@@ -1,3 +1,33 @@
 # Build artifacts
 pdfium/bin/
-pdfium/__pycache__/
+__pycache__/
+.pytest_cache/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.exe
+*.pdb
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Temporary files
+/tmp/
+*.tmp
+*.bak
+*.log
