@@ -1,6 +1,7 @@
 # Build artifacts
 pdfium/bin/
-pdfium/__pycache__/
+__pycache__/
+.pytest_cache/
 *.o
 *.a
 *.so
