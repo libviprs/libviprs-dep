@@ -1,0 +1,34 @@
+name: Build PDFium
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "PDFium chromium branch number (e.g. 7725)"
+        required: true
+      arch:
+        description: "Architecture"
+        required: true
+        type: choice
+        options:
+          - amd64
+          - arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build PDFium ${{ inputs.arch }}
+        run: python3 pdfium/build_pdfium.py ${{ inputs.version }} --arch ${{ inputs.arch }}
+      - name: Verify output
+        run: |
+          ls -lh pdfium/bin/
+          tar tzf pdfium/bin/pdfium-*.tgz | head -20
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdfium-linux-${{ inputs.arch }}
+          path: pdfium/bin/pdfium-*.tgz
