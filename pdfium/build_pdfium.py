@@ -78,7 +78,13 @@ pdf_use_partition_alloc = false
 clang_use_chrome_plugins = false
 target_os = "linux"
 target_cpu = "{gn_cpu}"
+{extra_args}
 """
+
+# arm64: disable Branch Target Identification enforcement — the Debian
+# Bullseye sysroot's CRT objects (crti.o, crtbeginS.o) weren't compiled
+# with BTI support, so the linker fails with -z force-bti.
+GN_ARGS_ARM64 = 'arm_control_flow_integrity = "none"'
 
 # Regex to detect Docker buildkit step markers like [3/14]
 STEP_RE = re.compile(r"\[\s*(\d+)/(\d+)\]")
@@ -87,6 +93,23 @@ IS_TTY = sys.stdout.isatty()
 
 # Maximum number of output lines to keep per architecture for replay on switch
 OUTPUT_BUFFER_SIZE = 500
+
+# Minimum thresholds before we transition from "estimating..." to a
+# numeric ETA.  Cached Docker steps complete instantly and inflate the
+# rate, so we need real wall time and real step throughput first.
+ETA_MIN_PHASE_SECS = 10   # seconds of wall time in current phase
+ETA_MIN_PHASE_STEPS = 5   # steps completed in current phase
+
+# EMA smoothing factor for step completion rate.  Applied over the most
+# recent 60 non-COPY step intervals.  Higher = more weight on recent.
+# 2/(60+1) ≈ 0.033 gives a smooth average over ~60 observations.
+EMA_ALPHA = 2.0 / 61.0
+
+# Initial pessimistic ETA (seconds) shown when the estimating period
+# ends but the EMA doesn't yet have enough samples to be reliable.
+# The displayed estimate starts here and converges toward the observed
+# rate as the window fills.
+ETA_INITIAL_SECS = 3600   # 60 minutes
 
 # ---------------------------------------------------------------------------
 # Keyboard listener — reads raw keypresses in a background thread
@@ -153,6 +176,49 @@ def make_bar(fraction, width):
     return "█" * filled + "░" * (width - filled)
 
 
+def _estimate_remaining(step, total, phase_start_step, phase_start_time,
+                        ema_secs_per_step, ema_samples, now):
+    """Estimate remaining build time, or return None if insufficient data.
+
+    Returns None during the "estimating..." period (not enough wall time
+    or steps to compute a meaningful rate).
+
+    Once past that threshold, uses the EMA-smoothed seconds-per-step rate
+    (computed over the last ~60 non-COPY step intervals) and multiplies
+    by remaining steps.  Blends with a pessimistic prior (ETA_INITIAL_SECS)
+    that decays as the EMA accumulates more samples, so the estimate
+    starts high and converges toward the observed rate.
+    """
+    if phase_start_time is None:
+        return None
+
+    phase_elapsed = now - phase_start_time
+    phase_steps_done = step - phase_start_step
+    remaining_steps = total - step
+
+    if (phase_elapsed < ETA_MIN_PHASE_SECS
+            or phase_steps_done < ETA_MIN_PHASE_STEPS):
+        return None
+
+    # EMA samples needed before we fully trust the observed rate.
+    # Matches the EMA span: 60 samples for full confidence.
+    EMA_FULL_CONFIDENCE = 60
+
+    if ema_secs_per_step is not None and ema_secs_per_step > 0:
+        observed_remaining = ema_secs_per_step * remaining_steps
+    else:
+        # No valid EMA yet (all steps were COPY/CACHED) — use prior only
+        return max(ETA_INITIAL_SECS - phase_elapsed, 0)
+
+    # Blend: trust ramps linearly with EMA sample count.
+    # At 0 samples → pure prior; at 60 samples → pure EMA.
+    trust = min(ema_samples / EMA_FULL_CONFIDENCE, 1.0)
+    prior_remaining = max(ETA_INITIAL_SECS - phase_elapsed, 0)
+    blended = (1 - trust) * prior_remaining + trust * observed_remaining
+
+    return max(blended, 0)
+
+
 class BuildProgress:
     """Manages a fixed terminal header showing per-architecture progress."""
 
@@ -175,6 +241,17 @@ class BuildProgress:
                 "total_steps": 0,
                 "start_time": None,
                 "elapsed": 0,
+                # Phase tracking: when the step counter resets (e.g. Docker
+                # steps → ninja steps), we record the new baseline so the
+                # ETA is computed from the current phase's pace, not the
+                # overall average which is polluted by cached steps.
+                "phase_start_step": 0,
+                "phase_start_time": None,
+                # EMA rate tracking (secs per step), ignoring COPY steps.
+                "ema_secs_per_step": None,
+                "ema_samples": 0,        # how many observations fed the EMA
+                "last_step_num": 0,
+                "last_step_time": None,
             }
         self.active = IS_TTY
         if self.active:
@@ -260,12 +337,44 @@ class BuildProgress:
             s["start_time"] = time.time()
             self._render()
 
-    def set_step(self, arch, step, total):
+    def set_step(self, arch, step, total, is_copy=False):
         with self._lock:
             s = self.status[arch]
+            now = time.time()
+
+            # Detect phase change: step counter reset or total changed
+            # (e.g. Docker [15/20] → ninja [1/2223])
+            if (step < s["step"]
+                    or total != s["total_steps"]
+                    or s["phase_start_time"] is None):
+                s["phase_start_step"] = step
+                s["phase_start_time"] = now
+                s["ema_secs_per_step"] = None
+                s["ema_samples"] = 0
+
+            # Update EMA rate, skipping COPY steps which are instant
+            # and would pollute the rate estimate.
+            if (not is_copy
+                    and s["last_step_time"] is not None
+                    and step > s["last_step_num"]):
+                dt = now - s["last_step_time"]
+                ds = step - s["last_step_num"]
+                if dt > 0 and ds > 0:
+                    instant_rate = dt / ds  # secs per step
+                    if s["ema_secs_per_step"] is None:
+                        s["ema_secs_per_step"] = instant_rate
+                    else:
+                        s["ema_secs_per_step"] = (
+                            EMA_ALPHA * instant_rate
+                            + (1 - EMA_ALPHA) * s["ema_secs_per_step"]
+                        )
+                    s["ema_samples"] += 1
+
+            s["last_step_num"] = step
+            s["last_step_time"] = now
             s["step"] = step
             s["total_steps"] = total
-            s["elapsed"] = time.time() - s["start_time"]
+            s["elapsed"] = now - s["start_time"]
             self._render()
 
     def set_extracting(self, arch):
@@ -322,7 +431,8 @@ class BuildProgress:
         else:
             for arch in self.archs:
                 s = self.status[arch]
-                arch_lines = self._render_arch(arch, s, w)
+                highlighted = self._parallel and arch == self._active_view
+                arch_lines = self._render_arch(arch, s, w, highlighted)
                 lines.extend(arch_lines)
 
         lines.append(f"│{' ' * (w - 2)}│")
@@ -340,14 +450,18 @@ class BuildProgress:
         sys.stdout.write("\033[u")  # restore cursor
         sys.stdout.flush()
 
-    def _render_arch(self, arch, s, w):
+    def _render_arch(self, arch, s, w, highlighted=False):
         state = s["state"]
         elapsed = s["elapsed"]
         lines = []
+        # ANSI: dim white background for the active view row
+        bg_on = "\033[48;5;236m" if highlighted else ""
+        bg_off = "\033[0m" if highlighted else ""
+        indicator = ">" if highlighted else " "
 
         if state == "waiting":
-            line = f"  {arch:<7} waiting"
-            lines.append(f"│{line:<{w - 2}}│")
+            line = f" {indicator}{arch:<7} waiting"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "building":
             step = s["step"]
@@ -357,28 +471,35 @@ class BuildProgress:
             bar = make_bar(frac, bar_w)
             pct = int(frac * 100)
             step_label = f"Step {step}/{total}" if total > 1 else "starting..."
-            line = f"  {arch:<7} {bar}  {pct:>3}%  {step_label}"
-            lines.append(f"│{line:<{w - 2}}│")
+            line = f" {indicator}{arch:<7} {bar}  {pct:>3}%  {step_label}"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
             time_parts = [f"{fmt_time(elapsed)} elapsed"]
-            if step > 0 and total > 0:
-                rate = elapsed / step
-                remaining = rate * (total - step)
-                time_parts.append(f"~{fmt_time(remaining)} remaining")
+            if step < total:
+                remaining = _estimate_remaining(
+                    step, total,
+                    s["phase_start_step"], s["phase_start_time"],
+                    s["ema_secs_per_step"], s["ema_samples"],
+                    time.time(),
+                )
+                if remaining is not None:
+                    time_parts.append(f"~{fmt_time(remaining)} remaining")
+                else:
+                    time_parts.append("estimating...")
             time_line = "  " + " " * 8 + " · ".join(time_parts)
-            lines.append(f"│{time_line:<{w - 2}}│")
+            lines.append(f"│{bg_on}{time_line:<{w - 2}}{bg_off}│")
 
         elif state == "extracting":
-            line = f"  {arch:<7} extracting binary...  ({fmt_time(elapsed)})"
-            lines.append(f"│{line:<{w - 2}}│")
+            line = f" {indicator}{arch:<7} extracting binary...  ({fmt_time(elapsed)})"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "done":
-            line = f"  {arch:<7} ✓ done  ({fmt_time(elapsed)})"
-            lines.append(f"│{line:<{w - 2}}│")
+            line = f" {indicator}{arch:<7} ✓ done  ({fmt_time(elapsed)})"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "failed":
-            line = f"  {arch:<7} ✗ failed  ({fmt_time(elapsed)})"
-            lines.append(f"│{line:<{w - 2}}│")
+            line = f" {indicator}{arch:<7} ✗ failed  ({fmt_time(elapsed)})"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         return lines
 
@@ -400,7 +521,10 @@ class BuildProgress:
             if m:
                 step = int(m.group(1))
                 total = int(m.group(2))
-                self.set_step(arch, step, total)
+                # COPY/CACHED steps are instant and would pollute the
+                # EMA rate — flag them so set_step skips the rate update.
+                is_copy = "] COPY " in line or "] CACHED" in line
+                self.set_step(arch, step, total, is_copy=is_copy)
             # Buffer and conditionally display
             with self._lock:
                 if self._parallel:
@@ -497,7 +621,8 @@ def make_dockerfile(version, arch, plat):
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
     branch = f"chromium/{version}"
-    gn_args = GN_ARGS_TEMPLATE.format(gn_cpu=gn_cpu)
+    extra_args = GN_ARGS_ARM64 if arch == "arm64" else ""
+    gn_args = GN_ARGS_TEMPLATE.format(gn_cpu=gn_cpu, extra_args=extra_args)
 
     # For cross-compilation, install the target arch's cross-compiler
     base_pkgs = (
@@ -520,6 +645,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
 RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
     /opt/depot_tools
 ENV PATH="/opt/depot_tools:${{PATH}}"
+# Bootstrap depot_tools (creates python3_bin_reldir.txt needed by gn),
+# then disable auto-updates for the rest of the build.
+RUN gclient --version
 ENV DEPOT_TOOLS_UPDATE=0
 
 # Step 2: Configure gclient
@@ -633,6 +761,13 @@ def build_for_arch(version, arch, plat, output_dir, progress):
 
         # No --platform flag: always build on host (amd64).
         # Cross-compilation is handled by GN args + sysroot.
+        gn_cpu = TARGETS[arch]["gn_cpu"]
+        print(
+            f"\n{'=' * 60}\n"
+            f"  Building PDFium for {plat}/{gn_cpu}  (arch={arch})\n"
+            f"{'=' * 60}\n",
+            flush=True,
+        )
         cmd = [
             "docker", "build",
             "--progress=plain",
@@ -711,7 +846,7 @@ def upload_release(version, built_files, progress):
         "--notes",
         f"PDFium shared library built from source.\n\n"
         f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
-        f"Build configuration:\n```\n{GN_ARGS_TEMPLATE.format(gn_cpu='<target>')}```",
+        f"Build configuration:\n```\n{GN_ARGS_TEMPLATE.format(gn_cpu='<target>', extra_args='')}```",
         *built_files,
     ])
 
