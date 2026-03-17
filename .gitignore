@@ -1,0 +1,3 @@
+# Build artifacts
+pdfium/bin/
+pdfium/__pycache__/
