@@ -35,6 +35,7 @@ import time
 try:
     import termios
     import tty
+
     HAS_TERMIOS = True
 except ImportError:
     HAS_TERMIOS = False
@@ -97,8 +98,8 @@ OUTPUT_BUFFER_SIZE = 500
 # Minimum thresholds before we transition from "estimating..." to a
 # numeric ETA.  Cached Docker steps complete instantly and inflate the
 # rate, so we need real wall time and real step throughput first.
-ETA_MIN_PHASE_SECS = 10   # seconds of wall time in current phase
-ETA_MIN_PHASE_STEPS = 5   # steps completed in current phase
+ETA_MIN_PHASE_SECS = 10  # seconds of wall time in current phase
+ETA_MIN_PHASE_STEPS = 5  # steps completed in current phase
 
 # EMA smoothing factor for step completion rate.  Applied over the most
 # recent 60 non-COPY step intervals.  Higher = more weight on recent.
@@ -109,7 +110,7 @@ EMA_ALPHA = 2.0 / 61.0
 # ends but the EMA doesn't yet have enough samples to be reliable.
 # The displayed estimate starts here and converges toward the observed
 # rate as the window fills.
-ETA_INITIAL_SECS = 3600   # 60 minutes
+ETA_INITIAL_SECS = 3600  # 60 minutes
 
 # ---------------------------------------------------------------------------
 # Keyboard listener — reads raw keypresses in a background thread
@@ -176,8 +177,9 @@ def make_bar(fraction, width):
     return "█" * filled + "░" * (width - filled)
 
 
-def _estimate_remaining(step, total, phase_start_step, phase_start_time,
-                        ema_secs_per_step, ema_samples, now):
+def _estimate_remaining(
+    step, total, phase_start_step, phase_start_time, ema_secs_per_step, ema_samples, now
+):
     """Estimate remaining build time, or return None if insufficient data.
 
     Returns None during the "estimating..." period (not enough wall time
@@ -196,8 +198,7 @@ def _estimate_remaining(step, total, phase_start_step, phase_start_time,
     phase_steps_done = step - phase_start_step
     remaining_steps = total - step
 
-    if (phase_elapsed < ETA_MIN_PHASE_SECS
-            or phase_steps_done < ETA_MIN_PHASE_STEPS):
+    if phase_elapsed < ETA_MIN_PHASE_SECS or phase_steps_done < ETA_MIN_PHASE_STEPS:
         return None
 
     # EMA samples needed before we fully trust the observed rate.
@@ -249,7 +250,7 @@ class BuildProgress:
                 "phase_start_time": None,
                 # EMA rate tracking (secs per step), ignoring COPY steps.
                 "ema_secs_per_step": None,
-                "ema_samples": 0,        # how many observations fed the EMA
+                "ema_samples": 0,  # how many observations fed the EMA
                 "last_step_num": 0,
                 "last_step_time": None,
             }
@@ -344,9 +345,7 @@ class BuildProgress:
 
             # Detect phase change: step counter reset or total changed
             # (e.g. Docker [15/20] → ninja [1/2223])
-            if (step < s["step"]
-                    or total != s["total_steps"]
-                    or s["phase_start_time"] is None):
+            if step < s["step"] or total != s["total_steps"] or s["phase_start_time"] is None:
                 s["phase_start_step"] = step
                 s["phase_start_time"] = now
                 s["ema_secs_per_step"] = None
@@ -354,9 +353,7 @@ class BuildProgress:
 
             # Update EMA rate, skipping COPY steps which are instant
             # and would pollute the rate estimate.
-            if (not is_copy
-                    and s["last_step_time"] is not None
-                    and step > s["last_step_num"]):
+            if not is_copy and s["last_step_time"] is not None and step > s["last_step_num"]:
                 dt = now - s["last_step_time"]
                 ds = step - s["last_step_num"]
                 if dt > 0 and ds > 0:
@@ -365,8 +362,7 @@ class BuildProgress:
                         s["ema_secs_per_step"] = instant_rate
                     else:
                         s["ema_secs_per_step"] = (
-                            EMA_ALPHA * instant_rate
-                            + (1 - EMA_ALPHA) * s["ema_secs_per_step"]
+                            EMA_ALPHA * instant_rate + (1 - EMA_ALPHA) * s["ema_secs_per_step"]
                         )
                     s["ema_samples"] += 1
 
@@ -477,9 +473,12 @@ class BuildProgress:
             time_parts = [f"{fmt_time(elapsed)} elapsed"]
             if step < total:
                 remaining = _estimate_remaining(
-                    step, total,
-                    s["phase_start_step"], s["phase_start_time"],
-                    s["ema_secs_per_step"], s["ema_samples"],
+                    step,
+                    total,
+                    s["phase_start_step"],
+                    s["phase_start_time"],
+                    s["ema_secs_per_step"],
+                    s["ema_samples"],
                     time.time(),
                 )
                 if remaining is not None:
@@ -550,6 +549,7 @@ class BuildProgress:
 # Dependency checks
 # ---------------------------------------------------------------------------
 
+
 def check_dependencies(upload):
     """Verify all required external tools are installed."""
     errors = []
@@ -561,20 +561,13 @@ def check_dependencies(upload):
         )
 
     if not shutil.which("docker"):
-        errors.append(
-            "docker not found. "
-            "Install from https://docs.docker.com/get-docker/"
-        )
+        errors.append("docker not found. Install from https://docs.docker.com/get-docker/")
     else:
         result = subprocess.run(["docker", "info"], capture_output=True)
         if result.returncode != 0:
-            errors.append(
-                "Docker daemon is not running. Start Docker and try again."
-            )
+            errors.append("Docker daemon is not running. Start Docker and try again.")
         else:
-            result = subprocess.run(
-                ["docker", "buildx", "version"], capture_output=True
-            )
+            result = subprocess.run(["docker", "buildx", "version"], capture_output=True)
             if result.returncode != 0:
                 errors.append(
                     "docker buildx not available. "
@@ -584,17 +577,12 @@ def check_dependencies(upload):
     if upload:
         if not shutil.which("gh"):
             errors.append(
-                "gh CLI not found (required for --upload). "
-                "Install from https://cli.github.com/"
+                "gh CLI not found (required for --upload). Install from https://cli.github.com/"
             )
         else:
-            result = subprocess.run(
-                ["gh", "auth", "status"], capture_output=True
-            )
+            result = subprocess.run(["gh", "auth", "status"], capture_output=True)
             if result.returncode != 0:
-                errors.append(
-                    "gh CLI is not authenticated. Run 'gh auth login' first."
-                )
+                errors.append("gh CLI is not authenticated. Run 'gh auth login' first.")
 
     if errors:
         print("Missing dependencies:\n")
@@ -607,6 +595,7 @@ def check_dependencies(upload):
 # ---------------------------------------------------------------------------
 # Dockerfile generation
 # ---------------------------------------------------------------------------
+
 
 def make_dockerfile(version, arch, plat):
     """Generate a Dockerfile that compiles PDFium at the given version.
@@ -625,10 +614,7 @@ def make_dockerfile(version, arch, plat):
     gn_args = GN_ARGS_TEMPLATE.format(gn_cpu=gn_cpu, extra_args=extra_args)
 
     # For cross-compilation, install the target arch's cross-compiler
-    base_pkgs = (
-        "git curl python3 ca-certificates "
-        "build-essential pkg-config lsb-release sudo file"
-    )
+    base_pkgs = "git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file"
     if arch == "arm64":
         base_pkgs += " g++-aarch64-linux-gnu"
 
@@ -696,6 +682,7 @@ RUN mkdir -p /staging/lib /staging/include && \\
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def archive_name(plat, arch):
     """Archive name: pdfium-{platform}-{gn_cpu}.tgz"""
     gn_cpu = TARGETS[arch]["gn_cpu"]
@@ -724,6 +711,7 @@ def run(cmd, **kwargs):
 # Build
 # ---------------------------------------------------------------------------
 
+
 def build_for_arch(version, arch, plat, output_dir, progress):
     """Build PDFium for a single architecture using Docker.
 
@@ -741,10 +729,7 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     patch_script = os.path.join(PATCHES_DIR, f"{plat}.sh")
     if not os.path.isfile(patch_script):
         progress.set_failed(arch)
-        raise RuntimeError(
-            f"No patch script for platform '{plat}' "
-            f"(expected {patch_script})"
-        )
+        raise RuntimeError(f"No patch script for platform '{plat}' (expected {patch_script})")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         dockerfile_path = os.path.join(tmpdir, "Dockerfile")
@@ -763,15 +748,15 @@ def build_for_arch(version, arch, plat, output_dir, progress):
         # Cross-compilation is handled by GN args + sysroot.
         gn_cpu = TARGETS[arch]["gn_cpu"]
         print(
-            f"\n{'=' * 60}\n"
-            f"  Building PDFium for {plat}/{gn_cpu}  (arch={arch})\n"
-            f"{'=' * 60}\n",
+            f"\n{'=' * 60}\n  Building PDFium for {plat}/{gn_cpu}  (arch={arch})\n{'=' * 60}\n",
             flush=True,
         )
         cmd = [
-            "docker", "build",
+            "docker",
+            "build",
             "--progress=plain",
-            "-t", image_tag,
+            "-t",
+            image_tag,
             tmpdir,
         ]
         rc = progress.stream_docker_build(cmd, arch)
@@ -789,25 +774,29 @@ def build_for_arch(version, arch, plat, output_dir, progress):
         staging_dest = os.path.join(extract_dir, dir_name)
         try:
             run(["docker", "create", "--name", container_name, image_tag])
-            run([
-                "docker", "cp",
-                f"{container_name}:/staging",
-                staging_dest,
-            ])
+            run(
+                [
+                    "docker",
+                    "cp",
+                    f"{container_name}:/staging",
+                    staging_dest,
+                ]
+            )
         finally:
-            subprocess.run(
-                ["docker", "rm", "-f", container_name], capture_output=True
-            )
-            subprocess.run(
-                ["docker", "rmi", "-f", image_tag], capture_output=True
-            )
+            subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
+            subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True)
 
         # Create tarball with top-level directory name
-        run([
-            "tar", "czf", output_path,
-            "-C", extract_dir,
-            dir_name,
-        ])
+        run(
+            [
+                "tar",
+                "czf",
+                output_path,
+                "-C",
+                extract_dir,
+                dir_name,
+            ]
+        )
 
     progress.set_done(arch)
 
@@ -819,6 +808,7 @@ def build_for_arch(version, arch, plat, output_dir, progress):
 # ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
+
 
 def upload_release(version, built_files, progress):
     """Create a GitHub Release and upload the built binaries."""
@@ -834,25 +824,39 @@ def upload_release(version, built_files, progress):
     )
     if result.returncode == 0:
         print(f"Release '{tag}' already exists, deleting...", flush=True)
-        run([
-            "gh", "release", "delete", tag,
-            "-R", GITHUB_REPO, "--yes",
-        ])
+        run(
+            [
+                "gh",
+                "release",
+                "delete",
+                tag,
+                "-R",
+                GITHUB_REPO,
+                "--yes",
+            ]
+        )
 
-    run([
-        "gh", "release", "create", tag,
-        "-R", GITHUB_REPO,
-        "--title", f"PDFium {branch}",
-        "--notes",
-        f"PDFium shared library built from source.\n\n"
-        f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
-        f"Build configuration:\n```\n{GN_ARGS_TEMPLATE.format(gn_cpu='<target>', extra_args='')}```",
-        *built_files,
-    ])
+    run(
+        [
+            "gh",
+            "release",
+            "create",
+            tag,
+            "-R",
+            GITHUB_REPO,
+            "--title",
+            f"PDFium {branch}",
+            "--notes",
+            f"PDFium shared library built from source.\n\n"
+            f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
+            "Build configuration:\n```\n"
+            f"{GN_ARGS_TEMPLATE.format(gn_cpu='<target>', extra_args='')}```",
+            *built_files,
+        ]
+    )
 
     print(
-        f"\nRelease: "
-        f"https://github.com/{GITHUB_REPO}/releases/tag/{tag}",
+        f"\nRelease: https://github.com/{GITHUB_REPO}/releases/tag/{tag}",
         flush=True,
     )
 
@@ -860,6 +864,7 @@ def upload_release(version, built_files, progress):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -911,7 +916,14 @@ def main():
         if args.parallel and len(archs) > 1:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(archs)) as pool:
                 futures = {
-                    pool.submit(build_for_arch, args.version, arch, plat, output_dir, progress): arch
+                    pool.submit(
+                        build_for_arch,
+                        args.version,
+                        arch,
+                        plat,
+                        output_dir,
+                        progress,
+                    ): arch
                     for arch in archs
                 }
                 for future in concurrent.futures.as_completed(futures):

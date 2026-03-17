@@ -17,6 +17,16 @@ pip install pytest
 pytest pdfium/tests/ -v
 ```
 
+### Git hooks
+
+Install pre-commit checks that mirror the CI workflow:
+
+```bash
+./tools/install-hooks.sh
+```
+
+The pre-commit hook runs ruff lint + format, shellcheck, and pytest before each commit.
+
 ### Linting
 
 ```bash

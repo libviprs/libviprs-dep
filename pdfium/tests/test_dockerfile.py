@@ -19,10 +19,10 @@ class TestMakeDockerfileAmd64:
         assert update_pos > bootstrap_pos
 
     def test_checkout_configuration_small(self):
-        assert 'checkout_configuration=small' in self.df
+        assert "checkout_configuration=small" in self.df
 
     def test_branch_in_sync(self):
-        assert 'origin/chromium/7725' in self.df
+        assert "origin/chromium/7725" in self.df
 
     def test_target_cpu_x64(self):
         assert 'target_cpu = "x64"' in self.df
@@ -73,7 +73,7 @@ class TestMakeDockerfileArm64:
         assert "install-sysroot.py --arch=arm64" in self.df
 
     def test_same_branch(self):
-        assert 'origin/chromium/7725' in self.df
+        assert "origin/chromium/7725" in self.df
 
 
 class TestMakeDockerfileDifferentVersions:
