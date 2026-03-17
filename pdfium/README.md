@@ -191,3 +191,22 @@ patches/
 ```
 
 To add a new platform, create a `patches/<name>.sh` script and add the name to the `PLATFORMS` list in `build_pdfium.py`. The script receives the PDFium source directory as its first argument.
+
+## Testing
+
+Unit tests cover the build script's pure functions without requiring Docker:
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
+
+Tests cover:
+
+| File | What it tests |
+| --- | --- |
+| `test_formatting.py` | `fmt_time`, `make_bar` output |
+| `test_naming.py` | Archive and directory naming convention |
+| `test_step_regex.py` | Docker buildkit and ninja step marker parsing |
+| `test_dockerfile.py` | Generated Dockerfile content for amd64 and arm64 |
+| `test_eta.py` | EMA-based ETA estimation lifecycle |
