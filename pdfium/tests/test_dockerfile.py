@@ -40,7 +40,7 @@ class TestMakeDockerfileAmd64:
         assert "install-sysroot.py --arch=x64" in self.df
 
     def test_platform_patch_copied(self):
-        assert "COPY platform.sh" in self.df
+        assert "COPY platform.py" in self.df
 
     def test_shared_library_gn_args(self):
         assert "is_component_build = false" in self.df

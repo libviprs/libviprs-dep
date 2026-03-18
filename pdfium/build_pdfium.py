@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build PDFium shared libraries for Linux amd64 and arm64 using Docker.
+"""Build PDFium shared libraries for Linux and macOS using Docker.
 
 Compiles PDFium from source by spinning up temporary Docker containers
-for each target architecture. The resulting libpdfium.so binaries can
-optionally be uploaded as GitHub Releases to libviprs/libviprs-dep.
+for each target architecture. Linux builds produce libpdfium.so, macOS
+builds cross-compile from Linux and produce libpdfium.dylib. Binaries
+can optionally be uploaded as GitHub Releases to libviprs/libviprs-dep.
 
 Requirements:
     - Docker with buildx support
@@ -15,6 +16,8 @@ Usage:
     python3 build_pdfium.py 7725 --arch amd64       # build amd64 only
     python3 build_pdfium.py 7725 --arch arm64       # build arm64 only
     python3 build_pdfium.py 7725 --platform linux   # explicit platform (default)
+    python3 build_pdfium.py 7725 --platform mac     # build for macOS
+    python3 build_pdfium.py 7725 --platform musl    # build for musl/Alpine
     python3 build_pdfium.py 7725 --upload           # build and upload to GitHub
 """
 
@@ -42,12 +45,12 @@ except ImportError:
 
 GITHUB_REPO = "libviprs/libviprs-dep"
 
-# Directory containing per-platform patch scripts (e.g. patches/linux.sh).
+# Directory containing per-platform patch scripts (e.g. patches/linux.py).
 PATCHES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "patches")
 
-# Supported platforms.  Each platform has a patch script in patches/<name>.sh
+# Supported platforms.  Each platform has a patch script in patches/<name>.py
 # that is copied into the Docker build context and run against the PDFium source.
-PLATFORMS = ["linux"]
+PLATFORMS = ["linux", "mac", "musl"]
 
 # Target architectures.  All builds run inside an amd64 Docker container
 # and cross-compile for arm64 using PDFium's built-in sysroot + clang.
@@ -66,21 +69,41 @@ TARGETS = {
 # use_custom_libcxx         — bundle libc++ so .so is portable across distros
 # pdf_use_partition_alloc   — skip complex allocator (fails on some platforms)
 # clang_use_chrome_plugins  — skip Chrome's custom clang plugins
-GN_ARGS_TEMPLATE = """\
+GN_ARGS_COMMON = """\
 is_debug = false
 pdf_is_standalone = true
 pdf_enable_v8 = false
 pdf_enable_xfa = false
 is_component_build = false
 treat_warnings_as_errors = false
-use_custom_libcxx = true
 pdf_use_skia = false
 pdf_use_partition_alloc = false
 clang_use_chrome_plugins = false
-target_os = "linux"
 target_cpu = "{gn_cpu}"
 {extra_args}
 """
+
+# Per-platform GN args appended to GN_ARGS_COMMON.
+GN_ARGS_PLATFORM = {
+    "linux": 'target_os = "linux"\nuse_custom_libcxx = true',
+    "mac": 'target_os = "mac"',
+    "musl": (
+        'target_os = "linux"\n'
+        "is_musl = true\n"
+        "is_clang = false\n"
+        "use_custom_libcxx = false\n"
+        "use_custom_libcxx_for_host = false\n"
+        "use_glib = false"
+    ),
+}
+
+
+def gn_args_for(plat, gn_cpu, extra_args):
+    """Build the full GN args string for a platform + architecture."""
+    platform_args = GN_ARGS_PLATFORM.get(plat, "")
+    all_extra = "\n".join(filter(None, [platform_args, extra_args]))
+    return GN_ARGS_COMMON.format(gn_cpu=gn_cpu, extra_args=all_extra)
+
 
 # arm64: disable Branch Target Identification enforcement — the Debian
 # Bullseye sysroot's CRT objects (crti.o, crtbeginS.o) weren't compiled
@@ -604,14 +627,23 @@ def make_dockerfile(version, arch, plat):
     is cross-compiled using its built-in clang and a Debian sysroot,
     avoiding slow QEMU emulation entirely.
 
-    The platform patch script (patches/<plat>.sh) is copied into the
+    The platform patch script (patches/<plat>.py) is copied into the
     build context and applied in Step 5.
     """
+    if plat == "mac":
+        return _make_dockerfile_mac(version, arch)
+    if plat == "musl":
+        return _make_dockerfile_musl(version, arch)
+    return _make_dockerfile_linux(version, arch, plat)
+
+
+def _make_dockerfile_linux(version, arch, plat):
+    """Dockerfile for Linux builds (runs in Docker, cross-compiles arm64)."""
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
     branch = f"chromium/{version}"
     extra_args = GN_ARGS_ARM64 if arch == "arm64" else ""
-    gn_args = GN_ARGS_TEMPLATE.format(gn_cpu=gn_cpu, extra_args=extra_args)
+    gn_args = gn_args_for(plat, gn_cpu, extra_args)
 
     # For cross-compilation, install the target arch's cross-compiler
     base_pkgs = "git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file"
@@ -654,8 +686,8 @@ RUN gclient runhooks
 RUN python3 build/linux/sysroot_scripts/install-sysroot.py --arch={gn_cpu}
 
 # Step 5: Apply platform patch
-COPY platform.sh /tmp/platform.sh
-RUN chmod +x /tmp/platform.sh && /tmp/platform.sh /build/pdfium
+COPY platform.py /tmp/platform.py
+RUN python3 /tmp/platform.py /build/pdfium
 
 # Step 6: Configure GN
 RUN mkdir -p out/Release && cat > out/Release/args.gn <<'ARGS'
@@ -669,6 +701,151 @@ RUN ninja -C out/Release pdfium
 RUN ls -lh out/Release/libpdfium.so && file out/Release/libpdfium.so
 
 # Step 9: Stage artifacts into /staging
+COPY LICENSE /tmp/LICENSE
+RUN mkdir -p /staging/lib /staging/include && \\
+    cp out/Release/libpdfium.so /staging/lib/ && \\
+    cp out/Release/args.gn /staging/ && \\
+    cp -r public/*.h /staging/include/ && \\
+    cp /tmp/LICENSE /staging/
+"""
+
+
+def _make_dockerfile_mac(version, arch):
+    """Dockerfile for macOS builds.
+
+    macOS builds cannot run natively inside Docker.  This Dockerfile
+    cross-compiles PDFium for macOS using the Chromium toolchain's clang
+    and the macOS SDK sysroot that gclient downloads.  The host container
+    is still Linux (amd64).
+    """
+    target = TARGETS[arch]
+    gn_cpu = target["gn_cpu"]
+    branch = f"chromium/{version}"
+    gn_args = gn_args_for("mac", gn_cpu, "")
+
+    return f"""\
+FROM debian:bookworm-slim
+
+# Step 0: System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file \\
+    && ln -sf /usr/bin/python3 /usr/bin/python \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Step 1: Install depot_tools
+RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
+    /opt/depot_tools
+ENV PATH="/opt/depot_tools:${{PATH}}"
+RUN gclient --version
+ENV DEPOT_TOOLS_UPDATE=0
+
+# Step 2: Configure gclient
+WORKDIR /build
+RUN gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git \\
+    --custom-var "checkout_configuration=small"
+RUN echo "target_os = [ 'mac' ]" >> .gclient
+
+# Step 3: Checkout source at target branch
+RUN gclient sync -r "origin/{branch}" --no-history --shallow
+
+# Step 4: Build dependencies
+WORKDIR /build/pdfium
+RUN gclient runhooks
+
+# Step 5: Apply platform patch
+COPY platform.py /tmp/platform.py
+RUN python3 /tmp/platform.py /build/pdfium
+
+# Step 6: Configure GN
+RUN mkdir -p out/Release && cat > out/Release/args.gn <<'ARGS'
+{gn_args}ARGS
+RUN gn gen out/Release
+
+# Step 7: Build
+RUN ninja -C out/Release pdfium
+
+# Step 8: Verify output
+RUN ls -lh out/Release/libpdfium.dylib && file out/Release/libpdfium.dylib
+
+# Step 9: Stage artifacts into /staging
+COPY LICENSE /tmp/LICENSE
+RUN mkdir -p /staging/lib /staging/include && \\
+    cp out/Release/libpdfium.dylib /staging/lib/ && \\
+    cp out/Release/args.gn /staging/ && \\
+    cp -r public/*.h /staging/include/ && \\
+    cp /tmp/LICENSE /staging/
+"""
+
+
+def _make_dockerfile_musl(version, arch):
+    """Dockerfile for musl (Alpine-compatible) builds.
+
+    Uses musl-cross-make toolchains instead of Chromium's clang.
+    The musl patch script installs a custom GN toolchain definition
+    and patches BUILDCONFIG.gn to route builds through musl-gcc.
+    """
+    target = TARGETS[arch]
+    gn_cpu = target["gn_cpu"]
+    branch = f"chromium/{version}"
+    gn_args = gn_args_for("musl", gn_cpu, "")
+
+    # Map gn_cpu to musl-cross-make target triple prefix
+    musl_targets = {
+        "x64": "x86_64-linux-musl",
+        "arm64": "aarch64-linux-musl",
+    }
+    musl_target = musl_targets[gn_cpu]
+
+    return f"""\
+FROM debian:bookworm-slim
+
+# Step 0: System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file \\
+    xz-utils \\
+    && ln -sf /usr/bin/python3 /usr/bin/python \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Step 1: Install musl-cross-make toolchain
+RUN curl -fsSL "https://musl.cc/{musl_target}-cross.tgz" | tar xz -C /opt
+ENV PATH="/opt/{musl_target}-cross/bin:${{PATH}}"
+
+# Step 2: Install depot_tools
+RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
+    /opt/depot_tools
+ENV PATH="/opt/depot_tools:${{PATH}}"
+RUN gclient --version
+ENV DEPOT_TOOLS_UPDATE=0
+
+# Step 3: Configure gclient
+WORKDIR /build
+RUN gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git \\
+    --custom-var "checkout_configuration=small"
+RUN echo "target_os = [ 'linux' ]" >> .gclient
+
+# Step 4: Checkout source at target branch
+RUN gclient sync -r "origin/{branch}" --no-history --shallow
+
+# Step 5: Build dependencies
+WORKDIR /build/pdfium
+RUN gclient runhooks
+
+# Step 6: Apply platform patch
+COPY platform.py /tmp/platform.py
+RUN python3 /tmp/platform.py /build/pdfium
+
+# Step 7: Configure GN
+RUN mkdir -p out/Release && cat > out/Release/args.gn <<'ARGS'
+{gn_args}ARGS
+RUN gn gen out/Release
+
+# Step 8: Build
+RUN ninja -C out/Release pdfium
+
+# Step 9: Verify output
+RUN ls -lh out/Release/libpdfium.so && file out/Release/libpdfium.so
+
+# Step 10: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
 RUN mkdir -p /staging/lib /staging/include && \\
     cp out/Release/libpdfium.so /staging/lib/ && \\
@@ -718,15 +895,15 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     All builds run inside an amd64 container.  arm64 targets are
     cross-compiled using PDFium's clang and a Debian sysroot.
 
-    The platform patch script (patches/<plat>.sh) is copied into the
-    Docker build context as ``platform.sh`` and applied during the build.
+    The platform patch script (patches/<plat>.py) is copied into the
+    Docker build context as ``platform.py`` and applied during the build.
     """
     image_tag = f"pdfium-builder-{version}-{arch}"
     container_name = f"pdfium-extract-{version}-{arch}"
 
     progress.start_arch(arch)
 
-    patch_script = os.path.join(PATCHES_DIR, f"{plat}.sh")
+    patch_script = os.path.join(PATCHES_DIR, f"{plat}.py")
     if not os.path.isfile(patch_script):
         progress.set_failed(arch)
         raise RuntimeError(f"No patch script for platform '{plat}' (expected {patch_script})")
@@ -737,7 +914,7 @@ def build_for_arch(version, arch, plat, output_dir, progress):
             f.write(make_dockerfile(version, arch, plat))
 
         # Copy the platform patch script and LICENSE into the build context
-        shutil.copy2(patch_script, os.path.join(tmpdir, "platform.sh"))
+        shutil.copy2(patch_script, os.path.join(tmpdir, "platform.py"))
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         shutil.copy2(
             os.path.join(repo_root, "LICENSE"),
@@ -754,6 +931,7 @@ def build_for_arch(version, arch, plat, output_dir, progress):
         cmd = [
             "docker",
             "build",
+            "--no-cache",
             "--progress=plain",
             "-t",
             image_tag,
@@ -850,7 +1028,7 @@ def upload_release(version, built_files, progress):
             f"PDFium shared library built from source.\n\n"
             f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
             "Build configuration:\n```\n"
-            f"{GN_ARGS_TEMPLATE.format(gn_cpu='<target>', extra_args='')}```",
+            f"{GN_ARGS_COMMON.format(gn_cpu='<target>', extra_args='')}```",
             *built_files,
         ]
     )

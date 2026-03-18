@@ -11,9 +11,10 @@ __pycache__/
 *.exe
 *.pdb
 
-# Editor / IDE
+# Editor / IDE / AI
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
