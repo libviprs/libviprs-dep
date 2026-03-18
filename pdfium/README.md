@@ -53,7 +53,7 @@ The build pipeline (inspired by [bblanchon/pdfium-binaries](https://github.com/b
 2. Configure gclient with `checkout_configuration=small` (skips V8, test deps, cipd)
 3. Checkout PDFium source at the target chromium branch
 4. Install build dependencies and target architecture sysroot
-5. Apply platform patch from `patches/<platform>.sh`
+5. Apply platform patch from `patches/<platform>.py`
 6. Configure GN args and generate build files
 7. Build with ninja
 8. Verify output binary
@@ -179,18 +179,24 @@ PDFium is compiled with these GN arguments:
 | `target_cpu` | `"x64"` / `"arm64"` | Target architecture |
 | `target_os` | `"linux"` | Target operating system |
 
-The `BUILD.gn` is patched to change the `component("pdfium")` target to `shared_library("pdfium")` so the output is a `.so` rather than a static archive.
-
 ### Platform patches
 
-Platform-specific patches live in `patches/<platform>.sh`. The `--platform` flag selects which patch script to apply during the build (default: `linux`).
+Platform-specific patches live in `patches/<platform>.py`. The `--platform` flag selects which patch script to apply during the build (default: `linux`). Each patch script receives the PDFium source directory as its first argument.
 
 ```
 patches/
-  linux.sh     # shared_library patch for Linux .so output
+  linux.py     # Linux shared library patches
 ```
 
-To add a new platform, create a `patches/<name>.sh` script and add the name to the `PLATFORMS` list in `build_pdfium.py`. The script receives the PDFium source directory as its first argument.
+The Linux patch applies two changes required to produce a `.so` with exported `FPDF_*` symbols:
+
+1. **BUILD.gn** — changes `component("pdfium")` to `shared_library("pdfium")`. The `component()` macro resolves to `static_library` when `is_component_build=false`, so without this patch the output would be a `.a` archive instead of a `.so`.
+
+2. **fpdfview.h** — removes the `#if defined(COMPONENT_BUILD)` guard around `FPDF_EXPORT`. PDFium only applies `__attribute__((visibility("default")))` to its public API when `COMPONENT_BUILD` is defined. Since we set `is_component_build=false` (to get a single `.so` instead of many small ones), `FPDF_EXPORT` resolves to nothing without this patch, and all `FPDF_*` symbols get hidden visibility — making the library unusable via `dlopen`/`dlsym`.
+
+These patches match the approach used by [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries) (`shared_library.patch` + `public_headers.patch`).
+
+To add a new platform, create a `patches/<name>.py` script and add the name to the `PLATFORMS` list in `build_pdfium.py`.
 
 ## Testing
 
