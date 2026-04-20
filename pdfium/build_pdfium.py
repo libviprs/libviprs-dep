@@ -164,7 +164,13 @@ GN_ARGS_PLATFORM = {
         "is_clang = false\n"
         "use_custom_libcxx = false\n"
         "use_custom_libcxx_for_host = false\n"
-        "use_glib = false"
+        "use_glib = false\n"
+        # musl-cross-make ships its own sysroot per target triple, so
+        # pointing Chromium at the hermetic Debian sysroot
+        # (build/linux/debian_bullseye_<arch>-sysroot) is both wrong
+        # and — for arm64 — outright fatal because the musl Dockerfile
+        # skips install-sysroot.py.
+        "use_sysroot = false"
     ),
 }
 
@@ -1738,6 +1744,11 @@ def main():
         )
 
     built_files = []
+    # Collect failures per-job instead of letting the first exception kill
+    # the whole run. A flake on one arch shouldn't waste a 30-minute
+    # successful build of the other three — upload_release already handles
+    # partial sets (append/--clobber, leaves unrelated assets intact).
+    failures = []  # list of (job, exception)
     try:
         progress = BuildProgress(args.version, job_ids, parallel=args.parallel)
         try:
@@ -1757,33 +1768,58 @@ def main():
                         for plat, arch in jobs
                     }
                     for future in concurrent.futures.as_completed(futures):
-                        built_files.append(future.result())
+                        plat, arch = futures[future]
+                        job_id = f"{plat}/{arch}"
+                        try:
+                            built_files.append(future.result())
+                        except (RuntimeError, subprocess.CalledProcessError) as e:
+                            failures.append((job_id, e))
             else:
                 for plat, arch in jobs:
-                    path = build_for_arch(args.version, arch, plat, output_dir, progress)
-                    built_files.append(path)
+                    job_id = f"{plat}/{arch}"
+                    try:
+                        path = build_for_arch(args.version, arch, plat, output_dir, progress)
+                        built_files.append(path)
+                    except (RuntimeError, subprocess.CalledProcessError) as e:
+                        failures.append((job_id, e))
         finally:
             progress.finish()
 
         # Sort so upload order is deterministic regardless of parallel completion order.
         built_files.sort()
 
-        if args.upload:
-            # Reuse a lightweight progress instance just to show the "Uploading..."
-            # banner during the gh release create; no job work runs here.
+        # Upload whatever succeeded. Skipping upload entirely on partial
+        # failure would waste the successful archives; upload_release uses
+        # --clobber so matching-name assets on the release are replaced
+        # and unrelated ones are preserved.
+        if args.upload and built_files:
             upload_progress = BuildProgress(args.version, job_ids, parallel=False)
             try:
                 upload_release(args.version, built_files, upload_progress)
             finally:
                 upload_progress.finish()
-    except (RuntimeError, subprocess.CalledProcessError) as e:
-        print(f"\nError: {e}", file=sys.stderr)
-        log_dir = os.path.join(output_dir, "logs")
-        print(f"Per-job build logs: {log_dir}/", file=sys.stderr)
-        sys.exit(1)
+        elif args.upload and not built_files:
+            print("\nNo archives built — skipping upload.", file=sys.stderr)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
+
+    if failures:
+        log_dir = os.path.join(output_dir, "logs")
+        print(
+            f"\n{len(failures)} of {len(jobs)} builds failed:",
+            file=sys.stderr,
+        )
+        for job_id, exc in failures:
+            print(f"  - {job_id}: {exc}", file=sys.stderr)
+        print(f"Per-job build logs: {log_dir}/", file=sys.stderr)
+        if built_files:
+            print(
+                f"Uploaded {len(built_files)} successful archive"
+                f"{'s' if len(built_files) != 1 else ''} to the release.",
+                file=sys.stderr,
+            )
+        sys.exit(1)
 
     print(f"\nBuilt {len(built_files)} binaries in {output_dir}/")
 

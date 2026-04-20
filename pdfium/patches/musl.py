@@ -37,23 +37,36 @@ from pathlib import Path
 
 
 def patch_build_gn_static(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> static_library()."""
+    """Patch BUILD.gn: component() -> static_library() + complete_static_lib.
+
+    See ``linux.py``'s docstring for why ``complete_static_lib = true``
+    is required: PDFium's ``pdfium`` target is an umbrella with deps but
+    no direct sources, so without this flag the archive is empty.
+    """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('component("pdfium")', 'static_library("pdfium")')
+    updated = text.replace(
+        'component("pdfium") {',
+        'static_library("pdfium") {\n  complete_static_lib = true',
+    )
     if updated == text:
-        print('WARNING: component("pdfium") not found in BUILD.gn — already patched?')
+        print('WARNING: component("pdfium") { not found in BUILD.gn — already patched?')
         return
     build_gn.write_text(updated)
-    print("Applied: BUILD.gn -> static_library")
+    print("Applied: BUILD.gn -> static_library (complete_static_lib)")
 
 
 def patch_build_gn_shared(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component()/static_library() -> shared_library()."""
+    """Patch BUILD.gn: component()/static_library() -> shared_library().
+
+    Also strips the ``complete_static_lib = true`` line the base patch
+    adds, since that flag is only valid on static_library targets.
+    """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
     updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
     updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
+    updated = re.sub(r"\n\s*complete_static_lib = true\s*\n", "\n", updated)
     if updated == text:
         print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
