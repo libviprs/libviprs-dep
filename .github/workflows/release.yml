@@ -1,0 +1,186 @@
+name: Release
+
+# Runs after a successful merge to `release` and publishes every archive
+# in build_pdfium's default --parallel matrix to the pdfium-<version>
+# GitHub Release. Each (platform, arch) runs as its own job so a flake
+# on one doesn't block the others, and each job uploads independently
+# — upload_release uses `gh release upload --clobber`, so parallel
+# uploads are safe as long as the release itself is created first.
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "PDFium chromium branch (overrides pdfium/VERSION)"
+        required: false
+
+concurrency:
+  # Two overlapping release runs would race on the same tag's assets.
+  # Serialize per ref; don't cancel in progress — a merged release is
+  # worth finishing even if a later push arrives.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve pdfium version
+        id: v
+        run: |
+          set -eu
+          if [ -n "${{ inputs.version }}" ]; then
+            V="${{ inputs.version }}"
+          else
+            V="$(tr -d '[:space:]' < pdfium/VERSION)"
+          fi
+          [ -n "$V" ] || { echo "pdfium/VERSION is empty" >&2; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=pdfium-$V" >> "$GITHUB_OUTPUT"
+
+  create-release:
+    # Create the release up front so the fan-out build jobs don't race
+    # on `gh release create`. upload_release in build_pdfium.py tolerates
+    # an existing release (it just appends/clobbers assets), so this is
+    # safe to re-run — it no-ops when the tag is already present.
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create or confirm release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TAG="${{ needs.resolve-version.outputs.tag }}"
+          BRANCH="chromium/${{ needs.resolve-version.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            gh release create "$TAG" \
+              --title "PDFium $BRANCH" \
+              --notes "PDFium libraries built from source.
+
+          Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/$BRANCH"
+          fi
+
+  build-linux:
+    # Fan-out: one job per (platform, arch) in build_pdfium's default
+    # matrix. fail-fast=false so musl/arm64 flakes don't discard a
+    # successful linux/amd64 build.
+    needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux, arch: amd64 }
+          - { platform: linux, arch: arm64 }
+          - { platform: musl,  arch: amd64 }
+          - { platform: musl,  arch: arm64 }
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure git identity
+        # build_pdfium.py's --upload preflight requires git user.name +
+        # user.email to be set (gh release create shells out to git).
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build + publish ${{ matrix.platform }}/${{ matrix.arch }}
+        env:
+          # GITHUB_TOKEN is minted automatically for every run; the gh
+          # CLI picks it up from GH_TOKEN. permissions.contents: write
+          # above is what grants write access to Releases on this repo.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 pdfium/build_pdfium.py "${{ needs.resolve-version.outputs.version }}" \
+            --platform ${{ matrix.platform }} \
+            --arch ${{ matrix.arch }} \
+            --upload
+
+      - name: Upload build logs on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.platform }}-${{ matrix.arch }}
+          path: bin/logs/
+          if-no-files-found: warn
+
+  build-mac:
+    # Mac must run on a macOS runner — PDFium's `gn gen` invokes
+    # `xcodebuild`, which doesn't exist inside the Debian container used
+    # for linux/musl. bblanchon/pdfium-binaries uses the same macos-15
+    # approach.
+    needs: [resolve-version, create-release]
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build + publish mac/arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 pdfium/build_pdfium.py "${{ needs.resolve-version.outputs.version }}" \
+            --platform mac --arch arm64 --upload
+
+      - name: Upload build logs on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-mac-arm64
+          path: bin/logs/
+          if-no-files-found: warn
+
+  summary:
+    # Prints the final release URL + per-job status once every build has
+    # either succeeded or failed. Doesn't gate on success — needs:
+    # [...] with if: always() lets this run even if some jobs failed,
+    # so the release URL is surfaced regardless of partial completion.
+    needs: [resolve-version, create-release, build-linux, build-mac]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          set -eu
+          URL="https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          {
+            echo "## PDFium release: \`$TAG\`"
+            echo ""
+            echo "Release URL: $URL"
+            echo ""
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "| build-linux   | ${{ needs.build-linux.result }} |"
+            echo "| build-mac     | ${{ needs.build-mac.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
