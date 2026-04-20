@@ -48,6 +48,8 @@ While the build is running, the terminal header accepts these keys:
 
 Every job streams its full Docker build output to `pdfium/bin/logs/<plat>-<arch>.log`. If a job fails, the script prints the log path to stderr — `tail -n 200 pdfium/bin/logs/linux-arm64.log` gives you the authoritative post-mortem, since the in-terminal view only retains the last ~500 lines per job.
 
+Partial failures don't lose the run. When `--upload` is passed, the archives from builds that *did* succeed are still attached to the GitHub Release (via `gh release upload --clobber`) before the script exits `1` with a per-job failure summary — so one flake never wastes a 30-minute successful build of the other three archives.
+
 Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`, entering the chromium branch number and toggling `upload=true`.
 
 ## Development

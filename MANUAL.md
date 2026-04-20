@@ -156,15 +156,22 @@ container's own CPU arch, not the target.
 
 **`--upload`**
 
-:   After a successful build, publish the archives as assets on the
-    GitHub Release tagged `pdfium-{VERSION}` on
-    `libviprs/libviprs-dep`. If the release does not exist it is
-    created; if it already exists, assets whose filenames match
-    something newly built are **replaced** (via
+:   Publish archives as assets on the GitHub Release tagged
+    `pdfium-{VERSION}` on `libviprs/libviprs-dep`. If the release does
+    not exist it is created; if it already exists, assets whose
+    filenames match something newly built are **replaced** (via
     `gh release upload --clobber`) and any unrelated assets are
     **preserved**. This lets a partial re-run — e.g.
     `--platform musl --upload` after fixing a musl-only regression —
     update only the musl tarballs without touching the linux ones.
+
+    The upload runs with **whatever archives successfully built**, even
+    when other jobs in the same matrix failed. A flake on one arch
+    therefore doesn't waste the 30-minute successful builds of the
+    others; the good archives are published and the script exits `1`
+    with a per-job failure summary so CI still treats the run as
+    broken. If zero archives built, the upload is skipped entirely.
+
     Requires `gh` to be installed and authenticated (`gh auth login`).
 
 **`--output-dir DIR`**
@@ -280,8 +287,8 @@ prefix.
 
 | Code | Meaning |
 | --- | --- |
-| `0` | All requested builds completed and, if `--upload` was passed, the release was created. |
-| `1` | A dependency check failed, a Docker build failed, or the `gh release create` call failed. |
+| `0` | Every requested build completed and, if `--upload` was passed, the release was created/updated. |
+| `1` | At least one build failed, or a dependency check / `gh release` call failed. With `--upload`, archives from builds that *did* succeed are still uploaded before the script exits `1`; stderr lists which jobs failed and where their logs live. |
 | `130` | Interrupted (SIGINT / Ctrl-C). |
 
 ## EXAMPLES
@@ -330,7 +337,8 @@ python3 pdfium/build_pdfium.py 7725 --upload
 Creates the `pdfium-7725` GitHub Release (if missing) and attaches all
 four archives. If the release already exists, its assets are appended
 or replaced in place — any unrelated assets on the release are
-preserved.
+preserved. If one arch fails, the other three are still uploaded and
+the script exits `1` with a failure summary.
 
 ### Re-run one platform and update only its assets
 
@@ -457,6 +465,31 @@ hand and see this error, update both the verify step
 (`ls -lh out/Static/obj/libpdfium.a`) and the staging copy
 (`cp out/Static/obj/libpdfium.a /staging/lib/`) to the `obj/` path.
 
+### `libpdfium.a` is 8 bytes (empty `ar` archive)
+
+GN's `static_library` only archives objects the target *directly*
+owns; PDFium's `pdfium` target is an umbrella with many `deps` and
+almost no direct `sources`, so a naive `component() → static_library`
+rewrite produces an archive containing just the `!<arch>\n` magic
+header. The base-mode patches now insert `complete_static_lib = true`
+into the rewritten target, which tells GN to pull every transitive
+dependency's objects into the archive. If you forked the patches,
+make sure that flag is present on the static target. The shared-mode
+patch strips the flag before rewriting to `shared_library` because
+GN rejects `complete_static_lib` on non-static targets.
+
+### `ERROR at //build/config/sysroot.gni:60:7: Assertion failed` (musl)
+
+GN asserts `path_exists(sysroot)` resolves to an existing directory,
+but the musl Dockerfile deliberately skips
+`build/linux/sysroot_scripts/install-sysroot.py` — the musl build uses
+the sysroot bundled with musl-cross-make, not the Debian sysroot. The
+musl GN args now include `use_sysroot = false` to tell Chromium's
+build config to skip the Debian sysroot lookup entirely. Affects
+`musl/arm64` in particular, because Chromium only auto-downloads the
+amd64 sysroot via hooks; arm64 requires the explicit install step
+that musl skips.
+
 ### `FileNotFoundError: No such file or directory: 'xcodebuild'` during `gn gen`
 
 You attempted `--platform mac` on a Linux host. PDFium's
@@ -506,7 +539,7 @@ parallel matrix.
 
 ## HISTORY
 
-- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, and `--upload` append/replace semantics landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
+- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, `--upload` append/replace semantics, partial-failure uploads, `complete_static_lib = true` for a non-empty `libpdfium.a`, and `use_sysroot = false` for musl all landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
 - **pdfium earlier** — glibc-only shared library releases.
 
 ## LICENSE
