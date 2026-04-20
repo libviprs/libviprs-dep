@@ -152,6 +152,33 @@ class TestMakeDockerfileMuslAmd64:
     def test_musl_toolchain_downloaded(self):
         assert "x86_64-linux-musl-cross.tgz" in self.df
 
+    def test_musl_toolchain_downloaded_to_file_not_piped(self):
+        # musl.cc occasionally returns a truncated body (HTTP 200 but the
+        # connection drops mid-stream). Piping curl into tar hides that
+        # failure as a cryptic tar error, so we download to a file first,
+        # assert the size, and extract separately. The anti-pattern below
+        # must stay out of the Dockerfile.
+        assert "-o /tmp/tc.tgz" in self.df
+        assert "| tar xz" not in self.df
+        assert "| tar -xz" not in self.df
+
+    def test_musl_toolchain_size_check(self):
+        # Real musl-cross-make toolchains are ~100 MB; a 50 MB floor is
+        # conservative enough to accept the real archive while rejecting a
+        # truncated body or a stray HTML error page.
+        assert "stat -c%s /tmp/tc.tgz" in self.df
+        assert "50000000" in self.df
+
+    def test_musl_toolchain_extracted_separately(self):
+        assert "tar xzf /tmp/tc.tgz -C /opt" in self.df
+
+    def test_musl_toolchain_download_retries(self):
+        # The toolchain URL is a single-host mirror prone to flakes —
+        # keep the retry/backoff flags on the curl command.
+        assert "--retry 5" in self.df
+        assert "--retry-delay 10" in self.df
+        assert "--retry-all-errors" in self.df
+
     def test_target_cpu_x64(self):
         assert 'target_cpu = "x64"' in self.df
 
