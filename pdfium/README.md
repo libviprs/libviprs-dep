@@ -81,11 +81,11 @@ The build pipeline (inspired by [bblanchon/pdfium-binaries](https://github.com/b
 2. Configure gclient with `checkout_configuration=small` (skips V8, test deps, cipd)
 3. Checkout PDFium source at the target chromium branch
 4. Install build dependencies and target architecture sysroot (linux) or musl-cross-make toolchain (musl)
-5. Apply the **base** platform patch — symbol visibility, musl toolchain GN config where relevant. Leaves `BUILD.gn` alone so `component("pdfium")` resolves to `static_library` under `is_component_build=false`.
+5. Apply the **base** platform patch — symbol visibility, rewrite `component("pdfium")` to `static_library("pdfium")` with `complete_static_lib = true`, plus musl toolchain GN config where relevant. Chromium's `component()` template resolves to `source_set` (not `static_library`) under `is_component_build=false`, so the explicit `static_library` rewrite is what actually gets a `.a` emitted; `complete_static_lib = true` then forces it to be a fat archive containing every transitive object.
 6. `gn gen out/Static` + `ninja -C out/Static pdfium` — produces `libpdfium.a`
-7. Apply the **shared** platform patch — rewrites `component("pdfium")` to `shared_library("pdfium")`.
+7. Apply the **shared** platform patch — rewrites `static_library("pdfium")` to `shared_library("pdfium")` and strips the static-only `complete_static_lib` line.
 8. `gn gen out/Shared` + `ninja -C out/Shared pdfium` — produces `libpdfium.so`
-9. Verify both outputs
+9. **Verify** `libpdfium.a` is a complete fat archive: magic must be `!<arch>\n` (not `!<thin>\n`), archive must have ≥ 100 members and be ≥ 10 MB. A thin archive would reference `.o` files in the now-discarded build sandbox, so the build fails here rather than publish a broken archive.
 10. Stage artifacts into a single directory and package as `pdfium-{platform}-{gn_cpu}.tgz`
 
 The two-phase ninja build is the cleanest way to emit both a static archive and a shared library from a single source checkout without duplicating the `component("pdfium")` target body inside `BUILD.gn`. It roughly doubles the ninja time per combo, but the expensive Docker setup steps (apt, depot_tools, gclient sync, runhooks) only run once per combo.
