@@ -4,20 +4,21 @@
 The patch is split into two modes so a single source checkout can
 produce *both* a static archive and a shared library:
 
-* ``base`` — applied once before any build. Only modifies
-  ``public/fpdfview.h`` to strip the ``COMPONENT_BUILD`` guard around
-  ``FPDF_EXPORT``, ensuring the public C API symbols always have
-  ``visibility("default")``. Leaves ``BUILD.gn`` alone, so the
-  ``component("pdfium")`` target resolves to ``static_library`` under
-  ``is_component_build=false`` and a subsequent ninja build produces
-  ``libpdfium.a``.
+* ``base`` — applied before the static-archive build. Modifies:
+    - ``public/fpdfview.h``: strip the ``COMPONENT_BUILD`` guard around
+      ``FPDF_EXPORT`` so the public C API always has
+      ``visibility("default")``.
+    - ``BUILD.gn``: rewrite ``component("pdfium")`` to
+      ``static_library("pdfium")``. Chromium's ``component()`` template
+      resolves to ``source_set`` (not ``static_library``) when
+      ``is_component_build=false``, and ``source_set`` does not link
+      a ``.a`` — it only groups objects. Explicit ``static_library``
+      is required to produce ``libpdfium.a``.
 
 * ``shared`` — applied on top of ``base`` before the second ninja pass.
-  Rewrites ``component("pdfium")`` to ``shared_library("pdfium")`` in
-  ``BUILD.gn`` so the same target now links a ``.so``. Invoking ninja in
-  a separate out dir then yields ``libpdfium.so`` using the already-built
-  object files would be ideal, but GN invalidates the target type change
-  and recompiles — acceptable cost for a single-source build.
+  Rewrites ``static_library("pdfium")`` back to ``shared_library("pdfium")``
+  so the same target now links a ``.so``. GN invalidates the target
+  type change and recompiles — acceptable cost for a single-source build.
 
 Together this gives us both artifacts from one checkout.
 
@@ -34,13 +35,31 @@ import sys
 from pathlib import Path
 
 
-def patch_build_gn(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> shared_library()."""
+def patch_build_gn_static(pdfium_dir: Path) -> None:
+    """Patch BUILD.gn: component() -> static_library()."""
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('component("pdfium")', 'shared_library("pdfium")')
+    updated = text.replace('component("pdfium")', 'static_library("pdfium")')
     if updated == text:
         print('WARNING: component("pdfium") not found in BUILD.gn — already patched?')
+        return
+    build_gn.write_text(updated)
+    print("Applied: BUILD.gn -> static_library")
+
+
+def patch_build_gn_shared(pdfium_dir: Path) -> None:
+    """Patch BUILD.gn: component()/static_library() -> shared_library().
+
+    Handles both the pristine ``component("pdfium")`` form and the
+    post-``base``-mode ``static_library("pdfium")`` form, so ``shared``
+    works whether or not ``base`` ran first.
+    """
+    build_gn = pdfium_dir / "BUILD.gn"
+    text = build_gn.read_text()
+    updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
+    updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
+    if updated == text:
+        print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
     build_gn.write_text(updated)
     print("Applied: BUILD.gn -> shared_library")
@@ -104,9 +123,9 @@ def main() -> None:
         choices=["base", "shared", "all"],
         default="all",
         help=(
-            "base = fpdfview.h only (keeps component() -> static_library, "
-            "produces libpdfium.a); shared = adds the BUILD.gn rewrite "
-            "to produce libpdfium.so; all = both (default, legacy behavior)."
+            "base = fpdfview.h + rewrite component() to static_library "
+            "(produces libpdfium.a); shared = rewrite target to shared_library "
+            "(produces libpdfium.so); all = both in sequence (default)."
         ),
     )
     args = parser.parse_args()
@@ -118,8 +137,9 @@ def main() -> None:
 
     if args.mode in ("base", "all"):
         patch_fpdfview_h(pdfium_dir)
+        patch_build_gn_static(pdfium_dir)
     if args.mode in ("shared", "all"):
-        patch_build_gn(pdfium_dir)
+        patch_build_gn_shared(pdfium_dir)
 
 
 if __name__ == "__main__":

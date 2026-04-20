@@ -8,14 +8,17 @@ class TestDefaultMatrix:
     def test_no_flags_returns_default(self):
         assert resolve_jobs(None, None) == list(DEFAULT_JOBS)
 
-    def test_default_is_five_jobs(self):
-        assert len(DEFAULT_JOBS) == 5
+    def test_default_is_four_jobs(self):
+        # mac was removed from the default matrix because PDFium's GN
+        # config invokes xcodebuild during `gn gen`, which doesn't exist
+        # in a Debian container — mac builds require a macOS host.
+        assert len(DEFAULT_JOBS) == 4
 
     def test_default_excludes_mac_amd64(self):
         assert ("mac", "amd64") not in DEFAULT_JOBS
 
-    def test_default_includes_mac_arm64(self):
-        assert ("mac", "arm64") in DEFAULT_JOBS
+    def test_default_excludes_mac_arm64(self):
+        assert ("mac", "arm64") not in DEFAULT_JOBS
 
 
 class TestPlatformFilter:
@@ -27,9 +30,12 @@ class TestPlatformFilter:
         jobs = resolve_jobs(["musl"], None)
         assert jobs == [("musl", "amd64"), ("musl", "arm64")]
 
-    def test_platform_mac_only_gives_arm64_by_default(self):
+    def test_platform_mac_falls_back_to_both_archs(self):
+        # mac is not in the default matrix, so resolve_jobs hits the
+        # ``missing`` branch that cross-products the requested platform
+        # with both archs.
         jobs = resolve_jobs(["mac"], None)
-        assert jobs == [("mac", "arm64")]
+        assert jobs == [("mac", "amd64"), ("mac", "arm64")]
 
     def test_platform_linux_musl_both(self):
         jobs = resolve_jobs(["linux", "musl"], None)
@@ -47,9 +53,10 @@ class TestArchFilter:
         assert jobs == [("linux", "amd64"), ("musl", "amd64")]
         assert ("mac", "amd64") not in jobs
 
-    def test_arch_arm64_includes_mac(self):
+    def test_arch_arm64_excludes_mac(self):
+        # mac not in DEFAULT_JOBS, so filtering by arch never surfaces it.
         jobs = resolve_jobs(None, "arm64")
-        assert jobs == [("linux", "arm64"), ("mac", "arm64"), ("musl", "arm64")]
+        assert jobs == [("linux", "arm64"), ("musl", "arm64")]
 
 
 class TestBothFlags:

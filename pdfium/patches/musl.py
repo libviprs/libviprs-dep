@@ -4,8 +4,7 @@
 Mirrors the linux patch's two-mode split so a single checkout yields
 both ``libpdfium.a`` and ``libpdfium.so``:
 
-* ``base`` — applied before the static-archive build. Does everything
-  *except* the BUILD.gn ``component()`` rewrite:
+* ``base`` — applied before the static-archive build:
     - ``fpdfview.h``: strip COMPONENT_BUILD guard around FPDF_EXPORT.
     - ``BUILDCONFIG.gn``: declare ``is_musl``, route default toolchain
       to ``//build/toolchain/linux/musl``, disable ``-fstack-protector``.
@@ -14,13 +13,16 @@ both ``libpdfium.a`` and ``libpdfium.so``:
     - Install the musl GN toolchain at
       ``build/toolchain/linux/musl/BUILD.gn`` (gcc_toolchain entries for
       x86/x64/arm/arm64 using musl-cross-make prefixes).
-  With these in place, ``component("pdfium")`` still resolves to
-  ``static_library`` under ``is_component_build=false`` and produces
-  ``libpdfium.a``.
+    - ``BUILD.gn``: rewrite ``component("pdfium")`` to
+      ``static_library("pdfium")``. Chromium's ``component()`` template
+      resolves to ``source_set`` (not ``static_library``) under
+      ``is_component_build=false``, and ``source_set`` does not link
+      a ``.a``. Explicit ``static_library`` is required for
+      ``libpdfium.a``.
 
 * ``shared`` — applied on top of ``base``. Rewrites
-  ``component("pdfium")`` to ``shared_library("pdfium")`` in BUILD.gn
-  so a second ninja pass yields ``libpdfium.so``.
+  ``static_library("pdfium")`` to ``shared_library("pdfium")`` in
+  BUILD.gn so a second ninja pass yields ``libpdfium.so``.
 
 All patches match bblanchon/pdfium-binaries (patches/musl/).
 
@@ -34,13 +36,26 @@ import sys
 from pathlib import Path
 
 
-def patch_build_gn(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> shared_library()."""
+def patch_build_gn_static(pdfium_dir: Path) -> None:
+    """Patch BUILD.gn: component() -> static_library()."""
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('component("pdfium")', 'shared_library("pdfium")')
+    updated = text.replace('component("pdfium")', 'static_library("pdfium")')
     if updated == text:
         print('WARNING: component("pdfium") not found in BUILD.gn — already patched?')
+        return
+    build_gn.write_text(updated)
+    print("Applied: BUILD.gn -> static_library")
+
+
+def patch_build_gn_shared(pdfium_dir: Path) -> None:
+    """Patch BUILD.gn: component()/static_library() -> shared_library()."""
+    build_gn = pdfium_dir / "BUILD.gn"
+    text = build_gn.read_text()
+    updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
+    updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
+    if updated == text:
+        print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
     build_gn.write_text(updated)
     print("Applied: BUILD.gn -> shared_library")
@@ -248,9 +263,9 @@ def main() -> None:
         choices=["base", "shared", "all"],
         default="all",
         help=(
-            "base = everything except BUILD.gn component->shared rewrite "
-            "(produces libpdfium.a); shared = adds the BUILD.gn rewrite "
-            "(produces libpdfium.so); all = both (default, legacy behavior)."
+            "base = rewrite component() to static_library + musl toolchain/"
+            "config setup (produces libpdfium.a); shared = rewrite target "
+            "to shared_library (produces libpdfium.so); all = both (default)."
         ),
     )
     args = parser.parse_args()
@@ -265,8 +280,9 @@ def main() -> None:
         patch_buildconfig_gn(pdfium_dir)
         patch_highway_build_gn(pdfium_dir)
         install_musl_toolchain(pdfium_dir)
+        patch_build_gn_static(pdfium_dir)
     if args.mode in ("shared", "all"):
-        patch_build_gn(pdfium_dir)
+        patch_build_gn_shared(pdfium_dir)
 
 
 if __name__ == "__main__":

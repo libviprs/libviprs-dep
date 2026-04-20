@@ -66,22 +66,32 @@ duplicating PDFium's large `component("pdfium")` target body inside
 | --- | --- | --- |
 | `linux` | `libpdfium.so` + `libpdfium.a`, glibc-linked | Debian / Ubuntu / RHEL / mainstream distros |
 | `musl`  | `libpdfium.so` + `libpdfium.a`, musl-linked  | Alpine, musl-based distroless images |
-| `mac`   | `libpdfium.dylib` (single-phase today) | macOS (Apple Silicon and x86_64) |
+| `mac`   | `libpdfium.dylib` (requires macOS host) | macOS (Apple Silicon and x86_64) |
 
-The default matrix is five archives:
+The default matrix is four archives:
 
 | Platform | Arch | Archive |
 | --- | --- | --- |
 | linux | amd64 | `pdfium-linux-x64.tgz` |
 | linux | arm64 | `pdfium-linux-arm64.tgz` |
-| mac   | arm64 | `pdfium-mac-arm64.tgz` (Apple Silicon) |
 | musl  | amd64 | `pdfium-musl-x64.tgz` |
 | musl  | arm64 | `pdfium-musl-arm64.tgz` |
 
-Intel Mac (`mac/amd64`) is **not** in the default matrix — Apple has
-shipped Apple Silicon exclusively for new Macs since 2020, so the
+`mac` is intentionally excluded from the default matrix. PDFium's
+`build/config/apple/sdk_info.py` invokes `xcodebuild` during `gn gen`
+to query the macOS SDK version, and `xcodebuild` does not exist in the
+Debian container used for glibc/musl builds. bblanchon/pdfium-binaries
+works around this by running mac builds on actual `macos-15` GitHub
+Actions runners rather than cross-compiling from Linux. The mac
+Dockerfile generator is kept in `build_pdfium.py` for reference, but
+opting into `--platform mac` on a Linux host fails at `gn gen` unless
+you pre-provision an Xcode SDK and a stub `xcodebuild` inside the
+container.
+
+Intel Mac (`mac/amd64`) is also **not** in the default matrix — Apple
+has shipped Apple Silicon exclusively for new Macs since 2020, so the
 x86_64 dylib is rarely useful. Request it explicitly with
-`--platform mac --arch amd64` if you need it.
+`--platform mac --arch amd64` when building on a macOS host.
 
 Every compile runs inside an amd64 Linux container regardless of the
 host's CPU arch. `build_pdfium.py` forces `--platform=linux/amd64` on
@@ -110,19 +120,19 @@ container's own CPU arch, not the target.
 
 **`--platform PLATFORM [PLATFORM ...]`**
 
-:   One or more of `linux`, `musl`, `mac`. Defaults to the full
-    5-archive matrix (see DESCRIPTION). Pass a single value
-    (`--platform musl`) or several space-separated values
-    (`--platform linux musl`). `--platform mac` alone produces only
-    `mac/arm64`; pair it with `--arch amd64` to build an Intel Mac
-    dylib.
+:   One or more of `linux`, `musl`, `mac`. Defaults to the
+    4-archive `{linux, musl} × {amd64, arm64}` matrix (see
+    DESCRIPTION). Pass a single value (`--platform musl`) or several
+    space-separated values (`--platform linux musl`). `--platform mac`
+    requires a macOS host (see supported-platforms note above);
+    pair it with `--arch amd64` to build an Intel Mac dylib.
 
 **`--parallel`**
 
 :   Fan out every `(platform, arch)` combo concurrently. With the
-    default matrix this runs up to five Docker builds at once (one
+    default matrix this runs up to four Docker builds at once (one
     thread per combo); with `--platform linux` + `--arch amd64` it has
-    no effect. In the terminal, press `Tab` or digits `1`–`5` to switch
+    no effect. In the terminal, press `Tab` or digits `1`–`4` to switch
     which build's live output is visible; the other builds continue in
     the background and replay on switch.
 
@@ -130,9 +140,10 @@ container's own CPU arch, not the target.
     daemon's memory budget (read via `docker info`) before starting.
     Builds whose reservation would exceed the budget are held in a
     `queued — waiting for memory` state and launched as earlier builds
-    finish, so a small Docker VM running five jobs degrades gracefully
-    to serial execution instead of OOM-crashing. If `docker info` can't
-    be read, gating is skipped with a one-line warning.
+    finish, so a small Docker VM running multiple jobs degrades
+    gracefully to serial execution instead of OOM-crashing. If
+    `docker info` can't be read, gating is skipped with a one-line
+    warning.
 
 **`--mem-per-build MB`**
 
@@ -145,16 +156,46 @@ container's own CPU arch, not the target.
 
 **`--upload`**
 
-:   After a successful build, call `gh release create` to publish the
-    archives as a GitHub Release tagged `pdfium-{VERSION}` on
-    `libviprs/libviprs-dep`. If a release with that tag already exists
-    it is deleted and replaced. Requires `gh` to be installed and
-    authenticated (`gh auth login`).
+:   After a successful build, publish the archives as assets on the
+    GitHub Release tagged `pdfium-{VERSION}` on
+    `libviprs/libviprs-dep`. If the release does not exist it is
+    created; if it already exists, assets whose filenames match
+    something newly built are **replaced** (via
+    `gh release upload --clobber`) and any unrelated assets are
+    **preserved**. This lets a partial re-run — e.g.
+    `--platform musl --upload` after fixing a musl-only regression —
+    update only the musl tarballs without touching the linux ones.
+    Requires `gh` to be installed and authenticated (`gh auth login`).
 
 **`--output-dir DIR`**
 
 :   Where to write the `.tgz` archives. Default: `./bin`. Created if it
     does not already exist.
+
+## INTERACTIVE CONTROLS
+
+While a build is running in an interactive terminal, `build_pdfium.py`
+reads single keypresses from stdin (via `termios` cbreak mode) without
+needing `Enter`. The listener is active in both sequential and
+`--parallel` modes.
+
+| Key | Action |
+| --- | --- |
+| `Tab` | cycle the live-output view to the next job (parallel only) |
+| `1`–`9` | switch the live-output view to the Nth job (parallel only) |
+| `c` | cancel the currently-viewed job (parallel) or the running job (sequential) |
+| `q` or `C` | cancel every job — running, extracting, and queued |
+
+Cancelled jobs render as `⊘ cancelled` in the header, distinct from
+`✗ failed`, so intentional stops are visually separated from real
+errors. `cancel_all` also sets a sticky flag: any job still queued
+behind the memory scheduler bails immediately when its turn would come
+up, so `q` does not wait for slow jobs to finish before terminating
+the whole run.
+
+Cancellation sends `SIGTERM` to the `docker build` subprocess. If the
+daemon survives but leaves orphan containers or images behind, run
+`docker system prune` between runs.
 
 ## LOGS
 
@@ -252,8 +293,7 @@ python3 pdfium/build_pdfium.py 7725
 ```
 
 Produces `pdfium-linux-x64.tgz`, `pdfium-linux-arm64.tgz`,
-`pdfium-mac-arm64.tgz`, `pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`
-in `./bin/`.
+`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz` in `./bin/`.
 
 ### Build only musl variants
 
@@ -274,12 +314,12 @@ python3 pdfium/build_pdfium.py 7725 --parallel
 ```
 
 Fans out every `(platform, arch)` combo at once — with the default
-matrix that's five concurrent Docker builds (`linux/amd64`,
-`linux/arm64`, `mac/arm64`, `musl/amd64`, `musl/arm64`). In the
-terminal, press `Tab` or digits `1`–`5` to switch which build's live
-output is on screen. On an 8-core machine with plenty of disk, wall
-time is roughly the slowest single build rather than five back-to-back
-builds.
+matrix that's four concurrent Docker builds (`linux/amd64`,
+`linux/arm64`, `musl/amd64`, `musl/arm64`). In the terminal, press
+`Tab` or digits `1`–`4` to switch which build's live output is on
+screen; `c` cancels the visible job and `q` cancels every job. On an
+8-core machine with plenty of disk, wall time is roughly the slowest
+single build rather than four back-to-back builds.
 
 ### Build and publish a release
 
@@ -287,9 +327,20 @@ builds.
 python3 pdfium/build_pdfium.py 7725 --upload
 ```
 
-Equivalent to a full build followed by `gh release create pdfium-7725`
-with all four archives attached. The existing release (if any) is
-replaced in place.
+Creates the `pdfium-7725` GitHub Release (if missing) and attaches all
+four archives. If the release already exists, its assets are appended
+or replaced in place — any unrelated assets on the release are
+preserved.
+
+### Re-run one platform and update only its assets
+
+```bash
+python3 pdfium/build_pdfium.py 7725 --platform musl --parallel --upload
+```
+
+Rebuilds only the musl archives and uploads them with `--clobber`,
+leaving the existing `pdfium-linux-*.tgz` assets on the release
+untouched. Useful after fixing a platform-specific regression.
 
 ### Run via GitHub Actions
 
@@ -316,7 +367,13 @@ pdfium-<platform>-<gn_cpu>/
 `args.gn` and `args.static.gn` are kept separate so a consumer
 investigating linker issues can see exactly which flags produced each
 binary. They differ only in the `BUILD.gn` target type that the
-matching patch mode selects.
+matching patch mode selects: `static_library("pdfium")` under
+`--mode base` (emitting `libpdfium.a` at `out/Static/obj/libpdfium.a`),
+then `shared_library("pdfium")` under `--mode shared` (emitting
+`libpdfium.so` at `out/Shared/libpdfium.so`). The patch must rewrite
+`component()` explicitly because `component()` resolves to `source_set`
+under `is_component_build=false`, which groups objects but does not
+link a `.a`.
 
 ## CONSUMING THE ARTIFACTS
 
@@ -391,6 +448,52 @@ A full default matrix build produces ~30 GB of Docker image layers
 before cleanup. Ensure the Docker daemon has at least that much free
 space, or run `docker system prune` between builds.
 
+### `ls: cannot access 'out/Static/libpdfium.a'` at the verify step
+
+The verify step looks at `out/Static/obj/libpdfium.a`, not
+`out/Static/libpdfium.a` — GN's `static_library` template writes its
+archive into the `obj/` subtree. If you are patching the Dockerfile by
+hand and see this error, update both the verify step
+(`ls -lh out/Static/obj/libpdfium.a`) and the staging copy
+(`cp out/Static/obj/libpdfium.a /staging/lib/`) to the `obj/` path.
+
+### `FileNotFoundError: No such file or directory: 'xcodebuild'` during `gn gen`
+
+You attempted `--platform mac` on a Linux host. PDFium's
+`build/config/apple/sdk_info.py` calls `xcodebuild -version` to
+populate the mac SDK variables, and `xcodebuild` does not exist
+inside the Debian container. Either build mac on a macOS host, or
+pre-provision an Xcode SDK plus a stub `xcodebuild` in the Dockerfile
+before the `gn gen` step.
+
+### `lockfile.LockError: Errno 11 EAGAIN` during `gclient sync`
+
+gclient's internal parallel workers race on the gsutil bundle bootstrap
+flock. The Dockerfile mitigates this by running
+`python3 /opt/depot_tools/gsutil.py --version` before `gclient sync`
+so the bundle download completes single-threaded. If the error
+returns, re-run the affected job — the race is non-deterministic and
+the retry usually succeeds.
+
+### `Could not resolve host: chromium.googlesource.com` (or `musl.cc`)
+
+Transient DNS failures inside the Docker VM, typically when several
+containers start in parallel. The Dockerfiles wrap the relevant
+fetches in retry loops (5 attempts × 10 s backoff for `git clone
+depot_tools`; `curl --retry 5 --retry-delay 10 --retry-all-errors`
+for `musl.cc`). If all retries fail, check the Docker VM's DNS
+configuration (`docker info | grep -i dns`) or drop parallelism for
+the affected run.
+
+### Docker build fails with `rpc error: code = Unavailable ... EOF`
+
+The BuildKit daemon inside the Docker VM disconnected mid-build —
+almost always an OOM kill. Raise the Docker VM's memory limit (Docker
+Desktop → Settings → Resources → Memory) or drop `--parallel`. On a
+7.5 GiB VM, five simultaneous PDFium builds exhaust RAM during the
+depot_tools bootstrap; 16 GiB+ is the practical floor for a full
+parallel matrix.
+
 ## SEE ALSO
 
 - [`pdfium/README.md`](pdfium/README.md) — build pipeline overview and download links
@@ -403,7 +506,7 @@ space, or run `docker system prune` between builds.
 
 ## HISTORY
 
-- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix.
+- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, and `--upload` append/replace semantics landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
 - **pdfium earlier** — glibc-only shared library releases.
 
 ## LICENSE
