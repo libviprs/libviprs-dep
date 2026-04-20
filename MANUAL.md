@@ -230,6 +230,8 @@ leave in place across runs. Each new invocation truncates its own
 ```
 pdfium/
 ├── build_pdfium.py            # entry point
+├── build_mac_native.sh        # native mac build (called on Darwin hosts)
+├── VERSION                    # chromium branch number the release workflow ships
 ├── bin/                       # default output directory (gitignored)
 │   ├── pdfium-<plat>-<cpu>.tgz
 │   └── logs/
@@ -241,7 +243,11 @@ pdfium/
 └── tests/                     # pytest suite for pure-function logic
 
 .github/workflows/
-└── build.yml                  # CI workflow: builds the full matrix on dispatch
+├── build.yml                  # manual-dispatch build of an arbitrary chromium branch
+├── ci.yml                     # lint + tests on PRs / pushes to main
+└── release.yml                # fires on push to `release`, fans out to
+                               # 4 ubuntu-latest + 1 macos-15 jobs, each
+                               # uploading to pdfium-<VERSION> via --upload
 ```
 
 Each patch script is copied into the Docker build context as
@@ -356,6 +362,29 @@ Trigger the **Build PDFium** workflow (`.github/workflows/build.yml`) via
 `workflow_dispatch`, supplying the chromium branch number. Tick
 `upload=true` to have the workflow create/replace the GitHub Release
 with all archives from the matrix.
+
+### Cutting a release via the `release` branch
+
+The **Release** workflow (`.github/workflows/release.yml`) is triggered
+by a merge to `release`. It reads the chromium branch from
+`pdfium/VERSION`, then fans out to one job per default-matrix entry:
+
+- Four `ubuntu-latest` jobs — `{linux, musl} × {amd64, arm64}` — each
+  calls `build_pdfium.py --platform X --arch Y --upload`.
+- One `macos-15` job runs the same command with `--platform mac
+  --arch arm64`; `build_pdfium.py` detects the Darwin host and dispatches
+  to `pdfium/build_mac_native.sh` instead of its Docker path.
+
+A preceding `create-release` job ensures the `pdfium-<VERSION>` tag
+exists before any build job uploads, so parallel `gh release upload
+--clobber` calls don't race on `gh release create`. Authentication uses
+the workflow's auto-minted `GITHUB_TOKEN` (exposed as `GH_TOKEN`); each
+build job declares `permissions: contents: write`.
+
+To publish a new version: open a PR that bumps `pdfium/VERSION` against
+`release`, merge it, and the workflow takes over. A final `summary`
+job posts the release URL and per-job statuses to the workflow run's
+summary page.
 
 ## ARTIFACT LAYOUT
 
