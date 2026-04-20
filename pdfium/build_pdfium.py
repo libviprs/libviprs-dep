@@ -1073,7 +1073,13 @@ def _make_dockerfile_linux(version, arch, plat):
     gn_cpu = target["gn_cpu"]
     branch = f"chromium/{version}"
     extra_args = GN_ARGS_ARM64 if arch == "arm64" else ""
-    gn_args = gn_args_for(plat, gn_cpu, extra_args)
+    gn_args_shared = gn_args_for(plat, gn_cpu, extra_args)
+    # pdf_is_complete_lib triggers PDFium's own BUILD.gn branch that sets
+    # static_component_type = "static_library", complete_static_lib = true,
+    # and — critically — strips //build/config/compiler:thin_archive from
+    # configs. Without the config subtraction GN's alink runs `ar -T -S …`
+    # and emits a GNU thin archive, which rustc can't bundle into an rlib.
+    gn_args_static = gn_args_for(plat, gn_cpu, f"{extra_args}\npdf_is_complete_lib = true".strip())
 
     # For cross-compilation, install the target arch's cross-compiler
     base_pkgs = "git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file"
@@ -1130,9 +1136,13 @@ RUN python3 build/linux/sysroot_scripts/install-sysroot.py --arch={gn_cpu}
 COPY platform.py /tmp/platform.py
 RUN python3 /tmp/platform.py /build/pdfium --mode base
 
-# Step 6: Configure static build
+# Step 6: Configure static build. pdf_is_complete_lib fires PDFium's own
+# BUILD.gn branch at lines 276-279 which sets static_component_type =
+# "static_library", complete_static_lib = true, and strips the
+# thin_archive config so `ar` emits a fat archive downstream Rust
+# consumers can actually bundle into an rlib.
 RUN mkdir -p out/Static && cat > out/Static/args.gn <<'ARGS'
-{gn_args}ARGS
+{gn_args_static}ARGS
 RUN gn gen out/Static
 
 # Step 7: Build static archive (component() -> static_library -> libpdfium.a)
@@ -1141,9 +1151,11 @@ RUN ninja -C out/Static pdfium
 # Step 8: Apply shared-library patch on top of base
 RUN python3 /tmp/platform.py /build/pdfium --mode shared
 
-# Step 9: Configure shared build
+# Step 9: Configure shared build (pdf_is_complete_lib omitted — the patch
+# already rewrote the target to shared_library and the complete-lib branch
+# is specific to static_library output).
 RUN mkdir -p out/Shared && cat > out/Shared/args.gn <<'ARGS'
-{gn_args}ARGS
+{gn_args_shared}ARGS
 RUN gn gen out/Shared
 
 # Step 10: Build shared library (shared_library -> libpdfium.so)
@@ -1267,7 +1279,15 @@ def _make_dockerfile_musl(version, arch):
     # returned 1 exit status". Pass arm_control_flow_integrity = "none"
     # so the linker doesn't require BTI on the prebuilt toolchain libs.
     extra_args = GN_ARGS_ARM64 if arch == "arm64" else ""
-    gn_args = gn_args_for("musl", gn_cpu, extra_args)
+    gn_args_shared = gn_args_for("musl", gn_cpu, extra_args)
+    # pdf_is_complete_lib triggers PDFium's own BUILD.gn branch that sets
+    # static_component_type = "static_library", complete_static_lib = true,
+    # and — critically — strips //build/config/compiler:thin_archive from
+    # configs. Without the config subtraction GN's alink runs `ar -T -S …`
+    # and emits a GNU thin archive, which rustc can't bundle into an rlib.
+    gn_args_static = gn_args_for(
+        "musl", gn_cpu, f"{extra_args}\npdf_is_complete_lib = true".strip()
+    )
 
     # Map gn_cpu to musl-cross-make target triple prefix
     musl_targets = {
@@ -1321,9 +1341,13 @@ RUN gclient runhooks
 COPY platform.py /tmp/platform.py
 RUN python3 /tmp/platform.py /build/pdfium --mode base
 
-# Step 7: Configure static build
+# Step 7: Configure static build. pdf_is_complete_lib fires PDFium's own
+# BUILD.gn branch at lines 276-279 which sets static_component_type =
+# "static_library", complete_static_lib = true, and strips the
+# thin_archive config so `ar` emits a fat archive downstream Rust
+# consumers can actually bundle into an rlib.
 RUN mkdir -p out/Static && cat > out/Static/args.gn <<'ARGS'
-{gn_args}ARGS
+{gn_args_static}ARGS
 RUN gn gen out/Static
 
 # Step 8: Build static archive (component() -> static_library -> libpdfium.a)
@@ -1332,9 +1356,11 @@ RUN ninja -C out/Static pdfium
 # Step 9: Apply shared-library patch on top of base
 RUN python3 /tmp/platform.py /build/pdfium --mode shared
 
-# Step 10: Configure shared build
+# Step 10: Configure shared build (pdf_is_complete_lib omitted — the patch
+# already rewrote the target to shared_library and the complete-lib branch
+# is specific to static_library output).
 RUN mkdir -p out/Shared && cat > out/Shared/args.gn <<'ARGS'
-{gn_args}ARGS
+{gn_args_shared}ARGS
 RUN gn gen out/Shared
 
 # Step 11: Build shared library (shared_library -> libpdfium.so)

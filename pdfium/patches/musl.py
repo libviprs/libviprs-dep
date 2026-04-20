@@ -13,16 +13,17 @@ both ``libpdfium.a`` and ``libpdfium.so``:
     - Install the musl GN toolchain at
       ``build/toolchain/linux/musl/BUILD.gn`` (gcc_toolchain entries for
       x86/x64/arm/arm64 using musl-cross-make prefixes).
-    - ``BUILD.gn``: rewrite ``component("pdfium")`` to
-      ``static_library("pdfium")``. Chromium's ``component()`` template
-      resolves to ``source_set`` (not ``static_library``) under
-      ``is_component_build=false``, and ``source_set`` does not link
-      a ``.a``. Explicit ``static_library`` is required for
-      ``libpdfium.a``.
 
-* ``shared`` — applied on top of ``base``. Rewrites
-  ``static_library("pdfium")`` to ``shared_library("pdfium")`` in
-  BUILD.gn so a second ninja pass yields ``libpdfium.so``.
+  Base mode does NOT touch ``BUILD.gn``. The static archive is produced
+  by passing ``pdf_is_complete_lib = true`` via GN args — PDFium's own
+  ``BUILD.gn`` handles that flag internally (sets
+  ``static_component_type = "static_library"``, ``complete_static_lib
+  = true``, and drops the ``thin_archive`` config). The build script
+  passes this arg directly, so the patch file doesn't need to.
+
+* ``shared`` — applied on top of ``base``. Rewrites the pristine
+  ``component("pdfium")`` to ``shared_library("pdfium")`` in BUILD.gn
+  so a second ninja pass yields ``libpdfium.so``.
 
 All patches match bblanchon/pdfium-binaries (patches/musl/).
 
@@ -36,37 +37,17 @@ import sys
 from pathlib import Path
 
 
-def patch_build_gn_static(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> static_library() + complete_static_lib.
-
-    See ``linux.py``'s docstring for why ``complete_static_lib = true``
-    is required: PDFium's ``pdfium`` target is an umbrella with deps but
-    no direct sources, so without this flag the archive is empty.
-    """
-    build_gn = pdfium_dir / "BUILD.gn"
-    text = build_gn.read_text()
-    updated = text.replace(
-        'component("pdfium") {',
-        'static_library("pdfium") {\n  complete_static_lib = true',
-    )
-    if updated == text:
-        print('WARNING: component("pdfium") { not found in BUILD.gn — already patched?')
-        return
-    build_gn.write_text(updated)
-    print("Applied: BUILD.gn -> static_library (complete_static_lib)")
-
-
 def patch_build_gn_shared(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component()/static_library() -> shared_library().
+    """Patch BUILD.gn: rewrite pristine ``component("pdfium")`` to shared_library.
 
-    Also strips the ``complete_static_lib = true`` line the base patch
-    adds, since that flag is only valid on static_library targets.
+    Base mode no longer touches BUILD.gn (the static archive comes from
+    the ``pdf_is_complete_lib = true`` GN arg, which PDFium's own
+    BUILD.gn handles), so by the time ``shared`` runs the file is still
+    in its pristine ``component("pdfium")`` form.
     """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
-    updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
-    updated = re.sub(r"\n\s*complete_static_lib = true\s*\n", "\n", updated)
+    updated = text.replace('component("pdfium")', 'shared_library("pdfium")')
     if updated == text:
         print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
@@ -276,9 +257,10 @@ def main() -> None:
         choices=["base", "shared", "all"],
         default="all",
         help=(
-            "base = rewrite component() to static_library + musl toolchain/"
-            "config setup (produces libpdfium.a); shared = rewrite target "
-            "to shared_library (produces libpdfium.so); all = both (default)."
+            "base = fpdfview.h + musl toolchain/config setup (static "
+            "archive comes from pdf_is_complete_lib GN arg, no BUILD.gn "
+            "rewrite needed); shared = rewrite component() to "
+            "shared_library (produces libpdfium.so); all = both (default)."
         ),
     )
     args = parser.parse_args()
@@ -293,7 +275,6 @@ def main() -> None:
         patch_buildconfig_gn(pdfium_dir)
         patch_highway_build_gn(pdfium_dir)
         install_musl_toolchain(pdfium_dir)
-        patch_build_gn_static(pdfium_dir)
     if args.mode in ("shared", "all"):
         patch_build_gn_shared(pdfium_dir)
 

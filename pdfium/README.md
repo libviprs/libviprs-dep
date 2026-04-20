@@ -81,11 +81,11 @@ The build pipeline (inspired by [bblanchon/pdfium-binaries](https://github.com/b
 2. Configure gclient with `checkout_configuration=small` (skips V8, test deps, cipd)
 3. Checkout PDFium source at the target chromium branch
 4. Install build dependencies and target architecture sysroot (linux) or musl-cross-make toolchain (musl)
-5. Apply the **base** platform patch — symbol visibility, rewrite `component("pdfium")` to `static_library("pdfium")` with `complete_static_lib = true`, plus musl toolchain GN config where relevant. Chromium's `component()` template resolves to `source_set` (not `static_library`) under `is_component_build=false`, so the explicit `static_library` rewrite is what actually gets a `.a` emitted; `complete_static_lib = true` then forces it to be a fat archive containing every transitive object.
-6. `gn gen out/Static` + `ninja -C out/Static pdfium` — produces `libpdfium.a`
-7. Apply the **shared** platform patch — rewrites `static_library("pdfium")` to `shared_library("pdfium")` and strips the static-only `complete_static_lib` line.
-8. `gn gen out/Shared` + `ninja -C out/Shared pdfium` — produces `libpdfium.so`
-9. **Verify** `libpdfium.a` is a complete fat archive: magic must be `!<arch>\n` (not `!<thin>\n`), archive must have ≥ 100 members and be ≥ 10 MB. A thin archive would reference `.o` files in the now-discarded build sandbox, so the build fails here rather than publish a broken archive.
+5. Apply the **base** platform patch — `fpdfview.h` symbol-visibility fix, plus musl-only toolchain GN config (BUILDCONFIG / highway / musl toolchain install) where relevant. Base mode no longer rewrites `BUILD.gn`.
+6. Write `out/Static/args.gn` with **`pdf_is_complete_lib = true`** and run `gn gen out/Static` + `ninja -C out/Static pdfium` — produces `libpdfium.a`. PDFium's own `BUILD.gn` already has a `pdf_is_complete_lib` branch that sets `static_component_type = "static_library"`, `complete_static_lib = true`, and — critically — strips `//build/config/compiler:thin_archive` from configs. Passing the GN flag triggers that branch, so we no longer patch `BUILD.gn` to obtain a fat archive.
+7. Apply the **shared** platform patch — rewrites `component("pdfium")` → `shared_library("pdfium")` in `BUILD.gn`.
+8. Write `out/Shared/args.gn` *without* `pdf_is_complete_lib` (the flag is static-only — the shared pass compiles `shared_library("pdfium")`) and run `gn gen out/Shared` + `ninja -C out/Shared pdfium` — produces `libpdfium.so`
+9. **Verify** `libpdfium.a` is a complete fat archive: magic must be `!<arch>\n` (not `!<thin>\n`), archive must have ≥ 100 members and be ≥ 10 MB. A thin archive would reference `.o` files in the now-discarded build sandbox, so the build fails here rather than publish a broken archive. This check guards against regressions in the `pdf_is_complete_lib` path (e.g. a future PDFium refactor dropping the config subtraction).
 10. Stage artifacts into a single directory and package as `pdfium-{platform}-{gn_cpu}.tgz`
 
 The two-phase ninja build is the cleanest way to emit both a static archive and a shared library from a single source checkout without duplicating the `component("pdfium")` target body inside `BUILD.gn`. It roughly doubles the ninja time per combo, but the expensive Docker setup steps (apt, depot_tools, gclient sync, runhooks) only run once per combo.
@@ -263,7 +263,7 @@ PDFium is compiled with these GN arguments:
 
 ### Platform patches
 
-Platform-specific patches live in `patches/<platform>.py`. The `--platform` flag selects which patch script to apply during the build. Each patch script accepts a `--mode` flag (`base` / `shared` / `all`) so the build orchestrator can apply only the symbol-visibility patches before the static build and then layer the BUILD.gn shared-library rewrite on top before the second ninja pass.
+Platform-specific patches live in `patches/<platform>.py`. The `--platform` flag selects which patch script to apply during the build. Each patch script accepts a `--mode` flag (`base` / `shared` / `all`) so the build orchestrator can apply only the symbol-visibility (and, on musl, toolchain) patches before the static build, then layer the `BUILD.gn` shared-library rewrite on top before the second ninja pass. The static archive is produced without any `BUILD.gn` rewrite — the Static pass's `args.gn` sets `pdf_is_complete_lib = true`, which triggers PDFium's own fat-archive branch in `BUILD.gn`.
 
 ```
 patches/
@@ -276,13 +276,13 @@ Each `patches/<name>.py` script takes the PDFium source directory as its positio
 
 | Mode | Effect |
 | --- | --- |
-| `base` | Everything needed for the static-archive build: `fpdfview.h` visibility patch, plus musl's BUILDCONFIG / highway / toolchain install where applicable |
+| `base` | Symbol-visibility patch for `fpdfview.h`, plus musl's BUILDCONFIG / highway / toolchain install where applicable. Does **not** touch `BUILD.gn` — the Static pass relies on `pdf_is_complete_lib = true` in `args.gn` to trigger PDFium's own static-library branch. |
 | `shared` | Rewrites `component("pdfium")` → `shared_library("pdfium")` in `BUILD.gn`, applied after the static ninja pass |
 | `all` | Both `base` and `shared` (default — equivalent to running `base` then `shared`) |
 
 The Linux patches apply two changes required to produce a `.so` with exported `FPDF_*` symbols:
 
-1. **BUILD.gn** — changes `component("pdfium")` to `shared_library("pdfium")`. The `component()` macro resolves to `static_library` when `is_component_build=false`, so without this patch the output would be a `.a` archive instead of a `.so`. We exploit this deliberately to get the static archive first, then apply the patch and run ninja a second time to get the shared library.
+1. **BUILD.gn (shared mode only)** — changes `component("pdfium")` to `shared_library("pdfium")`. The `component()` macro resolves to `source_set` when `is_component_build=false`, so without this rewrite the shared pass would not emit a `.so`. Base mode leaves `component("pdfium")` alone; the Static pass takes a different route entirely — `pdf_is_complete_lib = true` in `args.gn` flips PDFium's own BUILD.gn branch that sets `static_component_type = "static_library"` and `complete_static_lib = true`, and strips `//build/config/compiler:thin_archive` from configs so `ar` writes a fat archive (not a GNU thin one).
 
 2. **fpdfview.h** — removes the `#if defined(COMPONENT_BUILD)` guard around `FPDF_EXPORT`. PDFium only applies `__attribute__((visibility("default")))` to its public API when `COMPONENT_BUILD` is defined. Since we set `is_component_build=false` (to get a single `.so` instead of many small ones), `FPDF_EXPORT` resolves to nothing without this patch, and all `FPDF_*` symbols get hidden visibility — making the library unusable via `dlopen`/`dlsym` and unusable when linked statically into a Rust binary that relies on the exported C ABI.
 
