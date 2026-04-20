@@ -36,15 +36,28 @@ from pathlib import Path
 
 
 def patch_build_gn_static(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> static_library()."""
+    """Patch BUILD.gn: component() -> static_library() + complete_static_lib.
+
+    Just renaming ``component("pdfium")`` to ``static_library("pdfium")``
+    produces an 8-byte ar archive (magic header only) because PDFium's
+    ``pdfium`` target has many ``deps`` but almost no direct ``sources``
+    — GN's default ``static_library`` only archives objects the target
+    owns directly, not those pulled in via deps. ``complete_static_lib
+    = true`` tells GN to include every transitive dependency's objects
+    in the archive, producing a self-contained ``libpdfium.a`` that can
+    be linked without re-resolving all of PDFium's third-party deps.
+    """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('component("pdfium")', 'static_library("pdfium")')
+    updated = text.replace(
+        'component("pdfium") {',
+        'static_library("pdfium") {\n  complete_static_lib = true',
+    )
     if updated == text:
-        print('WARNING: component("pdfium") not found in BUILD.gn — already patched?')
+        print('WARNING: component("pdfium") { not found in BUILD.gn — already patched?')
         return
     build_gn.write_text(updated)
-    print("Applied: BUILD.gn -> static_library")
+    print("Applied: BUILD.gn -> static_library (complete_static_lib)")
 
 
 def patch_build_gn_shared(pdfium_dir: Path) -> None:
@@ -52,12 +65,18 @@ def patch_build_gn_shared(pdfium_dir: Path) -> None:
 
     Handles both the pristine ``component("pdfium")`` form and the
     post-``base``-mode ``static_library("pdfium")`` form, so ``shared``
-    works whether or not ``base`` ran first.
+    works whether or not ``base`` ran first. Also strips the
+    ``complete_static_lib = true`` line that ``base`` inserts —
+    ``complete_static_lib`` is only valid on static_library targets and
+    GN errors out if it appears inside a shared_library.
     """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
     updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
     updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
+    # Drop the complete_static_lib line that the base patch added; it's
+    # only valid in a static_library target.
+    updated = re.sub(r"\n\s*complete_static_lib = true\s*\n", "\n", updated)
     if updated == text:
         print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
