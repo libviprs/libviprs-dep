@@ -177,6 +177,17 @@ def gn_args_for(plat, gn_cpu, extra_args):
 # with BTI support, so the linker fails with -z force-bti.
 GN_ARGS_ARM64 = 'arm_control_flow_integrity = "none"'
 
+# Parallel Docker builds are each expected to peak around this much
+# memory (ninja link + clang compile + Docker layer overhead). This is a
+# conservative estimate — tune with --mem-per-build if runs serialize
+# needlessly, or bump it up if OOMs occur.
+DEFAULT_MEM_PER_BUILD_MB = 4096
+
+# Memory held back from the scheduling budget for the Docker daemon, the
+# host OS, and any non-build processes. Without this margin, launching
+# `budget // per_build` concurrent builds would leave zero slack.
+DEFAULT_MEM_RESERVE_MB = 1024
+
 # Regex to detect Docker buildkit step markers like [3/14]
 STEP_RE = re.compile(r"\[\s*(\d+)/(\d+)\]")
 
@@ -334,6 +345,7 @@ class BuildProgress:
         for job in jobs:
             self.status[job] = {
                 "state": "waiting",
+                "message": "",
                 "step": 0,
                 "total_steps": 0,
                 "start_time": None,
@@ -429,10 +441,21 @@ class BuildProgress:
         with self._lock:
             s = self.status[job]
             s["state"] = "building"
+            s["message"] = ""
             s["step"] = 0
             s["total_steps"] = 0
             s["start_time"] = time.time()
             self._render()
+
+    def set_queued(self, job, message):
+        """Mark a job as waiting for the scheduler (e.g. memory budget)."""
+        with self._lock:
+            s = self.status[job]
+            s["state"] = "queued"
+            s["message"] = message
+            self._render()
+        if not self.active:
+            print(f"[{job}] {message}", flush=True)
 
     def set_step(self, job, step, total, is_copy=False):
         with self._lock:
@@ -555,6 +578,10 @@ class BuildProgress:
 
         if state == "waiting":
             line = f" {indicator}{job:<{label_w}} waiting"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
+
+        elif state == "queued":
+            line = f" {indicator}{job:<{label_w}} ⏳ {s['message']}"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "building":
@@ -776,6 +803,79 @@ def check_dependencies(upload):
             "compile happens inside an amd64 Debian container."
         )
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Memory-aware parallel scheduling
+# ---------------------------------------------------------------------------
+
+
+def docker_total_memory_mb():
+    """Total memory the Docker daemon can hand to containers, in MB.
+
+    On Docker Desktop (macOS/Windows) this is the Linux VM's allocation —
+    which is the real constraint, not the host's physical RAM. On native
+    Linux Docker it's the host's total memory. Returns None if the
+    daemon is unreachable, in which case memory gating falls back to
+    no-op and parallel builds run unconstrained.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "info", "--format", "{{.MemTotal}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        return int(result.stdout.strip()) // (1024 * 1024)
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError, ValueError):
+        return None
+
+
+class MemoryScheduler:
+    """Admission-control for parallel Docker builds based on a memory budget.
+
+    Each ``reserve(job)`` call blocks on a condition variable until the
+    caller's pessimistic ``per_build_mb`` reservation fits under
+    ``budget_mb``; ``release()`` returns the reservation and wakes
+    waiters. If a single build's estimate exceeds the full budget (tiny
+    Docker VM, huge per-build estimate) the first caller is still allowed
+    through — we can't do better than serializing — while later callers
+    queue normally. When a caller has to wait, ``progress.set_queued()``
+    is invoked once so the UI row shows the reason.
+    """
+
+    def __init__(self, budget_mb, per_build_mb, progress):
+        self.budget_mb = budget_mb
+        self.per_build_mb = per_build_mb
+        self.reserved_mb = 0
+        self.progress = progress
+        self._cond = threading.Condition()
+
+    def reserve(self, job):
+        """Block until this job's reservation fits within the budget."""
+        with self._cond:
+            announced = False
+            # ``reserved_mb > 0`` is the deadlock guard: if a single
+            # build's estimate already exceeds the budget, the very first
+            # caller must still be allowed to run (with no concurrency).
+            while self.reserved_mb + self.per_build_mb > self.budget_mb and self.reserved_mb > 0:
+                if not announced:
+                    available = max(self.budget_mb - self.reserved_mb, 0)
+                    self.progress.set_queued(
+                        job,
+                        f"queued — waiting for memory "
+                        f"(need ~{self.per_build_mb} MB, ~{available} MB free)",
+                    )
+                    announced = True
+                self._cond.wait()
+            self.reserved_mb += self.per_build_mb
+
+    def release(self):
+        """Return a reservation to the budget and wake any waiters."""
+        with self._cond:
+            self.reserved_mb = max(self.reserved_mb - self.per_build_mb, 0)
+            self._cond.notify_all()
 
 
 # ---------------------------------------------------------------------------
@@ -1088,7 +1188,7 @@ def run(cmd, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def build_for_arch(version, arch, plat, output_dir, progress):
+def build_for_arch(version, arch, plat, output_dir, progress, mem_scheduler=None):
     """Build PDFium for a single (platform, arch) using Docker.
 
     All builds run inside an amd64 container.  arm64 targets are
@@ -1098,11 +1198,29 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     Docker build context as ``platform.py`` and applied during the build.
     Image and container names include both ``plat`` and ``arch`` so
     concurrent ``(plat, arch)`` builds can't collide on shared names.
+
+    When ``mem_scheduler`` is provided, the worker reserves a pessimistic
+    memory slice before any Docker work starts, and releases it in
+    ``finally`` so crashes don't permanently starve the budget.
     """
     job = f"{plat}/{arch}"
     image_tag = f"pdfium-builder-{version}-{plat}-{arch}"
     container_name = f"pdfium-extract-{version}-{plat}-{arch}"
 
+    if mem_scheduler is not None:
+        mem_scheduler.reserve(job)
+    try:
+        return _build_for_arch_inner(
+            version, arch, plat, output_dir, progress, job, image_tag, container_name
+        )
+    finally:
+        if mem_scheduler is not None:
+            mem_scheduler.release()
+
+
+def _build_for_arch_inner(
+    version, arch, plat, output_dir, progress, job, image_tag, container_name
+):
     progress.start_arch(job)
 
     patch_script = os.path.join(PATCHES_DIR, f"{plat}.py")
@@ -1261,6 +1379,31 @@ def upload_release(version, built_files, progress):
 # ---------------------------------------------------------------------------
 
 
+def _make_mem_scheduler(progress, per_build_mb):
+    """Build a MemoryScheduler from ``docker info`` output, or None on failure.
+
+    When Docker's MemTotal can't be read we return None — the caller
+    proceeds without gating rather than blocking the whole build. A
+    one-line warning is printed so the user knows gating is off.
+    """
+    total = docker_total_memory_mb()
+    if total is None:
+        print(
+            "Warning: could not read Docker daemon memory budget "
+            "(`docker info` failed). Running without memory gating — "
+            "a parallel OOM may crash builds.",
+            flush=True,
+        )
+        return None
+    budget = max(total - DEFAULT_MEM_RESERVE_MB, per_build_mb)
+    print(
+        f"Docker memory budget: ~{total} MB total, "
+        f"~{budget} MB schedulable ({per_build_mb} MB/build).",
+        flush=True,
+    )
+    return MemoryScheduler(budget, per_build_mb, progress)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Build PDFium shared libraries using Docker",
@@ -1312,6 +1455,19 @@ def main():
         default="./bin",
         help="output directory (default: ./bin)",
     )
+    parser.add_argument(
+        "--mem-per-build",
+        type=int,
+        default=DEFAULT_MEM_PER_BUILD_MB,
+        metavar="MB",
+        help=(
+            "pessimistic memory estimate per parallel build, in MB "
+            f"(default: {DEFAULT_MEM_PER_BUILD_MB}). With --parallel, "
+            "builds whose reservation would exceed the Docker daemon's "
+            "total memory budget are queued and launched as earlier "
+            "builds finish."
+        ),
+    )
     args = parser.parse_args()
     try:
         args.arch = normalize_arch(args.arch)
@@ -1343,6 +1499,7 @@ def main():
         progress = BuildProgress(args.version, job_ids, parallel=args.parallel)
         try:
             if args.parallel and len(jobs) > 1:
+                mem_scheduler = _make_mem_scheduler(progress, args.mem_per_build)
                 with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
                     futures = {
                         pool.submit(
@@ -1352,6 +1509,7 @@ def main():
                             plat,
                             output_dir,
                             progress,
+                            mem_scheduler,
                         ): (plat, arch)
                         for plat, arch in jobs
                     }

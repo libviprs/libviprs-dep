@@ -26,6 +26,7 @@ python3 pdfium/build_pdfium.py VERSION
                                [--arch {amd64,arm64}]
                                [--platform PLATFORM [PLATFORM ...]]
                                [--parallel]
+                               [--mem-per-build MB]
                                [--upload]
                                [--output-dir DIR]
 ```
@@ -119,11 +120,28 @@ container's own CPU arch, not the target.
 **`--parallel`**
 
 :   Fan out every `(platform, arch)` combo concurrently. With the
-    default matrix this runs four Docker builds at once (one thread per
-    combo); with `--platform linux` + `--arch amd64` it has no effect.
-    In the terminal, press `Tab` or digits `1`–`4` to switch which
-    build's live output is visible; the other builds continue in the
-    background and replay on switch.
+    default matrix this runs up to five Docker builds at once (one
+    thread per combo); with `--platform linux` + `--arch amd64` it has
+    no effect. In the terminal, press `Tab` or digits `1`–`5` to switch
+    which build's live output is visible; the other builds continue in
+    the background and replay on switch.
+
+    Each parallel build reserves `--mem-per-build` MB from the Docker
+    daemon's memory budget (read via `docker info`) before starting.
+    Builds whose reservation would exceed the budget are held in a
+    `queued — waiting for memory` state and launched as earlier builds
+    finish, so a small Docker VM running five jobs degrades gracefully
+    to serial execution instead of OOM-crashing. If `docker info` can't
+    be read, gating is skipped with a one-line warning.
+
+**`--mem-per-build MB`**
+
+:   Pessimistic per-build memory estimate used by the `--parallel`
+    scheduler. Default: `4096` (4 GiB), which comfortably covers
+    PDFium's ninja link peak plus Docker overhead. Tune down if runs
+    queue needlessly on a large host; tune up if you see OOM kills.
+    Has no effect outside `--parallel` or when the default matrix has
+    only one job.
 
 **`--upload`**
 
