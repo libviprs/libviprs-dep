@@ -83,14 +83,18 @@ def normalize_arch(arch):
     return canonical
 
 
-# Default build matrix. Intel Macs are deliberately excluded — Apple has
-# shipped Apple Silicon exclusively for new Macs since 2020 and
-# pdfium-render consumers rarely need an x86_64 dylib. Add
-# ``--platform mac --arch x86_64`` to build one explicitly when needed.
+# Default build matrix. mac is excluded because PDFium's GN config
+# invokes ``xcodebuild`` during ``gn gen`` (via
+# ``build/config/apple/sdk_info.py``), which doesn't exist in a Debian
+# container. bblanchon/pdfium-binaries solves this by running mac builds
+# on actual macOS GitHub Actions runners (macos-15) rather than
+# cross-compiling from Linux — so we follow the same pattern and
+# require an explicit opt-in via ``--platform mac``. Intel Macs are also
+# excluded (Apple Silicon only since 2020); request one with
+# ``--platform mac --arch x86_64``.
 DEFAULT_JOBS = [
     ("linux", "amd64"),
     ("linux", "arm64"),
-    ("mac", "arm64"),
     ("musl", "amd64"),
     ("musl", "arm64"),
 ]
@@ -342,6 +346,16 @@ class BuildProgress:
         # Which job's output is currently displayed (None = interleaved/sequential)
         self._active_view = jobs[0] if self._parallel else None
         self._key_listener = None
+        # Cancellation state: ``_processes`` maps job → running Popen so a
+        # keypress can kill the right Docker build; ``_cancelled`` records
+        # which jobs were intentionally stopped so we don't relabel them
+        # as "failed" when the subprocess dies; ``_cancel_all`` makes any
+        # future registered processes die immediately, shutting down the
+        # whole fleet even when some jobs are still queued behind the
+        # memory scheduler.
+        self._processes = {}
+        self._cancelled = set()
+        self._cancel_all = False
         for job in jobs:
             self.status[job] = {
                 "state": "waiting",
@@ -366,9 +380,11 @@ class BuildProgress:
         if self.active:
             self._setup()
             atexit.register(self._cleanup)
-            if self._parallel:
-                self._key_listener = KeyListener(self._on_key)
-                self._key_listener.start()
+            # Key listener runs in both parallel and sequential modes —
+            # parallel uses Tab/1-9 for view switching too, sequential
+            # only needs c/q/C for cancellation.
+            self._key_listener = KeyListener(self._on_key)
+            self._key_listener.start()
 
     # -- terminal setup / teardown -----------------------------------------
 
@@ -401,7 +417,7 @@ class BuildProgress:
         self._cleanup()
 
     def _on_key(self, ch):
-        """Handle a keypress for view switching during parallel builds."""
+        """Handle a keypress for view switching / cancellation."""
         if ch == "\t":
             # Tab: cycle to next job
             with self._lock:
@@ -416,6 +432,89 @@ class BuildProgress:
                     self._active_view = self.jobs[idx]
                     self._replay_output()
                     self._render()
+        elif ch == "c":
+            # Cancel just the currently-viewed job (parallel) or the one
+            # actively building (sequential). No-op if no job is running.
+            target = self._active_view if self._parallel else self._current_running_job()
+            if target:
+                self.cancel_job(target)
+        elif ch in ("C", "q"):
+            # Cancel every running + queued job.
+            self.cancel_all()
+
+    def _current_running_job(self):
+        """Return the (at most one) job currently in the ``building`` state.
+
+        Used in sequential mode where ``_active_view`` is ``None`` — we
+        fall back to the single job that's actually running so ``c``
+        still has a meaningful target.
+        """
+        with self._lock:
+            for job in self.jobs:
+                if self.status[job]["state"] == "building":
+                    return job
+        return None
+
+    @staticmethod
+    def _kill_process(proc):
+        """Best-effort SIGTERM — the process may already be gone."""
+        try:
+            proc.terminate()
+        except (OSError, ProcessLookupError):
+            pass
+
+    def register_process(self, job, process):
+        """Track a running Popen so a keypress can kill it.
+
+        If ``cancel_all`` already fired, kill the newly-registered
+        process immediately — otherwise a job that was queued behind
+        the memory scheduler would start, sail past the cancellation,
+        and waste cycles.
+        """
+        with self._lock:
+            self._processes[job] = process
+            if self._cancel_all or job in self._cancelled:
+                self._kill_process(process)
+
+    def unregister_process(self, job):
+        with self._lock:
+            self._processes.pop(job, None)
+
+    def cancel_job(self, job):
+        """Cancel a single job — marks it cancelled and kills the Docker build."""
+        with self._lock:
+            if self.status[job]["state"] in ("done", "failed", "cancelled"):
+                return
+            self._cancelled.add(job)
+            s = self.status[job]
+            if s["state"] == "building":
+                if s["start_time"]:
+                    s["elapsed"] = time.time() - s["start_time"]
+            s["state"] = "cancelled"
+            proc = self._processes.get(job)
+            if proc:
+                self._kill_process(proc)
+            self._render()
+
+    def cancel_all(self):
+        """Cancel every job — running or queued."""
+        with self._lock:
+            self._cancel_all = True
+            for job in self.jobs:
+                s = self.status[job]
+                if s["state"] in ("done", "failed", "cancelled"):
+                    continue
+                self._cancelled.add(job)
+                if s["state"] == "building" and s["start_time"]:
+                    s["elapsed"] = time.time() - s["start_time"]
+                s["state"] = "cancelled"
+            for proc in list(self._processes.values()):
+                self._kill_process(proc)
+            self._render()
+
+    def is_cancelled(self, job):
+        with self._lock:
+            return job in self._cancelled
 
     def _replay_output(self):
         """Clear the scroll area and replay buffered output for the active view."""
@@ -533,12 +632,16 @@ class BuildProgress:
         title = f" PDFium chromium/{self.version} "
         if self._parallel and self._active_view:
             switch_hint = "1-9" if len(self.jobs) > 2 else "1/2"
-            hint = f"viewing: {self._active_view}  (Tab/{switch_hint} to switch) "
+            hint = (
+                f"viewing: {self._active_view}  "
+                f"(Tab/{switch_hint} switch · c cancel · q cancel all) "
+            )
             pad = max(w - len(title) - len(hint) - 4, 0)
             lines.append(f"┌──{title}{'─' * pad}{hint}┐")
         else:
-            pad = max(w - len(title) - 4, 0)
-            lines.append(f"┌──{title}{'─' * pad}┐")
+            hint = " (c cancel · q cancel all) " if self._key_listener else ""
+            pad = max(w - len(title) - len(hint) - 4, 0)
+            lines.append(f"┌──{title}{'─' * pad}{hint}┐")
         lines.append(f"│{' ' * (w - 2)}│")
 
         if self._uploading:
@@ -625,6 +728,10 @@ class BuildProgress:
             line = f" {indicator}{job:<{label_w}} ✗ failed  ({fmt_time(elapsed)})"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
+        elif state == "cancelled":
+            line = f" {indicator}{job:<{label_w}} ⊘ cancelled  ({fmt_time(elapsed)})"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
+
         return lines
 
     # -- Docker output streaming with step parsing -------------------------
@@ -644,39 +751,45 @@ class BuildProgress:
             text=True,
             bufsize=1,
         )
-        for line in process.stdout:
-            line = line.rstrip("\n")
-            if log_file is not None:
-                log_file.write(f"{line}\n")
-                log_file.flush()
-            # Parse step markers
-            m = STEP_RE.search(line)
-            if m:
-                step = int(m.group(1))
-                total = int(m.group(2))
-                # COPY/CACHED steps are instant and would pollute the
-                # EMA rate — flag them so set_step skips the rate update.
-                is_copy = "] COPY " in line or "] CACHED" in line
-                self.set_step(job, step, total, is_copy=is_copy)
-            # Buffer and conditionally display
-            with self._lock:
-                if self._parallel:
-                    self._output[job].append(line)
-                    # Only print if this job is the active view
-                    if self._active_view == job:
+        # Register with the cancellation tracker. If ``cancel_all`` has
+        # already fired, ``register_process`` kills this Popen right away.
+        self.register_process(job, process)
+        try:
+            for line in process.stdout:
+                line = line.rstrip("\n")
+                if log_file is not None:
+                    log_file.write(f"{line}\n")
+                    log_file.flush()
+                # Parse step markers
+                m = STEP_RE.search(line)
+                if m:
+                    step = int(m.group(1))
+                    total = int(m.group(2))
+                    # COPY/CACHED steps are instant and would pollute the
+                    # EMA rate — flag them so set_step skips the rate update.
+                    is_copy = "] COPY " in line or "] CACHED" in line
+                    self.set_step(job, step, total, is_copy=is_copy)
+                # Buffer and conditionally display
+                with self._lock:
+                    if self._parallel:
+                        self._output[job].append(line)
+                        # Only print if this job is the active view
+                        if self._active_view == job:
+                            if self.active:
+                                sys.stdout.write(f"{line}\n")
+                                sys.stdout.flush()
+                            else:
+                                print(line)
+                    else:
                         if self.active:
                             sys.stdout.write(f"{line}\n")
                             sys.stdout.flush()
                         else:
                             print(line)
-                else:
-                    if self.active:
-                        sys.stdout.write(f"{line}\n")
-                        sys.stdout.flush()
-                    else:
-                        print(line)
-        process.wait()
-        return process.returncode
+            process.wait()
+            return process.returncode
+        finally:
+            self.unregister_process(job)
 
 
 # ---------------------------------------------------------------------------
@@ -937,13 +1050,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     && ln -sf /usr/bin/python3 /usr/bin/python \\
     && rm -rf /var/lib/apt/lists/*
 
-# Step 1: Install depot_tools
-RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
-    /opt/depot_tools
+# Step 1: Install depot_tools. Retry on transient DNS/network failures —
+# chromium.googlesource.com occasionally fails to resolve inside the
+# Docker VM on the first attempt, especially when several containers
+# start in parallel.
+RUN i=0; until git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
+    /opt/depot_tools; do i=$((i+1)); [ $i -ge 5 ] && exit 1; sleep 10; done
 ENV PATH="/opt/depot_tools:${{PATH}}"
-# Bootstrap depot_tools (creates python3_bin_reldir.txt needed by gn),
-# then disable auto-updates for the rest of the build.
-RUN gclient --version
+# Bootstrap depot_tools (creates python3_bin_reldir.txt needed by gn)
+# and serialize the gsutil bundle download — gclient's parallel sync
+# workers race on the gsutil bootstrap flock (Errno 11 EAGAIN) if this
+# is left to first-use during `gclient sync`. Then disable auto-updates.
+RUN gclient --version && python3 /opt/depot_tools/gsutil.py --version
 ENV DEPOT_TOOLS_UPDATE=0
 
 # Step 2: Configure gclient
@@ -986,15 +1104,18 @@ RUN gn gen out/Shared
 # Step 10: Build shared library (shared_library -> libpdfium.so)
 RUN ninja -C out/Shared pdfium
 
-# Step 11: Verify both outputs
-RUN ls -lh out/Static/libpdfium.a out/Shared/libpdfium.so && \\
-    file out/Static/libpdfium.a out/Shared/libpdfium.so
+# Step 11: Verify both outputs. GN's ``static_library`` writes the archive
+# to ``obj/<package>/lib<name>.a`` — for the top-level ``pdfium`` target
+# that's ``obj/libpdfium.a``. ``shared_library`` writes the .so at the
+# ninja out-dir root (``out/Shared/libpdfium.so``).
+RUN ls -lh out/Static/obj/libpdfium.a out/Shared/libpdfium.so && \\
+    file out/Static/obj/libpdfium.a out/Shared/libpdfium.so
 
 # Step 12: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
 RUN mkdir -p /staging/lib /staging/include && \\
     cp out/Shared/libpdfium.so /staging/lib/ && \\
-    cp out/Static/libpdfium.a /staging/lib/ && \\
+    cp out/Static/obj/libpdfium.a /staging/lib/ && \\
     cp out/Shared/args.gn /staging/args.gn && \\
     cp out/Static/args.gn /staging/args.static.gn && \\
     cp -r public/*.h /staging/include/ && \\
@@ -1003,12 +1124,17 @@ RUN mkdir -p /staging/lib /staging/include && \\
 
 
 def _make_dockerfile_mac(version, arch):
-    """Dockerfile for macOS builds.
+    """Dockerfile for macOS builds — DOES NOT WORK on a Linux host.
 
-    macOS builds cannot run natively inside Docker.  This Dockerfile
-    cross-compiles PDFium for macOS using the Chromium toolchain's clang
-    and the macOS SDK sysroot that gclient downloads.  The host container
-    is still Linux (amd64).
+    PDFium's ``build/config/apple/sdk_info.py`` invokes ``xcodebuild``
+    during ``gn gen`` to query the macOS SDK version, and ``xcodebuild``
+    doesn't exist in a Debian container. bblanchon/pdfium-binaries
+    solves this by running mac builds on actual macOS-15 GitHub Actions
+    runners rather than cross-compiling from Linux.
+
+    This function is kept for reference and for users who pre-provision
+    an Xcode SDK + stub ``xcodebuild`` inside the container. It is NOT
+    included in DEFAULT_JOBS and will fail at ``gn gen`` out of the box.
     """
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
@@ -1024,9 +1150,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     && ln -sf /usr/bin/python3 /usr/bin/python \\
     && rm -rf /var/lib/apt/lists/*
 
-# Step 1: Install depot_tools
-RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
-    /opt/depot_tools
+# Step 1: Install depot_tools. Retry on transient DNS/network failures —
+# chromium.googlesource.com occasionally fails to resolve inside the
+# Docker VM on the first attempt, especially when several containers
+# start in parallel.
+RUN i=0; until git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
+    /opt/depot_tools; do i=$((i+1)); [ $i -ge 5 ] && exit 1; sleep 10; done
 ENV PATH="/opt/depot_tools:${{PATH}}"
 RUN gclient --version
 ENV DEPOT_TOOLS_UPDATE=0
@@ -1100,15 +1229,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     && ln -sf /usr/bin/python3 /usr/bin/python \\
     && rm -rf /var/lib/apt/lists/*
 
-# Step 1: Install musl-cross-make toolchain
-RUN curl -fsSL "https://musl.cc/{musl_target}-cross.tgz" | tar xz -C /opt
+# Step 1: Install musl-cross-make toolchain.
+# musl.cc is a small single-host mirror that occasionally returns DNS
+# failures or 5xx under load; --retry with --retry-all-errors covers
+# both transient network and HTTP errors so a flake doesn't kill the build.
+RUN curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors \\
+    "https://musl.cc/{musl_target}-cross.tgz" | tar xz -C /opt
 ENV PATH="/opt/{musl_target}-cross/bin:${{PATH}}"
 
-# Step 2: Install depot_tools
-RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
-    /opt/depot_tools
+# Step 2: Install depot_tools. Retry on transient DNS/network failures.
+RUN i=0; until git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \\
+    /opt/depot_tools; do i=$((i+1)); [ $i -ge 5 ] && exit 1; sleep 10; done
 ENV PATH="/opt/depot_tools:${{PATH}}"
-RUN gclient --version
+# Bootstrap depot_tools and serialize gsutil download — see linux Dockerfile
+# comment for why this pre-warm is needed.
+RUN gclient --version && python3 /opt/depot_tools/gsutil.py --version
 ENV DEPOT_TOOLS_UPDATE=0
 
 # Step 3: Configure gclient
@@ -1147,15 +1282,17 @@ RUN gn gen out/Shared
 # Step 11: Build shared library (shared_library -> libpdfium.so)
 RUN ninja -C out/Shared pdfium
 
-# Step 12: Verify both outputs
-RUN ls -lh out/Static/libpdfium.a out/Shared/libpdfium.so && \\
-    file out/Static/libpdfium.a out/Shared/libpdfium.so
+# Step 12: Verify both outputs. GN's ``static_library`` writes the archive
+# to ``obj/<package>/lib<name>.a`` — for the top-level ``pdfium`` target
+# that's ``obj/libpdfium.a``.
+RUN ls -lh out/Static/obj/libpdfium.a out/Shared/libpdfium.so && \\
+    file out/Static/obj/libpdfium.a out/Shared/libpdfium.so
 
 # Step 13: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
 RUN mkdir -p /staging/lib /staging/include && \\
     cp out/Shared/libpdfium.so /staging/lib/ && \\
-    cp out/Static/libpdfium.a /staging/lib/ && \\
+    cp out/Static/obj/libpdfium.a /staging/lib/ && \\
     cp out/Shared/args.gn /staging/args.gn && \\
     cp out/Static/args.gn /staging/args.static.gn && \\
     cp -r public/*.h /staging/include/ && \\
@@ -1295,6 +1432,11 @@ def build_for_arch(version, arch, plat, output_dir, progress, mem_scheduler=None
 def _build_for_arch_inner(
     version, arch, plat, output_dir, progress, job, image_tag, container_name, log_file
 ):
+    # If cancel_all fired while this job was queued behind the memory
+    # scheduler, bail before starting the Docker build at all.
+    if progress.is_cancelled(job):
+        raise RuntimeError(f"Docker build cancelled for {job}")
+
     progress.start_arch(job)
 
     patch_script = os.path.join(PATCHES_DIR, f"{plat}.py")
@@ -1341,6 +1483,10 @@ def _build_for_arch_inner(
         log_file.flush()
         rc = progress.stream_docker_build(cmd, job, log_file=log_file)
         if rc != 0:
+            # If the non-zero exit came from a user cancellation, the job
+            # already shows as "cancelled" — don't relabel it "failed".
+            if progress.is_cancelled(job):
+                raise RuntimeError(f"Docker build cancelled for {job}")
             progress.set_failed(job)
             raise RuntimeError(f"Docker build failed for {job} (exit {rc})")
 
@@ -1407,46 +1553,57 @@ def _build_for_arch_inner(
 
 
 def upload_release(version, built_files, progress):
-    """Create a GitHub Release and upload the built binaries."""
+    """Create or update a GitHub Release, adding/replacing the built assets.
+
+    If the release doesn't exist, it is created. Existing assets with names
+    not in ``built_files`` are preserved — useful when a parallel run only
+    produced a subset of the matrix (e.g. musl succeeded, linux/arm64 didn't).
+    Assets whose names collide with newly-built files are replaced via
+    ``gh release upload --clobber``.
+    """
     tag = release_tag(version)
     branch = f"chromium/{version}"
 
     progress.set_uploading()
 
-    # Delete existing release if present
-    result = subprocess.run(
+    release_exists = subprocess.run(
         ["gh", "release", "view", tag, "-R", GITHUB_REPO],
         capture_output=True,
-    )
-    if result.returncode == 0:
-        print(f"Release '{tag}' already exists, deleting...", flush=True)
+    ).returncode == 0
+
+    if not release_exists:
+        print(f"Release '{tag}' doesn't exist, creating...", flush=True)
         run(
             [
                 "gh",
                 "release",
-                "delete",
+                "create",
                 tag,
                 "-R",
                 GITHUB_REPO,
-                "--yes",
+                "--title",
+                f"PDFium {branch}",
+                "--notes",
+                f"PDFium shared library built from source.\n\n"
+                f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
+                "Build configuration:\n```\n"
+                f"{GN_ARGS_COMMON.format(gn_cpu='<target>', extra_args='')}```",
             ]
         )
+    else:
+        print(f"Release '{tag}' exists, appending/replacing assets...", flush=True)
 
+    # --clobber replaces matching-name assets; non-matching existing assets
+    # are left alone so partial runs can be combined across invocations.
     run(
         [
             "gh",
             "release",
-            "create",
+            "upload",
             tag,
             "-R",
             GITHUB_REPO,
-            "--title",
-            f"PDFium {branch}",
-            "--notes",
-            f"PDFium shared library built from source.\n\n"
-            f"Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/{branch}\n\n"
-            "Build configuration:\n```\n"
-            f"{GN_ARGS_COMMON.format(gn_cpu='<target>', extra_args='')}```",
+            "--clobber",
             *built_files,
         ]
     )

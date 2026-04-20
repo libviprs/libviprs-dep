@@ -24,7 +24,7 @@ pdfium-<platform>-<cpu>/
 └── LICENSE
 ```
 
-The default release matrix is `{linux, musl} × {amd64, arm64}` — four archives per tag. Pick the `linux-*` archives for glibc runtimes (Debian, Ubuntu, …) and the `musl-*` archives for musl runtimes (Alpine, musl-based distroless images). Loading a glibc `.so` from a musl process — or vice versa — fails at `dlopen` time. macOS (`pdfium-mac-*`) is available on request but not in the default matrix.
+The default release matrix is `{linux, musl} × {amd64, arm64}` — four archives per tag. Pick the `linux-*` archives for glibc runtimes (Debian, Ubuntu, …) and the `musl-*` archives for musl runtimes (Alpine, musl-based distroless images). Loading a glibc `.so` from a musl process — or vice versa — fails at `dlopen` time. macOS is intentionally excluded from the default matrix: PDFium's GN config invokes `xcodebuild` during `gn gen`, which doesn't exist on Linux, so mac builds require an actual macOS host (bblanchon/pdfium-binaries runs mac builds on `macos-15` GitHub Actions runners for the same reason).
 
 See [`pdfium/README.md`](pdfium/README.md#download) for direct download URLs and consumption examples.
 
@@ -36,7 +36,15 @@ Build the full default matrix for chromium branch 7725 and publish it as a relea
 python3 pdfium/build_pdfium.py 7725 --parallel --upload
 ```
 
-`--parallel` fans out every `(platform, arch)` combo (5 by default) at once, gated by a memory scheduler that reads the Docker daemon's `MemTotal` and queues over-budget combos until earlier ones finish. Tune with `--mem-per-build MB` (default `4096`) if you see builds queuing unnecessarily on a large host or want extra safety margin on a small one.
+`--parallel` fans out every `(platform, arch)` combo (4 by default) at once, gated by a memory scheduler that reads the Docker daemon's `MemTotal` and queues over-budget combos until earlier ones finish. Tune with `--mem-per-build MB` (default `4096`) if you see builds queuing unnecessarily on a large host or want extra safety margin on a small one.
+
+While the build is running, the terminal header accepts these keys:
+
+| Key | Action |
+| --- | --- |
+| `Tab` / `1`–`9` | switch which build's live output is visible (parallel only) |
+| `c` | cancel the currently-viewed job |
+| `q` or `C` | cancel every job — running and queued |
 
 Every job streams its full Docker build output to `pdfium/bin/logs/<plat>-<arch>.log`. If a job fails, the script prints the log path to stderr — `tail -n 200 pdfium/bin/logs/linux-arm64.log` gives you the authoritative post-mortem, since the in-terminal view only retains the last ~500 lines per job.
 
