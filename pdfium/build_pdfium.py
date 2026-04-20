@@ -833,14 +833,32 @@ def _install_hint(tool):
     return hints[tool]["mac" if is_mac else "linux"]
 
 
-def check_dependencies(upload):
+def check_dependencies(upload, platforms=None):
     """Verify all required external tools are installed and authenticated.
 
-    Linux and macOS are both supported build hosts — the heavy lifting
-    happens inside an amd64 Debian container, so the host only needs
-    Docker, Python, and (for --upload) gh + git with a GitHub login.
+    Linux and musl builds run inside an amd64 Debian container, so their
+    host preflight needs Docker + buildx. The ``mac`` platform uses the
+    native ``build_mac_native.sh`` path (xcodebuild + depot_tools on the
+    host) and deliberately bypasses Docker — GitHub's ``macos-15`` runner
+    doesn't ship Docker Desktop, so requiring it here would fail every
+    mac release job.
+
+    ``platforms`` is an iterable of target platform strings (the same
+    values accepted by ``--platform``). When every requested platform is
+    ``mac``, the Docker preflight is skipped. When ``platforms`` is None
+    (default matrix across linux + musl + possibly mac), Docker is still
+    required because the non-mac jobs need it.
     """
     errors = []
+
+    if platforms is None:
+        needs_docker = True
+    else:
+        plats = list(platforms)
+        # Only skip the docker preflight when every requested platform is mac.
+        # A mixed run (e.g. --platform mac musl) still builds the musl
+        # container on the same host and must keep Docker required.
+        needs_docker = any(p != "mac" for p in plats) if plats else True
 
     if sys.version_info < (3, 7):
         errors.append(
@@ -848,27 +866,28 @@ def check_dependencies(upload):
             f"Install from https://www.python.org/downloads/"
         )
 
-    if not shutil.which("docker"):
-        errors.append(f"docker not found. {_install_hint('docker')}")
-    else:
-        result = subprocess.run(["docker", "info"], capture_output=True)
-        if result.returncode != 0:
-            errors.append(
-                "Docker daemon is not running. "
-                + (
-                    "Start Docker Desktop from the menu bar."
-                    if sys.platform == "darwin"
-                    else "Start it with `sudo systemctl start docker` (or add yourself to "
-                    "the `docker` group to run without sudo)."
-                )
-            )
+    if needs_docker:
+        if not shutil.which("docker"):
+            errors.append(f"docker not found. {_install_hint('docker')}")
         else:
-            result = subprocess.run(["docker", "buildx", "version"], capture_output=True)
+            result = subprocess.run(["docker", "info"], capture_output=True)
             if result.returncode != 0:
                 errors.append(
-                    "docker buildx not available. "
-                    "Install from https://docs.docker.com/build/install-buildx/"
+                    "Docker daemon is not running. "
+                    + (
+                        "Start Docker Desktop from the menu bar."
+                        if sys.platform == "darwin"
+                        else "Start it with `sudo systemctl start docker` (or add yourself to "
+                        "the `docker` group to run without sudo)."
+                    )
                 )
+            else:
+                result = subprocess.run(["docker", "buildx", "version"], capture_output=True)
+                if result.returncode != 0:
+                    errors.append(
+                        "docker buildx not available. "
+                        "Install from https://docs.docker.com/build/install-buildx/"
+                    )
 
     if upload:
         # gh CLI
@@ -1308,10 +1327,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
 
 # Step 1: Install musl-cross-make toolchain.
 # musl.cc is a small single-host mirror that occasionally returns DNS
-# failures or 5xx under load; --retry with --retry-all-errors covers
-# both transient network and HTTP errors so a flake doesn't kill the build.
+# failures or 5xx under load, and also (more subtly) drops the connection
+# mid-stream — the HTTP response starts with 200 OK but the body is
+# truncated. When curl is piped directly into `tar xz`, a short read
+# surfaces as a cryptic tar error and hides the real cause. Download to
+# a file first (with retries), assert the archive is at least 50 MB
+# (real toolchains are ~100 MB — anything smaller is a truncated body
+# or an error page), then extract. --retry-all-errors covers both
+# transient network and HTTP errors so a flake doesn't kill the build.
 RUN curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors \\
-    "https://musl.cc/{musl_target}-cross.tgz" | tar xz -C /opt
+    -o /tmp/tc.tgz "https://musl.cc/{musl_target}-cross.tgz"
+RUN test "$(stat -c%s /tmp/tc.tgz)" -gt 50000000 \\
+    || (echo "musl.cc returned a truncated toolchain archive" \\
+        "($(stat -c%s /tmp/tc.tgz) bytes < 50MB); aborting." >&2; exit 1)
+RUN tar xzf /tmp/tc.tgz -C /opt && rm /tmp/tc.tgz
 ENV PATH="/opt/{musl_target}-cross/bin:${{PATH}}"
 
 # Step 2: Install depot_tools. Retry on transient DNS/network failures.
@@ -1924,8 +1953,6 @@ def main():
     except ValueError as exc:
         parser.error(str(exc))
 
-    check_dependencies(upload=args.upload)
-
     output_dir = os.path.abspath(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -1934,6 +1961,12 @@ def main():
     # --parallel, every job runs concurrently in its own Docker build.
     jobs = resolve_jobs(args.platform, args.arch)
     job_ids = [f"{plat}/{arch}" for plat, arch in jobs]
+
+    # Preflight. Resolved platform set drives whether Docker is required:
+    # mac-only invocations run the native build_mac_native.sh path on a
+    # macOS host (no Docker), so the docker check is skipped. Any non-mac
+    # job keeps Docker required.
+    check_dependencies(upload=args.upload, platforms={plat for plat, _ in jobs})
 
     host_arch = platform.machine()
     if host_arch not in ("x86_64", "AMD64"):
