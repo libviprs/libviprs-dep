@@ -36,7 +36,7 @@ Build the full default matrix for chromium branch 7725 and publish it as a relea
 python3 pdfium/build_pdfium.py 7725 --parallel --upload
 ```
 
-`--parallel` fans out every `(platform, arch)` combo (4 by default) at once, gated by a memory scheduler that reads the Docker daemon's `MemTotal` and queues over-budget combos until earlier ones finish. Tune with `--mem-per-build MB` (default `4096`) if you see builds queuing unnecessarily on a large host or want extra safety margin on a small one.
+`--parallel` fans out every `(platform, arch)` combo (4 by default) at once, gated by a memory scheduler that reads the Docker daemon's `MemTotal` and queues over-budget combos until earlier ones finish. Tune with `--mem-per-build MB` (default `4096`) if you see builds queuing unnecessarily on a large host or want extra safety margin on a small one. Each container caps its internal `gclient sync` worker pool at 8 so four concurrent builds stay under Docker Desktop's DNS forwarder limits (see `MANUAL.md` troubleshooting for details).
 
 While the build is running, the terminal header accepts these keys:
 
