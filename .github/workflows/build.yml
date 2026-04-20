@@ -5,30 +5,90 @@ on:
       version:
         description: "PDFium chromium branch number (e.g. 7725)"
         required: true
-      arch:
-        description: "Architecture"
-        required: true
-        type: choice
-        options:
-          - amd64
-          - arm64
+      upload:
+        description: "Create a GitHub Release and attach the archives"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, musl]
+        arch: [amd64, arm64]
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Two ninja phases per archive (static + shared) plus cross-compile for
+    # arm64 pushes each combo well past the single-phase budget. 90 minutes
+    # gives headroom without letting a hung build loiter forever.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build PDFium ${{ inputs.arch }}
-        run: python3 pdfium/build_pdfium.py ${{ inputs.version }} --arch ${{ inputs.arch }}
-      - name: Verify output
+      - name: Build PDFium ${{ matrix.platform }}/${{ matrix.arch }}
+        run: >-
+          python3 pdfium/build_pdfium.py ${{ inputs.version }}
+          --platform ${{ matrix.platform }}
+          --arch ${{ matrix.arch }}
+      - name: Verify output contains both .so and .a
         run: |
-          ls -lh pdfium/bin/
-          tar tzf pdfium/bin/pdfium-*.tgz | head -20
+          set -eu
+          cd pdfium/bin
+          ls -lh
+          for f in pdfium-${{ matrix.platform }}-*.tgz; do
+            echo "=== $f ==="
+            tar tzf "$f"
+            tar tzf "$f" | grep -q 'lib/libpdfium.so' || { echo "missing libpdfium.so in $f"; exit 1; }
+            tar tzf "$f" | grep -q 'lib/libpdfium.a'  || { echo "missing libpdfium.a in $f";  exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: pdfium-linux-${{ inputs.arch }}
+          name: pdfium-${{ matrix.platform }}-${{ matrix.arch }}
           path: pdfium/bin/pdfium-*.tgz
+
+  release:
+    needs: build
+    if: ${{ inputs.upload }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          # download-artifact with a single name extracts to <path>; with
+          # no name and pattern: '*' it downloads every artifact from the
+          # run into <path>/<artifact-name>/, so the tarballs land under
+          # artifacts/pdfium-<plat>-<arch>/pdfium-<plat>-<cpu>.tgz.
+      - name: Flatten artifacts
+        run: |
+          set -eu
+          mkdir -p release-assets
+          find artifacts -name 'pdfium-*.tgz' -exec cp {} release-assets/ \;
+          ls -lh release-assets
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TAG="pdfium-${{ inputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release '$TAG' already exists, deleting so this run can replace it..."
+            gh release delete "$TAG" --yes
+          fi
+          gh release create "$TAG" \
+            --title "PDFium chromium/${{ inputs.version }}" \
+            --notes "PDFium libraries built from source.
+
+          Each archive contains:
+          - \`lib/libpdfium.so\` (shared library for \`dlopen\`)
+          - \`lib/libpdfium.a\` (static archive for \`pdfium-render/static\`)
+          - \`include/\` — public C headers
+          - \`args.gn\` / \`args.static.gn\` — GN build arguments used
+
+          Source: https://pdfium.googlesource.com/pdfium/+/refs/heads/chromium/${{ inputs.version }}" \
+            release-assets/pdfium-*.tgz
