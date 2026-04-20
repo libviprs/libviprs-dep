@@ -67,9 +67,30 @@ duplicating PDFium's large `component("pdfium")` target body inside
 | `musl`  | `libpdfium.so` + `libpdfium.a`, musl-linked  | Alpine, musl-based distroless images |
 | `mac`   | `libpdfium.dylib` (single-phase today) | macOS (Apple Silicon and x86_64) |
 
-By default the build matrix is `{linux, musl} × {amd64, arm64}`, which
-produces four archives. macOS is not in the default matrix and must be
-requested explicitly via `--platform mac`.
+The default matrix is five archives:
+
+| Platform | Arch | Archive |
+| --- | --- | --- |
+| linux | amd64 | `pdfium-linux-x64.tgz` |
+| linux | arm64 | `pdfium-linux-arm64.tgz` |
+| mac   | arm64 | `pdfium-mac-arm64.tgz` (Apple Silicon) |
+| musl  | amd64 | `pdfium-musl-x64.tgz` |
+| musl  | arm64 | `pdfium-musl-arm64.tgz` |
+
+Intel Mac (`mac/amd64`) is **not** in the default matrix — Apple has
+shipped Apple Silicon exclusively for new Macs since 2020, so the
+x86_64 dylib is rarely useful. Request it explicitly with
+`--platform mac --arch amd64` if you need it.
+
+Every compile runs inside an amd64 Linux container regardless of the
+host's CPU arch. `build_pdfium.py` forces `--platform=linux/amd64` on
+every `docker build` / `docker create` so Apple Silicon and Linux-arm64
+hosts still run an amd64 container (via QEMU emulation) — this is
+required because depot_tools ships amd64 Linux prebuilts for
+`clang` / `gn` / `ninja` that don't execute natively under arm64.
+Cross-compilation for the target arch happens inside the container via
+GN args + sysroot; the Docker `--platform` flag only controls the
+container's own CPU arch, not the target.
 
 ## OPTIONS
 
@@ -88,16 +109,21 @@ requested explicitly via `--platform mac`.
 
 **`--platform PLATFORM [PLATFORM ...]`**
 
-:   One or more of `linux`, `musl`, `mac`. Default: `linux musl`. Pass a
-    single value (`--platform musl`) or several space-separated values
-    (`--platform linux musl`). Each platform pass runs in sequence.
+:   One or more of `linux`, `musl`, `mac`. Defaults to the full
+    5-archive matrix (see DESCRIPTION). Pass a single value
+    (`--platform musl`) or several space-separated values
+    (`--platform linux musl`). `--platform mac` alone produces only
+    `mac/arm64`; pair it with `--arch amd64` to build an Intel Mac
+    dylib.
 
 **`--parallel`**
 
-:   Build the architectures of the current platform in parallel threads.
-    Only affects the `(amd64, arm64)` fan-out within a single platform
-    pass. Platform passes still run sequentially to keep the terminal
-    progress header readable.
+:   Fan out every `(platform, arch)` combo concurrently. With the
+    default matrix this runs four Docker builds at once (one thread per
+    combo); with `--platform linux` + `--arch amd64` it has no effect.
+    In the terminal, press `Tab` or digits `1`–`4` to switch which
+    build's live output is visible; the other builds continue in the
+    background and replay on switch.
 
 **`--upload`**
 
@@ -135,12 +161,33 @@ build) and `--mode shared` (for the shared build). See
 [`pdfium/README.md`](pdfium/README.md) for the patch script details and
 the GN args used.
 
+## HOST REQUIREMENTS
+
+The script runs on both macOS and Linux desktops — the heavy lifting
+happens inside an amd64 Debian container, so the host only needs the
+orchestration tools. Prerequisite checks run up-front (`check_dependencies`)
+and emit OS-specific install hints when something is missing.
+
+| Tool | Required when | macOS install | Linux install |
+| --- | --- | --- | --- |
+| Python 3.7+ | always | bundled / `brew install python` | distro package |
+| Docker + buildx | always | Docker Desktop (`brew install --cask docker`) | Docker Engine — `curl -fsSL https://get.docker.com \| sh` + `sudo usermod -aG docker $USER` |
+| `gh` CLI | `--upload` | `brew install gh` | distro repo (e.g. `sudo apt install gh` after adding gh apt repo) |
+| `git` + `user.name`/`user.email` config | `--upload` | `brew install git` | `sudo apt install git` |
+
+If `--upload` is passed, the prerequisite check also runs
+`gh auth status` and verifies the authenticated account has write
+access to `libviprs/libviprs-dep` via `gh repo view … --json
+viewerPermission`. Accounts with only read access, or no access, fail
+the preflight with an instruction pointing at `gh auth login` /
+`gh auth switch`.
+
 ## ENVIRONMENT
 
 **`PATH`**
 
 :   Must include `docker`, `python3`, and — if `--upload` is passed —
-    `gh`.
+    `gh` and `git`.
 
 The build script does not itself consume any other environment variables.
 Inside the Docker container, it sets and relies on `PATH`,
@@ -164,7 +211,8 @@ python3 pdfium/build_pdfium.py 7725
 ```
 
 Produces `pdfium-linux-x64.tgz`, `pdfium-linux-arm64.tgz`,
-`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz` in `./bin/`.
+`pdfium-mac-arm64.tgz`, `pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`
+in `./bin/`.
 
 ### Build only musl variants
 
@@ -184,9 +232,13 @@ python3 pdfium/build_pdfium.py 7725 --platform musl --arch arm64
 python3 pdfium/build_pdfium.py 7725 --parallel
 ```
 
-Runs amd64 and arm64 concurrently within each platform pass. In the
-terminal, press `Tab` / `1` / `2` to switch between each architecture's
-live output.
+Fans out every `(platform, arch)` combo at once — with the default
+matrix that's five concurrent Docker builds (`linux/amd64`,
+`linux/arm64`, `mac/arm64`, `musl/amd64`, `musl/arm64`). In the
+terminal, press `Tab` or digits `1`–`5` to switch which build's live
+output is on screen. On an 8-core machine with plenty of disk, wall
+time is roughly the slowest single build rather than five back-to-back
+builds.
 
 ### Build and publish a release
 
