@@ -55,7 +55,7 @@ def patch_build_gn_shared(pdfium_dir: Path) -> None:
     updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
     updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
     if updated == text:
-        print('WARNING: no pdfium target to rewrite in BUILD.gn — already patched?')
+        print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
     build_gn.write_text(updated)
     print("Applied: BUILD.gn -> shared_library")

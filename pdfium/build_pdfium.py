@@ -1566,10 +1566,13 @@ def upload_release(version, built_files, progress):
 
     progress.set_uploading()
 
-    release_exists = subprocess.run(
-        ["gh", "release", "view", tag, "-R", GITHUB_REPO],
-        capture_output=True,
-    ).returncode == 0
+    release_exists = (
+        subprocess.run(
+            ["gh", "release", "view", tag, "-R", GITHUB_REPO],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
     if not release_exists:
         print(f"Release '{tag}' doesn't exist, creating...", flush=True)
