@@ -177,6 +177,17 @@ def gn_args_for(plat, gn_cpu, extra_args):
 # with BTI support, so the linker fails with -z force-bti.
 GN_ARGS_ARM64 = 'arm_control_flow_integrity = "none"'
 
+# Parallel Docker builds are each expected to peak around this much
+# memory (ninja link + clang compile + Docker layer overhead). This is a
+# conservative estimate — tune with --mem-per-build if runs serialize
+# needlessly, or bump it up if OOMs occur.
+DEFAULT_MEM_PER_BUILD_MB = 4096
+
+# Memory held back from the scheduling budget for the Docker daemon, the
+# host OS, and any non-build processes. Without this margin, launching
+# `budget // per_build` concurrent builds would leave zero slack.
+DEFAULT_MEM_RESERVE_MB = 1024
+
 # Regex to detect Docker buildkit step markers like [3/14]
 STEP_RE = re.compile(r"\[\s*(\d+)/(\d+)\]")
 
@@ -334,6 +345,7 @@ class BuildProgress:
         for job in jobs:
             self.status[job] = {
                 "state": "waiting",
+                "message": "",
                 "step": 0,
                 "total_steps": 0,
                 "start_time": None,
@@ -429,10 +441,21 @@ class BuildProgress:
         with self._lock:
             s = self.status[job]
             s["state"] = "building"
+            s["message"] = ""
             s["step"] = 0
             s["total_steps"] = 0
             s["start_time"] = time.time()
             self._render()
+
+    def set_queued(self, job, message):
+        """Mark a job as waiting for the scheduler (e.g. memory budget)."""
+        with self._lock:
+            s = self.status[job]
+            s["state"] = "queued"
+            s["message"] = message
+            self._render()
+        if not self.active:
+            print(f"[{job}] {message}", flush=True)
 
     def set_step(self, job, step, total, is_copy=False):
         with self._lock:
@@ -557,6 +580,10 @@ class BuildProgress:
             line = f" {indicator}{job:<{label_w}} waiting"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
+        elif state == "queued":
+            line = f" {indicator}{job:<{label_w}} ⏳ {s['message']}"
+            lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
+
         elif state == "building":
             step = s["step"]
             total = s["total_steps"] or 1
@@ -602,8 +629,14 @@ class BuildProgress:
 
     # -- Docker output streaming with step parsing -------------------------
 
-    def stream_docker_build(self, cmd, job):
-        """Run a docker build command, stream its output, and parse step progress."""
+    def stream_docker_build(self, cmd, job, log_file=None):
+        """Run a docker build command, stream its output, and parse step progress.
+
+        When ``log_file`` is provided every output line is written there
+        verbatim — the UI buffers only OUTPUT_BUFFER_SIZE lines per job,
+        so the log file is the authoritative post-mortem record when a
+        parallel build fails.
+        """
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -613,6 +646,9 @@ class BuildProgress:
         )
         for line in process.stdout:
             line = line.rstrip("\n")
+            if log_file is not None:
+                log_file.write(f"{line}\n")
+                log_file.flush()
             # Parse step markers
             m = STEP_RE.search(line)
             if m:
@@ -776,6 +812,79 @@ def check_dependencies(upload):
             "compile happens inside an amd64 Debian container."
         )
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Memory-aware parallel scheduling
+# ---------------------------------------------------------------------------
+
+
+def docker_total_memory_mb():
+    """Total memory the Docker daemon can hand to containers, in MB.
+
+    On Docker Desktop (macOS/Windows) this is the Linux VM's allocation —
+    which is the real constraint, not the host's physical RAM. On native
+    Linux Docker it's the host's total memory. Returns None if the
+    daemon is unreachable, in which case memory gating falls back to
+    no-op and parallel builds run unconstrained.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "info", "--format", "{{.MemTotal}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        return int(result.stdout.strip()) // (1024 * 1024)
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError, ValueError):
+        return None
+
+
+class MemoryScheduler:
+    """Admission-control for parallel Docker builds based on a memory budget.
+
+    Each ``reserve(job)`` call blocks on a condition variable until the
+    caller's pessimistic ``per_build_mb`` reservation fits under
+    ``budget_mb``; ``release()`` returns the reservation and wakes
+    waiters. If a single build's estimate exceeds the full budget (tiny
+    Docker VM, huge per-build estimate) the first caller is still allowed
+    through — we can't do better than serializing — while later callers
+    queue normally. When a caller has to wait, ``progress.set_queued()``
+    is invoked once so the UI row shows the reason.
+    """
+
+    def __init__(self, budget_mb, per_build_mb, progress):
+        self.budget_mb = budget_mb
+        self.per_build_mb = per_build_mb
+        self.reserved_mb = 0
+        self.progress = progress
+        self._cond = threading.Condition()
+
+    def reserve(self, job):
+        """Block until this job's reservation fits within the budget."""
+        with self._cond:
+            announced = False
+            # ``reserved_mb > 0`` is the deadlock guard: if a single
+            # build's estimate already exceeds the budget, the very first
+            # caller must still be allowed to run (with no concurrency).
+            while self.reserved_mb + self.per_build_mb > self.budget_mb and self.reserved_mb > 0:
+                if not announced:
+                    available = max(self.budget_mb - self.reserved_mb, 0)
+                    self.progress.set_queued(
+                        job,
+                        f"queued — waiting for memory "
+                        f"(need ~{self.per_build_mb} MB, ~{available} MB free)",
+                    )
+                    announced = True
+                self._cond.wait()
+            self.reserved_mb += self.per_build_mb
+
+    def release(self):
+        """Return a reservation to the budget and wake any waiters."""
+        with self._cond:
+            self.reserved_mb = max(self.reserved_mb - self.per_build_mb, 0)
+            self._cond.notify_all()
 
 
 # ---------------------------------------------------------------------------
@@ -1083,12 +1192,37 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, check=True, **kwargs)
 
 
+def run_logged(cmd, log_file):
+    """Run a command, capturing stdout/stderr into ``log_file``.
+
+    Unlike ``run``, this captures output so the post-build extraction
+    steps (``docker create``, ``docker cp``, ``tar czf``) don't interleave
+    with parallel jobs on the terminal. The captured output is still
+    persisted to the per-job log file so failures remain diagnosable.
+    Raises ``CalledProcessError`` on non-zero exit, matching ``run``'s
+    ``check=True`` behavior.
+    """
+    display = cmd if isinstance(cmd, str) else " ".join(cmd)
+    print(f"  $ {display}", flush=True)
+    log_file.write(f"\n$ {display}\n")
+    log_file.flush()
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.stdout:
+        log_file.write(result.stdout)
+    if result.stderr:
+        log_file.write(result.stderr)
+    log_file.flush()
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
 
-def build_for_arch(version, arch, plat, output_dir, progress):
+def build_for_arch(version, arch, plat, output_dir, progress, mem_scheduler=None):
     """Build PDFium for a single (platform, arch) using Docker.
 
     All builds run inside an amd64 container.  arm64 targets are
@@ -1098,11 +1232,69 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     Docker build context as ``platform.py`` and applied during the build.
     Image and container names include both ``plat`` and ``arch`` so
     concurrent ``(plat, arch)`` builds can't collide on shared names.
+
+    When ``mem_scheduler`` is provided, the worker reserves a pessimistic
+    memory slice before any Docker work starts, and releases it in
+    ``finally`` so crashes don't permanently starve the budget.
+
+    Every job writes its full Docker build output to
+    ``<output_dir>/logs/<plat>-<arch>.log`` — the UI ring buffer only
+    keeps the last OUTPUT_BUFFER_SIZE lines per job, so when a parallel
+    build fails the log file is the authoritative post-mortem record.
     """
     job = f"{plat}/{arch}"
     image_tag = f"pdfium-builder-{version}-{plat}-{arch}"
     container_name = f"pdfium-extract-{version}-{plat}-{arch}"
 
+    log_dir = os.path.join(output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{plat}-{arch}.log")
+
+    if mem_scheduler is not None:
+        mem_scheduler.reserve(job)
+    try:
+        with open(log_path, "w") as log_file:
+            log_file.write(
+                f"# PDFium build log\n"
+                f"# job:     {job}\n"
+                f"# version: chromium/{version}\n"
+                f"# started: {time.strftime('%Y-%m-%d %H:%M:%S %z')}\n"
+                f"# image:   {image_tag}\n\n"
+            )
+            log_file.flush()
+            try:
+                result = _build_for_arch_inner(
+                    version,
+                    arch,
+                    plat,
+                    output_dir,
+                    progress,
+                    job,
+                    image_tag,
+                    container_name,
+                    log_file,
+                )
+                log_file.write(f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} (success)\n")
+                return result
+            except BaseException as exc:
+                log_file.write(
+                    f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} "
+                    f"(FAILED: {type(exc).__name__}: {exc})\n"
+                )
+                print(
+                    f"\n[{job}] build failed — full log: {log_path}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                raise
+    finally:
+        if mem_scheduler is not None:
+            mem_scheduler.release()
+
+
+def _build_for_arch_inner(
+    version, arch, plat, output_dir, progress, job, image_tag, container_name, log_file
+):
     progress.start_arch(job)
 
     patch_script = os.path.join(PATCHES_DIR, f"{plat}.py")
@@ -1145,7 +1337,9 @@ def build_for_arch(version, arch, plat, output_dir, progress):
             image_tag,
             tmpdir,
         ]
-        rc = progress.stream_docker_build(cmd, job)
+        log_file.write(f"\n$ {' '.join(cmd)}\n")
+        log_file.flush()
+        rc = progress.stream_docker_build(cmd, job, log_file=log_file)
         if rc != 0:
             progress.set_failed(job)
             raise RuntimeError(f"Docker build failed for {job} (exit {rc})")
@@ -1156,10 +1350,13 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     tarball = archive_name(plat, arch)
     output_path = os.path.join(output_dir, tarball)
 
+    log_file.write("\n# --- extracting staged artifacts ---\n")
+    log_file.flush()
+
     with tempfile.TemporaryDirectory() as extract_dir:
         staging_dest = os.path.join(extract_dir, dir_name)
         try:
-            run(
+            run_logged(
                 [
                     "docker",
                     "create",
@@ -1167,22 +1364,25 @@ def build_for_arch(version, arch, plat, output_dir, progress):
                     "--name",
                     container_name,
                     image_tag,
-                ]
+                ],
+                log_file,
             )
-            run(
+            run_logged(
                 [
                     "docker",
                     "cp",
                     f"{container_name}:/staging",
                     staging_dest,
-                ]
+                ],
+                log_file,
             )
         finally:
             subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
             subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True)
 
-        # Create tarball with top-level directory name
-        run(
+        log_file.write("\n# --- creating tarball ---\n")
+        log_file.flush()
+        run_logged(
             [
                 "tar",
                 "czf",
@@ -1190,7 +1390,8 @@ def build_for_arch(version, arch, plat, output_dir, progress):
                 "-C",
                 extract_dir,
                 dir_name,
-            ]
+            ],
+            log_file,
         )
 
     progress.set_done(job)
@@ -1261,6 +1462,31 @@ def upload_release(version, built_files, progress):
 # ---------------------------------------------------------------------------
 
 
+def _make_mem_scheduler(progress, per_build_mb):
+    """Build a MemoryScheduler from ``docker info`` output, or None on failure.
+
+    When Docker's MemTotal can't be read we return None — the caller
+    proceeds without gating rather than blocking the whole build. A
+    one-line warning is printed so the user knows gating is off.
+    """
+    total = docker_total_memory_mb()
+    if total is None:
+        print(
+            "Warning: could not read Docker daemon memory budget "
+            "(`docker info` failed). Running without memory gating — "
+            "a parallel OOM may crash builds.",
+            flush=True,
+        )
+        return None
+    budget = max(total - DEFAULT_MEM_RESERVE_MB, per_build_mb)
+    print(
+        f"Docker memory budget: ~{total} MB total, "
+        f"~{budget} MB schedulable ({per_build_mb} MB/build).",
+        flush=True,
+    )
+    return MemoryScheduler(budget, per_build_mb, progress)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Build PDFium shared libraries using Docker",
@@ -1312,6 +1538,19 @@ def main():
         default="./bin",
         help="output directory (default: ./bin)",
     )
+    parser.add_argument(
+        "--mem-per-build",
+        type=int,
+        default=DEFAULT_MEM_PER_BUILD_MB,
+        metavar="MB",
+        help=(
+            "pessimistic memory estimate per parallel build, in MB "
+            f"(default: {DEFAULT_MEM_PER_BUILD_MB}). With --parallel, "
+            "builds whose reservation would exceed the Docker daemon's "
+            "total memory budget are queued and launched as earlier "
+            "builds finish."
+        ),
+    )
     args = parser.parse_args()
     try:
         args.arch = normalize_arch(args.arch)
@@ -1343,6 +1582,7 @@ def main():
         progress = BuildProgress(args.version, job_ids, parallel=args.parallel)
         try:
             if args.parallel and len(jobs) > 1:
+                mem_scheduler = _make_mem_scheduler(progress, args.mem_per_build)
                 with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
                     futures = {
                         pool.submit(
@@ -1352,6 +1592,7 @@ def main():
                             plat,
                             output_dir,
                             progress,
+                            mem_scheduler,
                         ): (plat, arch)
                         for plat, arch in jobs
                     }
@@ -1377,6 +1618,8 @@ def main():
                 upload_progress.finish()
     except (RuntimeError, subprocess.CalledProcessError) as e:
         print(f"\nError: {e}", file=sys.stderr)
+        log_dir = os.path.join(output_dir, "logs")
+        print(f"Per-job build logs: {log_dir}/", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
