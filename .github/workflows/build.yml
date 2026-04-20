@@ -15,9 +15,15 @@ jobs:
   build:
     strategy:
       fail-fast: false
+      # Default matrix mirrors build_pdfium.DEFAULT_JOBS: 5 combos.
+      # Intel Mac is excluded — request manually if needed.
       matrix:
-        platform: [linux, musl]
-        arch: [amd64, arm64]
+        include:
+          - { platform: linux, arch: amd64 }
+          - { platform: linux, arch: arm64 }
+          - { platform: mac,   arch: arm64 }
+          - { platform: musl,  arch: amd64 }
+          - { platform: musl,  arch: arm64 }
     runs-on: ubuntu-latest
     # Two ninja phases per archive (static + shared) plus cross-compile for
     # arm64 pushes each combo well past the single-phase budget. 90 minutes
@@ -33,7 +39,7 @@ jobs:
           python3 pdfium/build_pdfium.py ${{ inputs.version }}
           --platform ${{ matrix.platform }}
           --arch ${{ matrix.arch }}
-      - name: Verify output contains both .so and .a
+      - name: Verify archive contents
         run: |
           set -eu
           cd pdfium/bin
@@ -41,8 +47,15 @@ jobs:
           for f in pdfium-${{ matrix.platform }}-*.tgz; do
             echo "=== $f ==="
             tar tzf "$f"
-            tar tzf "$f" | grep -q 'lib/libpdfium.so' || { echo "missing libpdfium.so in $f"; exit 1; }
-            tar tzf "$f" | grep -q 'lib/libpdfium.a'  || { echo "missing libpdfium.a in $f";  exit 1; }
+            if [ "${{ matrix.platform }}" = "mac" ]; then
+              tar tzf "$f" | grep -q 'lib/libpdfium.dylib' \
+                || { echo "missing libpdfium.dylib in $f"; exit 1; }
+            else
+              tar tzf "$f" | grep -q 'lib/libpdfium.so' \
+                || { echo "missing libpdfium.so in $f"; exit 1; }
+              tar tzf "$f" | grep -q 'lib/libpdfium.a' \
+                || { echo "missing libpdfium.a in $f";  exit 1; }
+            fi
           done
       - uses: actions/upload-artifact@v4
         with:
