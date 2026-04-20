@@ -52,6 +52,20 @@ Partial failures don't lose the run. When `--upload` is passed, the archives fro
 
 Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`, entering the chromium branch number and toggling `upload=true`.
 
+## Cutting a release
+
+`pdfium/VERSION` is the single source of truth for the chromium branch we ship. To publish a new build:
+
+1. Open a PR that bumps `pdfium/VERSION` (and anything else the release needs — patches, GN args, doc references).
+2. Merge the PR into the `release` branch.
+3. The **Release** workflow (`.github/workflows/release.yml`) fires on push to `release` and fans out:
+   - Four `ubuntu-latest` jobs build `{linux, musl} × {amd64, arm64}` via Docker.
+   - One `macos-15` job builds `mac/arm64` natively (via `pdfium/build_mac_native.sh`, since `xcodebuild` isn't available inside the Debian container used for the others).
+4. Each job runs `build_pdfium.py --upload`, which uploads its archive to the `pdfium-<VERSION>` GitHub Release with `gh release upload --clobber`. Parallel uploads are safe because a preceding `create-release` job ensures the tag exists before the fan-out, and `--clobber` replaces only matching asset names.
+5. A final `summary` job posts the release URL + each job's result to the workflow run's summary page.
+
+`GH_TOKEN` is the workflow's auto-minted `GITHUB_TOKEN`; each build job declares `permissions: contents: write` so `gh release *` has push access without any secrets configuration.
+
 ## Development
 
 ### Running tests

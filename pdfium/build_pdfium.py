@@ -1261,7 +1261,13 @@ def _make_dockerfile_musl(version, arch):
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
     branch = f"chromium/{version}"
-    gn_args = gn_args_for("musl", gn_cpu, "")
+    # Same BTI-disable fix as linux/arm64: musl-cross-make's libgcc.a
+    # doesn't have BTI NOTE sections, so linking with ``-z force-bti``
+    # (pdfium's default on arm64) fails with "collect2: error: ld
+    # returned 1 exit status". Pass arm_control_flow_integrity = "none"
+    # so the linker doesn't require BTI on the prebuilt toolchain libs.
+    extra_args = GN_ARGS_ARM64 if arch == "arm64" else ""
+    gn_args = gn_args_for("musl", gn_cpu, extra_args)
 
     # Map gn_cpu to musl-cross-make target triple prefix
     musl_targets = {
@@ -1486,6 +1492,57 @@ def build_for_arch(version, arch, plat, output_dir, progress, mem_scheduler=None
             mem_scheduler.release()
 
 
+def _build_for_arch_mac_native(version, arch, output_dir, progress, job, log_file):
+    """Native-macOS build path — shells out to pdfium/build_mac_native.sh.
+
+    The script emits Docker-style ``[N/TOTAL]`` step markers so the
+    progress UI parses percent/ETA exactly like a Docker build. It also
+    reads the same patches and LICENSE this module uses, so nothing here
+    duplicates the mac Dockerfile's logic — if you're editing either,
+    keep them aligned.
+    """
+    progress.start_arch(job)
+
+    patch_script = os.path.join(PATCHES_DIR, "mac.py")
+    if not os.path.isfile(patch_script):
+        progress.set_failed(job)
+        raise RuntimeError(f"No patch script for platform 'mac' (expected {patch_script})")
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script = os.path.join(repo_root, "pdfium", "build_mac_native.sh")
+    if not os.path.isfile(script):
+        progress.set_failed(job)
+        raise RuntimeError(f"Native mac build script not found at {script}")
+
+    workspace = os.path.join(output_dir, f"workspace-mac-{arch}")
+
+    print(
+        f"\n{'=' * 60}\n  Building PDFium for mac/{TARGETS[arch]['gn_cpu']} "
+        f"(native, arch={arch})\n{'=' * 60}\n",
+        flush=True,
+    )
+
+    cmd = ["bash", script, str(version), arch, workspace, repo_root, output_dir]
+    log_file.write(f"\n$ {' '.join(cmd)}\n")
+    log_file.flush()
+    rc = progress.stream_docker_build(cmd, job, log_file=log_file)
+    if rc != 0:
+        if progress.is_cancelled(job):
+            raise RuntimeError(f"Mac native build cancelled for {job}")
+        progress.set_failed(job)
+        raise RuntimeError(f"Mac native build failed for {job} (exit {rc})")
+
+    output_path = os.path.join(output_dir, archive_name("mac", arch))
+    if not os.path.isfile(output_path):
+        progress.set_failed(job)
+        raise RuntimeError(f"Mac native build reported success but {output_path} is missing")
+
+    progress.set_done(job)
+    size_mb = os.path.getsize(output_path) / (1024 * 1024)
+    print(f"  -> {output_path} ({size_mb:.1f} MB)", flush=True)
+    return output_path
+
+
 def _build_for_arch_inner(
     version, arch, plat, output_dir, progress, job, image_tag, container_name, log_file
 ):
@@ -1493,6 +1550,21 @@ def _build_for_arch_inner(
     # scheduler, bail before starting the Docker build at all.
     if progress.is_cancelled(job):
         raise RuntimeError(f"Docker build cancelled for {job}")
+
+    # Mac builds require a macOS host because PDFium's GN config invokes
+    # xcodebuild during `gn gen`. Rather than cross-compile the whole
+    # thing in Docker, route the mac path to a native shell script when
+    # the host is Darwin — same progress UI + log piping + cancellation
+    # as the Docker path, just a different command.
+    if plat == "mac":
+        if sys.platform != "darwin":
+            progress.set_failed(job)
+            raise RuntimeError(
+                "Mac builds require a macOS host (xcodebuild is invoked "
+                "during gn gen); run this job on a macOS runner. See the "
+                "`build-mac` job in .github/workflows/release.yml."
+            )
+        return _build_for_arch_mac_native(version, arch, output_dir, progress, job, log_file)
 
     progress.start_arch(job)
 
@@ -1672,6 +1744,58 @@ def upload_release(version, built_files, progress):
         f"\nRelease: https://github.com/{GITHUB_REPO}/releases/tag/{tag}",
         flush=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Summary banner
+# ---------------------------------------------------------------------------
+
+
+def _print_summary(version, built_files, failures, output_dir, uploaded):
+    """Print a final success/partial/failure banner.
+
+    Covers three outcomes:
+      * Everything built + uploaded — banner headers the release URL and
+        every archive is listed as ``published``.
+      * Partial success with ``--upload`` — banner shows release URL,
+        successful archives as ``published``, failures as ``failed``.
+      * ``--upload`` omitted (or zero archives built) — banner points at
+        the local output directory instead of the release.
+    """
+    w = min(shutil.get_terminal_size().columns if sys.stdout.isatty() else 72, 72)
+    bar = "=" * w
+    print()
+    print(bar)
+    if uploaded:
+        tag = release_tag(version)
+        url = f"https://github.com/{GITHUB_REPO}/releases/tag/{tag}"
+        header = f"Published to {tag}" if not failures else f"Partial publish to {tag}"
+        print(f"  {header}")
+        print(f"  {url}")
+    elif built_files:
+        header = "Build complete" if not failures else "Build complete (with failures)"
+        print(f"  {header}")
+        print(f"  Archives in: {output_dir}/")
+    else:
+        print("  No archives built.")
+
+    if built_files:
+        print()
+        verb = "published" if uploaded else "built"
+        for path in built_files:
+            name = os.path.basename(path)
+            size_mb = os.path.getsize(path) / (1024 * 1024)
+            print(f"  ✓ {name}  ({size_mb:.1f} MB)  [{verb}]")
+
+    if failures:
+        print()
+        for job_id, exc in failures:
+            print(f"  ✗ {job_id}  ({exc})")
+        log_dir = os.path.join(output_dir, "logs")
+        print()
+        print(f"  Logs: {log_dir}/")
+
+    print(bar)
 
 
 # ---------------------------------------------------------------------------
@@ -1855,24 +1979,11 @@ def main():
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
 
-    if failures:
-        log_dir = os.path.join(output_dir, "logs")
-        print(
-            f"\n{len(failures)} of {len(jobs)} builds failed:",
-            file=sys.stderr,
-        )
-        for job_id, exc in failures:
-            print(f"  - {job_id}: {exc}", file=sys.stderr)
-        print(f"Per-job build logs: {log_dir}/", file=sys.stderr)
-        if built_files:
-            print(
-                f"Uploaded {len(built_files)} successful archive"
-                f"{'s' if len(built_files) != 1 else ''} to the release.",
-                file=sys.stderr,
-            )
-        sys.exit(1)
+    uploaded = args.upload and bool(built_files)
+    _print_summary(args.version, built_files, failures, output_dir, uploaded)
 
-    print(f"\nBuilt {len(built_files)} binaries in {output_dir}/")
+    if failures:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
