@@ -4,26 +4,28 @@
 The patch is split into two modes so a single source checkout can
 produce *both* a static archive and a shared library:
 
-* ``base`` — applied before the static-archive build. Modifies:
+* ``base`` — applied before the static-archive build. Modifies only:
     - ``public/fpdfview.h``: strip the ``COMPONENT_BUILD`` guard around
       ``FPDF_EXPORT`` so the public C API always has
       ``visibility("default")``.
-    - ``BUILD.gn``: rewrite ``component("pdfium")`` to
-      ``static_library("pdfium")``. Chromium's ``component()`` template
-      resolves to ``source_set`` (not ``static_library``) when
-      ``is_component_build=false``, and ``source_set`` does not link
-      a ``.a`` — it only groups objects. Explicit ``static_library``
-      is required to produce ``libpdfium.a``.
+
+  Base mode does NOT touch ``BUILD.gn``. The static archive is produced
+  by passing ``pdf_is_complete_lib = true`` via GN args — PDFium's own
+  ``BUILD.gn`` handles that flag internally (sets
+  ``static_component_type = "static_library"``, ``complete_static_lib
+  = true``, and drops the ``thin_archive`` config). The build script
+  passes this arg directly, so the patch file doesn't need to.
 
 * ``shared`` — applied on top of ``base`` before the second ninja pass.
-  Rewrites ``static_library("pdfium")`` back to ``shared_library("pdfium")``
-  so the same target now links a ``.so``. GN invalidates the target
-  type change and recompiles — acceptable cost for a single-source build.
+  Rewrites the pristine ``component("pdfium")`` to
+  ``shared_library("pdfium")`` so the same target now links a ``.so``.
+  GN invalidates the target type change and recompiles — acceptable
+  cost for a single-source build.
 
 Together this gives us both artifacts from one checkout.
 
-These patches match what bblanchon/pdfium-binaries uses
-(shared_library.patch + public_headers.patch).
+The ``shared`` rewrite matches what bblanchon/pdfium-binaries uses
+(shared_library.patch); the fpdfview edit matches public_headers.patch.
 
 Usage:
     python3 linux.py /path/to/pdfium [--mode base|shared|all]
@@ -35,48 +37,17 @@ import sys
 from pathlib import Path
 
 
-def patch_build_gn_static(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component() -> static_library() + complete_static_lib.
-
-    Just renaming ``component("pdfium")`` to ``static_library("pdfium")``
-    produces an 8-byte ar archive (magic header only) because PDFium's
-    ``pdfium`` target has many ``deps`` but almost no direct ``sources``
-    — GN's default ``static_library`` only archives objects the target
-    owns directly, not those pulled in via deps. ``complete_static_lib
-    = true`` tells GN to include every transitive dependency's objects
-    in the archive, producing a self-contained ``libpdfium.a`` that can
-    be linked without re-resolving all of PDFium's third-party deps.
-    """
-    build_gn = pdfium_dir / "BUILD.gn"
-    text = build_gn.read_text()
-    updated = text.replace(
-        'component("pdfium") {',
-        'static_library("pdfium") {\n  complete_static_lib = true',
-    )
-    if updated == text:
-        print('WARNING: component("pdfium") { not found in BUILD.gn — already patched?')
-        return
-    build_gn.write_text(updated)
-    print("Applied: BUILD.gn -> static_library (complete_static_lib)")
-
-
 def patch_build_gn_shared(pdfium_dir: Path) -> None:
-    """Patch BUILD.gn: component()/static_library() -> shared_library().
+    """Patch BUILD.gn: rewrite pristine ``component("pdfium")`` to shared_library.
 
-    Handles both the pristine ``component("pdfium")`` form and the
-    post-``base``-mode ``static_library("pdfium")`` form, so ``shared``
-    works whether or not ``base`` ran first. Also strips the
-    ``complete_static_lib = true`` line that ``base`` inserts —
-    ``complete_static_lib`` is only valid on static_library targets and
-    GN errors out if it appears inside a shared_library.
+    Base mode no longer touches BUILD.gn (the static archive comes from
+    the ``pdf_is_complete_lib = true`` GN arg, which PDFium's own
+    BUILD.gn handles), so by the time ``shared`` runs the file is still
+    in its pristine ``component("pdfium")`` form.
     """
     build_gn = pdfium_dir / "BUILD.gn"
     text = build_gn.read_text()
-    updated = text.replace('static_library("pdfium")', 'shared_library("pdfium")')
-    updated = updated.replace('component("pdfium")', 'shared_library("pdfium")')
-    # Drop the complete_static_lib line that the base patch added; it's
-    # only valid in a static_library target.
-    updated = re.sub(r"\n\s*complete_static_lib = true\s*\n", "\n", updated)
+    updated = text.replace('component("pdfium")', 'shared_library("pdfium")')
     if updated == text:
         print("WARNING: no pdfium target to rewrite in BUILD.gn — already patched?")
         return
@@ -142,9 +113,10 @@ def main() -> None:
         choices=["base", "shared", "all"],
         default="all",
         help=(
-            "base = fpdfview.h + rewrite component() to static_library "
-            "(produces libpdfium.a); shared = rewrite target to shared_library "
-            "(produces libpdfium.so); all = both in sequence (default)."
+            "base = fpdfview.h only (static archive comes from "
+            "pdf_is_complete_lib GN arg, no BUILD.gn rewrite needed); "
+            "shared = rewrite component() to shared_library (produces "
+            "libpdfium.so); all = both in sequence (default)."
         ),
     )
     args = parser.parse_args()
@@ -156,7 +128,6 @@ def main() -> None:
 
     if args.mode in ("base", "all"):
         patch_fpdfview_h(pdfium_dir)
-        patch_build_gn_static(pdfium_dir)
     if args.mode in ("shared", "all"):
         patch_build_gn_shared(pdfium_dir)
 

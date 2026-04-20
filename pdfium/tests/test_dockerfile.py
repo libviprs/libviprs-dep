@@ -1,10 +1,11 @@
 """Tests for generated Dockerfile content.
 
 The build runs in two phases per platform so the release archive ships
-both ``libpdfium.a`` (from the base patch — ``component()`` stays as
-``static_library``) and ``libpdfium.so`` (from the shared-library
-rewrite applied on top). The assertions below lock in that two-phase
-structure for each platform.
+both ``libpdfium.a`` (from the Static pass, which passes
+``pdf_is_complete_lib = true`` into ``args.gn`` so PDFium's own BUILD.gn
+branch emits a fat ``static_library``) and ``libpdfium.so`` (from the
+shared-library rewrite applied on top). The assertions below lock in
+that two-phase structure for each platform.
 """
 
 import build_pdfium as bp
@@ -84,8 +85,28 @@ class TestMakeDockerfileLinuxAmd64:
         assert "args.gn /staging/args.gn" in self.df
         assert "args.gn /staging/args.static.gn" in self.df
 
+    def test_pdf_is_complete_lib_in_static_args(self):
+        # The static pass writes out/Static/args.gn with pdf_is_complete_lib = true
+        # (triggering PDFium's own complete-lib branch in BUILD.gn); the shared
+        # pass writes out/Shared/args.gn without it. The flag must therefore
+        # appear AFTER the Static args heredoc starts but BEFORE the Shared one.
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        flag_pos = self.df.index("pdf_is_complete_lib = true")
+        assert static_args_pos < flag_pos < shared_args_pos
+
+    def test_pdf_is_complete_lib_not_in_shared_args(self):
+        # pdf_is_complete_lib is specific to the static pass — the shared pass
+        # emits shared_library("pdfium") where the flag doesn't apply. The
+        # string must therefore appear exactly once in the whole Dockerfile
+        # (inside the Static args.gn heredoc).
+        assert self.df.count("pdf_is_complete_lib = true") == 1
+
     def test_verify_rejects_thin_archive(self):
         assert "'!<thin>'" in self.df
+        # Verify step still names the regression so operators see why the
+        # build failed. The exact wording in build_pdfium.py's _thin_err is
+        # "libpdfium.a is a GNU thin archive — complete_static_lib patch regressed".
         assert "complete_static_lib patch regressed" in self.df
 
     def test_verify_runs_between_shared_build_and_staging(self):
@@ -153,6 +174,17 @@ class TestMakeDockerfileMuslAmd64:
     def test_verify_complete_static_lib_present(self):
         assert "libpdfium.a has fat-archive magic" in self.df
         assert "'!<thin>'" in self.df
+
+    def test_pdf_is_complete_lib_in_static_args(self):
+        # Same invariant as the linux dockerfile: pdf_is_complete_lib = true
+        # lives only in the Static args.gn heredoc, not the Shared one.
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        flag_pos = self.df.index("pdf_is_complete_lib = true")
+        assert static_args_pos < flag_pos < shared_args_pos
+
+    def test_pdf_is_complete_lib_not_in_shared_args(self):
+        assert self.df.count("pdf_is_complete_lib = true") == 1
 
 
 class TestMakeDockerfileMuslArm64:

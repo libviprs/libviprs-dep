@@ -44,15 +44,19 @@ Docker, Python, and (for uploads) the `gh` CLI. For each requested
 1. Generates a platform-specific Dockerfile on the fly.
 2. Builds an amd64 Docker image that runs the full compile inside the
    container.
-3. Applies the **base** platform patch (symbol-visibility fixes, the
-   `component("pdfium")` → `static_library("pdfium") {
-   complete_static_lib = true }` rewrite, plus musl-specific toolchain
-   setup where applicable) and runs `ninja` against `out/Static`,
-   producing a complete (fat) `libpdfium.a`.
-4. Applies the **shared** patch on top (rewrites
-   `static_library("pdfium")` → `shared_library("pdfium")` and strips
-   the static-only `complete_static_lib` line) and runs `ninja` against
-   `out/Shared`, producing `libpdfium.so`.
+3. Applies the **base** platform patch (`fpdfview.h` symbol-visibility
+   fix, plus musl-specific toolchain setup where applicable — base mode
+   does **not** rewrite `BUILD.gn`), writes `out/Static/args.gn` with
+   `pdf_is_complete_lib = true`, and runs `ninja` against `out/Static`.
+   The GN flag trips PDFium's own `BUILD.gn` branch that sets
+   `static_component_type = "static_library"`, `complete_static_lib =
+   true`, and strips `//build/config/compiler:thin_archive` from
+   configs, so the pass emits a complete (fat) `libpdfium.a`.
+4. Applies the **shared** patch on top (rewrites `component("pdfium")`
+   → `shared_library("pdfium")` in `BUILD.gn`), writes
+   `out/Shared/args.gn` *without* `pdf_is_complete_lib` (the flag is
+   static-only), and runs `ninja` against `out/Shared`, producing
+   `libpdfium.so`.
 5. **Verifies** `libpdfium.a`: archive magic must be `!<arch>\n` (not
    `!<thin>\n`), archive must have ≥ 100 members and be ≥ 10 MB. Thin
    archives reference `.o` paths inside the build sandbox and would
@@ -411,14 +415,17 @@ pdfium-<platform>-<gn_cpu>/
 
 `args.gn` and `args.static.gn` are kept separate so a consumer
 investigating linker issues can see exactly which flags produced each
-binary. They differ only in the `BUILD.gn` target type that the
-matching patch mode selects: `static_library("pdfium")` under
-`--mode base` (emitting `libpdfium.a` at `out/Static/obj/libpdfium.a`),
-then `shared_library("pdfium")` under `--mode shared` (emitting
-`libpdfium.so` at `out/Shared/libpdfium.so`). The patch must rewrite
-`component()` explicitly because `component()` resolves to `source_set`
-under `is_component_build=false`, which groups objects but does not
-link a `.a`.
+binary. They differ in one line: `args.static.gn` sets
+`pdf_is_complete_lib = true`, which trips PDFium's own BUILD.gn branch
+that selects `static_component_type = "static_library"`,
+`complete_static_lib = true`, and drops the `thin_archive` config — so
+the Static pass emits `libpdfium.a` at `out/Static/obj/libpdfium.a`.
+`args.gn` (the Shared pass) omits that flag because the shared pass
+works off a `BUILD.gn` rewrite applied by `--mode shared`
+(`component("pdfium")` → `shared_library("pdfium")`, required because
+`component()` resolves to `source_set` under `is_component_build=false`
+and would not link a `.so`), emitting `libpdfium.so` at
+`out/Shared/libpdfium.so`.
 
 ## CONSUMING THE ARTIFACTS
 
@@ -519,12 +526,16 @@ GN's `static_library` only archives objects the target *directly*
 owns; PDFium's `pdfium` target is an umbrella with many `deps` and
 almost no direct `sources`, so a naive `component() → static_library`
 rewrite produces an archive containing just the `!<arch>\n` magic
-header. The base-mode patches now insert `complete_static_lib = true`
-into the rewritten target, which tells GN to pull every transitive
-dependency's objects into the archive. If you forked the patches,
-make sure that flag is present on the static target. The shared-mode
-patch strips the flag before rewriting to `shared_library` because
-GN rejects `complete_static_lib` on non-static targets.
+header. The fix is to let PDFium's own `BUILD.gn` handle the static
+wiring: the Static pass writes `pdf_is_complete_lib = true` into
+`out/Static/args.gn`, which trips the branch in `pdfium/BUILD.gn` that
+sets `static_component_type = "static_library"`, `complete_static_lib
+= true`, and strips `//build/config/compiler:thin_archive` from
+configs. If you forked the build script, make sure the Static
+`args.gn` carries that flag — and that the Shared `args.gn` does
+**not**, since the shared pass rewrites the target to
+`shared_library("pdfium")` and GN rejects `complete_static_lib` on
+non-static targets.
 
 ### `ERROR at //build/config/sysroot.gni:60:7: Assertion failed` (musl)
 
