@@ -84,6 +84,21 @@ class TestMakeDockerfileLinuxAmd64:
         assert "args.gn /staging/args.gn" in self.df
         assert "args.gn /staging/args.static.gn" in self.df
 
+    def test_verify_rejects_thin_archive(self):
+        assert "'!<thin>'" in self.df
+        assert "complete_static_lib patch regressed" in self.df
+
+    def test_verify_runs_between_shared_build_and_staging(self):
+        static_ninja = self.df.index("ninja -C out/Static pdfium")
+        verify = self.df.index("libpdfium.a has fat-archive magic")
+        stage = self.df.index("cp out/Static/obj/libpdfium.a /staging/lib/")
+        assert static_ninja < verify < stage
+
+    def test_verify_checks_member_count_and_size(self):
+        assert "ar t" in self.df
+        assert "MEMBERS" in self.df
+        assert "SIZE" in self.df
+
 
 class TestMakeDockerfileLinuxArm64:
     def setup_method(self):
@@ -134,6 +149,10 @@ class TestMakeDockerfileMuslAmd64:
     def test_staging_contains_both_artifacts(self):
         assert "libpdfium.so /staging/lib/" in self.df
         assert "libpdfium.a /staging/lib/" in self.df
+
+    def test_verify_complete_static_lib_present(self):
+        assert "libpdfium.a has fat-archive magic" in self.df
+        assert "'!<thin>'" in self.df
 
 
 class TestMakeDockerfileMuslArm64:

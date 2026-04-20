@@ -44,15 +44,23 @@ Docker, Python, and (for uploads) the `gh` CLI. For each requested
 1. Generates a platform-specific Dockerfile on the fly.
 2. Builds an amd64 Docker image that runs the full compile inside the
    container.
-3. Applies the **base** platform patch (symbol-visibility fixes, plus
-   musl-specific toolchain setup where applicable) and runs `ninja`
-   against `out/Static`, producing `libpdfium.a`.
+3. Applies the **base** platform patch (symbol-visibility fixes, the
+   `component("pdfium")` → `static_library("pdfium") {
+   complete_static_lib = true }` rewrite, plus musl-specific toolchain
+   setup where applicable) and runs `ninja` against `out/Static`,
+   producing a complete (fat) `libpdfium.a`.
 4. Applies the **shared** patch on top (rewrites
-   `component("pdfium")` → `shared_library("pdfium")`) and runs `ninja`
-   against `out/Shared`, producing `libpdfium.so`.
-5. Stages both artifacts — along with the public C headers, the two
+   `static_library("pdfium")` → `shared_library("pdfium")` and strips
+   the static-only `complete_static_lib` line) and runs `ninja` against
+   `out/Shared`, producing `libpdfium.so`.
+5. **Verifies** `libpdfium.a`: archive magic must be `!<arch>\n` (not
+   `!<thin>\n`), archive must have ≥ 100 members and be ≥ 10 MB. Thin
+   archives reference `.o` paths inside the build sandbox and would
+   fail to link once extracted, so the Docker build fails here rather
+   than publish a broken archive.
+6. Stages both artifacts — along with the public C headers, the two
    `args.gn` files, and `LICENSE` — into a single directory.
-6. Extracts the staging directory from the container and packages it as
+7. Extracts the staging directory from the container and packages it as
    `pdfium-{platform}-{gn_cpu}.tgz` in the output directory.
 
 The two-phase ninja build is the cleanest way to emit both a static
@@ -449,6 +457,17 @@ directory containing it.
 You are using `libpdfium.a` from an older release that predates the
 `FPDF_EXPORT` visibility patch. Upgrade to `pdfium-7725` or newer. The
 visibility patch is applied unconditionally under `--mode base`.
+
+### `libpdfium.a: archive has no index; run ranlib to add one` (or tiny `.a`)
+
+You're using a `libpdfium.a` from an early release that shipped a GNU
+thin archive — it only stored `.o` path references, not the object
+code, so once the Docker build sandbox was gone the archive was
+unlinkable. Upgrade to a release built after the `complete_static_lib`
+fix; the first 8 bytes of the archive must read `!<arch>\n`, never
+`!<thin>\n`. Current releases enforce this during the Docker build
+(archive magic + `ar t` member count + size floor) and will fail the
+build rather than publish a broken archive.
 
 ### Docker buildkit steps fail with "no space left on device"
 
