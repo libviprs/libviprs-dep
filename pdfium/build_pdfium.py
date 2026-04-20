@@ -1078,8 +1078,14 @@ RUN gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git \\
     --custom-var "checkout_configuration=small"
 RUN echo "target_os = [ '{plat}' ]" >> .gclient
 
-# Step 3: Checkout source at target branch
-RUN gclient sync -r "origin/{branch}" --no-history --shallow
+# Step 3: Checkout source at target branch.
+# gclient's default --jobs is cpu_count(), which on a 28-core host
+# means each container spawns 28 parallel git fetches + DNS lookups;
+# four concurrent containers multiply that into ~112 in-flight fetches,
+# overwhelming Docker Desktop's built-in DNS forwarder (look for
+# "read udp ... i/o timeout" errors). --jobs=8 caps the fan-out so the
+# total across the default matrix stays under ~32 concurrent requests.
+RUN gclient sync -r "origin/{branch}" --no-history --shallow --jobs=8
 
 # Step 4: Build dependencies and sysroot
 WORKDIR /build/pdfium
@@ -1173,7 +1179,8 @@ RUN gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git \\
 RUN echo "target_os = [ 'mac' ]" >> .gclient
 
 # Step 3: Checkout source at target branch
-RUN gclient sync -r "origin/{branch}" --no-history --shallow
+# See linux Dockerfile for why --jobs=8 (DNS saturation under default).
+RUN gclient sync -r "origin/{branch}" --no-history --shallow --jobs=8
 
 # Step 4: Build dependencies
 WORKDIR /build/pdfium
@@ -1258,8 +1265,9 @@ RUN gclient config --unmanaged https://pdfium.googlesource.com/pdfium.git \\
     --custom-var "checkout_configuration=small"
 RUN echo "target_os = [ 'linux' ]" >> .gclient
 
-# Step 4: Checkout source at target branch
-RUN gclient sync -r "origin/{branch}" --no-history --shallow
+# Step 4: Checkout source at target branch.
+# See linux Dockerfile for why --jobs=8 (DNS saturation under default).
+RUN gclient sync -r "origin/{branch}" --no-history --shallow --jobs=8
 
 # Step 5: Build dependencies
 WORKDIR /build/pdfium
