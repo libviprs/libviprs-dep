@@ -518,6 +518,27 @@ for `musl.cc`). If all retries fail, check the Docker VM's DNS
 configuration (`docker info | grep -i dns`) or drop parallelism for
 the affected run.
 
+### Repeated `subprocess ... git fetch ... failed; will retry after a short nap` from gclient, or `read udp ... i/o timeout` looking up `storage.googleapis.com`
+
+These are not rate-limits from Google — Google's infrastructure
+handles this traffic trivially. The bottleneck is Docker Desktop's
+built-in DNS forwarder (typically at `192.168.65.7:53`), which is a
+minimal userspace resolver not designed for hundreds of concurrent
+lookups. `gclient sync` defaults its worker pool to `cpu_count()` —
+on a 28-core host, four parallel containers × 28 workers = ~112
+simultaneous git fetches + DNS queries per container, which
+saturates the forwarder.
+
+The Dockerfiles cap per-container parallelism with
+`gclient sync ... --jobs=8`, putting the full matrix at ~32
+concurrent requests — well within any DNS resolver's capacity. If
+you still see timeouts, either:
+
+- **Give the Docker daemon a real DNS resolver**: Docker Desktop →
+  Settings → Resources → Network → set DNS to `8.8.8.8, 1.1.1.1`.
+- **Lower the matrix's parallelism**: drop `--parallel`, or re-run
+  with `--platform linux` then `--platform musl` sequentially.
+
 ### Docker build fails with `rpc error: code = Unavailable ... EOF`
 
 The BuildKit daemon inside the Docker VM disconnected mid-build —
@@ -539,7 +560,7 @@ parallel matrix.
 
 ## HISTORY
 
-- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, `--upload` append/replace semantics, partial-failure uploads, `complete_static_lib = true` for a non-empty `libpdfium.a`, and `use_sysroot = false` for musl all landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
+- **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, `--upload` append/replace semantics, partial-failure uploads, `complete_static_lib = true` for a non-empty `libpdfium.a`, `use_sysroot = false` for musl, and `gclient sync --jobs=8` to stop saturating Docker Desktop's DNS forwarder all landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
 - **pdfium earlier** — glibc-only shared library releases.
 
 ## LICENSE
