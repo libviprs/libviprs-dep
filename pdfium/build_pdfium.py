@@ -1028,6 +1028,39 @@ def make_dockerfile(version, arch, plat):
     return _make_dockerfile_linux(version, arch, plat)
 
 
+# Strict verification that ``out/Static/obj/libpdfium.a`` is a complete
+# (fat) static archive before we stage it. The base-mode patch rewrites
+# ``component("pdfium")`` to ``static_library("pdfium") {
+# complete_static_lib = true }`` precisely so GN embeds every transitive
+# object in the archive instead of emitting a GNU thin archive that
+# references ``.o`` files by sandbox path. The checks below lock that
+# contract in at the end of the build: if any regression ever drops the
+# ``complete_static_lib`` line or the ar backend silently falls back to
+# thin format, the Docker build fails here rather than publishing a
+# ``libpdfium.a`` that downstream consumers can't actually link against.
+_thin_err = "libpdfium.a is a GNU thin archive — complete_static_lib patch regressed"
+_size_err = "libpdfium.a is only $SIZE bytes — expected tens of MB for a complete build"
+_member_err = "only $MEMBERS members — expected thousands for a complete pdfium build"
+VERIFY_COMPLETE_STATIC_LIB = rf"""RUN set -eu; \
+    A=out/Static/obj/libpdfium.a; \
+    MAGIC=$(head -c 7 "$A"); \
+    case "$MAGIC" in \
+        '!<arch>') echo "OK: libpdfium.a has fat-archive magic" ;; \
+        '!<thin>') echo "ERROR: {_thin_err}" >&2; exit 1 ;; \
+        *) echo "ERROR: libpdfium.a has unexpected magic '$MAGIC'" >&2; exit 1 ;; \
+    esac; \
+    ar t "$A" > /tmp/ar-members.txt; \
+    MEMBERS=$(wc -l < /tmp/ar-members.txt); \
+    SIZE=$(stat -c %s "$A"); \
+    echo "libpdfium.a: $MEMBERS members, $SIZE bytes"; \
+    if [ "$MEMBERS" -lt 100 ]; then \
+        echo "ERROR: {_member_err}" >&2; exit 1; \
+    fi; \
+    if [ "$SIZE" -lt 10000000 ]; then \
+        echo "ERROR: {_size_err}" >&2; exit 1; \
+    fi"""
+
+
 def _make_dockerfile_linux(version, arch, plat):
     """Dockerfile for Linux builds (runs in Docker, cross-compiles arm64).
 
@@ -1122,6 +1155,11 @@ RUN ninja -C out/Shared pdfium
 # ninja out-dir root (``out/Shared/libpdfium.so``).
 RUN ls -lh out/Static/obj/libpdfium.a out/Shared/libpdfium.so && \\
     file out/Static/obj/libpdfium.a out/Shared/libpdfium.so
+
+# Step 11b: Strictly verify libpdfium.a is a complete (fat) static archive
+# and not a GNU thin archive. Fails the build if the complete_static_lib
+# patch ever regresses and we emit an unlinkable archive.
+{VERIFY_COMPLETE_STATIC_LIB}
 
 # Step 12: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
@@ -1301,6 +1339,11 @@ RUN ninja -C out/Shared pdfium
 # that's ``obj/libpdfium.a``.
 RUN ls -lh out/Static/obj/libpdfium.a out/Shared/libpdfium.so && \\
     file out/Static/obj/libpdfium.a out/Shared/libpdfium.so
+
+# Step 12b: Strictly verify libpdfium.a is a complete (fat) static archive
+# and not a GNU thin archive. Fails the build if the complete_static_lib
+# patch ever regresses and we emit an unlinkable archive.
+{VERIFY_COMPLETE_STATIC_LIB}
 
 # Step 13: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
