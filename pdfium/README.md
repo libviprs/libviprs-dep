@@ -13,11 +13,12 @@ We compile PDFium from source rather than using third-party prebuilt binaries to
 
 ## Download
 
-Archives are available from [Releases](https://github.com/libviprs/libviprs-dep/releases). Each release tag bundles four archives covering the full matrix of `{linux, musl}` × `{x64, arm64}`:
+Archives are available from [Releases](https://github.com/libviprs/libviprs-dep/releases). Each release tag bundles five archives covering the default matrix (`{linux, musl}` × `{x64, arm64}` plus `mac/arm64`):
 
 ```
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-linux-x64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-linux-arm64.tgz
+https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mac-arm64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-musl-x64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-musl-arm64.tgz
 ```
@@ -26,6 +27,9 @@ https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mu
 | --- | --- | --- |
 | `linux-x64`, `linux-arm64` | glibc | Debian, Ubuntu, RHEL, most mainstream distros |
 | `musl-x64`, `musl-arm64`   | musl  | Alpine, any container built `FROM alpine:*`, musl-based distroless images |
+| `mac-arm64`                | —     | macOS 11+ on Apple Silicon (`libpdfium.dylib`) |
+
+Intel Mac (`mac-x64`) is not in the default matrix — Apple has shipped Apple Silicon exclusively for new Macs since 2020, so the x86_64 dylib is rarely useful. Build one explicitly with `--platform mac --arch x86_64` if you need it.
 
 Pick the archive whose libc matches the runtime that will load PDFium. Loading a glibc `.so` from a musl process (or vice versa) fails at `dlopen` time with opaque errors — the libc mismatch is the single most common source of "pdfium doesn't load in my container" tickets.
 
@@ -95,7 +99,7 @@ The two-phase ninja build is the cleanest way to emit both a static archive and 
 ### Usage
 
 ```bash
-# Build the full default matrix (linux + musl, amd64 + arm64 — four archives)
+# Build the full default matrix (linux + mac/arm64 + musl — five archives)
 python3 build_pdfium.py 7725
 
 # Build a single platform
@@ -108,12 +112,17 @@ python3 build_pdfium.py 7725 --platform linux musl
 
 # Build a single architecture across all default platforms
 python3 build_pdfium.py 7725 --arch amd64
+python3 build_pdfium.py 7725 --arch x86_64   # alias for amd64 (Intel naming)
+python3 build_pdfium.py 7725 --arch aarch64  # alias for arm64
 
 # Combine: single platform, single arch
 python3 build_pdfium.py 7725 --platform musl --arch arm64
 
-# Build archs in parallel (within each platform pass)
+# Fan out every (platform, arch) combo concurrently
 python3 build_pdfium.py 7725 --parallel
+
+# Tune parallel scheduling (lower value = higher concurrency, higher = safer)
+python3 build_pdfium.py 7725 --parallel --mem-per-build 3500
 
 # Build and upload to GitHub Releases
 python3 build_pdfium.py 7725 --upload
@@ -143,9 +152,18 @@ Archives are written to `./bin/` by default (gitignored). With the default platf
 bin/
   pdfium-linux-x64.tgz
   pdfium-linux-arm64.tgz
+  pdfium-mac-arm64.tgz
   pdfium-musl-x64.tgz
   pdfium-musl-arm64.tgz
+  logs/
+    linux-amd64.log
+    linux-arm64.log
+    mac-arm64.log
+    musl-amd64.log
+    musl-arm64.log
 ```
+
+Each job streams its full Docker build output to `bin/logs/<plat>-<arch>.log` in addition to the terminal view. When a parallel build fails the log file is the authoritative post-mortem record — the in-terminal view switcher only retains the last ~500 output lines per job, but the log on disk has every line plus a header (version, start timestamp) and a failure footer with the exception type. On failure the script prints the log path to stderr so you can `tail -n 200 bin/logs/<plat>-<arch>.log` directly.
 
 Archives follow the naming convention `pdfium-{platform}-{gn_cpu}.tgz` and extract to a directory of the same name:
 
@@ -163,33 +181,54 @@ When `--upload` is used, a GitHub Release tagged `pdfium-{version}` is created w
 
 ### Parallel builds
 
-By default, architectures within a platform are built sequentially. Use `--parallel` to build all architectures of a platform simultaneously:
+By default every `(platform, arch)` combo builds sequentially. Use `--parallel` to fan all five default-matrix combos out concurrently in separate threads:
 
 ```bash
 python3 build_pdfium.py 7725 --parallel
 ```
 
-Platform passes still run sequentially (so the full default invocation builds linux first, then musl), but within each platform pass the amd64 and arm64 Docker builds run concurrently in separate threads.
-
-During a parallel build, you can switch between each architecture's build output:
+During a parallel run the terminal header shows a progress row per job and you can switch which job's live output is on screen:
 
 | Key | Action |
 | --- | --- |
-| `Tab` | Cycle to the next architecture's output |
-| `1` | Show amd64 output |
-| `2` | Show arm64 output |
+| `Tab`  | Cycle to the next job's output |
+| `1–5`  | Jump to the Nth job (order matches the header) |
 
-The active view is shown in the header bar. Each architecture's output is buffered independently, so switching views replays recent output without losing anything.
+Each job's output is buffered independently, so switching views replays the last ~500 lines of the selected job without losing anything. The full stream is also written to `bin/logs/<plat>-<arch>.log` for post-mortem inspection.
 
-`--parallel` has no effect when building a single architecture with `--arch`.
+`--parallel` has no effect when only one combo ends up in the run (e.g. `--platform linux --arch amd64`).
+
+#### Memory-aware scheduling
+
+Running five concurrent PDFium builds can exhaust a small Docker VM and OOM-kill the host. Before each parallel build starts, the scheduler reserves a pessimistic `--mem-per-build` slice (default **4096 MB**) against the Docker daemon's `MemTotal` (reported by `docker info`, minus 1 GB daemon overhead). Builds whose reservation would blow the budget enter a **`queued — waiting for memory`** state in the UI and launch as earlier builds finish — so a 24 GB Docker VM running the full matrix serializes gracefully instead of crashing.
+
+```bash
+# Tighter budget: allow more concurrent builds on a big box
+python3 build_pdfium.py 7725 --parallel --mem-per-build 3000
+
+# Looser budget: safer on a small Docker VM
+python3 build_pdfium.py 7725 --parallel --mem-per-build 5000
+```
+
+Sizing guidance:
+
+| Docker `MemTotal` | `--mem-per-build` default (4096) | Concurrent builds |
+| --- | --- | --- |
+| 8 GB  | 1 build at a time (serial fallback) | effective serial |
+| 16 GB | 3 concurrent | 1 queued |
+| 24 GB | all 5 concurrent | none queued |
+| 32 GB+ | all 5 concurrent | none queued |
+
+When `docker info` is unreachable, gating is skipped with a warning and the run proceeds unconstrained (prior behavior).
 
 ### Build time
 
 PDFium is a large C++ project. With the two-phase build, expect:
-- ~20–40 minutes per architecture per platform (roughly double the single-phase time)
-- `--parallel` can cut wall time roughly in half when building both architectures of the same platform
+- ~20–40 minutes per `(platform, arch)` combo (roughly double the single-phase time)
+- `--parallel` can bring the full 5-combo wall time close to the slowest single combo on a box with enough Docker memory to run all 5 at once
+- On a memory-constrained host the scheduler queues builds and wall time degrades toward the sequential total — but no OOM crashes
 
-A full default matrix build on a fast machine takes 60–90 minutes wall time with `--parallel` enabled.
+A full default matrix build on a fast machine with ≥24 GB of Docker memory takes ~30–45 minutes wall time with `--parallel` enabled.
 
 ### Cross-compilation
 
@@ -271,6 +310,8 @@ Tests cover:
 | `test_step_regex.py` | Docker buildkit and ninja step marker parsing |
 | `test_dockerfile.py` | Generated Dockerfile content for linux amd64/arm64 and musl amd64/arm64, including the two-phase build structure |
 | `test_eta.py` | EMA-based ETA estimation lifecycle |
+| `test_resolve_jobs.py` | CLI `--platform`/`--arch` resolution to concrete job lists + `--arch` alias normalization (`x86_64`/`aarch64`/etc.) |
+| `test_memory_scheduler.py` | `MemoryScheduler` admission control: budget fit, queueing, wakeup on release, deadlock guard when one build exceeds the full budget |
 
 ## Reference
 

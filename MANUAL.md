@@ -26,6 +26,7 @@ python3 pdfium/build_pdfium.py VERSION
                                [--arch {amd64,arm64}]
                                [--platform PLATFORM [PLATFORM ...]]
                                [--parallel]
+                               [--mem-per-build MB]
                                [--upload]
                                [--output-dir DIR]
 ```
@@ -119,11 +120,28 @@ container's own CPU arch, not the target.
 **`--parallel`**
 
 :   Fan out every `(platform, arch)` combo concurrently. With the
-    default matrix this runs four Docker builds at once (one thread per
-    combo); with `--platform linux` + `--arch amd64` it has no effect.
-    In the terminal, press `Tab` or digits `1`–`4` to switch which
-    build's live output is visible; the other builds continue in the
-    background and replay on switch.
+    default matrix this runs up to five Docker builds at once (one
+    thread per combo); with `--platform linux` + `--arch amd64` it has
+    no effect. In the terminal, press `Tab` or digits `1`–`5` to switch
+    which build's live output is visible; the other builds continue in
+    the background and replay on switch.
+
+    Each parallel build reserves `--mem-per-build` MB from the Docker
+    daemon's memory budget (read via `docker info`) before starting.
+    Builds whose reservation would exceed the budget are held in a
+    `queued — waiting for memory` state and launched as earlier builds
+    finish, so a small Docker VM running five jobs degrades gracefully
+    to serial execution instead of OOM-crashing. If `docker info` can't
+    be read, gating is skipped with a one-line warning.
+
+**`--mem-per-build MB`**
+
+:   Pessimistic per-build memory estimate used by the `--parallel`
+    scheduler. Default: `4096` (4 GiB), which comfortably covers
+    PDFium's ninja link peak plus Docker overhead. Tune down if runs
+    queue needlessly on a large host; tune up if you see OOM kills.
+    Has no effect outside `--parallel` or when the default matrix has
+    only one job.
 
 **`--upload`**
 
@@ -138,13 +156,36 @@ container's own CPU arch, not the target.
 :   Where to write the `.tgz` archives. Default: `./bin`. Created if it
     does not already exist.
 
+## LOGS
+
+Every job writes its full Docker build output to
+`<output-dir>/logs/<plat>-<arch>.log` (so the default location is
+`./bin/logs/linux-arm64.log`, `./bin/logs/mac-arm64.log`, …). The log
+file is the authoritative post-mortem record when a build fails —
+`--parallel` only keeps the last ~500 output lines per job in memory
+for the in-terminal view switcher, but the log file on disk has every
+line plus a header (version, start timestamp, image tag) and a footer
+with the exit status and exception type.
+
+On failure the script prints the log path to stderr so you can
+`tail -n 200 bin/logs/linux-arm64.log` or open it in an editor without
+hunting for it. The extraction and tarball-creation commands
+(`docker create`, `docker cp`, `tar czf`) are also captured into the
+same log file, so post-compile failures stay diagnosable.
+
+Log files are not gitignored by path but `*.log` is — they're safe to
+leave in place across runs. Each new invocation truncates its own
+`<plat>-<arch>.log` rather than appending.
+
 ## FILES
 
 ```
 pdfium/
 ├── build_pdfium.py            # entry point
 ├── bin/                       # default output directory (gitignored)
-│   └── pdfium-<plat>-<cpu>.tgz
+│   ├── pdfium-<plat>-<cpu>.tgz
+│   └── logs/
+│       └── <plat>-<arch>.log  # per-job Docker build log (overwritten each run)
 ├── patches/
 │   ├── linux.py               # glibc linux patch script (accepts --mode)
 │   ├── mac.py                 # macOS patch script (accepts --mode)
