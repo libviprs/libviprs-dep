@@ -11,11 +11,11 @@ Requirements:
     - gh CLI (only when using --upload)
 
 Usage:
-    python3 build_pdfium.py 7725                    # build both architectures
-    python3 build_pdfium.py 7725 --parallel         # build both in parallel
-    python3 build_pdfium.py 7725 --arch amd64       # build amd64 only
-    python3 build_pdfium.py 7725 --arch arm64       # build arm64 only
-    python3 build_pdfium.py 7725 --platform linux   # explicit platform (default)
+    python3 build_pdfium.py 7725                    # build linux + musl x amd64 + arm64
+    python3 build_pdfium.py 7725 --parallel         # fan out all (platform, arch) combos at once
+    python3 build_pdfium.py 7725 --arch amd64       # build amd64 only (both platforms)
+    python3 build_pdfium.py 7725 --arch arm64       # build arm64 only (both platforms)
+    python3 build_pdfium.py 7725 --platform linux   # glibc only
     python3 build_pdfium.py 7725 --platform mac     # build for macOS
     python3 build_pdfium.py 7725 --platform musl    # build for musl/Alpine
     python3 build_pdfium.py 7725 --upload           # build and upload to GitHub
@@ -53,12 +53,79 @@ PATCHES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "patches"
 PLATFORMS = ["linux", "mac", "musl"]
 
 # Target architectures.  All builds run inside an amd64 Docker container
-# and cross-compile for arm64 using PDFium's built-in sysroot + clang.
-# This avoids slow and fragile QEMU emulation.
+# (forced via --platform=linux/amd64 so Apple Silicon / Linux-arm64 hosts
+# still get an amd64 container via QEMU emulation) and cross-compile for
+# arm64 using PDFium's built-in sysroot + clang.
 TARGETS = {
     "amd64": {"gn_cpu": "x64"},
     "arm64": {"gn_cpu": "arm64"},
 }
+
+# `--arch` aliases — accepted on the CLI and normalized into a TARGETS key.
+# ``x86_64`` is the Unix / Apple / LLVM name for the same ISA that Docker
+# and Debian call ``amd64``; Intel never shipped an Intel Mac labelled
+# ``amd64``, so accepting ``x86_64`` avoids the "Intel Mac is not AMD"
+# confusion while keeping Docker's ``--platform=linux/amd64`` internals.
+ARCH_ALIASES = {
+    "x86_64": "amd64",
+    "x64": "amd64",
+    "aarch64": "arm64",
+}
+
+
+def normalize_arch(arch):
+    """Return the TARGETS key for a user-supplied arch name, or raise."""
+    if arch is None:
+        return None
+    canonical = ARCH_ALIASES.get(arch, arch)
+    if canonical not in TARGETS:
+        raise ValueError(f"Unknown arch '{arch}'. Accepted: amd64/x86_64, arm64/aarch64.")
+    return canonical
+
+
+# Default build matrix. Intel Macs are deliberately excluded — Apple has
+# shipped Apple Silicon exclusively for new Macs since 2020 and
+# pdfium-render consumers rarely need an x86_64 dylib. Add
+# ``--platform mac --arch x86_64`` to build one explicitly when needed.
+DEFAULT_JOBS = [
+    ("linux", "amd64"),
+    ("linux", "arm64"),
+    ("mac", "arm64"),
+    ("musl", "amd64"),
+    ("musl", "arm64"),
+]
+
+
+def resolve_jobs(platform_flag, arch_flag):
+    """Resolve CLI --platform / --arch flags to a concrete (plat, arch) list.
+
+    - No flags: the full default matrix (5 combos).
+    - ``--platform X``: filter the default matrix to platforms in X. If a
+      requested platform isn't in the default (e.g. only mac/arm64 is
+      default for mac), fall back to cross-producing X with both archs.
+    - ``--arch Y``: filter the default matrix by arch Y.
+    - Both: cross-product, honoring the explicit request even for combos
+      that aren't in the default matrix.
+    """
+    if platform_flag is None and arch_flag is None:
+        return list(DEFAULT_JOBS)
+
+    if platform_flag is not None and arch_flag is not None:
+        return [(p, arch_flag) for p in platform_flag]
+
+    if platform_flag is not None:
+        plat_set = set(platform_flag)
+        filtered = [(p, a) for (p, a) in DEFAULT_JOBS if p in plat_set]
+        covered = {p for p, _ in filtered}
+        missing = plat_set - covered
+        if missing:
+            filtered += [(p, a) for p in missing for a in ("amd64", "arm64")]
+        return filtered
+
+    # arch_flag set, platform unset — keep the default matrix's platform
+    # selection, filtering by the requested arch.
+    return [(p, a) for (p, a) in DEFAULT_JOBS if a == arch_flag]
+
 
 # GN build arguments for a self-contained shared library.
 #
@@ -182,8 +249,6 @@ class KeyListener:
 # Terminal UI — fixed header with progress, scrolling build output below
 # ---------------------------------------------------------------------------
 
-HEADER_LINES = 9
-
 
 def fmt_time(seconds):
     """Format seconds as m:ss or h:mm:ss."""
@@ -244,22 +309,30 @@ def _estimate_remaining(
 
 
 class BuildProgress:
-    """Manages a fixed terminal header showing per-architecture progress."""
+    """Manages a fixed terminal header showing per-job progress.
 
-    def __init__(self, version, archs, parallel=False):
+    A "job" is a ``(platform, arch)`` build. The identifier is a string
+    like ``"linux/amd64"`` so the same class backs both single-platform
+    and cross-platform parallel builds.
+    """
+
+    def __init__(self, version, jobs, parallel=False):
         self.version = version
-        self.archs = archs
+        self.jobs = jobs
         self._uploading = False
-        self._parallel = parallel and len(archs) > 1
+        self._parallel = parallel and len(jobs) > 1
         self._lock = threading.Lock()
         self.status = {}
-        # Per-arch output buffer (ring buffer of recent lines)
-        self._output = {arch: collections.deque(maxlen=OUTPUT_BUFFER_SIZE) for arch in archs}
-        # Which arch's output is currently displayed (None = interleaved/sequential)
-        self._active_view = archs[0] if self._parallel else None
+        # 4 chrome lines (top border, blank, blank, bottom border) + 2 per job
+        # in the worst case (building state renders two lines).
+        self._header_lines = max(9, 4 + 2 * len(jobs))
+        # Per-job output buffer (ring buffer of recent lines)
+        self._output = {job: collections.deque(maxlen=OUTPUT_BUFFER_SIZE) for job in jobs}
+        # Which job's output is currently displayed (None = interleaved/sequential)
+        self._active_view = jobs[0] if self._parallel else None
         self._key_listener = None
-        for arch in archs:
-            self.status[arch] = {
+        for job in jobs:
+            self.status[job] = {
                 "state": "waiting",
                 "step": 0,
                 "total_steps": 0,
@@ -291,10 +364,10 @@ class BuildProgress:
         rows = shutil.get_terminal_size().lines
         # Reserve header area: clear lines then set scroll region below it.
         sys.stdout.write("\033[H")
-        for _ in range(HEADER_LINES):
+        for _ in range(self._header_lines):
             sys.stdout.write("\033[2K\n")
-        sys.stdout.write(f"\033[{HEADER_LINES + 1};{rows}r")
-        sys.stdout.write(f"\033[{HEADER_LINES + 1};1H")
+        sys.stdout.write(f"\033[{self._header_lines + 1};{rows}r")
+        sys.stdout.write(f"\033[{self._header_lines + 1};1H")
         sys.stdout.flush()
         self._render()
 
@@ -318,17 +391,17 @@ class BuildProgress:
     def _on_key(self, ch):
         """Handle a keypress for view switching during parallel builds."""
         if ch == "\t":
-            # Tab: cycle to next arch
+            # Tab: cycle to next job
             with self._lock:
-                idx = self.archs.index(self._active_view)
-                self._active_view = self.archs[(idx + 1) % len(self.archs)]
+                idx = self.jobs.index(self._active_view)
+                self._active_view = self.jobs[(idx + 1) % len(self.jobs)]
                 self._replay_output()
                 self._render()
-        elif ch in ("1", "2"):
+        elif ch in "123456789":
             idx = int(ch) - 1
-            if idx < len(self.archs):
+            if idx < len(self.jobs):
                 with self._lock:
-                    self._active_view = self.archs[idx]
+                    self._active_view = self.jobs[idx]
                     self._replay_output()
                     self._render()
 
@@ -337,33 +410,33 @@ class BuildProgress:
         if not self.active or not self._active_view:
             return
         rows = shutil.get_terminal_size().lines
-        scroll_lines = rows - HEADER_LINES
+        scroll_lines = rows - self._header_lines
         # Move to scroll region top and clear it
-        sys.stdout.write(f"\033[{HEADER_LINES + 1};1H")
+        sys.stdout.write(f"\033[{self._header_lines + 1};1H")
         for _ in range(scroll_lines):
             sys.stdout.write("\033[2K\n")
         # Replay recent lines
         buf = self._output[self._active_view]
         replay = list(buf)[-scroll_lines:]
-        sys.stdout.write(f"\033[{HEADER_LINES + 1};1H")
+        sys.stdout.write(f"\033[{self._header_lines + 1};1H")
         for line in replay:
             sys.stdout.write(f"{line}\n")
         sys.stdout.flush()
 
     # -- state updates -----------------------------------------------------
 
-    def start_arch(self, arch):
+    def start_arch(self, job):
         with self._lock:
-            s = self.status[arch]
+            s = self.status[job]
             s["state"] = "building"
             s["step"] = 0
             s["total_steps"] = 0
             s["start_time"] = time.time()
             self._render()
 
-    def set_step(self, arch, step, total, is_copy=False):
+    def set_step(self, job, step, total, is_copy=False):
         with self._lock:
-            s = self.status[arch]
+            s = self.status[job]
             now = time.time()
 
             # Detect phase change: step counter reset or total changed
@@ -396,32 +469,32 @@ class BuildProgress:
             s["elapsed"] = now - s["start_time"]
             self._render()
 
-    def set_extracting(self, arch):
+    def set_extracting(self, job):
         with self._lock:
-            s = self.status[arch]
+            s = self.status[job]
             s["state"] = "extracting"
             if s["start_time"]:
                 s["elapsed"] = time.time() - s["start_time"]
             self._render()
 
-    def set_done(self, arch):
+    def set_done(self, job):
         with self._lock:
-            s = self.status[arch]
+            s = self.status[job]
             s["state"] = "done"
             if s["start_time"]:
                 s["elapsed"] = time.time() - s["start_time"]
             self._render()
 
-    def set_failed(self, arch):
+    def set_failed(self, job):
         with self._lock:
-            s = self.status[arch]
+            s = self.status[job]
             s["state"] = "failed"
             if s["start_time"]:
                 s["elapsed"] = time.time() - s["start_time"]
             self._render()
 
     def set_uploading(self):
-        """Replace all arch statuses with a single uploading message."""
+        """Replace all job statuses with a single uploading message."""
         with self._lock:
             self._uploading = True
             self._render()
@@ -436,7 +509,8 @@ class BuildProgress:
 
         title = f" PDFium chromium/{self.version} "
         if self._parallel and self._active_view:
-            hint = f"viewing: {self._active_view}  (Tab/1/2 to switch) "
+            switch_hint = "1-9" if len(self.jobs) > 2 else "1/2"
+            hint = f"viewing: {self._active_view}  (Tab/{switch_hint} to switch) "
             pad = max(w - len(title) - len(hint) - 4, 0)
             lines.append(f"┌──{title}{'─' * pad}{hint}┐")
         else:
@@ -448,19 +522,19 @@ class BuildProgress:
             line = "  Uploading to GitHub Releases..."
             lines.append(f"│{line:<{w - 2}}│")
         else:
-            for arch in self.archs:
-                s = self.status[arch]
-                highlighted = self._parallel and arch == self._active_view
-                arch_lines = self._render_arch(arch, s, w, highlighted)
-                lines.extend(arch_lines)
+            for job in self.jobs:
+                s = self.status[job]
+                highlighted = self._parallel and job == self._active_view
+                job_lines = self._render_job(job, s, w, highlighted)
+                lines.extend(job_lines)
 
         lines.append(f"│{' ' * (w - 2)}│")
         lines.append(f"└{'─' * (w - 2)}┘")
 
         # Pad or trim to fixed height
-        while len(lines) < HEADER_LINES:
+        while len(lines) < self._header_lines:
             lines.append("")
-        lines = lines[:HEADER_LINES]
+        lines = lines[: self._header_lines]
 
         sys.stdout.write("\033[s")  # save cursor
         sys.stdout.write("\033[H")  # move to top-left
@@ -469,7 +543,7 @@ class BuildProgress:
         sys.stdout.write("\033[u")  # restore cursor
         sys.stdout.flush()
 
-    def _render_arch(self, arch, s, w, highlighted=False):
+    def _render_job(self, job, s, w, highlighted=False):
         state = s["state"]
         elapsed = s["elapsed"]
         lines = []
@@ -477,20 +551,21 @@ class BuildProgress:
         bg_on = "\033[48;5;236m" if highlighted else ""
         bg_off = "\033[0m" if highlighted else ""
         indicator = ">" if highlighted else " "
+        label_w = 13  # fits "linux/amd64" / "musl/arm64" with a trailing space
 
         if state == "waiting":
-            line = f" {indicator}{arch:<7} waiting"
+            line = f" {indicator}{job:<{label_w}} waiting"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "building":
             step = s["step"]
             total = s["total_steps"] or 1
             frac = step / total
-            bar_w = max(w - 42, 10)
+            bar_w = max(w - 42 - (label_w - 7), 10)
             bar = make_bar(frac, bar_w)
             pct = int(frac * 100)
             step_label = f"Step {step}/{total}" if total > 1 else "starting..."
-            line = f" {indicator}{arch:<7} {bar}  {pct:>3}%  {step_label}"
+            line = f" {indicator}{job:<{label_w}} {bar}  {pct:>3}%  {step_label}"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
             time_parts = [f"{fmt_time(elapsed)} elapsed"]
@@ -508,26 +583,26 @@ class BuildProgress:
                     time_parts.append(f"~{fmt_time(remaining)} remaining")
                 else:
                     time_parts.append("estimating...")
-            time_line = "  " + " " * 8 + " · ".join(time_parts)
+            time_line = "  " + " " * (label_w + 1) + " · ".join(time_parts)
             lines.append(f"│{bg_on}{time_line:<{w - 2}}{bg_off}│")
 
         elif state == "extracting":
-            line = f" {indicator}{arch:<7} extracting binary...  ({fmt_time(elapsed)})"
+            line = f" {indicator}{job:<{label_w}} extracting binary...  ({fmt_time(elapsed)})"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "done":
-            line = f" {indicator}{arch:<7} ✓ done  ({fmt_time(elapsed)})"
+            line = f" {indicator}{job:<{label_w}} ✓ done  ({fmt_time(elapsed)})"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         elif state == "failed":
-            line = f" {indicator}{arch:<7} ✗ failed  ({fmt_time(elapsed)})"
+            line = f" {indicator}{job:<{label_w}} ✗ failed  ({fmt_time(elapsed)})"
             lines.append(f"│{bg_on}{line:<{w - 2}}{bg_off}│")
 
         return lines
 
     # -- Docker output streaming with step parsing -------------------------
 
-    def stream_docker_build(self, cmd, arch):
+    def stream_docker_build(self, cmd, job):
         """Run a docker build command, stream its output, and parse step progress."""
         process = subprocess.Popen(
             cmd,
@@ -546,13 +621,13 @@ class BuildProgress:
                 # COPY/CACHED steps are instant and would pollute the
                 # EMA rate — flag them so set_step skips the rate update.
                 is_copy = "] COPY " in line or "] CACHED" in line
-                self.set_step(arch, step, total, is_copy=is_copy)
+                self.set_step(job, step, total, is_copy=is_copy)
             # Buffer and conditionally display
             with self._lock:
                 if self._parallel:
-                    self._output[arch].append(line)
-                    # Only print if this arch is the active view
-                    if self._active_view == arch:
+                    self._output[job].append(line)
+                    # Only print if this job is the active view
+                    if self._active_view == job:
                         if self.active:
                             sys.stdout.write(f"{line}\n")
                             sys.stdout.flush()
@@ -573,8 +648,43 @@ class BuildProgress:
 # ---------------------------------------------------------------------------
 
 
+def _install_hint(tool):
+    """Platform-appropriate install instructions for a given tool."""
+    is_mac = sys.platform == "darwin"
+    hints = {
+        "docker": {
+            "mac": (
+                "Install Docker Desktop: https://docs.docker.com/desktop/install/mac-install/ "
+                "(or `brew install --cask docker`)."
+            ),
+            "linux": (
+                "Install Docker Engine: https://docs.docker.com/engine/install/ "
+                "(e.g. on Debian/Ubuntu: `curl -fsSL https://get.docker.com | sh` then "
+                "`sudo usermod -aG docker $USER` and log out/in)."
+            ),
+        },
+        "gh": {
+            "mac": "Install GitHub CLI: `brew install gh` (or see https://cli.github.com/).",
+            "linux": (
+                "Install GitHub CLI: https://github.com/cli/cli/blob/trunk/docs/install_linux.md "
+                "(e.g. on Debian/Ubuntu: `sudo apt install gh` after adding the gh apt repo)."
+            ),
+        },
+        "git": {
+            "mac": "Install git: `brew install git` (or run `xcode-select --install`).",
+            "linux": ("Install git: `sudo apt install git` (Debian/Ubuntu) or distro equivalent."),
+        },
+    }
+    return hints[tool]["mac" if is_mac else "linux"]
+
+
 def check_dependencies(upload):
-    """Verify all required external tools are installed."""
+    """Verify all required external tools are installed and authenticated.
+
+    Linux and macOS are both supported build hosts — the heavy lifting
+    happens inside an amd64 Debian container, so the host only needs
+    Docker, Python, and (for --upload) gh + git with a GitHub login.
+    """
     errors = []
 
     if sys.version_info < (3, 7):
@@ -584,11 +694,19 @@ def check_dependencies(upload):
         )
 
     if not shutil.which("docker"):
-        errors.append("docker not found. Install from https://docs.docker.com/get-docker/")
+        errors.append(f"docker not found. {_install_hint('docker')}")
     else:
         result = subprocess.run(["docker", "info"], capture_output=True)
         if result.returncode != 0:
-            errors.append("Docker daemon is not running. Start Docker and try again.")
+            errors.append(
+                "Docker daemon is not running. "
+                + (
+                    "Start Docker Desktop from the menu bar."
+                    if sys.platform == "darwin"
+                    else "Start it with `sudo systemctl start docker` (or add yourself to "
+                    "the `docker` group to run without sudo)."
+                )
+            )
         else:
             result = subprocess.run(["docker", "buildx", "version"], capture_output=True)
             if result.returncode != 0:
@@ -598,20 +716,65 @@ def check_dependencies(upload):
                 )
 
     if upload:
+        # gh CLI
         if not shutil.which("gh"):
-            errors.append(
-                "gh CLI not found (required for --upload). Install from https://cli.github.com/"
-            )
+            errors.append(f"gh CLI not found (required for --upload). {_install_hint('gh')}")
         else:
             result = subprocess.run(["gh", "auth", "status"], capture_output=True)
             if result.returncode != 0:
-                errors.append("gh CLI is not authenticated. Run 'gh auth login' first.")
+                errors.append(
+                    "gh CLI is not authenticated with GitHub. "
+                    "Run `gh auth login` (choose GitHub.com, HTTPS, login with a web browser "
+                    "or a personal access token with `repo` and `workflow` scopes)."
+                )
+            else:
+                # gh auth status passed — make sure the authenticated account
+                # can actually reach the release repo and has push access.
+                probe = subprocess.run(
+                    ["gh", "repo", "view", GITHUB_REPO, "--json", "viewerPermission"],
+                    capture_output=True,
+                    text=True,
+                )
+                if probe.returncode != 0:
+                    errors.append(
+                        f"gh cannot reach {GITHUB_REPO}. "
+                        "Check the authenticated account has access "
+                        "(`gh auth status` to inspect, `gh auth switch` to change account)."
+                    )
+                elif '"viewerPermission":"READ"' in probe.stdout or (
+                    '"viewerPermission":null' in probe.stdout
+                ):
+                    errors.append(
+                        f"Authenticated GitHub user lacks write access to {GITHUB_REPO}. "
+                        "Re-login with a token that has `repo` scope, or switch to an "
+                        "account with maintainer/admin permission via `gh auth switch`."
+                    )
+
+        # git — gh uses it under the hood for pushing release tags
+        if not shutil.which("git"):
+            errors.append(f"git not found (required for --upload). {_install_hint('git')}")
+        else:
+            name_r = subprocess.run(
+                ["git", "config", "--global", "user.name"], capture_output=True, text=True
+            )
+            email_r = subprocess.run(
+                ["git", "config", "--global", "user.email"], capture_output=True, text=True
+            )
+            if not name_r.stdout.strip() or not email_r.stdout.strip():
+                errors.append(
+                    "git user.name/user.email is not configured. Run "
+                    '`git config --global user.name "Your Name"` and '
+                    '`git config --global user.email "you@example.com"`.'
+                )
 
     if errors:
-        print("Missing dependencies:\n")
+        print("Missing or misconfigured dependencies:\n")
         for err in errors:
             print(f"  - {err}")
-        print()
+        print(
+            "\nThis build script runs on both macOS and Linux desktops; the actual "
+            "compile happens inside an amd64 Debian container."
+        )
         sys.exit(1)
 
 
@@ -926,22 +1089,25 @@ def run(cmd, **kwargs):
 
 
 def build_for_arch(version, arch, plat, output_dir, progress):
-    """Build PDFium for a single architecture using Docker.
+    """Build PDFium for a single (platform, arch) using Docker.
 
     All builds run inside an amd64 container.  arm64 targets are
     cross-compiled using PDFium's clang and a Debian sysroot.
 
     The platform patch script (patches/<plat>.py) is copied into the
     Docker build context as ``platform.py`` and applied during the build.
+    Image and container names include both ``plat`` and ``arch`` so
+    concurrent ``(plat, arch)`` builds can't collide on shared names.
     """
-    image_tag = f"pdfium-builder-{version}-{arch}"
-    container_name = f"pdfium-extract-{version}-{arch}"
+    job = f"{plat}/{arch}"
+    image_tag = f"pdfium-builder-{version}-{plat}-{arch}"
+    container_name = f"pdfium-extract-{version}-{plat}-{arch}"
 
-    progress.start_arch(arch)
+    progress.start_arch(job)
 
     patch_script = os.path.join(PATCHES_DIR, f"{plat}.py")
     if not os.path.isfile(patch_script):
-        progress.set_failed(arch)
+        progress.set_failed(job)
         raise RuntimeError(f"No patch script for platform '{plat}' (expected {patch_script})")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -957,8 +1123,13 @@ def build_for_arch(version, arch, plat, output_dir, progress):
             os.path.join(tmpdir, "LICENSE"),
         )
 
-        # No --platform flag: always build on host (amd64).
-        # Cross-compilation is handled by GN args + sysroot.
+        # Pin container arch to linux/amd64 regardless of host arch.
+        # depot_tools ships amd64 Linux prebuilts for clang/gn/ninja;
+        # on Apple Silicon or Linux-arm64 hosts, Docker would otherwise
+        # default to an arm64 container and the amd64 prebuilts would
+        # fail to execute. Cross-compilation for the target arch happens
+        # inside the container via GN args + sysroot — the --platform
+        # flag only controls the container's own CPU arch.
         gn_cpu = TARGETS[arch]["gn_cpu"]
         print(
             f"\n{'=' * 60}\n  Building PDFium for {plat}/{gn_cpu}  (arch={arch})\n{'=' * 60}\n",
@@ -967,19 +1138,20 @@ def build_for_arch(version, arch, plat, output_dir, progress):
         cmd = [
             "docker",
             "build",
+            "--platform=linux/amd64",
             "--no-cache",
             "--progress=plain",
             "-t",
             image_tag,
             tmpdir,
         ]
-        rc = progress.stream_docker_build(cmd, arch)
+        rc = progress.stream_docker_build(cmd, job)
         if rc != 0:
-            progress.set_failed(arch)
-            raise RuntimeError(f"Docker build failed for {arch} (exit {rc})")
+            progress.set_failed(job)
+            raise RuntimeError(f"Docker build failed for {job} (exit {rc})")
 
     # Extract staged artifacts and create tarball
-    progress.set_extracting(arch)
+    progress.set_extracting(job)
     dir_name = staging_dir_name(plat, arch)
     tarball = archive_name(plat, arch)
     output_path = os.path.join(output_dir, tarball)
@@ -987,7 +1159,16 @@ def build_for_arch(version, arch, plat, output_dir, progress):
     with tempfile.TemporaryDirectory() as extract_dir:
         staging_dest = os.path.join(extract_dir, dir_name)
         try:
-            run(["docker", "create", "--name", container_name, image_tag])
+            run(
+                [
+                    "docker",
+                    "create",
+                    "--platform=linux/amd64",
+                    "--name",
+                    container_name,
+                    image_tag,
+                ]
+            )
             run(
                 [
                     "docker",
@@ -1012,7 +1193,7 @@ def build_for_arch(version, arch, plat, output_dir, progress):
             ]
         )
 
-    progress.set_done(arch)
+    progress.set_done(job)
 
     size_mb = os.path.getsize(output_path) / (1024 * 1024)
     print(f"  -> {output_path} ({size_mb:.1f} MB)", flush=True)
@@ -1090,8 +1271,14 @@ def main():
     )
     parser.add_argument(
         "--arch",
-        choices=["amd64", "arm64"],
-        help="build for a single architecture (default: both)",
+        choices=["amd64", "x86_64", "x64", "arm64", "aarch64"],
+        metavar="ARCH",
+        help=(
+            "build for a single architecture (default: both). "
+            "`x86_64` and `x64` are accepted as aliases for `amd64` "
+            "(Intel CPUs — including Intel Macs — aren't 'AMD'). "
+            "`aarch64` is accepted as an alias for `arm64`."
+        ),
     )
     parser.add_argument(
         "--platform",
@@ -1101,14 +1288,19 @@ def main():
         help=(
             "target platform(s) — selects patch script(s) from patches/. "
             "Accepts multiple values (e.g. --platform linux musl). "
-            "Default: linux + musl, so each release ships both a glibc and "
-            "a musl variant. Pass --platform mac to build macOS alone."
+            "Default matrix: linux/amd64, linux/arm64, mac/arm64, "
+            "musl/amd64, musl/arm64 (5 archives). Intel Mac is excluded "
+            "from the default; request it with --platform mac --arch x86_64."
         ),
     )
     parser.add_argument(
         "--parallel",
         action="store_true",
-        help="build all architectures in parallel (default: sequential)",
+        help=(
+            "fan out every (platform, arch) combo in parallel "
+            "(default: sequential). With the default matrix this runs five "
+            "Docker builds at once; use Tab or 1-5 to switch the live view."
+        ),
     )
     parser.add_argument(
         "--upload",
@@ -1121,53 +1313,64 @@ def main():
         help="output directory (default: ./bin)",
     )
     args = parser.parse_args()
+    try:
+        args.arch = normalize_arch(args.arch)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     check_dependencies(upload=args.upload)
 
-    archs = [args.arch] if args.arch else ["amd64", "arm64"]
-    platforms = args.platform if args.platform else ["linux", "musl"]
     output_dir = os.path.abspath(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
+    # Resolve --platform / --arch into a concrete (plat, arch) job list.
+    # Default (no flags) is the 5-combo DEFAULT_JOBS matrix. With
+    # --parallel, every job runs concurrently in its own Docker build.
+    jobs = resolve_jobs(args.platform, args.arch)
+    job_ids = [f"{plat}/{arch}" for plat, arch in jobs]
+
+    host_arch = platform.machine()
+    if host_arch not in ("x86_64", "AMD64"):
+        print(
+            f"Host CPU arch is '{host_arch}'. All builds run inside an amd64 "
+            "container (pinned via --platform=linux/amd64), so non-amd64 hosts "
+            "emulate amd64 via QEMU — expect a significant slowdown.",
+            flush=True,
+        )
+
     built_files = []
     try:
-        # Each platform pass gets its own BuildProgress so per-arch status
-        # lines stay readable. Parallelism is within a platform (archs
-        # fan out in parallel); platforms run sequentially so the terminal
-        # UI doesn't have to juggle more than two or three rows at once.
-        for plat in platforms:
-            print(f"\n{'=' * 60}\n  Platform: {plat}\n{'=' * 60}\n", flush=True)
-            progress = BuildProgress(args.version, archs, parallel=args.parallel)
-            try:
-                if args.parallel and len(archs) > 1:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(archs)) as pool:
-                        futures = {
-                            pool.submit(
-                                build_for_arch,
-                                args.version,
-                                arch,
-                                plat,
-                                output_dir,
-                                progress,
-                            ): arch
-                            for arch in archs
-                        }
-                        for future in concurrent.futures.as_completed(futures):
-                            built_files.append(future.result())
-                else:
-                    for arch in archs:
-                        path = build_for_arch(args.version, arch, plat, output_dir, progress)
-                        built_files.append(path)
-            finally:
-                progress.finish()
+        progress = BuildProgress(args.version, job_ids, parallel=args.parallel)
+        try:
+            if args.parallel and len(jobs) > 1:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+                    futures = {
+                        pool.submit(
+                            build_for_arch,
+                            args.version,
+                            arch,
+                            plat,
+                            output_dir,
+                            progress,
+                        ): (plat, arch)
+                        for plat, arch in jobs
+                    }
+                    for future in concurrent.futures.as_completed(futures):
+                        built_files.append(future.result())
+            else:
+                for plat, arch in jobs:
+                    path = build_for_arch(args.version, arch, plat, output_dir, progress)
+                    built_files.append(path)
+        finally:
+            progress.finish()
 
         # Sort so upload order is deterministic regardless of parallel completion order.
         built_files.sort()
 
         if args.upload:
             # Reuse a lightweight progress instance just to show the "Uploading..."
-            # banner during the gh release create; no arch work runs here.
-            upload_progress = BuildProgress(args.version, archs, parallel=False)
+            # banner during the gh release create; no job work runs here.
+            upload_progress = BuildProgress(args.version, job_ids, parallel=False)
             try:
                 upload_release(args.version, built_files, upload_progress)
             finally:
