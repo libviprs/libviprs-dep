@@ -21,9 +21,13 @@ Patches 1 and 2 match bblanchon/pdfium-binaries (shared_library.patch +
 public_headers.patch). Patch 3 matches bblanchon's patches/mac/build.patch.
 
 Usage:
-    python3 mac.py /path/to/pdfium
+    python3 mac.py /path/to/pdfium [--mode base|shared|all]
+
+mac builds are single-phase today (only produce .dylib), so base + shared
+are both honored but the default ``all`` matches the legacy behavior.
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -97,18 +101,29 @@ def patch_apple_toolchain(pdfium_dir: Path) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        pdfium_dir = Path(".")
-    else:
-        pdfium_dir = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description="Apply PDFium mac patches.")
+    parser.add_argument("pdfium_dir", nargs="?", default=".", help="PDFium source dir")
+    parser.add_argument(
+        "--mode",
+        choices=["base", "shared", "all"],
+        default="all",
+        help=(
+            "base = fpdfview/toolchain only; shared adds the BUILD.gn rewrite; "
+            "all = both (default)."
+        ),
+    )
+    args = parser.parse_args()
 
+    pdfium_dir = Path(args.pdfium_dir)
     if not (pdfium_dir / "BUILD.gn").exists():
         print(f"Error: {pdfium_dir}/BUILD.gn not found", file=sys.stderr)
         sys.exit(1)
 
-    patch_build_gn(pdfium_dir)
-    patch_fpdfview_h(pdfium_dir)
-    patch_apple_toolchain(pdfium_dir)
+    if args.mode in ("base", "all"):
+        patch_fpdfview_h(pdfium_dir)
+        patch_apple_toolchain(pdfium_dir)
+    if args.mode in ("shared", "all"):
+        patch_build_gn(pdfium_dir)
 
 
 if __name__ == "__main__":
