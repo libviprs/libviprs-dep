@@ -1,38 +1,34 @@
 #!/usr/bin/env python3
-"""Platform patch for musl (Alpine) shared library builds.
+"""Platform patch for musl (Alpine) PDFium builds.
 
-Four changes are required on top of the standard Linux patches:
+Mirrors the linux patch's two-mode split so a single checkout yields
+both ``libpdfium.a`` and ``libpdfium.so``:
 
-1. Change component("pdfium") to shared_library("pdfium") in BUILD.gn.
-   Same as Linux — component() resolves to static_library when
-   is_component_build=false.
+* ``base`` — applied before the static-archive build. Does everything
+  *except* the BUILD.gn ``component()`` rewrite:
+    - ``fpdfview.h``: strip COMPONENT_BUILD guard around FPDF_EXPORT.
+    - ``BUILDCONFIG.gn``: declare ``is_musl``, route default toolchain
+      to ``//build/toolchain/linux/musl``, disable ``-fstack-protector``.
+    - ``third_party/highway/BUILD.gn``: disable ``HWY_AVX3_SPR`` on
+      32-bit (otherwise highway emits broken SIMD on musl x86).
+    - Install the musl GN toolchain at
+      ``build/toolchain/linux/musl/BUILD.gn`` (gcc_toolchain entries for
+      x86/x64/arm/arm64 using musl-cross-make prefixes).
+  With these in place, ``component("pdfium")`` still resolves to
+  ``static_library`` under ``is_component_build=false`` and produces
+  ``libpdfium.a``.
 
-2. Remove the COMPONENT_BUILD guard around FPDF_EXPORT in fpdfview.h.
-   Same as Linux — ensures FPDF_EXPORT always applies
-   visibility("default").
-
-3. Patch build/config/BUILDCONFIG.gn to:
-   - Declare the is_musl GN arg.
-   - Route the default toolchain to //build/toolchain/linux/musl when
-     is_musl is true.
-   - Disable -fstack-protector under musl (musl's __stack_chk_fail is
-     incompatible with the flags Chromium passes).
-
-4. Patch third_party/highway/BUILD.gn to also disable HWY_AVX3_SPR on
-   32-bit builds. Without this, highway emits broken SIMD code on musl
-   x86.
-
-5. Install the musl GN toolchain definition at
-   build/toolchain/linux/musl/BUILD.gn. This defines gcc_toolchain()
-   entries for x86, x64, arm, and arm64 using musl-cross-make prefixed
-   compilers.
+* ``shared`` — applied on top of ``base``. Rewrites
+  ``component("pdfium")`` to ``shared_library("pdfium")`` in BUILD.gn
+  so a second ninja pass yields ``libpdfium.so``.
 
 All patches match bblanchon/pdfium-binaries (patches/musl/).
 
 Usage:
-    python3 musl.py /path/to/pdfium
+    python3 musl.py /path/to/pdfium [--mode base|shared|all]
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -245,20 +241,32 @@ gcc_toolchain("arm64") {
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        pdfium_dir = Path(".")
-    else:
-        pdfium_dir = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description="Apply PDFium musl patches.")
+    parser.add_argument("pdfium_dir", nargs="?", default=".", help="PDFium source dir")
+    parser.add_argument(
+        "--mode",
+        choices=["base", "shared", "all"],
+        default="all",
+        help=(
+            "base = everything except BUILD.gn component->shared rewrite "
+            "(produces libpdfium.a); shared = adds the BUILD.gn rewrite "
+            "(produces libpdfium.so); all = both (default, legacy behavior)."
+        ),
+    )
+    args = parser.parse_args()
 
+    pdfium_dir = Path(args.pdfium_dir)
     if not (pdfium_dir / "BUILD.gn").exists():
         print(f"Error: {pdfium_dir}/BUILD.gn not found", file=sys.stderr)
         sys.exit(1)
 
-    patch_build_gn(pdfium_dir)
-    patch_fpdfview_h(pdfium_dir)
-    patch_buildconfig_gn(pdfium_dir)
-    patch_highway_build_gn(pdfium_dir)
-    install_musl_toolchain(pdfium_dir)
+    if args.mode in ("base", "all"):
+        patch_fpdfview_h(pdfium_dir)
+        patch_buildconfig_gn(pdfium_dir)
+        patch_highway_build_gn(pdfium_dir)
+        install_musl_toolchain(pdfium_dir)
+    if args.mode in ("shared", "all"):
+        patch_build_gn(pdfium_dir)
 
 
 if __name__ == "__main__":

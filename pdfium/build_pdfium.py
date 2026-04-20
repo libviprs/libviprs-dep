@@ -638,7 +638,13 @@ def make_dockerfile(version, arch, plat):
 
 
 def _make_dockerfile_linux(version, arch, plat):
-    """Dockerfile for Linux builds (runs in Docker, cross-compiles arm64)."""
+    """Dockerfile for Linux builds (runs in Docker, cross-compiles arm64).
+
+    Two ninja phases are run against the same source checkout so the
+    release archive ships both ``libpdfium.a`` (produced by the
+    base-patched ``component("pdfium")`` → ``static_library``) and
+    ``libpdfium.so`` (produced after the shared-library rewrite).
+    """
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
     branch = f"chromium/{version}"
@@ -685,26 +691,40 @@ RUN build/install-build-deps.sh --no-prompt --no-chromeos-fonts --no-nacl || tru
 RUN gclient runhooks
 RUN python3 build/linux/sysroot_scripts/install-sysroot.py --arch={gn_cpu}
 
-# Step 5: Apply platform patch
+# Step 5: Apply base platform patch (fpdfview.h symbol visibility only)
 COPY platform.py /tmp/platform.py
-RUN python3 /tmp/platform.py /build/pdfium
+RUN python3 /tmp/platform.py /build/pdfium --mode base
 
-# Step 6: Configure GN
-RUN mkdir -p out/Release && cat > out/Release/args.gn <<'ARGS'
+# Step 6: Configure static build
+RUN mkdir -p out/Static && cat > out/Static/args.gn <<'ARGS'
 {gn_args}ARGS
-RUN gn gen out/Release
+RUN gn gen out/Static
 
-# Step 7: Build
-RUN ninja -C out/Release pdfium
+# Step 7: Build static archive (component() -> static_library -> libpdfium.a)
+RUN ninja -C out/Static pdfium
 
-# Step 8: Verify output
-RUN ls -lh out/Release/libpdfium.so && file out/Release/libpdfium.so
+# Step 8: Apply shared-library patch on top of base
+RUN python3 /tmp/platform.py /build/pdfium --mode shared
 
-# Step 9: Stage artifacts into /staging
+# Step 9: Configure shared build
+RUN mkdir -p out/Shared && cat > out/Shared/args.gn <<'ARGS'
+{gn_args}ARGS
+RUN gn gen out/Shared
+
+# Step 10: Build shared library (shared_library -> libpdfium.so)
+RUN ninja -C out/Shared pdfium
+
+# Step 11: Verify both outputs
+RUN ls -lh out/Static/libpdfium.a out/Shared/libpdfium.so && \\
+    file out/Static/libpdfium.a out/Shared/libpdfium.so
+
+# Step 12: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
 RUN mkdir -p /staging/lib /staging/include && \\
-    cp out/Release/libpdfium.so /staging/lib/ && \\
-    cp out/Release/args.gn /staging/ && \\
+    cp out/Shared/libpdfium.so /staging/lib/ && \\
+    cp out/Static/libpdfium.a /staging/lib/ && \\
+    cp out/Shared/args.gn /staging/args.gn && \\
+    cp out/Static/args.gn /staging/args.static.gn && \\
     cp -r public/*.h /staging/include/ && \\
     cp /tmp/LICENSE /staging/
 """
@@ -780,9 +800,11 @@ RUN mkdir -p /staging/lib /staging/include && \\
 def _make_dockerfile_musl(version, arch):
     """Dockerfile for musl (Alpine-compatible) builds.
 
-    Uses musl-cross-make toolchains instead of Chromium's clang.
-    The musl patch script installs a custom GN toolchain definition
-    and patches BUILDCONFIG.gn to route builds through musl-gcc.
+    Uses musl-cross-make toolchains instead of Chromium's clang. The
+    musl patch script installs a custom GN toolchain definition and
+    patches BUILDCONFIG.gn to route builds through musl-gcc. Like the
+    linux dockerfile, this runs two ninja phases so a single source
+    checkout produces both ``libpdfium.a`` and ``libpdfium.so``.
     """
     target = TARGETS[arch]
     gn_cpu = target["gn_cpu"]
@@ -830,26 +852,40 @@ RUN gclient sync -r "origin/{branch}" --no-history --shallow
 WORKDIR /build/pdfium
 RUN gclient runhooks
 
-# Step 6: Apply platform patch
+# Step 6: Apply base platform patch (no shared_library rewrite yet)
 COPY platform.py /tmp/platform.py
-RUN python3 /tmp/platform.py /build/pdfium
+RUN python3 /tmp/platform.py /build/pdfium --mode base
 
-# Step 7: Configure GN
-RUN mkdir -p out/Release && cat > out/Release/args.gn <<'ARGS'
+# Step 7: Configure static build
+RUN mkdir -p out/Static && cat > out/Static/args.gn <<'ARGS'
 {gn_args}ARGS
-RUN gn gen out/Release
+RUN gn gen out/Static
 
-# Step 8: Build
-RUN ninja -C out/Release pdfium
+# Step 8: Build static archive (component() -> static_library -> libpdfium.a)
+RUN ninja -C out/Static pdfium
 
-# Step 9: Verify output
-RUN ls -lh out/Release/libpdfium.so && file out/Release/libpdfium.so
+# Step 9: Apply shared-library patch on top of base
+RUN python3 /tmp/platform.py /build/pdfium --mode shared
 
-# Step 10: Stage artifacts into /staging
+# Step 10: Configure shared build
+RUN mkdir -p out/Shared && cat > out/Shared/args.gn <<'ARGS'
+{gn_args}ARGS
+RUN gn gen out/Shared
+
+# Step 11: Build shared library (shared_library -> libpdfium.so)
+RUN ninja -C out/Shared pdfium
+
+# Step 12: Verify both outputs
+RUN ls -lh out/Static/libpdfium.a out/Shared/libpdfium.so && \\
+    file out/Static/libpdfium.a out/Shared/libpdfium.so
+
+# Step 13: Stage artifacts into /staging
 COPY LICENSE /tmp/LICENSE
 RUN mkdir -p /staging/lib /staging/include && \\
-    cp out/Release/libpdfium.so /staging/lib/ && \\
-    cp out/Release/args.gn /staging/ && \\
+    cp out/Shared/libpdfium.so /staging/lib/ && \\
+    cp out/Static/libpdfium.a /staging/lib/ && \\
+    cp out/Shared/args.gn /staging/args.gn && \\
+    cp out/Static/args.gn /staging/args.static.gn && \\
     cp -r public/*.h /staging/include/ && \\
     cp /tmp/LICENSE /staging/
 """
@@ -1060,8 +1096,14 @@ def main():
     parser.add_argument(
         "--platform",
         choices=PLATFORMS,
-        default="linux",
-        help="target platform — selects the patch script from patches/ (default: linux)",
+        nargs="+",
+        default=None,
+        help=(
+            "target platform(s) — selects patch script(s) from patches/. "
+            "Accepts multiple values (e.g. --platform linux musl). "
+            "Default: linux + musl, so each release ships both a glibc and "
+            "a musl variant. Pass --platform mac to build macOS alone."
+        ),
     )
     parser.add_argument(
         "--parallel",
@@ -1083,49 +1125,60 @@ def main():
     check_dependencies(upload=args.upload)
 
     archs = [args.arch] if args.arch else ["amd64", "arm64"]
+    platforms = args.platform if args.platform else ["linux", "musl"]
     output_dir = os.path.abspath(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    progress = BuildProgress(args.version, archs, parallel=args.parallel)
-
     built_files = []
     try:
-        plat = args.platform
-        if args.parallel and len(archs) > 1:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(archs)) as pool:
-                futures = {
-                    pool.submit(
-                        build_for_arch,
-                        args.version,
-                        arch,
-                        plat,
-                        output_dir,
-                        progress,
-                    ): arch
-                    for arch in archs
-                }
-                for future in concurrent.futures.as_completed(futures):
-                    arch = futures[future]
-                    built_files.append(future.result())
-            # Sort so upload order is deterministic (amd64 before arm64)
-            built_files.sort()
-        else:
-            for arch in archs:
-                path = build_for_arch(args.version, arch, plat, output_dir, progress)
-                built_files.append(path)
+        # Each platform pass gets its own BuildProgress so per-arch status
+        # lines stay readable. Parallelism is within a platform (archs
+        # fan out in parallel); platforms run sequentially so the terminal
+        # UI doesn't have to juggle more than two or three rows at once.
+        for plat in platforms:
+            print(f"\n{'=' * 60}\n  Platform: {plat}\n{'=' * 60}\n", flush=True)
+            progress = BuildProgress(args.version, archs, parallel=args.parallel)
+            try:
+                if args.parallel and len(archs) > 1:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(archs)) as pool:
+                        futures = {
+                            pool.submit(
+                                build_for_arch,
+                                args.version,
+                                arch,
+                                plat,
+                                output_dir,
+                                progress,
+                            ): arch
+                            for arch in archs
+                        }
+                        for future in concurrent.futures.as_completed(futures):
+                            built_files.append(future.result())
+                else:
+                    for arch in archs:
+                        path = build_for_arch(args.version, arch, plat, output_dir, progress)
+                        built_files.append(path)
+            finally:
+                progress.finish()
+
+        # Sort so upload order is deterministic regardless of parallel completion order.
+        built_files.sort()
 
         if args.upload:
-            upload_release(args.version, built_files, progress)
+            # Reuse a lightweight progress instance just to show the "Uploading..."
+            # banner during the gh release create; no arch work runs here.
+            upload_progress = BuildProgress(args.version, archs, parallel=False)
+            try:
+                upload_release(args.version, built_files, upload_progress)
+            finally:
+                upload_progress.finish()
     except (RuntimeError, subprocess.CalledProcessError) as e:
-        progress.finish()
         print(f"\nError: {e}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
-        progress.finish()
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
 
-    progress.finish()
     print(f"\nBuilt {len(built_files)} binaries in {output_dir}/")
 
 
