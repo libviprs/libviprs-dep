@@ -156,13 +156,36 @@ container's own CPU arch, not the target.
 :   Where to write the `.tgz` archives. Default: `./bin`. Created if it
     does not already exist.
 
+## LOGS
+
+Every job writes its full Docker build output to
+`<output-dir>/logs/<plat>-<arch>.log` (so the default location is
+`./bin/logs/linux-arm64.log`, `./bin/logs/mac-arm64.log`, …). The log
+file is the authoritative post-mortem record when a build fails —
+`--parallel` only keeps the last ~500 output lines per job in memory
+for the in-terminal view switcher, but the log file on disk has every
+line plus a header (version, start timestamp, image tag) and a footer
+with the exit status and exception type.
+
+On failure the script prints the log path to stderr so you can
+`tail -n 200 bin/logs/linux-arm64.log` or open it in an editor without
+hunting for it. The extraction and tarball-creation commands
+(`docker create`, `docker cp`, `tar czf`) are also captured into the
+same log file, so post-compile failures stay diagnosable.
+
+Log files are not gitignored by path but `*.log` is — they're safe to
+leave in place across runs. Each new invocation truncates its own
+`<plat>-<arch>.log` rather than appending.
+
 ## FILES
 
 ```
 pdfium/
 ├── build_pdfium.py            # entry point
 ├── bin/                       # default output directory (gitignored)
-│   └── pdfium-<plat>-<cpu>.tgz
+│   ├── pdfium-<plat>-<cpu>.tgz
+│   └── logs/
+│       └── <plat>-<arch>.log  # per-job Docker build log (overwritten each run)
 ├── patches/
 │   ├── linux.py               # glibc linux patch script (accepts --mode)
 │   ├── mac.py                 # macOS patch script (accepts --mode)

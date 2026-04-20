@@ -629,8 +629,14 @@ class BuildProgress:
 
     # -- Docker output streaming with step parsing -------------------------
 
-    def stream_docker_build(self, cmd, job):
-        """Run a docker build command, stream its output, and parse step progress."""
+    def stream_docker_build(self, cmd, job, log_file=None):
+        """Run a docker build command, stream its output, and parse step progress.
+
+        When ``log_file`` is provided every output line is written there
+        verbatim — the UI buffers only OUTPUT_BUFFER_SIZE lines per job,
+        so the log file is the authoritative post-mortem record when a
+        parallel build fails.
+        """
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -640,6 +646,9 @@ class BuildProgress:
         )
         for line in process.stdout:
             line = line.rstrip("\n")
+            if log_file is not None:
+                log_file.write(f"{line}\n")
+                log_file.flush()
             # Parse step markers
             m = STEP_RE.search(line)
             if m:
@@ -1183,6 +1192,31 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, check=True, **kwargs)
 
 
+def run_logged(cmd, log_file):
+    """Run a command, capturing stdout/stderr into ``log_file``.
+
+    Unlike ``run``, this captures output so the post-build extraction
+    steps (``docker create``, ``docker cp``, ``tar czf``) don't interleave
+    with parallel jobs on the terminal. The captured output is still
+    persisted to the per-job log file so failures remain diagnosable.
+    Raises ``CalledProcessError`` on non-zero exit, matching ``run``'s
+    ``check=True`` behavior.
+    """
+    display = cmd if isinstance(cmd, str) else " ".join(cmd)
+    print(f"  $ {display}", flush=True)
+    log_file.write(f"\n$ {display}\n")
+    log_file.flush()
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if result.stdout:
+        log_file.write(result.stdout)
+    if result.stderr:
+        log_file.write(result.stderr)
+    log_file.flush()
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, cmd, result.stdout, result.stderr)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -1202,24 +1236,64 @@ def build_for_arch(version, arch, plat, output_dir, progress, mem_scheduler=None
     When ``mem_scheduler`` is provided, the worker reserves a pessimistic
     memory slice before any Docker work starts, and releases it in
     ``finally`` so crashes don't permanently starve the budget.
+
+    Every job writes its full Docker build output to
+    ``<output_dir>/logs/<plat>-<arch>.log`` — the UI ring buffer only
+    keeps the last OUTPUT_BUFFER_SIZE lines per job, so when a parallel
+    build fails the log file is the authoritative post-mortem record.
     """
     job = f"{plat}/{arch}"
     image_tag = f"pdfium-builder-{version}-{plat}-{arch}"
     container_name = f"pdfium-extract-{version}-{plat}-{arch}"
 
+    log_dir = os.path.join(output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"{plat}-{arch}.log")
+
     if mem_scheduler is not None:
         mem_scheduler.reserve(job)
     try:
-        return _build_for_arch_inner(
-            version, arch, plat, output_dir, progress, job, image_tag, container_name
-        )
+        with open(log_path, "w") as log_file:
+            log_file.write(
+                f"# PDFium build log\n"
+                f"# job:     {job}\n"
+                f"# version: chromium/{version}\n"
+                f"# started: {time.strftime('%Y-%m-%d %H:%M:%S %z')}\n"
+                f"# image:   {image_tag}\n\n"
+            )
+            log_file.flush()
+            try:
+                result = _build_for_arch_inner(
+                    version,
+                    arch,
+                    plat,
+                    output_dir,
+                    progress,
+                    job,
+                    image_tag,
+                    container_name,
+                    log_file,
+                )
+                log_file.write(f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} (success)\n")
+                return result
+            except BaseException as exc:
+                log_file.write(
+                    f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} "
+                    f"(FAILED: {type(exc).__name__}: {exc})\n"
+                )
+                print(
+                    f"\n[{job}] build failed — full log: {log_path}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                raise
     finally:
         if mem_scheduler is not None:
             mem_scheduler.release()
 
 
 def _build_for_arch_inner(
-    version, arch, plat, output_dir, progress, job, image_tag, container_name
+    version, arch, plat, output_dir, progress, job, image_tag, container_name, log_file
 ):
     progress.start_arch(job)
 
@@ -1263,7 +1337,9 @@ def _build_for_arch_inner(
             image_tag,
             tmpdir,
         ]
-        rc = progress.stream_docker_build(cmd, job)
+        log_file.write(f"\n$ {' '.join(cmd)}\n")
+        log_file.flush()
+        rc = progress.stream_docker_build(cmd, job, log_file=log_file)
         if rc != 0:
             progress.set_failed(job)
             raise RuntimeError(f"Docker build failed for {job} (exit {rc})")
@@ -1274,10 +1350,13 @@ def _build_for_arch_inner(
     tarball = archive_name(plat, arch)
     output_path = os.path.join(output_dir, tarball)
 
+    log_file.write("\n# --- extracting staged artifacts ---\n")
+    log_file.flush()
+
     with tempfile.TemporaryDirectory() as extract_dir:
         staging_dest = os.path.join(extract_dir, dir_name)
         try:
-            run(
+            run_logged(
                 [
                     "docker",
                     "create",
@@ -1285,22 +1364,25 @@ def _build_for_arch_inner(
                     "--name",
                     container_name,
                     image_tag,
-                ]
+                ],
+                log_file,
             )
-            run(
+            run_logged(
                 [
                     "docker",
                     "cp",
                     f"{container_name}:/staging",
                     staging_dest,
-                ]
+                ],
+                log_file,
             )
         finally:
             subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
             subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True)
 
-        # Create tarball with top-level directory name
-        run(
+        log_file.write("\n# --- creating tarball ---\n")
+        log_file.flush()
+        run_logged(
             [
                 "tar",
                 "czf",
@@ -1308,7 +1390,8 @@ def _build_for_arch_inner(
                 "-C",
                 extract_dir,
                 dir_name,
-            ]
+            ],
+            log_file,
         )
 
     progress.set_done(job)
@@ -1535,6 +1618,8 @@ def main():
                 upload_progress.finish()
     except (RuntimeError, subprocess.CalledProcessError) as e:
         print(f"\nError: {e}", file=sys.stderr)
+        log_dir = os.path.join(output_dir, "logs")
+        print(f"Per-job build logs: {log_dir}/", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)

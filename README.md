@@ -36,6 +36,10 @@ Build the full default matrix for chromium branch 7725 and publish it as a relea
 python3 pdfium/build_pdfium.py 7725 --parallel --upload
 ```
 
+`--parallel` fans out every `(platform, arch)` combo (5 by default) at once, gated by a memory scheduler that reads the Docker daemon's `MemTotal` and queues over-budget combos until earlier ones finish. Tune with `--mem-per-build MB` (default `4096`) if you see builds queuing unnecessarily on a large host or want extra safety margin on a small one.
+
+Every job streams its full Docker build output to `pdfium/bin/logs/<plat>-<arch>.log`. If a job fails, the script prints the log path to stderr — `tail -n 200 pdfium/bin/logs/linux-arm64.log` gives you the authoritative post-mortem, since the in-terminal view only retains the last ~500 lines per job.
+
 Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`, entering the chromium branch number and toggling `upload=true`.
 
 ## Development
