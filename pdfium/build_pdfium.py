@@ -1314,6 +1314,8 @@ def _make_dockerfile_musl(version, arch):
         "arm64": "aarch64-linux-musl",
     }
     musl_target = musl_targets[gn_cpu]
+    mirror_base = "https://github.com/libviprs/libviprs-dep/releases/download/musl-cross-mirror"
+    toolchain_tgz = f"{musl_target}-cross.tgz"
 
     return f"""\
 FROM debian:bookworm-slim
@@ -1326,19 +1328,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
     && rm -rf /var/lib/apt/lists/*
 
 # Step 1: Install musl-cross-make toolchain.
-# musl.cc is a small single-host mirror that occasionally returns DNS
-# failures or 5xx under load, and also (more subtly) drops the connection
-# mid-stream — the HTTP response starts with 200 OK but the body is
-# truncated. When curl is piped directly into `tar xz`, a short read
-# surfaces as a cryptic tar error and hides the real cause. Download to
-# a file first (with retries), assert the archive is at least 50 MB
-# (real toolchains are ~100 MB — anything smaller is a truncated body
-# or an error page), then extract. --retry-all-errors covers both
-# transient network and HTTP errors so a flake doesn't kill the build.
-RUN curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors \\
-    -o /tmp/tc.tgz "https://musl.cc/{musl_target}-cross.tgz"
+# Primary source is our own GH release mirror
+# (libviprs/libviprs-dep/releases/musl-cross-mirror) — GitHub's CDN is
+# reliably reachable from GH-hosted runners. Upstream musl.cc is a
+# single-host free mirror and has been observed blackholed from GH
+# Actions runners (6 retries × 133 s TCP connect timeouts), so we don't
+# depend on it for CI. Fall back to musl.cc only if the mirror fetch
+# fails for some reason.
+#
+# Download to a file first (with retries) instead of piping into `tar`,
+# then assert size >= 50 MB (real toolchains are ~100 MB — anything
+# smaller is a truncated body or an error page), then extract.
+# --retry-all-errors covers both transient network and HTTP errors.
+# --connect-timeout 30 short-circuits the blackhole case so we fail
+# over to the fallback in seconds rather than minutes.
+RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \\
+        --connect-timeout 30 -o /tmp/tc.tgz \\
+        "{mirror_base}/{toolchain_tgz}" \\
+    || curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors \\
+        --connect-timeout 30 -o /tmp/tc.tgz \\
+        "https://musl.cc/{toolchain_tgz}"
 RUN test "$(stat -c%s /tmp/tc.tgz)" -gt 50000000 \\
-    || (echo "musl.cc returned a truncated toolchain archive" \\
+    || (echo "toolchain archive truncated" \\
         "($(stat -c%s /tmp/tc.tgz) bytes < 50MB); aborting." >&2; exit 1)
 RUN tar xzf /tmp/tc.tgz -C /opt && rm /tmp/tc.tgz
 ENV PATH="/opt/{musl_target}-cross/bin:${{PATH}}"
