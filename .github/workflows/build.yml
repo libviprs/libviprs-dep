@@ -24,7 +24,11 @@ jobs:
           - { platform: mac,   arch: arm64 }
           - { platform: musl,  arch: amd64 }
           - { platform: musl,  arch: arm64 }
-    runs-on: ubuntu-latest
+    # Mac needs a macOS host — gn gen invokes xcodebuild during setup.
+    # All other combos build under a Chromium sysroot and cross-compile
+    # fine from linux. release.yml uses the same split (build-mac on
+    # macos-15, build-linux on ubuntu-latest).
+    runs-on: ${{ matrix.platform == 'mac' && 'macos-15' || 'ubuntu-latest' }}
     # Two ninja phases per archive (static + shared) plus cross-compile for
     # arm64 pushes each combo well past the single-phase budget. 90 minutes
     # gives headroom without letting a hung build loiter forever.
@@ -67,7 +71,6 @@ jobs:
         # Same invariants release.yml enforces — leaked Chromium std::__Cr::
         # symbols, stripped FPDF_* C API, or missing standard C++ runtime
         # all fail the build here before the artifact is uploaded.
-        if: matrix.platform != 'mac'
         run: |
           for f in bin/pdfium-${{ matrix.platform }}-*.tgz; do
             bash pdfium/scripts/verify_archive.sh "$f"
