@@ -24,7 +24,7 @@ pdfium-<platform>-<cpu>/
 └── LICENSE
 ```
 
-The default release matrix is `{linux, musl} × {amd64, arm64}` — four archives per tag. Pick the `linux-*` archives for glibc runtimes (Debian, Ubuntu, …) and the `musl-*` archives for musl runtimes (Alpine, musl-based distroless images). Loading a glibc `.so` from a musl process — or vice versa — fails at `dlopen` time. macOS is intentionally excluded from the default matrix: PDFium's GN config invokes `xcodebuild` during `gn gen`, which doesn't exist on Linux, so mac builds require an actual macOS host (bblanchon/pdfium-binaries runs mac builds on `macos-15` GitHub Actions runners for the same reason).
+The default in-process matrix (`build_pdfium.py` on a Linux host) is `{linux, musl} × {amd64, arm64}` — four archives. The release workflow additionally produces three macOS archives on `macos-15` runners: `pdfium-mac-arm64.tgz`, `pdfium-mac-x64.tgz`, and `pdfium-mac-univ.tgz` (a universal Mach-O built via `lipo -create` over the two per-arch dylibs). Pick the `linux-*` archives for glibc runtimes (Debian, Ubuntu, …), the `musl-*` archives for musl runtimes (Alpine, musl-based distroless images), and one of the `mac-*` archives for macOS (`mac-univ` if you want a single binary that loads on both Apple Silicon and Intel). Loading a glibc `.so` from a musl process — or vice versa — fails at `dlopen` time. macOS is intentionally excluded from `build_pdfium.py`'s in-process default matrix because PDFium's GN config invokes `xcodebuild` during `gn gen`, which doesn't exist on Linux, so mac builds require an actual macOS host (bblanchon/pdfium-binaries runs mac builds on `macos-15` GitHub Actions runners for the same reason).
 
 See [`pdfium/README.md`](pdfium/README.md#download) for direct download URLs and consumption examples.
 
@@ -60,7 +60,8 @@ Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`,
 2. Merge the PR into the `release` branch.
 3. The **Release** workflow (`.github/workflows/release.yml`) fires on push to `release` and fans out:
    - Four `ubuntu-latest` jobs build `{linux, musl} × {amd64, arm64}` via Docker.
-   - One `macos-15` job builds `mac/arm64` natively (via `pdfium/build_mac_native.sh`, since `xcodebuild` isn't available inside the Debian container used for the others).
+   - Two `macos-15` matrix jobs build `mac/arm64` and `mac/amd64` natively (via `pdfium/build_mac_native.sh`, since `xcodebuild` isn't available inside the Debian container used for the others).
+   - A follow-up `macos-15` job (`build-mac-universal`) downloads the two per-arch mac archives and `lipo -create`s their `libpdfium.dylib` files into a universal Mach-O, uploading it as `pdfium-mac-univ.tgz`.
 4. Each job runs `build_pdfium.py --upload`, which uploads its archive to the `pdfium-<VERSION>` GitHub Release with `gh release upload --clobber`. Parallel uploads are safe because a preceding `create-release` job ensures the tag exists before the fan-out, and `--clobber` replaces only matching asset names.
 5. A final `summary` job posts the release URL + each job's result to the workflow run's summary page.
 

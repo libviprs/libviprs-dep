@@ -126,8 +126,16 @@ jobs:
     # Mac must run on a macOS runner — PDFium's `gn gen` invokes
     # `xcodebuild`, which doesn't exist inside the Debian container used
     # for linux/musl. bblanchon/pdfium-binaries uses the same macos-15
-    # approach.
+    # approach. We fan out arm64 and amd64 into separate jobs so a flake
+    # on one doesn't block the other and so build-mac-universal can lipo
+    # the two resulting dylibs into a single fat Mach-O.
     needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64 }
+          - { arch: amd64 }
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
@@ -143,27 +151,88 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Build + publish mac/arm64
+      - name: Build + publish mac/${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 pdfium/build_pdfium.py "${{ needs.resolve-version.outputs.version }}" \
-            --platform mac --arch arm64 --upload
+            --platform mac --arch ${{ matrix.arch }} --upload
 
       - name: Upload build logs on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-mac-arm64
+          name: logs-mac-${{ matrix.arch }}
           path: bin/logs/
           if-no-files-found: warn
+
+  build-mac-universal:
+    # Fuse the per-arch mac dylibs into a single universal Mach-O using
+    # `lipo -create`, matching bblanchon/pdfium-binaries' mac-univ.yml
+    # pattern. Downloads the per-arch tarballs from the release we just
+    # published, swaps in the combined dylib, and uploads the result as
+    # pdfium-mac-univ.tgz alongside the per-arch archives.
+    needs: [resolve-version, create-release, build-mac]
+    runs-on: macos-15
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download mac/arm64 and mac/x64 release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          set -eu
+          mkdir -p work
+          cd work
+          gh release download "$TAG" \
+            --pattern 'pdfium-mac-arm64.tgz' \
+            --pattern 'pdfium-mac-x64.tgz'
+          tar xzf pdfium-mac-arm64.tgz
+          tar xzf pdfium-mac-x64.tgz
+
+      - name: Lipo-combine into universal dylib
+        run: |
+          set -eux
+          cd work
+          cp -R pdfium-mac-arm64 pdfium-mac-univ
+          # The arch-specific target_cpu in args.gn would lie for a
+          # universal binary; strip it so the args.gn documents only the
+          # shared flags. The per-arch tarballs still carry the truthful
+          # target_cpu for anyone who needs it.
+          sed -i '' '/^target_cpu/d' pdfium-mac-univ/args.gn
+          rm pdfium-mac-univ/lib/libpdfium.dylib
+          lipo -create \
+            pdfium-mac-arm64/lib/libpdfium.dylib \
+            pdfium-mac-x64/lib/libpdfium.dylib \
+            -output pdfium-mac-univ/lib/libpdfium.dylib
+          file pdfium-mac-univ/lib/libpdfium.dylib
+          tar czf pdfium-mac-univ.tgz pdfium-mac-univ
+          ls -lh pdfium-mac-univ.tgz
+
+      - name: Upload pdfium-mac-univ.tgz to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          gh release upload "$TAG" work/pdfium-mac-univ.tgz --clobber
 
   summary:
     # Prints the final release URL + per-job status once every build has
     # either succeeded or failed. Doesn't gate on success — needs:
     # [...] with if: always() lets this run even if some jobs failed,
     # so the release URL is surfaced regardless of partial completion.
-    needs: [resolve-version, create-release, build-linux, build-mac]
+    needs:
+      [
+        resolve-version,
+        create-release,
+        build-linux,
+        build-mac,
+        build-mac-universal,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -181,6 +250,7 @@ jobs:
             echo ""
             echo "| Job | Result |"
             echo "| --- | --- |"
-            echo "| build-linux   | ${{ needs.build-linux.result }} |"
-            echo "| build-mac     | ${{ needs.build-mac.result }} |"
+            echo "| build-linux         | ${{ needs.build-linux.result }} |"
+            echo "| build-mac           | ${{ needs.build-mac.result }} |"
+            echo "| build-mac-universal | ${{ needs.build-mac-universal.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"
