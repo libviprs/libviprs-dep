@@ -46,6 +46,23 @@ TOTAL=10
 mkdir -p "$WORKSPACE" "$OUTPUT_DIR"
 rm -rf "$BUILD_DIR" "$STAGING" "$ARCHIVE"
 
+# Pin Xcode to 26.0 — the macos-15 runner's default is Xcode 16.4, which
+# ships MacOSX15.5.sdk. Chromium's 7725 branch generates ninja rules that
+# reference DarwinFoundation1.modulemap from the SDK, but Apple removed
+# that file in the 15.5 SDK layout — ninja then fails with
+# "missing and no known rule to make it". Xcode 26.0's MacOSX26.0.sdk
+# still has the file. bblanchon/pdfium-binaries pins the same version
+# in steps/01-install.sh for the same reason. Export DEVELOPER_DIR
+# instead of running `sudo xcode-select -s` so the script is safe to
+# run locally without modifying the developer's global toolchain.
+XCODE_PIN="/Applications/Xcode_26.0.app"
+if [ -d "$XCODE_PIN" ]; then
+  export DEVELOPER_DIR="$XCODE_PIN/Contents/Developer"
+  echo "Using $DEVELOPER_DIR"
+else
+  echo "WARNING: $XCODE_PIN not installed — using current xcode-select ($(xcode-select -p))"
+fi
+
 echo "[1/$TOTAL] Install depot_tools"
 if [ ! -d "$DEPOT_TOOLS" ]; then
   i=0

@@ -13,12 +13,14 @@ We compile PDFium from source rather than using third-party prebuilt binaries to
 
 ## Download
 
-Archives are available from [Releases](https://github.com/libviprs/libviprs-dep/releases). Each release tag bundles five archives covering the default matrix (`{linux, musl}` × `{x64, arm64}` plus `mac/arm64`):
+Archives are available from [Releases](https://github.com/libviprs/libviprs-dep/releases). Each release tag bundles the four Linux archives covering the default matrix (`{linux, musl}` × `{x64, arm64}`) plus three macOS archives (`mac-arm64`, `mac-x64`, and `mac-univ`, the latter being a `lipo`-combined fat Mach-O):
 
 ```
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-linux-x64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-linux-arm64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mac-arm64.tgz
+https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mac-x64.tgz
+https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mac-univ.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-musl-x64.tgz
 https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-musl-arm64.tgz
 ```
@@ -28,8 +30,10 @@ https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mu
 | `linux-x64`, `linux-arm64` | glibc | Debian, Ubuntu, RHEL, most mainstream distros |
 | `musl-x64`, `musl-arm64`   | musl  | Alpine, any container built `FROM alpine:*`, musl-based distroless images |
 | `mac-arm64`                | —     | macOS 11+ on Apple Silicon (`libpdfium.dylib`) |
+| `mac-x64`                  | —     | macOS 11+ on Intel (`libpdfium.dylib`) |
+| `mac-univ`                 | —     | macOS 11+ on both Apple Silicon and Intel — universal Mach-O combining the arm64 + x64 dylibs via `lipo -create` |
 
-Intel Mac (`mac-x64`) is not in the default matrix — Apple has shipped Apple Silicon exclusively for new Macs since 2020, so the x86_64 dylib is rarely useful. Build one explicitly with `--platform mac --arch x86_64` if you need it.
+Intel Mac (`mac-x64`) and the universal Mach-O (`mac-univ`) are built on the CI matrix but aren't part of the in-process `build_pdfium.py` default matrix (`--platform mac` alone still builds arm64). On the release workflow, `build-mac-universal` runs after both per-arch mac builds succeed, downloads the two dylibs, and `lipo -create`s them into `pdfium-mac-univ.tgz`.
 
 Pick the archive whose libc matches the runtime that will load PDFium. Loading a glibc `.so` from a musl process (or vice versa) fails at `dlopen` time with opaque errors — the libc mismatch is the single most common source of "pdfium doesn't load in my container" tickets.
 
@@ -152,16 +156,16 @@ Archives are written to `./bin/` by default (gitignored). With the default platf
 bin/
   pdfium-linux-x64.tgz
   pdfium-linux-arm64.tgz
-  pdfium-mac-arm64.tgz
   pdfium-musl-x64.tgz
   pdfium-musl-arm64.tgz
   logs/
     linux-amd64.log
     linux-arm64.log
-    mac-arm64.log
     musl-amd64.log
     musl-arm64.log
 ```
+
+On a macOS host, additionally invoking `--platform mac --arch amd64` / `--arch arm64` produces `pdfium-mac-x64.tgz` and `pdfium-mac-arm64.tgz`. The release workflow combines those two per-arch archives into a `pdfium-mac-univ.tgz` (universal Mach-O built via `lipo -create`) in a dedicated CI job — there is no local equivalent inside `build_pdfium.py`, so the universal archive only exists on the release tag.
 
 Each job streams its full Docker build output to `bin/logs/<plat>-<arch>.log` in addition to the terminal view. When a parallel build fails the log file is the authoritative post-mortem record — the in-terminal view switcher only retains the last ~500 output lines per job, but the log on disk has every line plus a header (version, start timestamp) and a failure footer with the exception type. On failure the script prints the log path to stderr so you can `tail -n 200 bin/logs/<plat>-<arch>.log` directly.
 

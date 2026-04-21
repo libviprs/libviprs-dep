@@ -105,6 +105,15 @@ has shipped Apple Silicon exclusively for new Macs since 2020, so the
 x86_64 dylib is rarely useful. Request it explicitly with
 `--platform mac --arch amd64` when building on a macOS host.
 
+The release workflow (`.github/workflows/release.yml`) ships both
+per-arch mac archives — `pdfium-mac-arm64.tgz` and `pdfium-mac-x64.tgz`
+— and, after both succeed, a `build-mac-universal` job runs `lipo
+-create` over the two dylibs and uploads a third archive,
+`pdfium-mac-univ.tgz`, containing a single fat Mach-O that loads on
+either architecture. This fat-archive step has no `build_pdfium.py`
+equivalent — it only exists as a CI post-processing job, mirroring
+bblanchon/pdfium-binaries' `mac-univ.yml`.
+
 Every compile runs inside an amd64 Linux container regardless of the
 host's CPU arch. `build_pdfium.py` forces `--platform=linux/amd64` on
 every `docker build` / `docker create` so Apple Silicon and Linux-arm64
@@ -383,9 +392,16 @@ by a merge to `release`. It reads the chromium branch from
 
 - Four `ubuntu-latest` jobs — `{linux, musl} × {amd64, arm64}` — each
   calls `build_pdfium.py --platform X --arch Y --upload`.
-- One `macos-15` job runs the same command with `--platform mac
-  --arch arm64`; `build_pdfium.py` detects the Darwin host and dispatches
-  to `pdfium/build_mac_native.sh` instead of its Docker path.
+- Two `macos-15` matrix jobs — `mac/arm64` and `mac/amd64` — each
+  calls `build_pdfium.py --platform mac --arch Y --upload`;
+  `build_pdfium.py` detects the Darwin host and dispatches to
+  `pdfium/build_mac_native.sh` instead of its Docker path.
+- One further `macos-15` job (`build-mac-universal`) runs after both
+  per-arch mac builds succeed. It downloads `pdfium-mac-arm64.tgz` and
+  `pdfium-mac-x64.tgz` from the just-published release, `lipo
+  -create`s the two `libpdfium.dylib` files into a universal Mach-O,
+  and uploads the result as `pdfium-mac-univ.tgz`. Matches the pattern
+  in bblanchon/pdfium-binaries' `mac-univ.yml`.
 
 A preceding `create-release` job ensures the `pdfium-<VERSION>` tag
 exists before any build job uploads, so parallel `gh release upload
