@@ -108,6 +108,21 @@ echo "[6/$TOTAL] Apply mac patches"
 python3 "$REPO_ROOT/pdfium/patches/mac.py" "$PDFIUM" --mode all
 
 echo "[7/$TOTAL] gn gen"
+# Keep Chromium's bundled libc++ (use_custom_libcxx = true, the default)
+# for the mac dylib — dlopen consumers never see internal __Cr:: symbols
+# so the Chromium-namespaced libc++ inside the shared object is harmless.
+# This mirrors the linux .so path: libcxx overrides apply to the static
+# archive only, because rustc (the only consumer that actually links
+# against internal C++ symbols) can't resolve __Cr::.
+#
+# Setting use_custom_libcxx = false here additionally breaks on Xcode
+# 26.0 / MacOSX26.0.sdk: Chromium's gen/third_party/libc++ module sources
+# still get compiled but miss macros like
+# _LIBCPP_BEGIN_UNVERSIONED_NAMESPACE_STD that are only defined when the
+# bundled libc++ is active, failing with "unknown type name" on every
+# std:: template. A mac static build would need its own out/Static dir
+# with the override isolated to that dir (see build_pdfium.py for the
+# linux version), but this script currently only produces a .dylib.
 mkdir -p out/Release
 cat > out/Release/args.gn <<EOF
 is_debug = false
