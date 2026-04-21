@@ -3,14 +3,24 @@
 The mac build runs on a macos-15 GitHub Actions runner (instead of inside
 the Debian build container used for linux/musl) because PDFium's
 ``gn gen`` invokes ``xcodebuild``, which doesn't exist in Docker. This
-native build path writes its own ``out/Release/args.gn`` heredoc — these
-tests lock in the GN flags that make the resulting ``libpdfium.dylib``
-(and, once we split static/shared on mac, ``libpdfium.a``) export
-standard ``std::__1::*`` symbols from Apple's system libc++ instead of
-Chromium's ``std::__Cr::*`` namespace.
+native build path writes its own ``out/Release/args.gn`` heredoc.
+
+Currently this script only produces a ``libpdfium.dylib`` — a single
+shared-library phase. Internal C++ symbols are resolved inside the
+dylib itself before any ``dlopen`` consumer sees them, so Chromium's
+bundled libc++ (``use_custom_libcxx = true``, the default) is fine and
+we intentionally do *not* override it. This matches the linux .so path
+in ``build_pdfium.py``: libcxx overrides are scoped to the static
+archive only, because rustc is the single consumer that actually links
+against internal C++ symbols and can't resolve ``std::__Cr::``.
+
+Setting ``use_custom_libcxx = false`` here additionally broke on
+Xcode 26.0 / MacOSX26.0.sdk (Chromium's libc++ module sources expect
+macros that are only defined when the bundled libc++ is active).
 """
 
 import os
+import re
 
 SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "build_mac_native.sh")
 
@@ -20,20 +30,30 @@ def load_script():
         return f.read()
 
 
+def extract_args_gn_heredoc(sh: str) -> str:
+    # Pull just the `cat > out/Release/args.gn <<EOF ... EOF` block so
+    # assertions test what actually ends up in args.gn, not commentary
+    # in surrounding shell comments.
+    m = re.search(r"cat > out/Release/args\.gn <<EOF\n(.*?)\nEOF\n", sh, re.DOTALL)
+    assert m, "args.gn heredoc not found in build_mac_native.sh"
+    return m.group(1)
+
+
 class TestMacBuildScriptLibcxx:
     def setup_method(self):
-        self.sh = load_script()
+        self.args_gn = extract_args_gn_heredoc(load_script())
 
-    def test_libcxx_standard_not_custom(self):
-        # mac: fall back to Apple's system libc++ (inline namespace
-        # std::__1::) instead of Chromium's std::__Cr::. Apple libc++ is
-        # the standard C++ runtime on mac — pdfium-render + rustc both
-        # expect this.
-        assert "use_custom_libcxx = false" in self.sh
-        assert "use_custom_libcxx_for_host = false" in self.sh
-
-    def test_no_custom_libcxx_true(self):
-        assert "use_custom_libcxx = true" not in self.sh
+    def test_dylib_keeps_chromium_bundled_libcxx(self):
+        # mac dylib is shared-only — dlopen consumers never see internal
+        # __Cr:: symbols, so Chromium's bundled libc++ is harmless and we
+        # MUST NOT set use_custom_libcxx = false here. Doing so broke the
+        # Xcode 26.0 build with module compile errors in Chromium's own
+        # libc++ sources. If a mac static build is added later it needs
+        # its own out/Static args.gn with the override isolated there —
+        # see build_pdfium.py's gn_args_static_for() for the linux
+        # pattern.
+        assert "use_custom_libcxx = false" not in self.args_gn
+        assert "use_custom_libcxx_for_host" not in self.args_gn
 
 
 class TestMacBuildScriptXcodePin:
