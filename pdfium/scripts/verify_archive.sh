@@ -114,8 +114,14 @@ verify_lib() {
   # 1. Public FPDF_* C API must be defined. This invariant applies to
   #    every shippable artifact — both rustc static links and dlopen
   #    consumers call into the public C entry points.
+  #
+  # Match "<space-or-underscore>SYM<end-of-line>": mac's mach-o nm
+  # prefixes C symbols with `_` (so the line ends in `_FPDF_InitLibrary`)
+  # while linux/musl ELF nm does not (line ends in `FPDF_InitLibrary`).
+  # A `\b` word boundary fails on mac because `_` and `F` are both word
+  # characters, so there's no boundary between them.
   for sym in FPDF_InitLibrary FPDF_DestroyLibrary FPDF_LoadDocument; do
-    if ! echo "$syms" | grep -qE "\\b${sym}\\b"; then
+    if ! echo "$syms" | grep -qE "[ _]${sym}$"; then
       fail "$lib missing required symbol: $sym"
     fi
   done

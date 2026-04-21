@@ -113,6 +113,35 @@ class TestVerifyArchiveScriptShellcheck:
         assert result.returncode == 0, f"shellcheck failed:\n{result.stdout}\n{result.stderr}"
 
 
+class TestVerifyArchiveScriptMachOSymbolMatch:
+    def setup_method(self):
+        with open(SCRIPT_PATH) as f:
+            self.sh = f.read()
+
+    def test_fpdf_regex_tolerates_mach_o_underscore_prefix(self):
+        # On mac, mach-o nm prefixes C symbols with `_`, so a real line
+        # looks like:
+        #     0000000000012ab0 T _FPDF_InitLibrary
+        # A `\b` word boundary between `_` and `F` does NOT exist (both
+        # are word chars), so the original `\bFPDF_InitLibrary\b` pattern
+        # silently reported every mac dylib as missing its public C API.
+        # Pin the fix: the FPDF_* match must accept either whitespace or
+        # underscore before the symbol name.
+        import re as _re
+
+        match = _re.search(r'grep -qE "\[([^\]]+)\]\$\{sym\}\$"', self.sh)
+        assert match, "FPDF_* regex pattern not found in verify script"
+        charclass = match.group(1)
+        assert "_" in charclass, (
+            f"FPDF_* regex char class {charclass!r} must include `_` to "
+            "match mac mach-o underscore-prefixed symbols"
+        )
+        assert " " in charclass, (
+            f"FPDF_* regex char class {charclass!r} must include ` ` to "
+            "match linux/musl ELF symbols (no prefix)"
+        )
+
+
 class TestVerifyArchiveScriptUsage:
     def test_fails_without_argument(self):
         # If invoked with no archive path, the script must exit non-zero
