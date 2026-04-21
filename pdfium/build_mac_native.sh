@@ -56,13 +56,19 @@ if [ ! -d "$DEPOT_TOOLS" ]; then
   done
 fi
 export PATH="$DEPOT_TOOLS:$PATH"
-export DEPOT_TOOLS_UPDATE=0
 
 echo "[2/$TOTAL] Bootstrap depot_tools + gsutil"
-# Pre-warming gsutil serializes the bundle download so gclient's parallel
-# workers don't race on flock (same fix as the Linux/musl Dockerfiles).
+# First gclient call triggers depot_tools' first-run bootstrap, which
+# unpacks the hermetic python3 into .cipd_bin and writes the
+# python3_bin_reldir.txt file that `gn gen` reads later. Setting
+# DEPOT_TOOLS_UPDATE=0 here would short-circuit that bootstrap and
+# make `gn gen` fail with "python3_bin_reldir.txt not found. need to
+# initialize depot_tools". Freeze updates AFTER the bootstrap runs.
 gclient --version
 python3 "$DEPOT_TOOLS/gsutil.py" --version
+# Pre-warming gsutil serializes the bundle download so gclient's parallel
+# workers don't race on flock (same fix as the Linux/musl Dockerfiles).
+export DEPOT_TOOLS_UPDATE=0
 
 echo "[3/$TOTAL] gclient config"
 mkdir -p "$BUILD_DIR"

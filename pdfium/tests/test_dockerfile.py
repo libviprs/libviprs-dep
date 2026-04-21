@@ -173,11 +173,19 @@ class TestMakeDockerfileMuslAmd64:
         assert "tar xzf /tmp/tc.tgz -C /opt" in self.df
 
     def test_musl_toolchain_download_retries(self):
-        # The toolchain URL is a single-host mirror prone to flakes —
-        # keep the retry/backoff flags on the curl command.
-        assert "--retry 5" in self.df
-        assert "--retry-delay 10" in self.df
-        assert "--retry-all-errors" in self.df
+        # Keep retry/backoff flags on both the primary (GH mirror) and
+        # fallback (musl.cc) curls so a single transient failure doesn't
+        # kill the build.
+        assert self.df.count("--retry-all-errors") >= 2
+        assert self.df.count("--connect-timeout 30") >= 2
+
+    def test_musl_toolchain_mirror_primary(self):
+        # Our libviprs-dep releases mirror is the primary source; musl.cc
+        # is only a fallback (GH Actions runners intermittently blackhole
+        # TCP to musl.cc).
+        mirror_pos = self.df.index("libviprs/libviprs-dep/releases/download/musl-cross-mirror/")
+        muslcc_pos = self.df.index("https://musl.cc/")
+        assert mirror_pos < muslcc_pos
 
     def test_target_cpu_x64(self):
         assert 'target_cpu = "x64"' in self.df
