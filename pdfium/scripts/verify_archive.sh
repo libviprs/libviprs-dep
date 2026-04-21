@@ -111,37 +111,63 @@ verify_lib() {
     return
   fi
 
-  # 1. Public FPDF_* C API must be defined.
+  # 1. Public FPDF_* C API must be defined. This invariant applies to
+  #    every shippable artifact — both rustc static links and dlopen
+  #    consumers call into the public C entry points.
   for sym in FPDF_InitLibrary FPDF_DestroyLibrary FPDF_LoadDocument; do
     if ! echo "$syms" | grep -qE "\\b${sym}\\b"; then
       fail "$lib missing required symbol: $sym"
     fi
   done
 
-  # 2. Reject Chromium's __Cr namespace anywhere (defined or undefined).
-  local cr_count
-  cr_count=$(echo "$syms" | grep -c '__Cr::' || true)
-  if [ "$cr_count" -gt 0 ]; then
-    fail "$lib contains $cr_count std::__Cr::* symbols (Chromium custom libc++ leaked)"
-    echo "  first few:" >&2
-    echo "$syms" | grep '__Cr::' | head -3 >&2
-  fi
+  # Static vs shared invariants diverge from here:
+  #
+  #   * libpdfium.a is linked by rustc at build time — every internal C++
+  #     symbol must be resolvable against the consumer's system C++ runtime.
+  #     Chromium's bundled libc++ (std::__Cr::*) does not exist on the
+  #     consumer side; the link fails with "undefined reference to
+  #     std::__Cr::basic_string<...>". So .a MUST NOT contain __Cr::
+  #     symbols, and MUST contain the platform's standard C++ runtime
+  #     namespace (std::__cxx11:: on linux, std::__1:: on mac).
+  #
+  #   * libpdfium.so / libpdfium.dylib are loaded at runtime via dlopen —
+  #     internal C++ symbols are fully resolved inside the library itself.
+  #     Chromium's self-contained __Cr::* symbols are therefore harmless
+  #     in the shared object, and keeping them lets the linux shared build
+  #     continue to use Chromium's bundled sysroot for arm64 cross-compile
+  #     (which ships glib/nss/fontconfig the system apt can't provide
+  #     multi-arch). We only verify the public C API for .so/.dylib.
+  case "$lib" in
+    *.a)
+      local cr_count
+      cr_count=$(echo "$syms" | grep -c '__Cr::' || true)
+      if [ "$cr_count" -gt 0 ]; then
+        fail "$lib contains $cr_count std::__Cr::* symbols (Chromium custom libc++ leaked into static archive)"
+        echo "  first few:" >&2
+        echo "$syms" | grep '__Cr::' | head -3 >&2
+      fi
 
-  # 3. Require the platform's *standard* C++ runtime namespace to be present.
-  #    Absence means we accidentally stripped the C++ stdlib entirely (very
-  #    unusual, but would silently let the .a through without the symbols
-  #    downstream rustc actually links against).
-  if [ "$PLATFORM" = "mac" ]; then
-    # Apple libc++ inline namespace: std::__1::
-    if ! echo "$syms" | grep -q 'std::__1::'; then
-      fail "$lib has no std::__1:: symbols — Apple libc++ not linked?"
-    fi
-  else
-    # libstdc++ dual-ABI inline namespace: std::__cxx11::
-    if ! echo "$syms" | grep -q 'std::__cxx11::'; then
-      fail "$lib has no std::__cxx11:: symbols — libstdc++ not linked?"
-    fi
-  fi
+      if [ "$PLATFORM" = "mac" ]; then
+        # Apple libc++ inline namespace.
+        if ! echo "$syms" | grep -q 'std::__1::'; then
+          fail "$lib has no std::__1:: symbols — Apple libc++ not linked?"
+        fi
+      else
+        # libstdc++ dual-ABI inline namespace.
+        if ! echo "$syms" | grep -q 'std::__cxx11::'; then
+          fail "$lib has no std::__cxx11:: symbols — libstdc++ not linked?"
+        fi
+      fi
+      ;;
+    *.so|*.dylib)
+      # Public C API check above is sufficient; internal __Cr:: symbols
+      # are acceptable because they are resolved within the shared object
+      # and never surfaced to dlopen consumers.
+      ;;
+    *)
+      fail "$lib has unexpected extension (expected .a, .so, or .dylib)"
+      ;;
+  esac
 }
 
 # Find all shippable libs in LIB_DIR (may include .a, .so, .dylib).

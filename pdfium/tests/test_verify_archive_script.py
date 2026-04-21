@@ -6,9 +6,12 @@ libpdfium.so / libpdfium.dylib and fails the build if any of these
 invariants break:
 
   * required FPDF_* C API symbols are present (public ABI not stripped).
-  * std::__Cr:: symbols are absent (no Chromium custom libc++ leaked).
-  * on linux: std::__cxx11:: libstdc++ symbols are present.
-  * on macOS: std::__1:: Apple libc++ symbols are present.
+  * in libpdfium.a: std::__Cr:: symbols are absent (no Chromium custom
+    libc++ leaked — rustc consumers can't resolve __Cr).
+  * in libpdfium.a on linux: std::__cxx11:: libstdc++ symbols present.
+  * in libpdfium.a on macOS: std::__1:: Apple libc++ symbols present.
+  * .so and .dylib files are checked ONLY for the public FPDF_* API —
+    __Cr:: is acceptable there because dlopen consumers never see it.
 
 These tests cover script-level invariants (existence, executability,
 shellcheck-cleanliness, argument handling). Full symbol verification is
@@ -74,6 +77,23 @@ class TestVerifyArchiveScriptContent:
     def test_mac_expects_libcxx_std(self):
         # Apple libc++ inline namespace — the mac "standard" namespace.
         assert "__1::" in self.sh or "__1\\\\:\\\\:" in self.sh
+
+    def test_cr_namespace_strict_only_for_static_archive(self):
+        # Chromium's std::__Cr::* is only toxic for .a consumers (rustc
+        # links against the system C++ runtime and can't resolve __Cr).
+        # For .so/.dylib, __Cr symbols are internal to the dynamic
+        # library and dlopen consumers never see them, so those libs
+        # are allowed to keep Chromium's bundled libc++ — which is what
+        # the linux shared build actually does (use_custom_libcxx=true
+        # is needed on linux/arm64 for the sysroot's bundled glib).
+        assert "*.a)" in self.sh, (
+            "verify_archive.sh must dispatch on *.a separately so the "
+            "__Cr:: check only applies to the static archive"
+        )
+        assert "*.so|*.dylib)" in self.sh or "*.so)" in self.sh, (
+            "verify_archive.sh must also dispatch on .so/.dylib so those "
+            "artifacts are allowed to keep internal __Cr:: symbols"
+        )
 
 
 class TestVerifyArchiveScriptShellcheck:

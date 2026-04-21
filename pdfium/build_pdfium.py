@@ -140,12 +140,14 @@ def resolve_jobs(platform_flag, arch_flag):
 # pdf_use_partition_alloc   — skip complex allocator (fails on some platforms)
 # clang_use_chrome_plugins  — skip Chrome's custom clang plugins
 #
-# use_custom_libcxx — set false across all platforms. When true, Chromium's
-# build compiles against its bundled libc++ with -D_LIBCPP_ABI_NAMESPACE=__Cr,
-# producing std::__Cr::* symbols in the static archive. rustc consumers
-# (via pdfium-render/static with the libstdc++ feature) link against the
-# system C++ runtime and cannot resolve __Cr symbols. Disabling gives us
-# std::__cxx11::* on linux (libstdc++) and std::__1::* on mac (Apple libc++).
+# use_custom_libcxx — set false for the STATIC build only (see
+# LIBCXX_STANDARD_ARGS below). When true, Chromium's build compiles against
+# its bundled libc++ with -D_LIBCPP_ABI_NAMESPACE=__Cr, producing
+# std::__Cr::* symbols in the archive. rustc consumers (via
+# pdfium-render/static with the libstdc++ feature) link against the system
+# C++ runtime and cannot resolve __Cr symbols. The SHARED build keeps
+# Chromium's defaults — dlopen consumers of libpdfium.so never resolve
+# internal C++ symbols, only the public FPDF_* C API.
 GN_ARGS_COMMON = """\
 is_debug = false
 pdf_is_standalone = true
@@ -161,31 +163,14 @@ target_cpu = "{gn_cpu}"
 """
 
 # Per-platform GN args appended to GN_ARGS_COMMON.
+#
+# Only the SHARED build uses these directly. The STATIC build adds
+# LIBCXX_STANDARD_ARGS_STATIC on top (see below) — and keeping the shared
+# build on Chromium's default libc++/sysroot combo matters for linux/arm64
+# cross-compile, which relies on the bundled sysroot for glib/nss/fontconfig.
 GN_ARGS_PLATFORM = {
-    "linux": (
-        'target_os = "linux"\n'
-        # Produce std::__cxx11::* libstdc++ symbols (not std::__Cr::*) so
-        # the static archive is linkable from rustc via pdfium-render's
-        # libstdc++ feature. See comment on GN_ARGS_COMMON above.
-        "use_custom_libcxx = false\n"
-        "use_custom_libcxx_for_host = false\n"
-        # Chromium's pinned debian_bullseye_<arch>-sysroot ships libc
-        # headers but NOT libstdc++ headers, so with use_custom_libcxx=false
-        # compilation fails with "<string> not found". The build container
-        # already installs libstdc++-12-dev via build-essential — point
-        # Chromium at those system headers instead.
-        "use_sysroot = false"
-    ),
-    "mac": (
-        'target_os = "mac"\n'
-        # Fall back to Apple's system libc++ (inline namespace std::__1::)
-        # rather than Chromium's std::__Cr::. Apple libc++ IS the
-        # standard C++ runtime on mac — pdfium-render + rustc expect it.
-        # Xcode's SDK supplies the libc++ headers, so use_sysroot stays
-        # unset (the default already uses the active Xcode SDK path).
-        "use_custom_libcxx = false\n"
-        "use_custom_libcxx_for_host = false"
-    ),
+    "linux": 'target_os = "linux"\nuse_custom_libcxx = true',
+    "mac": 'target_os = "mac"',
     "musl": (
         'target_os = "linux"\n'
         "is_musl = true\n"
@@ -203,11 +188,51 @@ GN_ARGS_PLATFORM = {
 }
 
 
+# GN args appended ONLY to the static build on linux + mac so libpdfium.a
+# exports the system C++ runtime's std::* symbols instead of Chromium's
+# std::__Cr::* custom namespace. Rust consumers (pdfium-render/static
+# with the libstdc++ feature) link against the system C++ runtime and
+# cannot resolve __Cr symbols — a libpdfium.a built with Chromium's
+# bundled libc++ is unusable. The shared build doesn't need these flags:
+# libpdfium.so is loaded at runtime via dlopen, and consumers only resolve
+# the public FPDF_* C API — never internal C++ symbols.
+#
+# On linux, use_sysroot=false is also required because Chromium's pinned
+# debian_bookworm sysroot ships libc headers but NOT libstdc++ headers.
+# build-essential (already in the Dockerfile) supplies libstdc++-12-dev
+# at the host include paths instead. Not needed on mac (Xcode SDK ships
+# libc++ headers in its default location). NOT applied to the shared
+# build because arm64 cross-compile of the shared library relies on the
+# sysroot for bundled glib/nss/fontconfig — SOLINK would fail without it.
+#
+# musl isn't in this dict — its SHARED build already disables custom
+# libc++ in GN_ARGS_PLATFORM (musl-cross-make ships libstdc++ in its own
+# sysroot), so both static and shared output standard symbols for free.
+LIBCXX_STANDARD_ARGS_STATIC = {
+    "linux": ("use_custom_libcxx = false\nuse_custom_libcxx_for_host = false\nuse_sysroot = false"),
+    "mac": ("use_custom_libcxx = false\nuse_custom_libcxx_for_host = false"),
+}
+
+
 def gn_args_for(plat, gn_cpu, extra_args):
     """Build the full GN args string for a platform + architecture."""
     platform_args = GN_ARGS_PLATFORM.get(plat, "")
     all_extra = "\n".join(filter(None, [platform_args, extra_args]))
     return GN_ARGS_COMMON.format(gn_cpu=gn_cpu, extra_args=all_extra)
+
+
+def gn_args_static_for(plat, gn_cpu, extra_args):
+    """GN args for the libpdfium.a build path.
+
+    Same as gn_args_for but also appends LIBCXX_STANDARD_ARGS_STATIC on
+    platforms that need it, so the archive exports std::__cxx11::* /
+    std::__1::* symbols that rustc consumers can resolve.
+    """
+    static_extra_args = extra_args
+    standard_args = LIBCXX_STANDARD_ARGS_STATIC.get(plat)
+    if standard_args:
+        static_extra_args = "\n".join(filter(None, [extra_args, standard_args]))
+    return gn_args_for(plat, gn_cpu, static_extra_args)
 
 
 # arm64: disable Branch Target Identification enforcement — the Debian
@@ -1126,7 +1151,13 @@ def _make_dockerfile_linux(version, arch, plat):
     # and — critically — strips //build/config/compiler:thin_archive from
     # configs. Without the config subtraction GN's alink runs `ar -T -S …`
     # and emits a GNU thin archive, which rustc can't bundle into an rlib.
-    gn_args_static = gn_args_for(plat, gn_cpu, f"{extra_args}\npdf_is_complete_lib = true".strip())
+    # Static build additionally gets LIBCXX_STANDARD_ARGS_STATIC appended
+    # (via gn_args_static_for) so libpdfium.a exports std::__cxx11::*
+    # libstdc++ symbols rustc consumers can resolve — not Chromium's
+    # std::__Cr:: custom namespace.
+    gn_args_static = gn_args_static_for(
+        plat, gn_cpu, f"{extra_args}\npdf_is_complete_lib = true".strip()
+    )
 
     # For cross-compilation, install the target arch's cross-compiler
     base_pkgs = "git curl python3 ca-certificates build-essential pkg-config lsb-release sudo file"
