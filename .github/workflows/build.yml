@@ -40,9 +40,14 @@ jobs:
           --platform ${{ matrix.platform }}
           --arch ${{ matrix.arch }}
       - name: Verify archive contents
+        # build_pdfium.py's --output-dir defaults to ./bin (relative to cwd,
+        # which is the repo root when invoked as `python3 pdfium/build_pdfium.py …`).
+        # Earlier versions of this workflow wrote `cd pdfium/bin`, which never
+        # existed; the step has been silently path-errored ever since the default
+        # was set. Keep it as `cd bin` so the tarball structure is actually checked.
         run: |
           set -eu
-          cd pdfium/bin
+          cd bin
           ls -lh
           for f in pdfium-${{ matrix.platform }}-*.tgz; do
             echo "=== $f ==="
@@ -57,10 +62,21 @@ jobs:
                 || { echo "missing libpdfium.a in $f";  exit 1; }
             fi
           done
+
+      - name: Verify archive symbols
+        # Same invariants release.yml enforces — leaked Chromium std::__Cr::
+        # symbols, stripped FPDF_* C API, or missing standard C++ runtime
+        # all fail the build here before the artifact is uploaded.
+        if: matrix.platform != 'mac'
+        run: |
+          for f in bin/pdfium-${{ matrix.platform }}-*.tgz; do
+            bash pdfium/scripts/verify_archive.sh "$f"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: pdfium-${{ matrix.platform }}-${{ matrix.arch }}
-          path: pdfium/bin/pdfium-*.tgz
+          path: bin/pdfium-*.tgz
 
   release:
     needs: build
