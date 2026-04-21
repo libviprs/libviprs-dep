@@ -142,6 +142,39 @@ class TestVerifyArchiveScriptMachOSymbolMatch:
         )
 
 
+class TestVerifyArchiveScriptPipefailSafety:
+    def setup_method(self):
+        import re as _re
+
+        with open(SCRIPT_PATH) as f:
+            raw = f.read()
+        # Drop shell comments and blank lines so assertions only match
+        # executable code, not explanatory prose that quotes the
+        # forbidden pattern.
+        self.code = "\n".join(
+            line for line in raw.splitlines() if not _re.match(r"\s*#", line) and line.strip()
+        )
+
+    def test_symbol_checks_do_not_pipe_echo_to_grep(self):
+        # Under `set -o pipefail`, `echo "$syms" | grep -q …` fails the
+        # whole pipeline when grep matches early and echo gets SIGPIPE
+        # on a subsequent write. That false-fails every invariant on
+        # linux .a (the archive's symbol list is big enough that echo
+        # never finishes before grep exits). Dump symbols to a tempfile
+        # and grep the file instead.
+        assert 'echo "$syms" | grep' not in self.code, (
+            "verify_archive.sh must not pipe $syms into grep — pipefail "
+            "promotes echo's SIGPIPE to a pipeline failure. Write to a "
+            "temp file and grep the file."
+        )
+
+    def test_symbol_dump_goes_to_temp_file(self):
+        # Encode the chosen mitigation so a future refactor can't silently
+        # re-introduce the pipe form.
+        assert "mktemp" in self.code
+        assert "syms_file" in self.code
+
+
 class TestVerifyArchiveScriptUsage:
     def test_fails_without_argument(self):
         # If invoked with no archive path, the script must exit non-zero

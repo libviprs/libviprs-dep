@@ -102,11 +102,22 @@ verify_lib() {
   local lib="$1"
   echo "---- $lib ----"
 
-  local syms
-  syms=$(list_symbols "$lib")
+  # Dump symbols to a temp file, then grep the file directly. This
+  # avoids the `echo "$syms" | grep -q ...` + `set -o pipefail` trap:
+  # when grep -q matches early it closes the pipe, echo gets SIGPIPE,
+  # and the pipeline exit status flips nonzero — `if ! ...` then fires
+  # `fail` on a successful match. libpdfium.a's symbol list is large
+  # enough (thousands of archive members) that echo has not finished
+  # writing when grep finds its match, so every linux .a reported
+  # every invariant as failing until we moved to file-based grep.
+  local syms_file
+  syms_file=$(mktemp)
+  # shellcheck disable=SC2064  # intentional $syms_file expansion at trap-setup time
+  trap "rm -f '$syms_file'" RETURN
+  list_symbols "$lib" > "$syms_file"
 
   # Catch silent nm failure (would cause every grep to pass vacuously).
-  if [ -z "$syms" ]; then
+  if [ ! -s "$syms_file" ]; then
     fail "nm produced no output for $lib"
     return
   fi
@@ -121,7 +132,7 @@ verify_lib() {
   # A `\b` word boundary fails on mac because `_` and `F` are both word
   # characters, so there's no boundary between them.
   for sym in FPDF_InitLibrary FPDF_DestroyLibrary FPDF_LoadDocument; do
-    if ! echo "$syms" | grep -qE "[ _]${sym}$"; then
+    if ! grep -qE "[ _]${sym}$" "$syms_file"; then
       fail "$lib missing required symbol: $sym"
     fi
   done
@@ -146,21 +157,23 @@ verify_lib() {
   case "$lib" in
     *.a)
       local cr_count
-      cr_count=$(echo "$syms" | grep -c '__Cr::' || true)
+      cr_count=$(grep -c '__Cr::' "$syms_file" || true)
       if [ "$cr_count" -gt 0 ]; then
         fail "$lib contains $cr_count std::__Cr::* symbols (Chromium custom libc++ leaked into static archive)"
         echo "  first few:" >&2
-        echo "$syms" | grep '__Cr::' | head -3 >&2
+        # head closes the pipe early; `|| true` keeps pipefail from
+        # promoting that SIGPIPE into a hard exit under `set -e`.
+        grep '__Cr::' "$syms_file" | head -3 >&2 || true
       fi
 
       if [ "$PLATFORM" = "mac" ]; then
         # Apple libc++ inline namespace.
-        if ! echo "$syms" | grep -q 'std::__1::'; then
+        if ! grep -q 'std::__1::' "$syms_file"; then
           fail "$lib has no std::__1:: symbols — Apple libc++ not linked?"
         fi
       else
         # libstdc++ dual-ABI inline namespace.
-        if ! echo "$syms" | grep -q 'std::__cxx11::'; then
+        if ! grep -q 'std::__cxx11::' "$syms_file"; then
           fail "$lib has no std::__cxx11:: symbols — libstdc++ not linked?"
         fi
       fi
