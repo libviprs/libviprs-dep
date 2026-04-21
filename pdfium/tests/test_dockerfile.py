@@ -66,6 +66,48 @@ class TestMakeDockerfileLinuxAmd64:
         assert "pdf_use_partition_alloc = false" in self.df
         assert "clang_use_chrome_plugins = false" in self.df
 
+    def test_libcxx_standard_in_static_args_only(self):
+        # Rust consumers of libpdfium.a (via pdfium-render/static with the
+        # libstdc++ feature) link against the system C++ runtime and
+        # cannot resolve Chromium's std::__Cr::* symbols. The static pass
+        # therefore disables Chromium's bundled libc++ — but ONLY the
+        # static pass: the shared build on linux/arm64 cross-compile
+        # relies on the bundled sysroot (via use_custom_libcxx=true /
+        # use_sysroot=true) for arm64 glib/nss/fontconfig. dlopen
+        # consumers of libpdfium.so never resolve internal C++ symbols,
+        # so keeping __Cr::* in the .so is harmless.
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        libcxx_false_pos = self.df.index("use_custom_libcxx = false")
+        # libcxx=false appears in the static heredoc, between the two markers.
+        assert static_args_pos < libcxx_false_pos < shared_args_pos, (
+            "use_custom_libcxx = false must live inside the Static args heredoc "
+            "only, not the Shared one"
+        )
+        # Must appear exactly once in the entire Dockerfile: if it leaked
+        # into the shared heredoc, linux/arm64 cross-compile SOLINK would
+        # fail with "unable to find library -lglib-2.0".
+        assert self.df.count("use_custom_libcxx = false") == 1
+        assert "use_custom_libcxx_for_host = false" in self.df
+
+    def test_shared_build_keeps_custom_libcxx(self):
+        # The shared build on linux MUST keep use_custom_libcxx = true —
+        # the bundled sysroot is the only source of arm64 glib, nss, and
+        # fontconfig for cross-compile.
+        assert "use_custom_libcxx = true" in self.df
+
+    def test_use_sysroot_false_in_static_args_only(self):
+        # Pairs with use_custom_libcxx = false: Chromium's debian_bookworm
+        # sysroot lacks libstdc++ headers, so the static build uses host
+        # system headers (libstdc++-12-dev via build-essential) instead.
+        # The shared build keeps the default use_sysroot = true so arm64
+        # cross-compile can link against the sysroot's bundled glib.
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        flag_pos = self.df.index("use_sysroot = false")
+        assert static_args_pos < flag_pos < shared_args_pos
+        assert self.df.count("use_sysroot = false") == 1
+
     def test_two_ninja_invocations(self):
         assert "ninja -C out/Static pdfium" in self.df
         assert "ninja -C out/Shared pdfium" in self.df
@@ -144,6 +186,26 @@ class TestMakeDockerfileLinuxArm64:
         assert "ninja -C out/Static pdfium" in self.df
         assert "ninja -C out/Shared pdfium" in self.df
 
+    def test_libcxx_standard_in_static_args_only(self):
+        # Same scoping as linux/amd64: static gets standard libstdc++
+        # symbols, shared keeps Chromium's bundled libc++ + sysroot so
+        # SOLINK can resolve the bundled arm64 glib/nss/fontconfig.
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        libcxx_false_pos = self.df.index("use_custom_libcxx = false")
+        assert static_args_pos < libcxx_false_pos < shared_args_pos
+        assert self.df.count("use_custom_libcxx = false") == 1
+
+    def test_shared_build_keeps_custom_libcxx(self):
+        assert "use_custom_libcxx = true" in self.df
+
+    def test_use_sysroot_false_in_static_args_only(self):
+        static_args_pos = self.df.index("out/Static/args.gn")
+        shared_args_pos = self.df.index("out/Shared/args.gn")
+        flag_pos = self.df.index("use_sysroot = false")
+        assert static_args_pos < flag_pos < shared_args_pos
+        assert self.df.count("use_sysroot = false") == 1
+
 
 class TestMakeDockerfileMuslAmd64:
     def setup_method(self):
@@ -221,6 +283,14 @@ class TestMakeDockerfileMuslAmd64:
     def test_pdf_is_complete_lib_not_in_shared_args(self):
         assert self.df.count("pdf_is_complete_lib = true") == 1
 
+    def test_libcxx_standard_not_custom(self):
+        # musl already uses libstdc++ (gcc + musl-cross-make ships its own
+        # libstdc++.a); this regression-guards both the libcxx and the
+        # for_host flag remaining disabled.
+        assert "use_custom_libcxx = false" in self.df
+        assert "use_custom_libcxx_for_host = false" in self.df
+        assert "use_custom_libcxx = true" not in self.df
+
 
 class TestMakeDockerfileMuslArm64:
     def setup_method(self):
@@ -231,6 +301,11 @@ class TestMakeDockerfileMuslArm64:
 
     def test_target_cpu_arm64(self):
         assert 'target_cpu = "arm64"' in self.df
+
+    def test_libcxx_standard_not_custom(self):
+        assert "use_custom_libcxx = false" in self.df
+        assert "use_custom_libcxx_for_host = false" in self.df
+        assert "use_custom_libcxx = true" not in self.df
 
 
 class TestMakeDockerfileDifferentVersions:
