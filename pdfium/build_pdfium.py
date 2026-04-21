@@ -137,9 +137,15 @@ def resolve_jobs(platform_flag, arch_flag):
 # pdf_enable_v8             — no JS engine (not needed for rasterization)
 # pdf_enable_xfa            — no XFA form support
 # is_component_build        — single .so, not many small ones
-# use_custom_libcxx         — bundle libc++ so .so is portable across distros
 # pdf_use_partition_alloc   — skip complex allocator (fails on some platforms)
 # clang_use_chrome_plugins  — skip Chrome's custom clang plugins
+#
+# use_custom_libcxx — set false across all platforms. When true, Chromium's
+# build compiles against its bundled libc++ with -D_LIBCPP_ABI_NAMESPACE=__Cr,
+# producing std::__Cr::* symbols in the static archive. rustc consumers
+# (via pdfium-render/static with the libstdc++ feature) link against the
+# system C++ runtime and cannot resolve __Cr symbols. Disabling gives us
+# std::__cxx11::* on linux (libstdc++) and std::__1::* on mac (Apple libc++).
 GN_ARGS_COMMON = """\
 is_debug = false
 pdf_is_standalone = true
@@ -156,8 +162,30 @@ target_cpu = "{gn_cpu}"
 
 # Per-platform GN args appended to GN_ARGS_COMMON.
 GN_ARGS_PLATFORM = {
-    "linux": 'target_os = "linux"\nuse_custom_libcxx = true',
-    "mac": 'target_os = "mac"',
+    "linux": (
+        'target_os = "linux"\n'
+        # Produce std::__cxx11::* libstdc++ symbols (not std::__Cr::*) so
+        # the static archive is linkable from rustc via pdfium-render's
+        # libstdc++ feature. See comment on GN_ARGS_COMMON above.
+        "use_custom_libcxx = false\n"
+        "use_custom_libcxx_for_host = false\n"
+        # Chromium's pinned debian_bullseye_<arch>-sysroot ships libc
+        # headers but NOT libstdc++ headers, so with use_custom_libcxx=false
+        # compilation fails with "<string> not found". The build container
+        # already installs libstdc++-12-dev via build-essential — point
+        # Chromium at those system headers instead.
+        "use_sysroot = false"
+    ),
+    "mac": (
+        'target_os = "mac"\n'
+        # Fall back to Apple's system libc++ (inline namespace std::__1::)
+        # rather than Chromium's std::__Cr::. Apple libc++ IS the
+        # standard C++ runtime on mac — pdfium-render + rustc expect it.
+        # Xcode's SDK supplies the libc++ headers, so use_sysroot stays
+        # unset (the default already uses the active Xcode SDK path).
+        "use_custom_libcxx = false\n"
+        "use_custom_libcxx_for_host = false"
+    ),
     "musl": (
         'target_os = "linux"\n'
         "is_musl = true\n"

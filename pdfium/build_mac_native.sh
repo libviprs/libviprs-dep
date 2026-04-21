@@ -108,6 +108,12 @@ echo "[6/$TOTAL] Apply mac patches"
 python3 "$REPO_ROOT/pdfium/patches/mac.py" "$PDFIUM" --mode all
 
 echo "[7/$TOTAL] gn gen"
+# use_custom_libcxx=false falls back to Apple's system libc++ (inline
+# namespace std::__1::) instead of Chromium's std::__Cr::. Apple libc++
+# IS the standard C++ runtime on mac, so pdfium-render + rustc consumers
+# can link the resulting libpdfium.dylib (and libpdfium.a once the mac
+# build gains a static pass). Must match the flag set used for linux/
+# musl in build_pdfium.py::GN_ARGS_PLATFORM.
 mkdir -p out/Release
 cat > out/Release/args.gn <<EOF
 is_debug = false
@@ -119,6 +125,8 @@ treat_warnings_as_errors = false
 pdf_use_skia = false
 pdf_use_partition_alloc = false
 clang_use_chrome_plugins = false
+use_custom_libcxx = false
+use_custom_libcxx_for_host = false
 target_cpu = "$GN_CPU"
 target_os = "mac"
 EOF
