@@ -102,17 +102,37 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Build + publish ${{ matrix.platform }}/${{ matrix.arch }}
-        env:
-          # GITHUB_TOKEN is minted automatically for every run; the gh
-          # CLI picks it up from GH_TOKEN. permissions.contents: write
-          # above is what grants write access to Releases on this repo.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build ${{ matrix.platform }}/${{ matrix.arch }}
+        # No --upload yet: build first, then verify, then upload. That
+        # ordering ensures a bad archive (leaked __Cr symbols, stripped
+        # FPDF_* API, missing libstdc++) can never reach the Release page.
         run: |
           python3 pdfium/build_pdfium.py "${{ needs.resolve-version.outputs.version }}" \
             --platform ${{ matrix.platform }} \
-            --arch ${{ matrix.arch }} \
-            --upload
+            --arch ${{ matrix.arch }}
+
+      - name: Verify archive symbols
+        # Blocks the upload if any rustc-linkability invariant breaks.
+        # See pdfium/scripts/verify_archive.sh for the full invariant set.
+        run: |
+          shopt -s nullglob
+          for tgz in bin/pdfium-${{ matrix.platform }}-*.tgz; do
+            bash pdfium/scripts/verify_archive.sh "$tgz"
+          done
+
+      - name: Upload release assets ${{ matrix.platform }}/${{ matrix.arch }}
+        # GITHUB_TOKEN is minted automatically for every run; the gh CLI
+        # picks it up from GH_TOKEN. permissions.contents: write above is
+        # what grants write access to Releases on this repo. --clobber so
+        # re-runs replace their own assets without touching others.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(bin/pdfium-${{ matrix.platform }}-*.tgz)
+          [ ${#assets[@]} -gt 0 ] || { echo "no archives to upload" >&2; exit 1; }
+          gh release upload "$TAG" "${assets[@]}" --clobber
 
       - name: Upload build logs on failure
         if: always()
@@ -151,12 +171,28 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Build + publish mac/${{ matrix.arch }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build mac/${{ matrix.arch }}
+        # Split from upload so the Verify step below can gate publication.
         run: |
           python3 pdfium/build_pdfium.py "${{ needs.resolve-version.outputs.version }}" \
-            --platform mac --arch ${{ matrix.arch }} --upload
+            --platform mac --arch ${{ matrix.arch }}
+
+      - name: Verify archive symbols
+        run: |
+          shopt -s nullglob
+          for tgz in bin/pdfium-mac-*.tgz; do
+            bash pdfium/scripts/verify_archive.sh "$tgz"
+          done
+
+      - name: Upload release assets mac/${{ matrix.arch }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(bin/pdfium-mac-*.tgz)
+          [ ${#assets[@]} -gt 0 ] || { echo "no archives to upload" >&2; exit 1; }
+          gh release upload "$TAG" "${assets[@]}" --clobber
 
       - name: Upload build logs on failure
         if: always()
@@ -212,6 +248,13 @@ jobs:
           file pdfium-mac-univ/lib/libpdfium.dylib
           tar czf pdfium-mac-univ.tgz pdfium-mac-univ
           ls -lh pdfium-mac-univ.tgz
+
+      - name: Verify universal archive symbols
+        # The per-arch dylibs were already verified by build-mac. Re-verify
+        # the lipo'd output: a future regression in our lipo flags (e.g.
+        # accidentally dropping one slice, or stripping debug sections)
+        # would still be caught here before it reaches the Release page.
+        run: bash pdfium/scripts/verify_archive.sh work/pdfium-mac-univ.tgz
 
       - name: Upload pdfium-mac-univ.tgz to release
         env:
