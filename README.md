@@ -2,6 +2,8 @@
 
 Pre-compiled native dependencies for [libviprs](https://github.com/libviprs/libviprs). Each dependency has its own directory with build scripts and documentation. Compiled binaries are published as GitHub Releases.
 
+PDFium consumers and CLI flags that exercise it are documented at https://libviprs.org/cli/#flag-render. The matching CLI flags — [`--render`](https://libviprs.org/cli/#flag-render), [`--dpi`](https://libviprs.org/cli/#flag-dpi), [`--page`](https://libviprs.org/cli/#flag-page), and [`--match-page-size`](https://libviprs.org/cli/#flag-match-page-size) — are what load the binaries shipped here at runtime, gated by the `pdfium` and `pdfium-static` Cargo features.
+
 For a full man-page-style reference on the build tooling, see [`MANUAL.md`](MANUAL.md).
 
 ## Dependencies
