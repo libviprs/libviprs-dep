@@ -163,9 +163,9 @@ gcc_toolchain("x86") {
   cc = "${toolprefix}gcc"
   cxx = "${toolprefix}g++"
 
-  readelf = "${toolprefix}readelf"
-  nm = "${toolprefix}nm"
-  ar = "${toolprefix}ar"
+  readelf = "/opt/${toolprefix}cross/bin/${toolprefix}readelf"
+  nm = "/opt/${toolprefix}cross/bin/${toolprefix}nm"
+  ar = "/opt/${toolprefix}cross/bin/${toolprefix}ar"
   ld = cxx
 
   extra_ldflags = "-static-libgcc -static-libstdc++"
@@ -185,9 +185,9 @@ gcc_toolchain("x64") {
   cc = "${toolprefix}gcc"
   cxx = "${toolprefix}g++"
 
-  readelf = "${toolprefix}readelf"
-  nm = "${toolprefix}nm"
-  ar = "${toolprefix}ar"
+  readelf = "/opt/${toolprefix}cross/bin/${toolprefix}readelf"
+  nm = "/opt/${toolprefix}cross/bin/${toolprefix}nm"
+  ar = "/opt/${toolprefix}cross/bin/${toolprefix}ar"
   ld = cxx
 
   extra_ldflags = "-static-libgcc -static-libstdc++"
@@ -207,9 +207,9 @@ gcc_toolchain("arm") {
   cc = "${toolprefix}gcc"
   cxx = "${toolprefix}g++"
 
-  readelf = "${toolprefix}readelf"
-  nm = "${toolprefix}nm"
-  ar = "${toolprefix}ar"
+  readelf = "/opt/${toolprefix}cross/bin/${toolprefix}readelf"
+  nm = "/opt/${toolprefix}cross/bin/${toolprefix}nm"
+  ar = "/opt/${toolprefix}cross/bin/${toolprefix}ar"
   ld = cxx
 
   extra_ldflags = "-static-libgcc -static-libstdc++"
@@ -229,9 +229,9 @@ gcc_toolchain("arm64") {
   cc = "${toolprefix}gcc"
   cxx = "${toolprefix}g++"
 
-  readelf = "${toolprefix}readelf"
-  nm = "${toolprefix}nm"
-  ar = "${toolprefix}ar"
+  readelf = "/opt/${toolprefix}cross/bin/${toolprefix}readelf"
+  nm = "/opt/${toolprefix}cross/bin/${toolprefix}nm"
+  ar = "/opt/${toolprefix}cross/bin/${toolprefix}ar"
   ld = cxx
 
   extra_cxxflags= "-flax-vector-conversions"
