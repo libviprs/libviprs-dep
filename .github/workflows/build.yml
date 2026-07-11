@@ -59,6 +59,8 @@ jobs:
             if [ "${{ matrix.platform }}" = "mac" ]; then
               tar tzf "$f" | grep -q 'lib/libpdfium.dylib' \
                 || { echo "missing libpdfium.dylib in $f"; exit 1; }
+              tar tzf "$f" | grep -q 'lib/libpdfium.a' \
+                || { echo "missing libpdfium.a in $f";  exit 1; }
             else
               tar tzf "$f" | grep -q 'lib/libpdfium.so' \
                 || { echo "missing libpdfium.so in $f"; exit 1; }
