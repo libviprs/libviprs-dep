@@ -1,0 +1,89 @@
+name: CI
+# Migrated from .github/workflows/ci.yml to run on the self-hosted Gitea
+# Actions runner. Results are reported back to GitHub as the `gitea/ci`
+# commit status via the GH_STATUS_TOKEN org secret.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  status-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report pending status to GitHub
+        if: always()
+        env:
+          GH_STATUS_TOKEN: ${{ secrets.GH_STATUS_TOKEN }}
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_STATUS_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -d '{"state":"pending","context":"gitea/ci","description":"Gitea CI running","target_url":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' || true
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check pdfium/
+      - run: ruff format --check pdfium/
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest
+      - run: pytest pdfium/tests/ -v
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure shellcheck is available
+        # GitHub's ubuntu-latest ships shellcheck preinstalled; the Gitea
+        # runner image may not, so install it on demand.
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y shellcheck
+            else
+              apt-get update && apt-get install -y shellcheck
+            fi
+          fi
+          shellcheck --version
+      - run: shellcheck pdfium/patches/*.sh
+
+  report:
+    needs: [lint, test, shellcheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report final status to GitHub
+        env:
+          GH_STATUS_TOKEN: ${{ secrets.GH_STATUS_TOKEN }}
+        run: |
+          if [ "${{ needs.lint.result }}" = "success" ] && \
+             [ "${{ needs.test.result }}" = "success" ] && \
+             [ "${{ needs.shellcheck.result }}" = "success" ]; then
+            STATE="success"
+            DESC="All Gitea CI checks passed"
+          else
+            STATE="failure"
+            DESC="Gitea CI failed (lint=${{ needs.lint.result }} test=${{ needs.test.result }} shellcheck=${{ needs.shellcheck.result }})"
+          fi
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_STATUS_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -d "{\"state\":\"$STATE\",\"context\":\"gitea/ci\",\"description\":\"$DESC\",\"target_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" || true
