@@ -124,8 +124,8 @@ class TestMacBuildScriptStaticArchive:
     def test_mac_stages_libpdfium_a(self):
         # The staging step must copy the fat archive from its GN output
         # path (obj/libpdfium.a) into $STAGE_DEST/lib/ next to the dylib.
-        assert "cp out/Static/obj/libpdfium.a  \"$STAGE_DEST/lib/\"" in self.sh
-        assert "cp out/Release/libpdfium.dylib \"$STAGE_DEST/lib/\"" in self.sh
+        assert 'cp out/Static/obj/libpdfium.a  "$STAGE_DEST/lib/"' in self.sh
+        assert 'cp out/Release/libpdfium.dylib "$STAGE_DEST/lib/"' in self.sh
         # The static GN args must also ship as args.static.gn (matches the
         # linux/musl release layout so consumers can inspect both builds).
         assert 'cp out/Static/args.gn          "$STAGE_DEST/args.static.gn"' in self.sh
