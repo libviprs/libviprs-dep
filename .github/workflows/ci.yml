@@ -1,0 +1,38 @@
+name: CI
+# Runs natively on GitHub Actions. Every push to any branch gets a run, so a
+# push to a PR branch always produces a signal (libviprs/libviprs#585).
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check pdfium/
+      - run: ruff format --check pdfium/
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest
+      - run: pytest pdfium/tests/ -v
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck pdfium/patches/*.sh
