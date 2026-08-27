@@ -6,4 +6,10 @@ line-length = 100
 select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
-testpaths = ["pdfium/tests"]
+# Deliberately no `testpaths`. Collection walks the repo from the root,
+# so a new dependency directory's tests/ is picked up the day it lands
+# rather than the day someone remembers to edit this file — the same
+# reason .github/workflows/ci.yml discovers its paths instead of listing
+# them. `bin` is excluded because the build drivers unpack upstream
+# source trees there and those carry test files of their own.
+norecursedirs = ["bin", "build", "dist", "node_modules", "venv", "*.egg", ".*"]

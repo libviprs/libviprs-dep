@@ -1,6 +1,11 @@
 name: CI
 # Runs natively on GitHub Actions. Every push to any branch gets a run, so a
 # push to a PR branch always produces a signal (libviprs/libviprs#585).
+#
+# No job names a dependency directory. `pdfium/` was hardcoded into every
+# step here, which meant a second dependency landed completely unchecked
+# until someone noticed; the paths are now discovered from the tree, so
+# the next one is covered the day it lands.
 on:
   push:
     branches: ['**']
@@ -15,8 +20,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check pdfium/
-      - run: ruff format --check pdfium/
+      # ruff walks the whole repo and honours .gitignore, so every
+      # dependency's Python is linted without listing any of them.
+      - run: ruff check .
+      - run: ruff format --check .
 
   test:
     runs-on: ubuntu-latest
@@ -29,10 +36,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install pytest
-      - run: pytest pdfium/tests/ -v
+      # Collection is repo-wide (pyproject.toml sets no testpaths), so
+      # every */tests directory runs. pytest exits 5 when it collects
+      # nothing, so a discovery regression fails the job rather than
+      # passing vacuously.
+      - run: pytest -v
 
   shellcheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck pdfium/patches/*.sh
+      - name: Shellcheck every tracked shell script
+        run: |
+          set -euo pipefail
+          scripts=$(git ls-files '*.sh')
+          if [ -z "$scripts" ]; then
+            echo "no shell scripts found — script discovery is broken" >&2
+            exit 1
+          fi
+          echo "$scripts"
+          echo "$scripts" | xargs shellcheck

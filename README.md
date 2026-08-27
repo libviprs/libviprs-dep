@@ -11,10 +11,11 @@ For a full man-page-style reference on the build tooling, see [`MANUAL.md`](MANU
 | Directory | Library | Purpose |
 | --- | --- | --- |
 | [`pdfium/`](pdfium/) | [PDFium](https://pdfium.googlesource.com/pdfium/) | PDF page rasterization |
+| [`zstd/`](zstd/) | [zstd](https://github.com/facebook/zstd) | Packfile compression, so `--features packfile` stops compiling C |
 
 ## Release contents
 
-Every archive published under [Releases](https://github.com/libviprs/libviprs-dep/releases) ships both a shared library and a static archive so downstream consumers can pick either linking strategy:
+Every archive published under [Releases](https://github.com/libviprs/libviprs-dep/releases) ships both a shared library and a static archive so downstream consumers can pick either linking strategy. Archives are named `<library>-<platform>-<cpu>.tgz` and unpack to a directory of the same name.
 
 ```
 pdfium-<platform>-<cpu>/
@@ -26,9 +27,22 @@ pdfium-<platform>-<cpu>/
 └── LICENSE
 ```
 
+```
+zstd-<platform>-<cpu>/
+├── lib/libzstd.so             # or .dylib on mac, with the usual soname symlinks
+├── lib/libzstd.a              # static archive, position-independent
+├── lib/pkgconfig/libzstd.pc   # relocatable — prefix is ${pcfiledir}/../..
+├── lib/cmake/zstd/            # CMake package config for find_package(zstd)
+├── include/                   # zstd.h, zstd_errors.h, zdict.h
+├── cmake-args.txt             # CMake configure flags used
+└── LICENSE
+```
+
 The default in-process matrix (`build_pdfium.py` on a Linux host) is `{linux, musl} × {amd64, arm64}` — four archives. The release workflow additionally produces three macOS archives on `macos-15` runners: `pdfium-mac-arm64.tgz`, `pdfium-mac-x64.tgz`, and `pdfium-mac-univ.tgz` (a universal Mach-O built via `lipo -create` over the two per-arch dylibs). Pick the `linux-*` archives for glibc runtimes (Debian, Ubuntu, …), the `musl-*` archives for musl runtimes (Alpine, musl-based distroless images), and one of the `mac-*` archives for macOS (`mac-univ` if you want a single binary that loads on both Apple Silicon and Intel). Loading a glibc `.so` from a musl process — or vice versa — fails at `dlopen` time. macOS is intentionally excluded from `build_pdfium.py`'s in-process default matrix because PDFium's GN config invokes `xcodebuild` during `gn gen`, which doesn't exist on Linux, so mac builds require an actual macOS host (bblanchon/pdfium-binaries runs mac builds on `macos-15` GitHub Actions runners for the same reason).
 
-See [`pdfium/README.md`](pdfium/README.md#download) for direct download URLs and consumption examples.
+zstd's matrix is the same four Linux archives — `{linux, musl} × {amd64, arm64}` — plus `zstd-mac-arm64.tgz` and `zstd-mac-x64.tgz` from a macOS host. It needs no Chromium toolchain: each combo builds in a container pinned to the target architecture, so a foreign-arch build is emulated rather than cross-compiled, and the build's own smoke test runs the library it just produced.
+
+See [`pdfium/README.md`](pdfium/README.md#download) and [`zstd/README.md`](zstd/README.md#download) for direct download URLs and consumption examples.
 
 ## Quickstart
 
@@ -54,6 +68,14 @@ Partial failures don't lose the run. When `--upload` is passed, the archives fro
 
 Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`, entering the chromium branch number and toggling `upload=true`.
 
+zstd is a much smaller job — no chromium branch to pick, and the version comes from `zstd/VERSION`:
+
+```bash
+python3 zstd/build_zstd.py --parallel --upload
+```
+
+Every archive is put through `zstd/scripts/verify_archive.sh` before `--upload` publishes anything, so a malformed tarball can't reach a release even from a local run.
+
 ## Cutting a release
 
 `pdfium/VERSION` is the single source of truth for the chromium branch we ship. To publish a new build:
@@ -69,14 +91,18 @@ Or trigger the **Build PDFium** GitHub Actions workflow via `workflow_dispatch`,
 
 `GH_TOKEN` is the workflow's auto-minted `GITHUB_TOKEN`; each build job declares `permissions: contents: write` so `gh release *` has push access without any secrets configuration.
 
+zstd has no release workflow of its own yet. Its releases are cut by running `python3 zstd/build_zstd.py --upload` from a host with Docker (and, for the mac archives, from a macOS host), which creates or updates the `zstd-<VERSION>` release. Everything such a workflow would need already lives in the driver — version resolution, verification, and `gh release upload --clobber` — so wiring it up is a YAML job rather than new build logic.
+
 ## Development
 
 ### Running tests
 
 ```bash
 pip install pytest
-pytest pdfium/tests/ -v
+pytest -v
 ```
+
+Collection is repo-wide — `pyproject.toml` sets no `testpaths` — so every dependency's `tests/` directory runs without being listed anywhere.
 
 ### Git hooks
 
@@ -92,18 +118,20 @@ The pre-commit hook runs ruff lint + format, shellcheck, and pytest before each 
 
 ```bash
 pip install ruff
-ruff check pdfium/
-ruff format --check pdfium/
-shellcheck pdfium/patches/*.sh
+ruff check .
+ruff format --check .
+git ls-files '*.sh' | xargs shellcheck
 ```
+
+These are exactly what CI runs, and none of them names a dependency directory: ruff walks the tree, pytest collects from the root, and shellcheck takes its file list from git. A new dependency is covered the day it lands.
 
 ### CI
 
 GitHub Actions runs on every push and PR to `main`:
 
-- **lint** — ruff check + format
-- **test** — pytest on Python 3.9 and 3.12
-- **shellcheck** — validates platform patch scripts
+- **lint** — ruff check + format over the whole repo
+- **test** — pytest on Python 3.9 and 3.12, collecting from the repo root
+- **shellcheck** — every shell script `git ls-files '*.sh'` reports
 
 A separate **Build PDFium** workflow (`.github/workflows/build.yml`) is available via manual dispatch. It builds the full `{linux, musl} × {amd64, arm64}` matrix inside Docker and — when `upload=true` is set — creates or replaces the GitHub Release on this repo.
 
@@ -111,6 +139,7 @@ A separate **Build PDFium** workflow (`.github/workflows/build.yml`) is availabl
 
 - [`MANUAL.md`](MANUAL.md) — complete man-page-style reference for the build tooling, CLI options, artifact layout, environment, exit statuses, troubleshooting.
 - [`pdfium/README.md`](pdfium/README.md) — PDFium-specific build pipeline overview, GN args, patches.
+- [`zstd/README.md`](zstd/README.md) — zstd build pipeline, version pin rationale, pkg-config consumption.
 
 ## License
 
