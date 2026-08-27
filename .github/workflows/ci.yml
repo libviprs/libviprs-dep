@@ -35,7 +35,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install pytest
+      # pyyaml is not a test dependency of this repo's own suite, but
+      # pdfium/tests/test_release_workflow.py `importorskip`s it — without
+      # it those 13 tests skipped on every CI run while looking green.
+      - run: pip install pytest pyyaml
       # Collection is repo-wide (pyproject.toml sets no testpaths), so
       # every */tests directory runs. pytest exits 5 when it collects
       # nothing, so a discovery regression fails the job rather than
