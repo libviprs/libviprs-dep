@@ -137,6 +137,38 @@ class TestShellcheckDiscoveryCoversEveryScript:
             )
 
 
+class TestOptionalTestDependenciesAreInstalled:
+    def test_every_importorskip_is_installed_by_the_test_job(self):
+        # `pytest.importorskip("yaml")` at the top of a test module skips
+        # the whole file when the package is missing. That is how 13
+        # pdfium release-workflow tests ran nowhere while the job stayed
+        # green. Anything a test module skips itself over has to be in
+        # the test job's pip install line.
+        needed = set()
+        for dirpath, _dirs, files in os.walk(REPO_ROOT):
+            if os.path.basename(dirpath) != "tests":
+                continue
+            for name in files:
+                if not name.startswith("test_") or not name.endswith(".py"):
+                    continue
+                with open(os.path.join(dirpath, name)) as f:
+                    for line in f:
+                        match = re.search(r'importorskip\(\s*["\'](\w+)["\']', line)
+                        if match:
+                            needed.add(match.group(1))
+
+        installs = re.findall(r"run:\s*pip install (.+)", without_comments(CI_WORKFLOW))
+        installed = {pkg for line in installs for pkg in line.split()}
+        # import name -> distribution name, where they differ
+        aliases = {"yaml": "pyyaml"}
+        for module in needed:
+            package = aliases.get(module, module)
+            assert package in installed, (
+                f"tests importorskip {module!r} but CI never installs {package!r}, so "
+                "those tests skip silently on every run"
+            )
+
+
 class TestPytestCollectionCoversEveryDependency:
     def test_repo_wide_collection_reaches_every_tests_directory(self):
         result = subprocess.run(
