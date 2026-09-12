@@ -17,24 +17,31 @@ set -euo pipefail
 
 echo "Running pre-commit checks..."
 
-# Ruff lint
+# Ruff lint. Paths are discovered rather than listed, matching
+# .github/workflows/ci.yml — a new dependency directory is checked
+# without editing this hook.
 echo "  ruff check..."
-ruff check pdfium/ || {
+ruff check . || {
     echo "ruff check failed. Fix lint errors before committing."
     exit 1
 }
 
 # Ruff format
 echo "  ruff format --check..."
-ruff format --check pdfium/ || {
-    echo "ruff format failed. Run 'ruff format pdfium/' to fix."
+ruff format --check . || {
+    echo "ruff format failed. Run 'ruff format .' to fix."
     exit 1
 }
 
 # Shellcheck
 echo "  shellcheck..."
 if command -v shellcheck &>/dev/null; then
-    shellcheck pdfium/patches/*.sh || {
+    scripts=$(git ls-files '*.sh')
+    if [ -z "$scripts" ]; then
+        echo "no shell scripts found - script discovery is broken"
+        exit 1
+    fi
+    echo "$scripts" | xargs shellcheck || {
         echo "shellcheck failed. Fix shell script issues before committing."
         exit 1
     }
@@ -42,9 +49,9 @@ else
     echo "  (shellcheck not installed, skipping)"
 fi
 
-# Pytest
+# Pytest. No path argument: collection is repo-wide (see pyproject.toml).
 echo "  pytest..."
-python3 -m pytest pdfium/tests/ -q || {
+python3 -m pytest -q || {
     echo "Tests failed. Fix failing tests before committing."
     exit 1
 }
