@@ -2,13 +2,13 @@
 
 A man-page-style reference for the libviprs-dep build tooling. For
 narrative overview and download links, see
-[`pdfium/README.md`](pdfium/README.md) and the
-[repo top-level README](README.md).
+[`pdfium/README.md`](pdfium/README.md), [`zstd/README.md`](zstd/README.md)
+and the [repo top-level README](README.md).
 
 ```
 NAME          libviprs-dep-build — compile pre-built native dependencies for libviprs
 SECTION       1 (User Commands)
-UPDATED       2026-04-20
+UPDATED       2026-08-27
 ```
 
 ---
@@ -18,6 +18,13 @@ UPDATED       2026-04-20
 **build_pdfium.py** — build PDFium shared libraries and static archives for
 Linux (glibc), musl/Alpine, and macOS from source inside Docker, and
 optionally publish them as GitHub Releases on `libviprs/libviprs-dep`.
+
+**build_zstd.py** — the same, for the zstd compression library.
+
+Everything from **OPTIONS** through **TROUBLESHOOTING** below describes
+`build_pdfium.py`. zstd's driver shares the CLI shape and the archive
+conventions but almost none of the machinery; see [**ZSTD**](#zstd) for
+what it does differently and why it needs so much less.
 
 ## SYNOPSIS
 
@@ -29,11 +36,20 @@ python3 pdfium/build_pdfium.py VERSION
                                [--mem-per-build MB]
                                [--upload]
                                [--output-dir DIR]
+
+python3 zstd/build_zstd.py [VERSION]
+                           [--arch {amd64,arm64}]
+                           [--platform PLATFORM [PLATFORM ...]]
+                           [--parallel]
+                           [--upload]
+                           [--output-dir DIR]
 ```
 
 `VERSION` is a PDFium chromium branch number (e.g. `7725`). It is
 resolved to `origin/chromium/VERSION` at
-`https://pdfium.googlesource.com/pdfium/`.
+`https://pdfium.googlesource.com/pdfium/`. For `build_zstd.py` it is an
+upstream zstd release (e.g. `1.5.7`) and is optional — omitted, it comes
+from `zstd/VERSION`.
 
 ## DESCRIPTION
 
@@ -263,13 +279,29 @@ pdfium/
 │   └── musl.py                # musl/Alpine patch script (accepts --mode)
 └── tests/                     # pytest suite for pure-function logic
 
+zstd/
+├── build_zstd.py              # entry point
+├── VERSION                    # zstd release the archives ship
+├── bin/                       # default output directory (gitignored)
+├── scripts/
+│   └── verify_archive.sh      # invariant check run over every packaged .tgz
+└── tests/                     # pytest suite, including the CI-coverage guards
+
 .github/workflows/
 ├── build.yml                  # manual-dispatch build of an arbitrary chromium branch
-├── ci.yml                     # lint + tests on PRs / pushes to main
+├── ci.yml                     # lint + tests on every push; discovers its own
+                               # paths, so a new dependency directory is covered
+                               # without editing it
 └── release.yml                # fires on push to `release`, fans out to
                                # 4 ubuntu-latest + 1 macos-15 jobs, each
                                # uploading to pdfium-<VERSION> via --upload
 ```
+
+`ci.yml` deliberately names no dependency directory: `ruff check .`,
+a bare `pytest` (there is no `testpaths` in `pyproject.toml`), and
+`git ls-files '*.sh' | xargs shellcheck`. `zstd/tests/test_ci_coverage.py`
+fails if any of those three is narrowed back to a hardcoded path, which
+is how `zstd/` would otherwise have landed entirely unchecked.
 
 Each patch script is copied into the Docker build context as
 `platform.py` before being invoked with `--mode base` (for the static
@@ -483,6 +515,158 @@ binaries.
 | musl (Alpine, distroless musl) | `pdfium-musl-*` | Loading a glibc `.so` from a musl process fails at `dlopen` |
 | macOS | `pdfium-mac-*` (not in default matrix) | Use `--platform mac` to build |
 
+## ZSTD
+
+`build_zstd.py` publishes the same shape of artifact as
+`build_pdfium.py` — one archive per `(platform, arch)`, each carrying a
+static archive *and* a shared library — from a library that needs almost
+none of PDFium's machinery.
+
+### How it differs from build_pdfium.py
+
+| | `build_pdfium.py` | `build_zstd.py` |
+| --- | --- | --- |
+| Source | `gclient sync` of a Chromium-style checkout | one pinned release tarball, sha256 checked before anything compiles |
+| Build system | GN + two `ninja` passes (static, then shared) | one CMake configure; `ZSTD_BUILD_STATIC` and `ZSTD_BUILD_SHARED` are both on, so both libraries come out of a single pass |
+| Container arch | always amd64, cross-compiling to the target | pinned to the *target* arch, emulated when that is foreign |
+| Patches | per-platform patch scripts | none — upstream builds as-is |
+| Memory gating | `--mem-per-build` against the daemon's `MemTotal` | none; peak RSS is a few hundred MB |
+| Wall time | 20–40 min per combo | 1–2 min native, ~5–10 min emulated |
+| Version source | chromium branch, required on the CLI | `zstd/VERSION`, CLI argument optional |
+
+Pinning the container to the target architecture is what buys most of
+the simplicity: there is no cross toolchain, no sysroot, and the smoke
+test at the end of the build *runs* the library it just produced instead
+of merely linking it. PDFium can't do this — a QEMU-emulated 30-minute
+Chromium build is not a trade anyone would take — but for a library this
+size the emulation costs minutes.
+
+### Options
+
+**`VERSION`**
+
+:   Upstream zstd release, e.g. `1.5.7`. Optional; defaults to the
+    contents of `zstd/VERSION`. A version with no entry in
+    `SOURCE_SHA256` (in `build_zstd.py`) is refused rather than
+    downloaded unverified.
+
+**`--platform {linux,musl,mac} [...]`**
+
+:   Target platform(s). Default matrix is `{linux, musl} × {amd64,
+    arm64}`. `mac` is excluded from the default because there is no
+    macOS container image; it builds natively with CMake on a macOS
+    host and needs no Docker at all.
+
+**`--arch {amd64,arm64}`**, **`--parallel`**, **`--upload`**,
+**`--output-dir DIR`**
+
+:   As `build_pdfium.py`. `--arch` takes the same aliases
+    (`x86_64`, `x64`, `aarch64`). There is no `--mem-per-build`.
+
+### Artifact layout
+
+```
+zstd-<platform>-<cpu>/
+├── lib/
+│   ├── libzstd.a                 # static archive, position-independent
+│   ├── libzstd.so -> libzstd.so.1.5.7        # .dylib chain on mac
+│   ├── libzstd.so.1 -> libzstd.so.1.5.7
+│   ├── libzstd.so.1.5.7
+│   ├── pkgconfig/libzstd.pc      # prefix=${pcfiledir}/../..
+│   └── cmake/zstd/*.cmake        # find_package(zstd) support
+├── include/                      # zstd.h, zstd_errors.h, zdict.h
+├── cmake-args.txt                # the CMake configure flags used
+└── LICENSE                       # zstd's own BSD-3-Clause licence
+```
+
+`cmake-args.txt` is zstd's answer to `args.gn`: the exact flags that
+produced the binaries, next to the binaries. The `LICENSE` here is
+upstream zstd's, taken from the source tarball.
+
+### Verification
+
+`zstd/scripts/verify_archive.sh <tgz>` runs over the packaged tarball
+and is called by `build_zstd.py` on every archive it produces — before
+`--upload` can publish it, so verification isn't something only CI does.
+It enforces:
+
+1. One top-level directory, named to match the tarball, with the full
+   layout above present.
+2. `libzstd.a` has fat-archive magic (`!<arch>`, never `!<thin>`), is
+   large enough to be real, holds at least ten objects, and carries a
+   symbol index that **defines** `ZSTD_compress`, `ZSTD_decompress`,
+   `ZSTD_versionNumber`, `ZSTD_createCCtx` and `ZDICT_trainFromBuffer`.
+3. Every object inside `libzstd.a`, and the shared library, is built for
+   the architecture the filename claims — read straight out of the ELF
+   `e_machine` / Mach-O `cputype` fields, so an arm64 archive can be
+   checked on an x64 runner with no cross binutils installed.
+4. The shared library is `ET_DYN` / `MH_DYLIB` and exports the public
+   API — not an executable, not a stray relocatable object.
+5. `libzstd.pc` is relocatable and carries no build-machine paths.
+
+Separately, the build itself compiles a compress/decompress round-trip
+against the staged libraries and runs it, asserting
+`ZSTD_versionString()` matches `VERSION`. That is the check only the
+build host can make: verification proves the tarball is well-formed,
+execution proves the code works.
+
+### Consuming the artifacts
+
+`zstd-sys` links a prebuilt library when built with its `pkg-config`
+feature or with `ZSTD_SYS_USE_PKG_CONFIG=1` in the environment, and the
+shipped `libzstd.pc` resolves relative to itself:
+
+```bash
+tar xzf zstd-linux-x64.tgz
+export PKG_CONFIG_PATH="$PWD/zstd-linux-x64/lib/pkgconfig"
+pkg-config --modversion libzstd     # 1.5.7
+```
+
+Linking the static archive by hand needs `-pthread`, because the library
+is built with `ZSTD_MULTITHREAD_SUPPORT=ON` (matching distro packages
+and zstd's own release binaries):
+
+```bash
+cc main.c -I zstd-linux-x64/include zstd-linux-x64/lib/libzstd.a -pthread -o main
+```
+
+### Examples
+
+```bash
+# Default matrix, version from zstd/VERSION
+python3 zstd/build_zstd.py
+
+# One combo, for iterating
+python3 zstd/build_zstd.py --platform musl --arch arm64
+
+# macOS, on a macOS host (no Docker involved)
+python3 zstd/build_zstd.py --platform mac --arch arm64
+
+# Everything at once, then publish what passed verification
+python3 zstd/build_zstd.py --parallel --upload
+```
+
+### Troubleshooting
+
+**`No pinned source hash for zstd <version>`**
+
+:   `zstd/VERSION` was bumped without adding the new tarball's sha256 to
+    `SOURCE_SHA256` in `build_zstd.py`. Add it; the build will not
+    download a tarball it can't check.
+
+**`exec format error` or a build that hangs on the first `RUN`**
+
+:   The daemon has no binfmt handler for the target architecture. Docker
+    Desktop ships one; on a bare Docker Engine install
+    `docker run --privileged --rm tonistiigi/binfmt --install all` once.
+
+**`smoke: linked zstd is X, expected Y`**
+
+:   The staged headers and the staged library disagree, which means a
+    stale build directory got reused. The build normally rebuilds from
+    scratch (`--no-cache`); if you are iterating by hand, remove the
+    workspace under `<output-dir>/workspace-*` first.
+
 ## TROUBLESHOOTING
 
 ### `DlOpen { desc: "Dynamic loading not supported" }` from `pdfium-render`
@@ -626,6 +810,7 @@ parallel matrix.
 ## SEE ALSO
 
 - [`pdfium/README.md`](pdfium/README.md) — build pipeline overview and download links
+- [`zstd/README.md`](zstd/README.md) — zstd build pipeline, version pin rationale, pkg-config consumption
 - [`README.md`](README.md) — repo top-level
 - [`.github/workflows/build.yml`](.github/workflows/build.yml) — CI workflow definition
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — lint + test workflow
@@ -635,6 +820,7 @@ parallel matrix.
 
 ## HISTORY
 
+- **zstd-1.5.7** (2026-08) — second dependency in the repo. Publishes `libzstd.a` + `libzstd.so`/`.dylib` per platform with a relocatable `libzstd.pc`, built in a container pinned to the target architecture rather than cross-compiled. CI stopped hardcoding `pdfium/` in the same cycle, so dependency directories are discovered rather than listed.
 - **pdfium-7725** (2026-04) — first release to ship both `libpdfium.so` and `libpdfium.a` per archive, and to include musl-linked variants (`pdfium-musl-x64.tgz`, `pdfium-musl-arm64.tgz`) in the default matrix. Interactive cancellation (`c` / `q`), retry-wrapped network steps, `--upload` append/replace semantics, partial-failure uploads, `complete_static_lib = true` for a non-empty `libpdfium.a`, `use_sysroot = false` for musl, and `gclient sync --jobs=8` to stop saturating Docker Desktop's DNS forwarder all landed in the same cycle. `mac` was removed from the default matrix after bblanchon/pdfium-binaries confirmed that mac builds require a macOS host.
 - **pdfium earlier** — glibc-only shared library releases.
 
