@@ -23,6 +23,8 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 CI_WORKFLOW = os.path.join(REPO_ROOT, ".github", "workflows", "ci.yml")
 PYPROJECT = os.path.join(REPO_ROOT, "pyproject.toml")
 HOOK_INSTALLER = os.path.join(REPO_ROOT, "tools", "install-hooks.sh")
+SHELLCHECK_SCRIPT = os.path.join(REPO_ROOT, "tools", "shellcheck-all.sh")
+README = os.path.join(REPO_ROOT, "README.md")
 
 
 def dependency_dirs():
@@ -105,25 +107,27 @@ class TestWorkflowIsPathAgnostic:
     def test_shellcheck_discovery_is_guarded_against_finding_nothing(self):
         # xargs with no input runs shellcheck over zero files and exits
         # 0, so a broken discovery would turn the job green rather than
-        # red. The workflow has to notice an empty list itself.
-        code = without_comments(CI_WORKFLOW)
+        # red. The discovery moved out of ci.yml and into a tracked
+        # script (see TestShellcheckRunsThroughATrackedScript for why),
+        # so the guard has to be where the discovery is.
+        code = without_comments(SHELLCHECK_SCRIPT)
         assert 'if [ -z "$scripts" ]' in code and "exit 1" in code
 
 
 class TestShellcheckDiscoveryCoversEveryScript:
     def test_workflow_glob_matches_every_tracked_script(self):
-        code = without_comments(CI_WORKFLOW)
+        code = without_comments(SHELLCHECK_SCRIPT)
         match = re.search(r"git ls-files '([^']+)'", code)
-        assert match, "ci.yml no longer discovers shell scripts with git ls-files"
+        assert match, "tools/shellcheck-all.sh no longer discovers shell scripts with git ls-files"
 
         discovered = set(tracked_shell_scripts(match.group(1)))
         everything = set(tracked_shell_scripts("*.sh"))
         assert discovered == everything, (
-            f"ci.yml's pattern {match.group(1)!r} misses {sorted(everything - discovered)}"
+            f"the pattern {match.group(1)!r} misses {sorted(everything - discovered)}"
         )
 
     def test_each_dependency_with_scripts_is_covered(self):
-        code = without_comments(CI_WORKFLOW)
+        code = without_comments(SHELLCHECK_SCRIPT)
         match = re.search(r"git ls-files '([^']+)'", code)
         assert match
         discovered = tracked_shell_scripts(match.group(1))
@@ -190,21 +194,71 @@ class TestPytestCollectionCoversEveryDependency:
             assert dep not in code, f"pyproject.toml pins pytest to {dep}"
 
 
-class TestPreCommitHookMatchesCi:
-    def test_hook_installer_is_path_agnostic(self):
-        # The hook is advertised as mirroring CI; if it keeps checking
-        # only pdfium/, contributors get a green local run for a change
-        # CI will reject.
-        code = without_comments(HOOK_INSTALLER)
-        for dep in dependency_dirs():
-            assert f"{dep}/" not in code, f"tools/install-hooks.sh still hardcodes {dep}/"
+class TestThereIsOneHookInstaller:
+    """This repo installs its hooks from libviprs-tests, not from here.
 
-    def test_hook_runs_the_same_three_checks(self):
-        code = without_comments(HOOK_INSTALLER)
-        assert "ruff check ." in code
-        assert "ruff format --check ." in code
-        assert "git ls-files '*.sh'" in code
-        assert "python3 -m pytest -q" in code
+    Two installers wrote the same .git/hooks/pre-commit and whichever ran
+    last won. The one that used to live here skipped shellcheck when
+    shellcheck was missing, which is a pass reported for a check that did
+    not run, and nothing held it to this workflow. The shared one fails
+    loudly on a missing tool and a guard over there drives the generated
+    hook and compares what it invokes against this ci.yml.
+    """
+
+    def test_this_repo_ships_no_hook_installer_of_its_own(self):
+        assert not os.path.exists(HOOK_INSTALLER), (
+            "tools/install-hooks.sh is back. Two installers writing the same "
+            "hook means whichever ran last wins, and this one is the copy "
+            "nothing holds to ci.yml."
+        )
+
+    def test_the_readme_points_at_the_shared_installer(self):
+        readme = without_comments(README)
+        assert "libviprs-tests/tools/install-hooks.sh" in readme, (
+            "the README must say where hooks now come from, or the only "
+            "instruction a contributor has is one that no longer exists"
+        )
+
+
+class TestShellcheckRunsThroughATrackedScript:
+    """CI's shellcheck step has to be one command, not an inline block.
+
+    The shared pre-commit hook mirrors this workflow command for command,
+    and its guard refuses to stand in for a multi-line `run:` block: such
+    a step has to be exempted instead, and an exempted step is one the
+    local hook does not run. So an inline block here does not make the
+    hook stricter, it silently removes shellcheck from it, which is the
+    same false green in a new place.
+    """
+
+    def test_ci_runs_the_script_rather_than_an_inline_block(self):
+        ci = without_comments(CI_WORKFLOW)
+        assert "run: tools/shellcheck-all.sh" in ci, (
+            "the shellcheck job must invoke the tracked script as a single "
+            "command so the shared pre-commit hook can mirror it exactly"
+        )
+        assert "xargs shellcheck" not in ci, (
+            "the discovery logic belongs in tools/shellcheck-all.sh, where "
+            "shellcheck itself covers it, not inline in the workflow"
+        )
+
+    def test_the_script_is_tracked_and_executable(self):
+        assert os.path.exists(SHELLCHECK_SCRIPT)
+        assert os.access(SHELLCHECK_SCRIPT, os.X_OK), (
+            "ci.yml invokes it directly, so a non-executable file fails the job"
+        )
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "tools/shellcheck-all.sh"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert tracked.returncode == 0, "tools/shellcheck-all.sh must be tracked"
+
+    def test_the_script_checks_itself(self):
+        # It is a tracked *.sh, so its own discovery has to reach it.
+        assert "tools/shellcheck-all.sh" in tracked_shell_scripts()
 
 
 class TestRuffActuallySeesEveryDependency:
