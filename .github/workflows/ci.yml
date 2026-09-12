@@ -1,9 +1,10 @@
 name: CI
+# Runs natively on GitHub Actions. Every push to any branch gets a run, so a
+# push to a PR branch always produces a signal (libviprs/libviprs#585).
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: ['**']
+  workflow_dispatch:
 
 jobs:
   lint:

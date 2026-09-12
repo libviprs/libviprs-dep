@@ -29,7 +29,7 @@ https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mu
 | --- | --- | --- |
 | `linux-x64`, `linux-arm64` | glibc | Debian, Ubuntu, RHEL, most mainstream distros |
 | `musl-x64`, `musl-arm64`   | musl  | Alpine, any container built `FROM alpine:*`, musl-based distroless images |
-| `mac-arm64`                | —     | macOS 11+ on Apple Silicon (`libpdfium.dylib`) |
+| `mac-arm64`                | —     | macOS 11+ on Apple Silicon (`libpdfium.dylib` + `libpdfium.a`) |
 | `mac-x64`                  | —     | macOS 11+ on Intel (`libpdfium.dylib`) |
 | `mac-univ`                 | —     | macOS 11+ on both Apple Silicon and Intel — universal Mach-O combining the arm64 + x64 dylibs via `lipo -create` |
 
@@ -272,7 +272,7 @@ Platform-specific patches live in `patches/<platform>.py`. The `--platform` flag
 ```
 patches/
   linux.py     # glibc linux shared library patches
-  mac.py       # macOS shared library patches (single-phase today)
+  mac.py       # macOS patches: base (fpdfview + headerpad) then shared (component -> shared_library)
   musl.py      # musl/Alpine patches + toolchain install
 ```
 
