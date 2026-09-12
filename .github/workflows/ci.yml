@@ -49,13 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Shellcheck every tracked shell script
-        run: |
-          set -euo pipefail
-          scripts=$(git ls-files '*.sh')
-          if [ -z "$scripts" ]; then
-            echo "no shell scripts found — script discovery is broken" >&2
-            exit 1
-          fi
-          echo "$scripts"
-          echo "$scripts" | xargs shellcheck
+      # One command rather than an inline block, so the shared pre-commit
+      # hook in libviprs-tests can mirror it exactly. Its guard cannot
+      # stand in for a multi-line block, and a step it cannot mirror is a
+      # step the local hook stops running.
+      - run: tools/shellcheck-all.sh
