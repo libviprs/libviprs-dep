@@ -106,13 +106,17 @@ Collection is repo-wide — `pyproject.toml` sets no `testpaths` — so every de
 
 ### Git hooks
 
-Install pre-commit checks that mirror the CI workflow:
+Hooks for every repo in the org are installed from `libviprs-tests`, which keeps one
+installer and one guard holding it to each repo's CI:
 
 ```bash
-./tools/install-hooks.sh
+../libviprs-tests/tools/install-hooks.sh
 ```
 
-The pre-commit hook runs ruff lint + format, shellcheck, and pytest before each commit.
+The pre-commit hook it writes for this repo runs ruff lint + format, shellcheck and
+pytest, and it fails loudly when one of those tools is missing rather than skipping
+it. This repo used to ship an installer of its own that skipped shellcheck when
+shellcheck was not installed, which reported a pass for a check it had not run.
 
 ### Linting
 
