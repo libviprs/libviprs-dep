@@ -9,6 +9,7 @@ import os
 import re
 
 import build_zstd as bz
+import pytest
 
 ZSTD_DIR = os.path.join(os.path.dirname(__file__), "..")
 VERSION_PATH = os.path.join(ZSTD_DIR, "VERSION")
@@ -75,6 +76,25 @@ class TestPinnedSource:
         assert url == (
             "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
         )
+
+
+class TestReleaseNotes:
+    """The notes on the release page are the only place a consumer can
+    check what the archives were built from, so they carry the upstream
+    URL and the digest we pinned it to."""
+
+    def test_notes_name_the_pinned_source(self):
+        version = bz.read_version()
+        notes = bz.release_notes(version)
+        assert bz.source_url(version) in notes
+        assert bz.source_sha256(version) in notes
+
+    def test_an_unpinned_version_has_no_notes(self):
+        # release-zstd.yml writes these notes in create-release, which
+        # runs before any build. A version we have no hash for must not
+        # get as far as a describable release.
+        with pytest.raises(ValueError):
+            bz.release_notes("0.0.0")
 
 
 class TestDocsTrackTheVersion:
