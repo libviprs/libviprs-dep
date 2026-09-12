@@ -28,10 +28,10 @@ https://github.com/libviprs/libviprs-dep/releases/download/pdfium-7725/pdfium-mu
 | Archive suffix | libc | Compatible runtime |
 | --- | --- | --- |
 | `linux-x64`, `linux-arm64` | glibc | Debian, Ubuntu, RHEL, most mainstream distros |
-| `musl-x64`, `musl-arm64`   | musl  | Alpine, any container built `FROM alpine:*`, musl-based distroless images |
-| `mac-arm64`                | —     | macOS 11+ on Apple Silicon (`libpdfium.dylib` + `libpdfium.a`) |
-| `mac-x64`                  | —     | macOS 11+ on Intel (`libpdfium.dylib`) |
-| `mac-univ`                 | —     | macOS 11+ on both Apple Silicon and Intel — universal Mach-O combining the arm64 + x64 dylibs via `lipo -create` |
+| `musl-x64`, `musl-arm64` | musl | Alpine, any container built `FROM alpine:*`, musl-based distroless images |
+| `mac-arm64` | — | macOS 11+ on Apple Silicon (`libpdfium.dylib` + `libpdfium.a`) |
+| `mac-x64` | — | macOS 11+ on Intel (`libpdfium.dylib`) |
+| `mac-univ` | — | macOS 11+ on both Apple Silicon and Intel — universal Mach-O combining the arm64 + x64 dylibs via `lipo -create` |
 
 Intel Mac (`mac-x64`) and the universal Mach-O (`mac-univ`) are built on the CI matrix but aren't part of the in-process `build_pdfium.py` default matrix (`--platform mac` alone still builds arm64). On the release workflow, `build-mac-universal` runs after both per-arch mac builds succeed, downloads the two dylibs, and `lipo -create`s them into `pdfium-mac-univ.tgz`.
 
@@ -195,8 +195,8 @@ During a parallel run the terminal header shows a progress row per job and you c
 
 | Key | Action |
 | --- | --- |
-| `Tab`  | Cycle to the next job's output |
-| `1–5`  | Jump to the Nth job (order matches the header) |
+| `Tab` | Cycle to the next job's output |
+| `1–5` | Jump to the Nth job (order matches the header) |
 
 Each job's output is buffered independently, so switching views replays the last ~500 lines of the selected job without losing anything. The full stream is also written to `bin/logs/<plat>-<arch>.log` for post-mortem inspection.
 
@@ -218,7 +218,7 @@ Sizing guidance:
 
 | Docker `MemTotal` | `--mem-per-build` default (4096) | Concurrent builds |
 | --- | --- | --- |
-| 8 GB  | 1 build at a time (serial fallback) | effective serial |
+| 8 GB | 1 build at a time (serial fallback) | effective serial |
 | 16 GB | 3 concurrent | 1 queued |
 | 24 GB | all 5 concurrent | none queued |
 | 32 GB+ | all 5 concurrent | none queued |
@@ -286,7 +286,7 @@ Each `patches/<name>.py` script takes the PDFium source directory as its positio
 
 The Linux patches apply two changes required to produce a `.so` with exported `FPDF_*` symbols:
 
-1. **BUILD.gn (shared mode only)** — changes `component("pdfium")` to `shared_library("pdfium")`. The `component()` macro resolves to `source_set` when `is_component_build=false`, so without this rewrite the shared pass would not emit a `.so`. Base mode leaves `component("pdfium")` alone; the Static pass takes a different route entirely — `pdf_is_complete_lib = true` in `args.gn` flips PDFium's own BUILD.gn branch that sets `static_component_type = "static_library"` and `complete_static_lib = true`, and strips `//build/config/compiler:thin_archive` from configs so `ar` writes a fat archive (not a GNU thin one).
+1. **BUILD.gn (shared mode only)** — changes `component("pdfium")` to `shared_library("pdfium")`. The `component` macro resolves to `source_set` when `is_component_build=false`, so without this rewrite the shared pass would not emit a `.so`. Base mode leaves `component("pdfium")` alone; the Static pass takes a different route entirely — `pdf_is_complete_lib = true` in `args.gn` flips PDFium's own BUILD.gn branch that sets `static_component_type = "static_library"` and `complete_static_lib = true`, and strips `//build/config/compiler:thin_archive` from configs so `ar` writes a fat archive (not a GNU thin one).
 
 2. **fpdfview.h** — removes the `#if defined(COMPONENT_BUILD)` guard around `FPDF_EXPORT`. PDFium only applies `__attribute__((visibility("default")))` to its public API when `COMPONENT_BUILD` is defined. Since we set `is_component_build=false` (to get a single `.so` instead of many small ones), `FPDF_EXPORT` resolves to nothing without this patch, and all `FPDF_*` symbols get hidden visibility — making the library unusable via `dlopen`/`dlsym` and unusable when linked statically into a Rust binary that relies on the exported C ABI.
 
