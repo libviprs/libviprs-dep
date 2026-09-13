@@ -20,6 +20,7 @@ checks are what keeps them honest between runs.
 
 import os
 import re
+import subprocess
 
 import pytest
 from test_wire_protocol import FORWARD_PROBE_FIRST, RECORD_TYPES
@@ -29,7 +30,13 @@ ACADSHARP = os.path.dirname(HERE)
 CONFORMANCE = os.path.join(HERE, "conformance")
 C_DIR = os.path.join(CONFORMANCE, "c")
 RUST_DIR = os.path.join(CONFORMANCE, "rust")
+FIND_SHIM = os.path.join(CONFORMANCE, "find_shim.sh")
 WIRE_FORMAT_CS = os.path.join(ACADSHARP, "native", "Wire", "WireFormat.cs")
+
+# The two names the same library goes by. The publish emits the assembly
+# name; build_acadsharp.py stages it under the name a linker's -l takes.
+PUBLISH_NAME = "viprs_acadsharp.so"
+PACKAGED_NAME = "libacadsharp_native.so"
 
 C_SOURCES = ("conformance.c", "vacb.c", "vacb.h", "layout_table.h", "run.sh")
 RUST_SOURCES = (
@@ -99,6 +106,112 @@ class TestBothConsumersArePresent:
             "run once on the one machine it works on."
         )
         assert "set -euo pipefail" in body
+
+
+class TestBothRunnersCanBeAimedAtAnUnpackedArchive:
+    """The runners have to be able to run against what a consumer downloads.
+
+    Both used to name `viprs_acadsharp.so`, which is the publish tree's
+    file, while the archive ships `lib/libacadsharp_native.so`. So the one
+    artefact a conformance run most wants to be pointed at, the released
+    one, was the one it could not be pointed at, and a run against an
+    unpacked archive failed with "no shim at" a path nobody had asked for.
+
+    The lookup lives in one script both runners call, so there is one place
+    to teach and one place to watch fail. These cases are that script run
+    over fabricated layouts: no compiler, no container, no shim.
+    """
+
+    def find(self, directory):
+        return subprocess.run(
+            ["bash", FIND_SHIM, str(directory)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_the_script_is_there_and_executable(self):
+        assert os.path.isfile(FIND_SHIM)
+        assert os.access(FIND_SHIM, os.X_OK), "both runners invoke it directly"
+
+    @pytest.mark.parametrize("script", ("c", "rust"))
+    def test_each_runner_asks_the_script_rather_than_naming_a_file(self, script):
+        body = read(os.path.join(CONFORMANCE, script, "run.sh"))
+        assert "find_shim.sh" in body, (
+            f"the {script} runner resolves the library itself, so the two runners "
+            "can disagree about which layouts they accept"
+        )
+
+    def test_it_finds_the_publish_tree(self, tmp_path):
+        (tmp_path / PUBLISH_NAME).write_bytes(b"")
+        result = self.find(tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(tmp_path / PUBLISH_NAME)
+
+    def test_it_finds_an_unpacked_archive_root(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        (lib / PACKAGED_NAME).write_bytes(b"")
+        result = self.find(tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(lib / PACKAGED_NAME)
+
+    def test_it_finds_an_archives_lib_directory_handed_over_directly(self, tmp_path):
+        (tmp_path / PACKAGED_NAME).write_bytes(b"")
+        result = self.find(tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(tmp_path / PACKAGED_NAME)
+
+    def test_it_finds_the_mac_archives_dylib(self, tmp_path):
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        (lib / "libacadsharp_native.dylib").write_bytes(b"")
+        result = self.find(tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == str(lib / "libacadsharp_native.dylib")
+
+    def test_the_publish_tree_wins_over_an_archive_below_it(self, tmp_path):
+        # Only one library can be linked, so which one is not a detail to
+        # leave to readdir order.
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        (lib / PACKAGED_NAME).write_bytes(b"")
+        (tmp_path / PUBLISH_NAME).write_bytes(b"")
+        assert self.find(tmp_path).stdout.strip() == str(tmp_path / PUBLISH_NAME)
+
+    def test_it_comes_back_absolute(self, tmp_path):
+        # It becomes an rpath and an LD_LIBRARY_PATH entry inside a
+        # container whose working directory is the runner's, not the
+        # caller's, so a relative path resolves somewhere else there.
+        (tmp_path / PUBLISH_NAME).write_bytes(b"")
+        result = subprocess.run(
+            ["bash", FIND_SHIM, "."],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert os.path.isabs(result.stdout.strip())
+        assert os.path.samefile(result.stdout.strip(), tmp_path / PUBLISH_NAME)
+
+    def test_an_empty_directory_is_refused_and_says_what_it_looked_for(self, tmp_path):
+        result = self.find(tmp_path)
+        assert result.returncode == 2
+        assert PUBLISH_NAME in result.stderr and PACKAGED_NAME in result.stderr, (
+            "a refusal that does not name the files it wanted leaves the reader "
+            f"guessing which of two names it needed: {result.stderr!r}"
+        )
+
+    def test_a_directory_that_is_not_there_is_refused(self, tmp_path):
+        result = self.find(tmp_path / "nothing-here")
+        assert result.returncode == 2
+
+    def test_a_directory_rather_than_a_file_is_not_a_shim(self, tmp_path):
+        # `-f`, not `-e`. An unpacked archive whose lib/ is empty would
+        # otherwise be reported as the library itself.
+        (tmp_path / PUBLISH_NAME).mkdir()
+        assert self.find(tmp_path).returncode == 2
 
 
 class TestNeitherConsumerCopiesTheHeader:

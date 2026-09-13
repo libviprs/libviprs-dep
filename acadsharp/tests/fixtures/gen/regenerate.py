@@ -23,7 +23,9 @@ What it produces, and what reads it back:
 pytest has no .NET and is not getting one (ADR 0001), so the committed files
 are what the tests read. That only means something if a capture is provably a
 run of the file in the tree, so every capture carries the sha256 of its fixture
-and the tests recompute it.
+and the tests recompute it, and ``MANIFEST.json`` carries the sha256 of every
+source this generator compiles so a capture of a flattener that has since been
+edited is refused the same way.
 """
 
 import argparse
@@ -288,11 +290,39 @@ def main(argv=None):
     return 0
 
 
+def shim_block():
+    """The shim these captures are a run of, as digests.
+
+    Every fixture entry already carries the sha256 of the DWG it was
+    produced from, which is what lets pytest refuse a capture of a file that
+    has since changed. This is the other half: the sha256 of every source
+    this generator compiles, so a capture of a flattener that has since been
+    edited is refused the same way.
+
+    The functions come from the test support module rather than being
+    written a second time here. The digest is a contract between the file
+    this writes and the test that reads it, and two implementations of a
+    contract is how the two ends drift.
+    """
+    sys.path.insert(0, os.path.join(ACAD_ROOT, "tests"))
+    from g13_support import sha256_file as digest_file
+    from g13_support import shim_digest, shim_sources
+
+    sources = shim_sources()
+    return {
+        "sha256": shim_digest(sources),
+        "sources": {rel: digest_file(os.path.join(ACAD_ROOT, rel)) for rel in sources},
+    }
+
+
 def expectations(scratch):
+    shim = shim_block()
+
     manifest = {
         "recorded": time.strftime("%Y-%m-%d"),
         "runner": f"fixturegen decode --dump, {SDK_IMAGE}, {PLATFORM}",
         "batch_bytes": BATCH_BYTES,
+        "shim": shim,
         "fixtures": {},
     }
 

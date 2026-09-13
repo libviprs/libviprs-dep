@@ -5,7 +5,10 @@ read is what a container recorded: the canonical record dumps under
 ``tests/expectations``, the scenario capture beside them and the benchmark
 under ``tests/benchmarks``. That only means something if a capture is provably
 a run of the file in the tree, so every capture carries the sha256 of its
-fixture and every test that uses one checks it.
+fixture and every test that uses one checks it. The other half of "provably a
+run of" is the code: ``shim_sources`` and ``shim_digest`` below are what
+``tests/expectations/MANIFEST.json`` records the shim with, and
+``test_shim_digest.py`` is what refuses a stale one.
 
 Regenerating all of it is ``tests/fixtures/gen/regenerate.py``.
 """
@@ -17,9 +20,12 @@ import random
 import re
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+ACAD_ROOT = os.path.dirname(TESTS_DIR)
 FIXTURES = os.path.join(TESTS_DIR, "fixtures")
 EXPECTATIONS = os.path.join(TESTS_DIR, "expectations")
 BENCHMARKS = os.path.join(TESTS_DIR, "benchmarks")
+GEN_DIR = os.path.join(FIXTURES, "gen")
+GEN_PROJECT = os.path.join(GEN_DIR, "Viprs.ACadSharp.FixtureGen.csproj")
 
 MANIFEST = os.path.join(EXPECTATIONS, "MANIFEST.json")
 SCENARIOS = os.path.join(EXPECTATIONS, "g13_scenarios.json")
@@ -61,6 +67,62 @@ def sha256_file(path):
 
 def sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
+
+
+# One <Compile Include="..."/> line of the fixture generator's csproj.
+COMPILE_INCLUDE = re.compile(r'<Compile\s+Include="([^"]+)"\s*/>')
+
+
+def shim_sources():
+    """Every source the fixture generator compiles, relative to acadsharp/.
+
+    Read out of the generator's csproj rather than listed here. The set that
+    matters is the set that actually compiled into the run that recorded the
+    captures, and a file added to the shim is picked up by the same glob the
+    generator uses, so it lands in the digest the day it lands in the tree.
+
+    An include this reader does not understand is an error rather than a
+    skip: a pattern silently dropped here is a source file silently outside
+    the digest, which is the failure this whole file exists to stop.
+    """
+    with open(GEN_PROJECT) as f:
+        includes = COMPILE_INCLUDE.findall(f.read())
+    if not includes:
+        raise AssertionError(f"{GEN_PROJECT} compiles nothing this reader can see")
+
+    found = []
+    for include in includes:
+        pattern = include.replace("\\", "/")
+        if pattern.endswith("/**/*.cs"):
+            root = os.path.normpath(os.path.join(GEN_DIR, pattern[: -len("/**/*.cs")]))
+            for dirpath, dirs, files in os.walk(root):
+                dirs[:] = sorted(dirs)
+                found += [os.path.join(dirpath, f) for f in files if f.endswith(".cs")]
+        elif pattern.endswith(".cs") and "*" not in pattern:
+            found.append(os.path.normpath(os.path.join(GEN_DIR, pattern)))
+        else:
+            raise AssertionError(
+                f"{pattern!r} is a <Compile Include> this reader does not understand, "
+                "so the shim digest would quietly stop covering it. Teach "
+                "g13_support.shim_sources() the shape before shipping it."
+            )
+
+    return sorted(os.path.relpath(p, ACAD_ROOT).replace(os.sep, "/") for p in found)
+
+
+def shim_digest(sources=None):
+    """One sha256 over the sorted source paths and the bytes behind them.
+
+    The path goes into the hash as well as the contents, so moving a file
+    without changing a byte of it still moves the number.
+    """
+    h = hashlib.sha256()
+    for rel in shim_sources() if sources is None else sources:
+        h.update(rel.encode())
+        h.update(b"\0")
+        h.update(sha256_file(os.path.join(ACAD_ROOT, rel)).encode())
+        h.update(b"\0")
+    return h.hexdigest()
 
 
 def load_json(path):

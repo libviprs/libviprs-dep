@@ -424,13 +424,6 @@ public static class Exports
 	// four different ways, and the C conformance consumer checks that each
 	// comes back as INTERNAL_ERROR and that the process is still running
 	// afterwards.
-	// Test-only, and named so. The handle table is the only thing that knows
-	// whether a failure path closed what it opened, and a leak that is only
-	// argued about in a code review is a leak nobody measured. The malformed
-	// corpus reads this after every refusal.
-	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__test_live_handles")]
-	public static ulong TestLiveHandles() => (ulong)Handles.LiveCount;
-
 	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__test_throw")]
 	public static uint TestThrow(uint kind)
 	{
