@@ -154,11 +154,13 @@ jobs:
 
       - name: Generate the release notes preamble
         # Everything here is read out of a manifest. Nothing about the
-        # version, the SDK or the read range is typed into this file, so
-        # bumping a pin cannot leave the release page stating the old
-        # one. The per-target table is appended by release-notes once the
-        # archives exist, because static_certified and each archive's
-        # digest only exist after a build.
+        # version or the SDK is typed into this file, so bumping a pin
+        # cannot leave the release page stating the old one. The
+        # per-target table is appended by release-notes once the archives
+        # exist, because static_certified and each archive's digest only
+        # exist after a build. The DWG read range is appended there too:
+        # it is measured off each library during its own build, so at
+        # this point in the run nothing has been asked yet.
         env:
           VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
@@ -183,16 +185,6 @@ jobs:
 
           with open("acadsharp/include/viprs_acadsharp.h") as f:
               header = f.read()
-          # The header's capabilities block is the manifest for the read
-          # range: it is what viprs_acad_capabilities_v1 documents and
-          # what the adapter fills in at run time.
-          codes = re.search(r"numeric AC10xx codes, so (\d{4}) and (\d{4})", header)
-          if not codes:
-              sys.exit(
-                  "viprs_acadsharp.h no longer states the AC10xx read range where "
-                  "this generator looks for it, so the notes would be silent about "
-                  "what the build reads."
-              )
           abi = re.search(r"VIPRS_ACAD_ABI_VERSION\s+(\d+)u", header)
           wire = re.search(r"VIPRS_ACAD_WIRE_VERSION\s+(\d+)u", header)
 
@@ -206,7 +198,6 @@ jobs:
           print(f"- Source sha256: `{driver.source_sha256(upstream)}`")
           print(f"- CSUtilities submodule: `{driver.CSUTILITIES_COMMIT}`")
           print(f"- .NET SDK: `{sdk}`")
-          print(f"- DWG read range: AC{codes.group(1)} to AC{codes.group(2)}, inclusive")
           if abi and wire:
               print(f"- ABI version {abi.group(1)}, wire version {wire.group(1)}")
           print()
@@ -475,6 +466,11 @@ jobs:
 
           version = os.environ["VERSION"]
           published, missing, refused, commits = [], [], [], set()
+          # The AC10xx range each archive recorded when its own build
+          # asked the library it was about to pack. Keyed by the pair, so
+          # a disagreement names both ranges and the archives on each
+          # side of it.
+          ranges = {}
           for line in os.environ["TARGETS"].split("\n"):
               line = line.split()
               if not line:
@@ -506,6 +502,8 @@ jobs:
 
               if info.get("acadsharp_commit"):
                   commits.add(info["acadsharp_commit"])
+              pair = (info.get("dwg_version_min"), info.get("dwg_version_max"))
+              ranges.setdefault(pair, []).append(f"{stem}.tgz")
               published.append(
                   {
                       "archive": f"{stem}.tgz",
@@ -521,9 +519,33 @@ jobs:
               for row in refused:
                   f.write(row["archive"] + "\n")
 
+          # The read range, as the archives on this page state it. Five
+          # archives are five builds of one shim, so one range or the
+          # release is not one artifact in five shapes. No asset is
+          # removed on a disagreement: with the manifests contradicting
+          # each other there is nothing to say which of them is wrong, so
+          # the page reports what was found and the run goes red.
+          range_problem = ""
+          if published:
+              pairs = sorted(ranges)
+              unusable = [p for p in pairs if not all(isinstance(v, int) for v in p)]
+              if len(pairs) > 1:
+                  range_problem = "the published archives do not agree on the DWG read range"
+              elif unusable:
+                  range_problem = "a published archive records no read range"
+
           if commits:
               print()
               print(f"- ACadSharp commit: `{', '.join(sorted(commits))}`")
+
+          if published and not range_problem:
+              low, high = pairs[0]
+              print(f"- DWG read range: AC{low} to AC{high}, inclusive")
+              print()
+              print(
+                  "Read out of every published archive's metadata/LINKINFO.json, which "
+                  "records what that archive's own library answered when it was asked."
+              )
 
           print()
           print("## Archives")
@@ -558,6 +580,33 @@ jobs:
               )
               print()
 
+          if range_problem:
+              print()
+              print("## DWG read range")
+              print()
+              print(f"{range_problem}. Each archive records the range its own library")
+              print("answered with during its build, so these are five measurements of")
+              print("what is on this page:")
+              print()
+              for pair in pairs:
+                  low, high = pair
+                  if all(isinstance(v, int) for v in pair):
+                      what = f"AC{low} to AC{high}"
+                  else:
+                      what = "no read range in LINKINFO.json"
+                  print(f"- {what}: {', '.join(sorted(ranges[pair]))}")
+              print()
+              print(
+                  "Nothing has been removed from the release: with the manifests "
+                  "contradicting each other there is no way to say which is wrong. "
+                  "The run is failed so somebody looks."
+              )
+              print()
+
+          # Named for the shell below, which fails the run on it.
+          with open("range-disagreement.txt", "w") as f:
+              f.write(range_problem + "\n" if range_problem else "")
+
           if missing or refused:
               if missing:
                   print("## Targets that did not publish")
@@ -589,6 +638,15 @@ jobs:
               echo "removing $asset: its artifact_version is not $VERSION" >&2
               gh release delete-asset "$TAG" "$asset" --yes
             done < refused-assets.txt
+            exit 1
+          fi
+
+          # A read-range disagreement removes nothing and still fails: the
+          # notes above name every range that was found and which archives
+          # carry it, which is what somebody needs to work out which build
+          # is the odd one.
+          if [ -s range-disagreement.txt ]; then
+            cat range-disagreement.txt >&2
             exit 1
           fi
 

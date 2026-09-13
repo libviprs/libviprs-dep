@@ -46,6 +46,8 @@ FROZEN_LINKINFO_FIELDS = (
     "static_certified",
     "static_system_libraries",
     "static_link_args",
+    "dwg_version_min",
+    "dwg_version_max",
 )
 
 # The four that describe the static link. They are present together when
@@ -77,14 +79,28 @@ ENTRY_POINTS = (
 )
 
 
+# The range the pinned build answers with, written here rather than read
+# out of the shim. These tests are an oracle of the manifest writer the
+# same way the conformance consumers are an oracle of the library: a
+# number this file computed from the same place the driver does could
+# only ever agree with itself.
+MEASURED_RANGE = {"dwg_version_min": 1014, "dwg_version_max": 1032}
+
+# The same pair as the staging script writes them: facts.txt is text, and
+# finish_archive is what turns them into integers.
+MEASURED_FACTS = {"dwg_version_min": "1014", "dwg_version_max": "1032"}
+
+
 def _shared_only(**kwargs):
     base = {"shared_system_libraries": ["m", "dl", "pthread"]}
+    base.update(MEASURED_RANGE)
     base.update(kwargs)
     return base
 
 
 def _certified(**kwargs):
     base = dict(
+        **MEASURED_RANGE,
         shared_system_libraries=["m"],
         static_library=ba.STATIC_LIBRARY_NAME,
         static_init_library=ba.STATIC_INIT_LIBRARY_NAME,
@@ -160,6 +176,110 @@ class TestTheAbiFieldsComeFromTheHeader:
         fake.write_text("/* nothing useful */\n")
         with pytest.raises(ValueError, match="VIPRS_ACAD_ABI_VERSION"):
             ba.header_versions(str(fake))
+
+
+class TestTheReadRangeIsAMeasuredFact:
+    """The AC10xx codes this build reads are a fact about the backing
+    reader, not a clause in the ABI. The header's own preamble says it
+    describes a VIPRS boundary and never ACadSharp, so the range is not a
+    macro in it: the library answers with it at run time, the archive smoke
+    asks the library that question in the container, and what the library
+    said is what the manifest records. Nothing here reads a number out of
+    the shim, which is the point: a manifest built from the same constant
+    the library is built from agrees with itself whatever either of them
+    says.
+    """
+
+    def test_the_shared_smoke_asks_the_library(self):
+        source = ba.archive_smoke_source()
+        assert "caps.dwg_version_min" in source and "caps.dwg_version_max" in source, (
+            "the smoke does not read the range off the capabilities struct, so the "
+            "fact recorded downstream of it is not a measurement"
+        )
+        assert "DWG_VERSION_MIN=" in source and "DWG_VERSION_MAX=" in source, (
+            "the smoke never prints the range, so the staging script has nothing to "
+            "record and the manifest has nothing to write"
+        )
+
+    @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
+    def test_the_staging_script_records_both(self, plat):
+        script = ba.stage_script(plat)
+        assert "fact dwg_version_min" in script and "fact dwg_version_max" in script, (
+            f"the {plat} staging script records no read range, so finish_archive has "
+            "no measurement to put in LINKINFO.json"
+        )
+        assert "DWG_VERSION_MIN=" in script and "DWG_VERSION_MAX=" in script, (
+            "the script records the fact without reading it out of the smoke output"
+        )
+
+    def test_the_manifest_carries_them_as_integers(self):
+        info = ba.make_linkinfo("linux", "amd64", **_shared_only())
+        assert info["dwg_version_min"] == 1014
+        assert info["dwg_version_max"] == 1032
+        for field in ("dwg_version_min", "dwg_version_max"):
+            assert isinstance(info[field], int) and not isinstance(info[field], bool), (
+                f"{field} is {info[field]!r}. build.rs compares it against a number, and "
+                '"1014" is not 1014'
+            )
+
+    @pytest.mark.parametrize("field", ["dwg_version_min", "dwg_version_max"])
+    def test_a_range_nobody_measured_is_refused(self, field):
+        # Same rule aot_warning_count has: a measurement is taken or the
+        # build was not watched. A default here would be a number that
+        # describes the build the default was written for.
+        with pytest.raises(ValueError, match=field):
+            ba.make_linkinfo("linux", "amd64", **_shared_only(**{field: None}))
+
+    @pytest.mark.parametrize("value", ["1014", 1014.0, True, 0, 99, 20000])
+    def test_a_range_that_is_not_an_ac10xx_code_is_refused(self, value):
+        with pytest.raises(ValueError, match="dwg_version_min"):
+            ba.make_linkinfo("linux", "amd64", **_shared_only(dwg_version_min=value))
+
+    def test_an_inverted_range_is_refused(self):
+        # A library reading AC1032 up to AC1014 reads nothing, and a
+        # consumer branching on the pair would decide that quietly.
+        with pytest.raises(ValueError, match="dwg_version"):
+            ba.make_linkinfo(
+                "linux", "amd64", **_shared_only(dwg_version_min=1032, dwg_version_max=1014)
+            )
+
+    def test_finish_archive_takes_them_from_the_recorded_facts(self, tmp_path):
+        root = tmp_path / "acadsharp-linux-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "lib" / ba.shared_library_name("linux")).write_bytes(b"binary")
+        info = ba.finish_archive(
+            str(root),
+            "linux",
+            "amd64",
+            {
+                "aot_warning_count": "0",
+                "shared_needed": "",
+                "static_ok": "0",
+                "dwg_version_min": "1009",
+                "dwg_version_max": "1099",
+            },
+            builder_image="debian:bookworm-slim",
+        )
+        assert (info["dwg_version_min"], info["dwg_version_max"]) == (1009, 1099), (
+            "finish_archive is not reading the range off the facts the container "
+            "recorded, so the manifest states something the library was never asked"
+        )
+
+    def test_facts_with_no_range_stop_the_packaging(self, tmp_path):
+        # The smoke prints it on every target, so a facts file without it
+        # is a smoke that did not run or a staging script that stopped
+        # recording. Both are archives whose manifest would be guessing.
+        root = tmp_path / "acadsharp-linux-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "lib" / ba.shared_library_name("linux")).write_bytes(b"binary")
+        with pytest.raises(ValueError, match="dwg_version_min"):
+            ba.finish_archive(
+                str(root),
+                "linux",
+                "amd64",
+                {"aot_warning_count": "0", "shared_needed": "", "static_ok": "0"},
+                builder_image="debian:bookworm-slim",
+            )
 
 
 class TestTheEntryPointList:
@@ -431,7 +551,13 @@ class TestTheContractDocumentsShip:
             str(root),
             plat,
             arch,
-            {"aot_warning_count": "0", "shared_needed": "", "static_ok": "0"},
+            {
+                "aot_warning_count": "0",
+                "shared_needed": "",
+                "static_ok": "0",
+                "dwg_version_min": "1014",
+                "dwg_version_max": "1032",
+            },
             builder_image="debian:bookworm-slim",
         )
         return root
@@ -743,7 +869,15 @@ class TestAnUncertifiedStaticLibraryIsNotShipped:
         if init:
             (root / "lib" / ba.STATIC_INIT_LIBRARY_NAME).write_bytes(b"!<arch>\n")
         (root / "lib" / "libacadsharp_native.so").write_bytes(b"x")
-        ba.finish_archive(str(root), "linux", "amd64", facts, builder_image="debian:bookworm-slim")
+        # The smoke records the read range on every target, so these
+        # cases are about the static half rather than about that.
+        ba.finish_archive(
+            str(root),
+            "linux",
+            "amd64",
+            dict(MEASURED_FACTS, **facts),
+            builder_image="debian:bookworm-slim",
+        )
         return root
 
     def _linkinfo(self, root):

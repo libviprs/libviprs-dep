@@ -207,6 +207,12 @@ LINKINFO_FIELDS = (
     "static_certified",
     "static_system_libraries",
     "static_link_args",
+    # Appended rather than slotted in beside abi_version, which is where
+    # they read best: every other field keeps the position it has had
+    # since the first release, so a consumer that walks this file in
+    # order sees exactly what it saw before plus two keys at the end.
+    "dwg_version_min",
+    "dwg_version_max",
 )
 
 # The four that describe the static link appear together or not at all,
@@ -609,11 +615,47 @@ def linkinfo_skeleton(plat, arch, version=None):
     }
 
 
+# The shape of a DWG version signature: the four digits behind the `AC`
+# in the six bytes every drawing opens with. Deliberately a shape check
+# and not a list of the codes ACadSharp reads, because this number is
+# measured off the library rather than known here, and a check that knew
+# the answer would be checking itself.
+DWG_VERSION_CODE_MIN = 1000
+DWG_VERSION_CODE_MAX = 1099
+
+
+def _check_dwg_code(value, field):
+    """One end of the read range, as the smoke measured it."""
+    if value is None:
+        raise ValueError(
+            f"{field} was not measured. The archive smoke asks the staged library for "
+            "its read range and the staging script records both ends, the same way "
+            "aot_warning_count is read out of the publish log: a default here would "
+            "be a number describing whichever build the default was written for."
+        )
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(
+            f"{field} is {value!r}. It is an AC10xx code as an integer, because a "
+            "consumer compares it against one; a string or a float is a field "
+            "build.rs reads wrong rather than refuses."
+        )
+    if not DWG_VERSION_CODE_MIN <= value <= DWG_VERSION_CODE_MAX:
+        raise ValueError(
+            f"{field} is {value}, which is not a DWG version signature. Those are the "
+            f"four digits behind the AC in a drawing's first six bytes, so "
+            f"{DWG_VERSION_CODE_MIN} to {DWG_VERSION_CODE_MAX}. A number outside that "
+            "is a smoke whose output was parsed wrong, not a wider reader."
+        )
+    return value
+
+
 def make_linkinfo(
     plat,
     arch,
     *,
     shared_system_libraries,
+    dwg_version_min,
+    dwg_version_max,
     static_library=None,
     static_init_library=None,
     static_certified=False,
@@ -666,6 +708,15 @@ def make_linkinfo(
     if static_system_libraries is not None:
         _check_bare_library_names(static_system_libraries, "static_system_libraries")
 
+    dwg_min = _check_dwg_code(dwg_version_min, "dwg_version_min")
+    dwg_max = _check_dwg_code(dwg_version_max, "dwg_version_max")
+    if dwg_min > dwg_max:
+        raise ValueError(
+            f"dwg_version_min is {dwg_min} and dwg_version_max is {dwg_max}, which is a "
+            "range holding no drawing at all. A consumer branching on the pair would "
+            "decide that silently."
+        )
+
     for arg in static_link_args or []:
         if DEAD_STATIC_INIT_SYMBOL in arg:
             raise ValueError(
@@ -694,6 +745,8 @@ def make_linkinfo(
         info["static_system_libraries"] = list(static_system_libraries)
     if static_link_args is not None:
         info["static_link_args"] = list(static_link_args)
+    info["dwg_version_min"] = dwg_min
+    info["dwg_version_max"] = dwg_max
 
     expected = set(LINKINFO_FIELDS)
     if not static_certified:
@@ -964,6 +1017,18 @@ int main(int argc, char **argv)
 \tbacking[needed] = '\\0';
 \tprintf("BACKING_VERSION=%s\\n", backing);
 \tfree(backing);
+
+\t/* And what does it read? The same call answers with the AC10xx range,
+\t * so the archive is packed knowing what the library it holds says it
+\t * reads rather than what the shim was compiled from. */
+\tprintf("DWG_VERSION_MIN=%u\\n", (unsigned)caps.dwg_version_min);
+\tprintf("DWG_VERSION_MAX=%u\\n", (unsigned)caps.dwg_version_max);
+\tif (caps.dwg_version_min == 0 || caps.dwg_version_max < caps.dwg_version_min) {{
+\t\tfprintf(stderr, "smoke: the library reports a read range of %u to %u, which "
+\t\t\t"holds no drawing at all\\n", (unsigned)caps.dwg_version_min,
+\t\t\t(unsigned)caps.dwg_version_max);
+\t\treturn 7;
+\t}}
 \treturn 0;
 }}
 """
@@ -1162,9 +1227,16 @@ fi
 MISSING=$(sed -n 's/^MISSING_EXPORT //p' /tmp/smoke.out | sort -u | tr '\n' ' ')
 LIVE_FP=$(sed -n 's/^ABI_FINGERPRINT=//p' /tmp/smoke.out | head -1)
 BACKING=$(sed -n 's/^BACKING_VERSION=//p' /tmp/smoke.out | head -1)
+# The read range the library itself answered with. Recorded as a fact
+# like every other measurement here, so LINKINFO.json states what the
+# packed library says it reads rather than what a header says about it.
+DWG_MIN=$(sed -n 's/^DWG_VERSION_MIN=//p' /tmp/smoke.out | head -1)
+DWG_MAX=$(sed -n 's/^DWG_VERSION_MAX=//p' /tmp/smoke.out | head -1)
 fact missing_exports "$MISSING"
 fact live_fingerprint "$LIVE_FP"
 fact backing_version "$BACKING"
+fact dwg_version_min "$DWG_MIN"
+fact dwg_version_max "$DWG_MAX"
 echo "---- shared smoke ----"
 cat /tmp/smoke.out
 
@@ -1573,6 +1645,17 @@ Artifact version {version}.
 """
 
 
+def _measured_code(facts, key):
+    """One recorded fact as an integer, or None when it was not recorded.
+
+    None rather than a substitute: `make_linkinfo` refuses the field by
+    name, which says which measurement is missing, and a number invented
+    here would describe a library nobody asked.
+    """
+    value = facts.get(key, "").strip()
+    return int(value) if value.isdigit() else None
+
+
 def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=None):
     """Write the manifests, the README and CHECKSUMS.txt into a staged tree."""
     version = version or read_version()
@@ -1588,11 +1671,22 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
     # and it is not the static link's list; they used to share a field.
     shared_system_libraries = facts.get("shared_needed", "").split()
 
+    # The read range as the staged library answered it, not as the shim
+    # was compiled. The smoke calls viprs_acad_capabilities_v1 against the
+    # library that is about to be packed and prints what came back; this
+    # is that answer on its way into the manifest. A fact that cannot be
+    # parsed is passed through as None so make_linkinfo refuses it by
+    # name, rather than being turned into a plausible number here.
+    dwg_min = _measured_code(facts, "dwg_version_min")
+    dwg_max = _measured_code(facts, "dwg_version_max")
+
     if certified:
         linkinfo = make_linkinfo(
             plat,
             arch,
             shared_system_libraries=shared_system_libraries,
+            dwg_version_min=dwg_min,
+            dwg_version_max=dwg_max,
             static_library=STATIC_LIBRARY_NAME,
             static_init_library=STATIC_INIT_LIBRARY_NAME,
             static_certified=True,
@@ -1602,7 +1696,12 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
         )
     else:
         linkinfo = make_linkinfo(
-            plat, arch, shared_system_libraries=shared_system_libraries, version=version
+            plat,
+            arch,
+            shared_system_libraries=shared_system_libraries,
+            dwg_version_min=dwg_min,
+            dwg_version_max=dwg_max,
+            version=version,
         )
 
     warnings = facts.get("aot_warning_count", "").strip()

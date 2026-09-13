@@ -231,8 +231,16 @@ def job_text(job):
     return yaml.safe_dump(job)
 
 
+# The range every real archive carries, since the smoke measures it on
+# every target. Staged by default so a test about something else is not
+# also a test about a manifest with no read range in it; pass None for
+# either to leave it out.
+STAGED_RANGE = {"dwg_version_min": 1014, "dwg_version_max": 1032}
+
+
 def stage_archive(tmp_path, platform, cpu, **linkinfo):
     """Write assets/<stem>.tgz laid out the way issue #48 freezes it."""
+    linkinfo = {k: v for k, v in dict(STAGED_RANGE, **linkinfo).items() if v is not None}
     assets = tmp_path / "assets"
     assets.mkdir(exist_ok=True)
     stem = f"{TAG_PREFIX}{platform}-{cpu}"
@@ -898,33 +906,45 @@ class TestReleaseNotesAreGenerated:
 
 
 def dwg_range():
-    """The AC10xx read range, out of the ABI header's capabilities block.
+    """The AC10xx read range, out of the shim's own constants.
 
-    The header is the manifest for this one: it is what
-    ``viprs_acad_capabilities_v1`` documents and what the adapter fills in
-    at run time. The notes generator reads it with the same regex, so a
-    header edit that breaks the extraction fails here rather than in a
-    release run.
+    Not out of the header, which never states it: the range is a fact
+    about the backing reader, `viprs_acad_capabilities_v1` answers with it
+    at run time, and the build records what the library answered in each
+    archive's LINKINFO.json. This reads `AbiConstants` only so the test
+    below has a number to look for in the workflow, which is the one
+    place it must never appear.
     """
-    with open(ABI_HEADER) as f:
-        header = f.read()
-    match = re.search(r"numeric AC10xx codes, so (\d{4}) and (\d{4})", header)
-    assert match, (
-        "viprs_acadsharp.h no longer states the AC10xx read range where the release "
-        "notes generator looks for it"
-    )
-    return match.group(1), match.group(2)
+    with open(os.path.join(ACADSHARP_DIR, "native", "Abi.cs")) as f:
+        shim = f.read()
+    codes = []
+    for name in ("DwgVersionMin", "DwgVersionMax"):
+        match = re.search(rf"{name}\s*=\s*(\d+)u", shim)
+        assert match, f"AbiConstants no longer declares {name}"
+        codes.append(match.group(1))
+    return tuple(codes)
 
 
-class TestTheHeaderStillStatesTheReadRange:
-    def test_the_range_is_extractable(self):
-        dwg_min, dwg_max = dwg_range()
-        assert int(dwg_min) < int(dwg_max)
+class TestTheNotesDoNotReadTheHeadersProse:
+    """The preamble used to pull the read range out of an English sentence
+    in the header with a regex, and a test in this file pinned that
+    wording, so rephrasing a comment in a frozen contract document broke a
+    release. The range is not in the header at all now: it is measured off
+    the library during the build and recorded in every archive's
+    LINKINFO.json, which is where the notes read it."""
 
-    def test_the_workflow_uses_the_same_regex(self):
-        assert "numeric AC10xx codes, so" in workflow_text(), (
-            "the notes generator must read the read range out of the header; a "
-            "different phrase here means the two have already drifted"
+    def test_the_workflow_no_longer_matches_on_the_headers_wording(self):
+        assert "numeric AC10xx codes" not in workflow_text(), (
+            "the workflow is matching prose in viprs_acadsharp.h again. A comment "
+            "rewritten in a contract document is not a release failure, and the "
+            "range the notes report has to be the one the archives carry"
+        )
+
+    def test_the_range_is_read_out_of_the_manifests(self):
+        run = step_named(load_workflow()["jobs"]["release-notes"], "Write the release notes")["run"]
+        assert "dwg_version_min" in run and "dwg_version_max" in run, (
+            "the notes never read the read range out of the archives, so the release "
+            "page says nothing about what the thing it is publishing reads"
         )
 
 
@@ -952,10 +972,9 @@ class TestTheInlineGeneratorsRun:
         upstream, _ = ba.split_version(version)
         with open(GLOBAL_JSON) as f:
             sdk = json.load(f)["sdk"]["version"]
-        dwg_min, dwg_max = dwg_range()
 
         done = subprocess.run(
-            [sys.executable, "-c", notes_generator("numeric AC10xx codes, so"), version],
+            [sys.executable, "-c", notes_generator("Generated from acadsharp/VERSION"), version],
             capture_output=True,
             text=True,
             cwd=REPO_ROOT,
@@ -966,7 +985,6 @@ class TestTheInlineGeneratorsRun:
         for expected in (
             upstream,
             sdk,
-            f"AC{dwg_min} to AC{dwg_max}",
             ba.source_sha256(upstream),
             ba.CSUTILITIES_COMMIT,
         ):
@@ -1110,6 +1128,124 @@ class TestTheInlineGeneratorsRun:
             f"an archive with no recorded version was not refused:\n{done.stdout}"
         )
         assert (tmp_path / "refused-assets.txt").read_text().split() == [f"{stem}.tgz"]
+
+    def test_the_notes_report_the_range_the_archives_carry(self, tmp_path):
+        # Every archive is asked what it reads during its own build, and
+        # the answer is in its manifest. The notes say what that was, so
+        # the release page's claim about the read range is a measurement
+        # of the five things on the page rather than a sentence somebody
+        # kept up to date.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        version = ba.read_version()
+        for platform, cpu in ALL_CELLS:
+            stage_archive(
+                tmp_path,
+                platform,
+                cpu,
+                artifact_version=version,
+                target="x86_64-unknown-linux-gnu",
+                dwg_version_min=1014,
+                dwg_version_max=1032,
+            )
+
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, version),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        notes = done.stdout
+        assert "AC1014 to AC1032" in notes, f"the notes never state the read range:\n{notes}"
+        assert not (tmp_path / "range-disagreement.txt").read_text().strip(), (
+            "five archives that agree were reported as disagreeing"
+        )
+
+    def test_archives_that_disagree_about_the_range_fail_the_run(self, tmp_path):
+        # Five archives are five builds, and a release whose targets do
+        # not read the same formats is not one artifact in five shapes.
+        # No asset is removed: with five manifests disagreeing there is no
+        # way to say which one is wrong, so the run fails and the page
+        # says what was found.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        version = ba.read_version()
+        for i, (platform, cpu) in enumerate(ALL_CELLS):
+            stage_archive(
+                tmp_path,
+                platform,
+                cpu,
+                artifact_version=version,
+                target="x86_64-unknown-linux-gnu",
+                dwg_version_min=1014,
+                dwg_version_max=1032 if i else 1035,
+            )
+
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, version),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        notes = done.stdout
+        assert "1035" in notes and "1032" in notes, (
+            f"the notes have to name both ranges that were found:\n{notes}"
+        )
+        assert (tmp_path / "range-disagreement.txt").read_text().strip(), (
+            "nothing tells the shell to fail the run, so a release whose archives "
+            "disagree about what they read would publish green"
+        )
+
+    def test_an_archive_with_no_recorded_range_is_reported(self, tmp_path):
+        # "Cannot be checked" is not "checked and fine", the same rule
+        # artifact_version already has.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        version = ba.read_version()
+        platform, cpu = ALL_CELLS[0]
+        stage_archive(
+            tmp_path,
+            platform,
+            cpu,
+            artifact_version=version,
+            target="x86_64-unknown-linux-gnu",
+            dwg_version_min=None,
+            dwg_version_max=None,
+        )
+
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, version),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        assert "no read range" in done.stdout, (
+            f"an archive recording no read range was not reported:\n{done.stdout}"
+        )
+        assert (tmp_path / "range-disagreement.txt").read_text().strip()
+
+    def test_a_range_disagreement_fails_the_run_after_the_notes_go_up(self):
+        run = step_named(load_workflow()["jobs"]["release-notes"], "Write the release notes")["run"]
+        assert "range-disagreement.txt" in run, (
+            "the generator classifies and the shell acts; without this the "
+            "disagreement is a paragraph in the notes and a green run"
+        )
+        # rindex: the generator writes the file and the shell reads it, so
+        # the name appears twice and it is the second one that has to come
+        # after the notes are published.
+        assert run.index("gh release edit") < run.rindex("range-disagreement.txt"), (
+            "the notes have to go up before the step fails, or the release page says "
+            "nothing about why the run is red"
+        )
 
     def test_a_refused_archive_is_taken_off_the_release_and_fails_the_run(self):
         # The generator only classifies. The shell around it is what
