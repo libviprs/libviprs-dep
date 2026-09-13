@@ -49,7 +49,7 @@ echo "library: $library"
 echo "image:   $image ($platform)"
 
 # The upstream half of acadsharp/VERSION, which is what the header promises
-# viprs_acad_capabilities_v1 writes. Read here rather than compiled in, for the
+# viprs_acad_get_capabilities_v1 writes. Read here rather than compiled in, for the
 # same reason the fingerprint is: a number this program carried would agree
 # with the shim on the day it was typed.
 version="$(tr -d '[:space:]' < "$repo/acadsharp/VERSION")"
