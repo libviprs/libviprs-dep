@@ -465,6 +465,7 @@ class TestBuildInfo:
         "trimmer_roots",
         "trimmer_single_warn",
         "aot_warning_count",
+        "source_patches",
         "built_utc",
     )
 
@@ -875,6 +876,43 @@ class TestTheGeneratedSmokes:
         source = ba.static_smoke_source()
         for name in ba.header_entry_points():
             assert name in source
+
+    def test_the_shared_smoke_compares_the_abi_version_it_prints(self):
+        # Both smokes printed this number and neither compared it to
+        # anything, which is the same shape as the hole the verifier had: a
+        # value read back off the library, displayed, and discarded, so a
+        # library disagreeing with the header it is packed beside about its
+        # own ABI version went out with the disagreement in the log.
+        source = ba.archive_smoke_source()
+        assert "abi_version() != VIPRS_ACAD_ABI_VERSION" in source, (
+            "the shared smoke prints ABI_VERSION and never checks it against the header it includes"
+        )
+
+    def test_the_shared_smoke_checks_the_struct_as_well_as_the_call(self):
+        # One library answered 1 through the export and 2 through the
+        # capabilities struct, because an earlier round fixed one path and not
+        # the other. Both are asked here for that reason.
+        source = ba.archive_smoke_source()
+        assert "caps.abi_version != VIPRS_ACAD_ABI_VERSION" in source
+        assert "caps.wire_version != VIPRS_ACAD_WIRE_VERSION" in source
+
+    def test_the_static_smoke_compares_the_abi_version_it_prints(self):
+        # It does not include the header, so the number is substituted from
+        # the header when the file is generated. Still not a second copy:
+        # nobody types it, and a header bump moves it.
+        abi = ba.header_versions()[0]
+        source = ba.static_smoke_source()
+        assert f"viprs_acad_abi_version() != {abi}u" in source
+
+    def test_the_static_smoke_takes_that_number_from_the_header(self, tmp_path, monkeypatch):
+        header = tmp_path / "viprs_acadsharp.h"
+        with open(ba.HEADER_PATH) as f:
+            text = f.read()
+        header.write_text(
+            text.replace("#define VIPRS_ACAD_ABI_VERSION 2u", "#define VIPRS_ACAD_ABI_VERSION 9u")
+        )
+        monkeypatch.setattr(ba, "HEADER_PATH", str(header))
+        assert "viprs_acad_abi_version() != 9u" in ba.static_smoke_source()
 
 
 class TestEveryFileTheBuildReadsIsStaged:

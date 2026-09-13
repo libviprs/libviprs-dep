@@ -388,6 +388,39 @@ from one that was shortened. [WIRE.md](WIRE.md) has the rule and the marker.
 Nothing about that weakens the sentence above: the stream is complete and the
 message says it was cut, which is the opposite of a silent truncation.
 
+### What no field in this struct bounds
+
+The DWG reader allocates from sizes the file declares. `max_input_bytes` is
+applied to the input before the read begins and nothing after it looks at a
+length again, so every buffer the reader asks for is a number the drawing
+chose: one four-byte page-header field decides how much memory is committed
+before a byte of that page has been decompressed. Measured on the smallest
+file in this repository's corpus, a 10,539-byte drawing rewritten to declare a
+gigabyte for one section allocated 1,077,539,656 bytes during the open, a
+hundred thousand times its own size, and then opened successfully and decoded.
+The ceiling was not a ratio at all: it was whatever fits in a 32-bit field.
+
+None of that can be bounded from out here. The allocating types are `internal`
+to ACadSharp with no injection point, and the only process-wide lever is a GC
+hard limit, which kills the process and so breaks the promise above that a
+refusal leaves this library able to read the next file. The bound is therefore
+a patch to the pinned upstream source, applied at build time by
+`acadsharp/patches/allocation_ceiling.py` and named with its sha256 in
+`metadata/BUILDINFO.json` under `source_patches`. A declared size past 64 times
+the input's length, or 16 MiB, whichever is larger, is
+`VIPRS_ACAD_CORRUPT_INPUT` rather than `VIPRS_ACAD_LIMIT_EXCEEDED`: a file
+whose own header describes something the file cannot contain is malformed, and
+there is no field in this struct a caller could raise to change the answer.
+
+What that leaves, said plainly: the ceiling is per allocation and it scales
+with `max_input_bytes`. A caller who allows the default 512 MiB input is
+allowing up to 32 GiB for a single section buffer, and a document is read as a
+handful of sections. This makes allocation a function of a number the caller
+sets. It does not make it small, and the field that moves it is
+`max_input_bytes`. For scale: the largest single allocation any drawing in
+this repository's corpus asks for is 3.82 times its own length, and two of
+those drawings are files AutoCAD itself wrote.
+
 `struct_size` is checked. A `viprs_acad_limits_v1` whose `struct_size` is
 not a size this build knows returns `VIPRS_ACAD_INVALID_ARGUMENT`, and so
 does a `struct_version` it does not recognise.

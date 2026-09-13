@@ -23,6 +23,23 @@ namespace Viprs.Cad
 	{
 		private const string Fmt = "0.000000";
 
+		// The records the dump has never printed: the document and view
+		// framing, and the forward probe. An expectation is the geometry and
+		// the warnings a consumer gets, and the framing is checked by the
+		// protocol tests and the conformance consumers instead.
+		//
+		// Here rather than in the walk, because the walk now goes through
+		// DecodeSession.Compose and a filter written inline there would be a
+		// second list of which types are framing.
+		public static bool IsFraming(ushort type)
+		{
+			return type == WireFormat.TypeDocumentBegin
+				|| type == WireFormat.TypeViewBegin
+				|| type == WireFormat.TypeViewEnd
+				|| type == WireFormat.TypeDocumentEnd
+				|| type >= (ushort)WireFormat.ForwardProbeFirst;
+		}
+
 		public static string N(double d)
 		{
 			string s = d.ToString(Fmt, CultureInfo.InvariantCulture);

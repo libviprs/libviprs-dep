@@ -35,6 +35,7 @@ edited is refused the same way.
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import random
@@ -96,6 +97,7 @@ DUMPED = (
     "g13_ocs_skew.dwg",
     "g13_nan_bulge.dwg",
     "g13_bad_extents.dwg",
+    "g13_empty_view.dwg",
     "g13_wide_polyline.dwg",
     "g13_long_text.dwg",
     "g13_scale_1x.dwg",
@@ -189,6 +191,44 @@ def run(cmd, check=True):
         sys.stderr.write(proc.stderr or "")
         raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}")
     return proc
+
+
+def driver():
+    """`build_acadsharp.py` as a module, for the one thing this needs from it.
+
+    The list of patches lives in one place, and that place is the build
+    driver. A second copy of "which scripts in patches/ are applied" here is
+    how the captures end up recording a reader the archive does not ship.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "build_acadsharp", os.path.join(ACAD_ROOT, "build_acadsharp.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def apply_patches(acad_source, plan=False):
+    """Apply every patch the archive is built with to this checkout.
+
+    Without this the generator compiles the pristine tarball while the
+    published library is built from a patched one, so a capture would be a
+    recording of a reader nobody ships. The scripts are idempotent, which is
+    what makes a reused checkout safe to run this against.
+    """
+    patches = os.path.join(ACAD_ROOT, "patches")
+    for name in driver().patch_scripts():
+        cmd = [sys.executable, os.path.join(patches, name), acad_source]
+        print(" ".join(cmd))
+        if not plan:
+            proc = run(cmd, check=False)
+            sys.stdout.write(proc.stdout or "")
+            if proc.returncode != 0:
+                sys.stderr.write(proc.stderr or "")
+                raise RuntimeError(
+                    f"{name} refused {acad_source}. The captures cannot be recorded "
+                    "against a tree the published library is not built from."
+                )
 
 
 def build(scratch, acad_source, plan=False):
@@ -304,6 +344,7 @@ def main(argv=None):
         os.makedirs(d, exist_ok=True)
 
     if not args.skip_build:
+        apply_patches(os.path.abspath(args.acad_source), plan=args.plan)
         build(scratch, os.path.abspath(args.acad_source), plan=args.plan)
     if args.plan:
         return 0
@@ -321,6 +362,19 @@ def main(argv=None):
     return 0
 
 
+def support():
+    """`tests/g13_support.py`, which owns the derivations a capture records.
+
+    Imported rather than restated, for the reason shim_block gives below: a
+    derivation is a contract between the file this writes and the test that
+    reads it, and two implementations of a contract is how the two ends drift.
+    """
+    sys.path.insert(0, os.path.join(ACAD_ROOT, "tests"))
+    import g13_support
+
+    return g13_support
+
+
 def shim_block():
     """The shim these captures are a run of, as digests.
 
@@ -335,11 +389,10 @@ def shim_block():
     this writes and the test that reads it, and two implementations of a
     contract is how the two ends drift.
     """
-    sys.path.insert(0, os.path.join(ACAD_ROOT, "tests"))
-    from g13_support import sha256_file as digest_file
-    from g13_support import shim_digest, shim_sources
-
-    sources = shim_sources()
+    g13 = support()
+    digest_file = g13.sha256_file
+    sources = g13.shim_sources()
+    shim_digest = g13.shim_digest
     return {
         "sha256": shim_digest(sources),
         "sources": {rel: digest_file(os.path.join(ACAD_ROOT, rel)) for rel in sources},
@@ -884,6 +937,33 @@ def scenarios(scratch):
             f"dangling={entry['result']['dangling_lead_bytes']}"
         )
 
+    # An empty view, and the control that says the code is about geometry and
+    # not about the stream being short. Both files carry the same four reader
+    # notifications, so a producer that counted records rather than geometry
+    # would fire on neither.
+    record(
+        "warnings/empty_view",
+        fixture_arg("g13_empty_view.dwg"),
+        [],
+        "a drawing with nothing in model space, so the view's stream is the "
+        "reader's notifications and no geometry at all",
+    )
+    record(
+        "warnings/empty_view_control",
+        fixture_arg("g13_line.dwg"),
+        [],
+        "the same document with one line in it",
+    )
+    # The same code on the layout nobody has ever decoded. Every fixture in the
+    # corpus has two views and every capture so far is of view 0, so the paper
+    # space beside a drawing with geometry in it has never been in a recording.
+    record(
+        "warnings/empty_view_layout",
+        fixture_arg("g13_line.dwg"),
+        ["--view", 1],
+        "view 1 of a drawing whose geometry is all in model space",
+    )
+
     record(
         "warnings/nonuniform_block_scale",
         fixture_arg("g13_nonuniform.dwg"),
@@ -907,6 +987,64 @@ def scenarios(scratch):
         network="none",
         repo_ro=True,
         read_only=True,
+    )
+
+    # The sizes a drawing declares, and what the reader allocates from them.
+    #
+    # max_input_bytes is applied to the input before the read begins and
+    # nothing after it looks at a length again, so every buffer the DWG reader
+    # allocates is a number the file chose. Each of these is the smallest
+    # fixture in the corpus with one four-byte page-header field rewritten, so
+    # the column that matters is alloc_open_bytes beside file_bytes: before the
+    # ceiling patch a 10,539-byte file could ask for a gigabyte and get it.
+    #
+    # Two headers because the reader reaches them in order and refuses at the
+    # first, so a single fixture can only ever prove the guard it hits.
+    g13 = support()
+    with open(os.path.join(FIXTURES, g13.DECLARED_SIZE_SOURCE), "rb") as f:
+        pristine = f.read()
+
+    for header, magic in g13.DECLARED_SIZE_HEADERS:
+        for label, value in g13.DECLARED_SIZES:
+            name = f"{header}_{label}"
+            blob = g13.with_declared_size(pristine, magic, value)
+            path = os.path.join(derived, f"{name}.dwg")
+            with open(path, "wb") as f:
+                f.write(blob)
+            entry = record(
+                f"declared/{name}",
+                f"/scratch/derived/{name}.dwg",
+                [],
+                f"{g13.DECLARED_SIZE_SOURCE} with the {header} page header declaring "
+                f"{value} bytes of decompressed data",
+            )
+            entry["derived"] = {
+                "kind": "declared_size",
+                "header": header,
+                "declared": value,
+                "source": g13.DECLARED_SIZE_SOURCE,
+                "sha256": sha256_bytes(blob),
+                "bytes": len(blob),
+            }
+            result = entry["result"]
+            print(
+                f"declared/{name}: open={result.get('open_code')} "
+                f"alloc_open={result.get('alloc_open_bytes')}"
+            )
+
+    # The control, and it is the whole reason the numbers above mean anything:
+    # the same file with nothing rewritten opens, decodes, and allocates what a
+    # 10 KB drawing allocates. A refusal that applied to the pristine fixture
+    # too would be a ceiling set below the corpus rather than a bound on a lie.
+    control = record(
+        "declared/unmodified_control",
+        fixture_arg(g13.DECLARED_SIZE_SOURCE),
+        [],
+        "the same fixture with no page header rewritten",
+    )
+    print(
+        f"declared/unmodified_control: open={control['result'].get('open_code')} "
+        f"alloc_open={control['result'].get('alloc_open_bytes')}"
     )
 
     # Malformed derivatives, derived here and written to the scratch directory

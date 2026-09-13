@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Viprs.Abi;
+using Viprs.Cad;
 using Viprs.Sources;
 
 // What an open document and an open decode actually are behind the two opaque
@@ -114,7 +115,7 @@ namespace Viprs.Wire
 			_document = document;
 			_viewIndex = viewIndex;
 			_cancelFlag = cancelFlag;
-			_writer = new BatchWriter(Stream().GetEnumerator(), document.Limits);
+			_writer = new BatchWriter(Compose().GetEnumerator(), document.Limits);
 		}
 
 		public DocumentHandle Document
@@ -216,7 +217,17 @@ namespace Viprs.Wire
 		// makes a consumer's skip-the-unknown path something that runs on
 		// every conformance run rather than something that runs the day a
 		// second wire version exists.
-		private IEnumerable<Primitive> Stream()
+		//
+		// Internal rather than private so the fixture generator can dump what a
+		// consumer actually receives instead of what the source produced. The
+		// two used to be the same list and they are not any more: EMPTY_VIEW is
+		// composed here, so a dump taken from the source below would be missing
+		// the one record it is the evidence for.
+		//
+		// One walk per session. This is an iterator over instance counters, so
+		// a second enumeration of the same DecodeSession counts everything
+		// twice; the generator builds a fresh session for the dump.
+		internal IEnumerable<Primitive> Compose()
 		{
 			SourceView view;
 			if (!_document.Source.TryGetView((int)_viewIndex, out view))
@@ -257,6 +268,33 @@ namespace Viprs.Wire
 				}
 
 				yield return p;
+			}
+
+			// A view that produced no geometry, said once, here rather than in
+			// any source.
+			//
+			// It is the difference and not the count: the reader's
+			// notifications head every view's stream whether or not the view
+			// holds anything, so a drawing that could not be read at all
+			// arrives with items and no geometry among them. _warnings is
+			// already tracked for DocumentEnd, so geometry is _items minus it.
+			//
+			// Counted into _items and _warnings rather than yielded past them.
+			// ViewEnd's record_count is derived from _items and this is a
+			// record between ViewBegin and ViewEnd like any other, so a count
+			// that skipped it would be wrong for exactly the views this fires
+			// on. max_entities is deliberately not consulted: this record is
+			// the shim's own and not an entity the drawing holds, and refusing
+			// a view for being empty is not a bound anybody asked for.
+			if (_items - _warnings == 0ul)
+			{
+				_items = _items + 1ul;
+				_warnings = _warnings + 1ul;
+				yield return Primitive.Warning(
+					WarningCodes.EmptyView,
+					0ul,
+					"this view holds no geometry"
+				);
 			}
 
 			yield return Primitive.ForwardProbe();
