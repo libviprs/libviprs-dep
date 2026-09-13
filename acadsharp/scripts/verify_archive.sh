@@ -908,6 +908,33 @@ if [ -f "$STATIC_LIB" ]; then
       echo "  symbol index defines every entry point the header declares"
     fi
   fi
+
+  # The runtime's module headers live in `__modules` and the bootstrapper
+  # reaches them through `__start___modules` and `__stop___modules`.
+  # Nothing relocates against that section, and lld has defaulted to
+  # `-z start-stop-gc` since 13, so under `--gc-sections` it collects the
+  # section and the encapsulation symbols come out undefined. The build
+  # sets SHF_GNU_RETAIN to stop that, and this checks the archive rather
+  # than the build script that set it.
+  #
+  # It runs for every ELF target on every host, which is the point.
+  # Reading a section header needs no linker and no matching
+  # architecture, so this covers the targets the consumer link below
+  # skips because the host cannot build for them. That skip is how both
+  # musl archives shipped a static recipe nothing had ever linked.
+  if [ "$PLATFORM" != "mac" ]; then
+    RETAIN_SECTIONS="$(dirname "$0")/retain_sections.py"
+    if [ ! -f "$RETAIN_SECTIONS" ]; then
+      fail "retain_sections.py is not beside this script, so __modules cannot be checked"
+    elif python3 "$RETAIN_SECTIONS" --check "$STATIC_LIB" \
+        __modules __managedcode __unbox > "$WORK/retain.log" 2>&1; then
+      echo "  the encapsulation sections are retained, so --gc-sections cannot collect them"
+    else
+      fail "$STATIC_NAME would fail to link under any linker that defaults to
+    -z start-stop-gc, which is every rustc on x86_64-unknown-linux-gnu:
+$(sed 's/^/    /' "$WORK/retain.log")"
+    fi
+  fi
 fi
 
 if [ -f "$STATIC_INIT_LIB" ]; then
