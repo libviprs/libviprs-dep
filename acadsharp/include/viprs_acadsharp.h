@@ -265,8 +265,12 @@ uint32_t viprs_acad_decode_begin(viprs_cad_handle *h,
  *
  * cap must be at least 12, the size of a batch header. A successful call
  * always writes one complete batch, and the header is part of every batch, so
- * a cap below that cannot be satisfied at all: it returns
- * VIPRS_ACAD_LIMIT_EXCEEDED with 12 in *written, having written nothing.
+ * a smaller cap cannot be satisfied at all. The two ways of being smaller are
+ * different, deliberately. A cap of 0 is VIPRS_ACAD_INVALID_ARGUMENT, because
+ * a zero length is a caller mistake everywhere on this boundary rather than a
+ * buffer that wants growing. A cap between 1 and 11 is
+ * VIPRS_ACAD_LIMIT_EXCEEDED with 12 in *written, having written nothing, so
+ * the caller can grow it and retry.
  *
  * Calling again after *done came back 1 is legal and is not an error. It
  * writes an empty batch carrying the last-batch flag and reports *done 1

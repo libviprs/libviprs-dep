@@ -476,9 +476,13 @@ static void test_a_short_buffer_is_never_written_past(void)
 static void test_closing_with_the_wrong_handle_type(void)
 {
 	uint8_t synth[16];
+	uint8_t buf[8192];
 	viprs_cad_handle *doc = NULL;
 	viprs_decode_handle *dec = NULL;
 	uint64_t before;
+	uint64_t written = 0;
+	uint32_t count = 0;
+	uint8_t done = 0;
 
 	synthetic_input(synth, 1, 9);
 	before = viprs_acad__test_live_handles();
@@ -491,18 +495,31 @@ static void test_closing_with_the_wrong_handle_type(void)
 	check(viprs_acad__test_live_handles() == before + 2,
 	      "a document and a decode are two live handles");
 
+	/* The live count on its own is not enough, which the mutation run
+	 * proved: with the bug back, the wrong-typed close evicts the handle
+	 * without disposing it, so the count still walks back down to the
+	 * baseline and the last check below still passes while both objects are
+	 * orphaned. What tells the two apart is whether the handle still works
+	 * afterwards, because a close that did nothing must have left it
+	 * alone. */
 	viprs_acad_decode_close((viprs_decode_handle *)doc);
 	check(viprs_acad__test_live_handles() == before + 2,
 	      "decode_close on a document handle releases nothing");
+	check(viprs_acad_view_count(doc, &count) == VIPRS_ACAD_OK,
+	      "and leaves the document handle usable, rather than evicting it and dropping "
+	      "the document on the floor");
 
 	viprs_acad_close((viprs_cad_handle *)dec);
 	check(viprs_acad__test_live_handles() == before + 2,
 	      "and close on a decode handle releases nothing either");
+	check(viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done) ==
+		      VIPRS_ACAD_OK,
+	      "and leaves the decode handle usable too");
 
 	viprs_acad_decode_close(dec);
 	viprs_acad_close(doc);
 	check(viprs_acad__test_live_handles() == before,
-	      "and the right calls still release both, so nothing was orphaned");
+	      "and the right calls still release both");
 }
 #endif
 

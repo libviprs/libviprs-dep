@@ -450,10 +450,27 @@ fn closing_with_the_wrong_handle_type(t: &mut Tally) {
             "a document and a decode are two live handles",
         );
 
+        // The live count on its own is not enough, which the mutation run
+        // proved: with the bug back, the wrong-typed close evicts the handle
+        // without disposing it, so the count still walks back down to the
+        // baseline and the last check below still passes while both objects
+        // are orphaned. What tells the two apart is whether the handle still
+        // works afterwards, because a close that did nothing must have left
+        // it alone.
+        let mut count: u32 = 0;
+        let mut written: u64 = 0;
+        let mut done: u8 = 0;
+        let mut buf = vec![0u8; 8192];
+
         viprs_acad_decode_close(doc as *mut viprs_decode_handle);
         t.check(
             viprs_acad__test_live_handles() == before + 2,
             "decode_close on a document handle releases nothing",
+        );
+        t.check(
+            viprs_acad_view_count(doc, &mut count) == VIPRS_ACAD_OK,
+            "and leaves the document handle usable, rather than evicting it and dropping \
+             the document on the floor",
         );
 
         viprs_acad_close(dec as *mut viprs_cad_handle);
@@ -461,12 +478,22 @@ fn closing_with_the_wrong_handle_type(t: &mut Tally) {
             viprs_acad__test_live_handles() == before + 2,
             "and close on a decode handle releases nothing either",
         );
+        t.check(
+            viprs_acad_decode_next_batch(
+                dec,
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut written,
+                &mut done,
+            ) == VIPRS_ACAD_OK,
+            "and leaves the decode handle usable too",
+        );
 
         viprs_acad_decode_close(dec);
         viprs_acad_close(doc);
         t.check(
             viprs_acad__test_live_handles() == before,
-            "and the right calls still release both, so nothing was orphaned",
+            "and the right calls still release both",
         );
     }
 }
