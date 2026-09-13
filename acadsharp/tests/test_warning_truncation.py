@@ -176,13 +176,14 @@ class TestTheDrawingsOwnTextIsStillRefused:
 # instead is one helper, used by both paths, and these are the checks that it
 # stays one.
 
-ENCODER_CS = os.path.join(os.path.dirname(FIXTURES), "..", "native", "Wire", "RecordEncoder.cs")
-SOURCE_CS = os.path.join(os.path.dirname(FIXTURES), "..", "native", "Sources", "AcadSharpSource.cs")
+ACADSHARP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENCODER_CS = os.path.join(ACADSHARP, "native", "Wire", "RecordEncoder.cs")
+SOURCE_CS = os.path.join(ACADSHARP, "native", "Sources", "AcadSharpSource.cs")
 HELPER = "TruncateMessage"
 
 
 def read_source(path):
-    with open(os.path.normpath(path), encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
