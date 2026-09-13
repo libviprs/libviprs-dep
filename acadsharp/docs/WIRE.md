@@ -1,4 +1,4 @@
-# The VACB batch protocol, wire version 1
+# The VACB batch protocol, wire version 2
 
 `viprs_acad_decode_next_batch` writes one batch per call into a buffer the
 caller owns. This document is the complete definition of what is in that
@@ -12,26 +12,26 @@ self-describing beyond what is written here, and nothing is compressed.
 ## Record types, frozen
 
 The numbering is part of the contract. A consumer switches on the number,
-never on a name, and these numbers do not move in wire version 1.
+never on a name, and these numbers have not moved since wire version 1.
 
 | Number | Name | Carries |
 | --- | --- | --- |
 | 1 | `DocumentBegin` | How many views the document has, and the numeric AC10xx code it was read from. |
 | 2 | `ViewBegin` | One view's index, kind, extents, an approximate item count, and its name as UTF-8. |
 | 3 | `Line` | Two endpoints. |
-| 4 | `Polyline` | A vertex run, open or closed. |
+| 4 | `Polyline` | A vertex run, open or closed, a normal, and a bulge per vertex. |
 | 5 | `Arc` | Centre, radius, start and end angle, and a normal. |
 | 6 | `Circle` | Centre, radius, and a normal. |
 | 7 | `Ellipse` | Centre, major axis vector, minor-to-major ratio, parameter range, and a normal. |
 | 8 | `Spline` | Degree, knots, control points and weights. |
-| 9 | `Polygon` | A closed boundary of vertices. |
+| 9 | `Polygon` | A closed boundary, with record 4's payload and `closed` always 1. |
 | 10 | `Text` | Position, height, rotation, and UTF-8 bytes with a length. |
 | 11 | `Warning` | A numeric code, a UTF-8 message with a length, and an optional item handle. |
 | 12 | `ViewEnd` | The view index it closes, and how many records it contained. |
 | 13 | `DocumentEnd` | Totals for the whole stream. |
 
 Numbers from 32512 (`0x7F00`) upward are the forward-probe range. They carry
-no meaning in wire version 1 and a consumer must skip them by their length.
+no meaning in wire version 2 and a consumer must skip them by their length.
 The library emits one on purpose, so that the skip path is exercised by a
 real stream rather than only by a buffer a test assembled by hand.
 
@@ -42,7 +42,7 @@ Twelve bytes, then the records.
 | Offset | Size | Field | Value |
 | --- | --- | --- | --- |
 | 0 | 4 | magic | The ASCII bytes `VACB`, `0x56 0x41 0x43 0x42` |
-| 4 | 2 | `wire_version` | 1 |
+| 4 | 2 | `wire_version` | 2 |
 | 6 | 2 | `flags` | Bit 0 set on the last batch of a stream, every other bit zero |
 | 8 | 4 | `payload_length` | Bytes of records that follow, not counting these twelve |
 
@@ -52,8 +52,8 @@ A batch is therefore `12 + payload_length` bytes, and that is what
 Batches target 64 KiB and never exceed 1 MiB, with one exception: a single
 record larger than 1 MiB is sent as a batch of its own, because a batch never
 splits a record and the limits allow records that large. A `Polyline` at the
-default `max_polyline_points` is 24 MB on its own, so this is not a corner
-nobody reaches.
+default `max_polyline_points`, carrying a bulge per vertex, is 32 MB on its
+own, so this is not a corner nobody reaches.
 
 A batch never spans two calls. A caller that hands over a buffer too small for
 the next batch gets `VIPRS_ACAD_LIMIT_EXCEEDED` with the size it needs, which
@@ -101,8 +101,15 @@ kill.
 
 A `type` a consumer does not recognise is skipped by `length`, and parsing
 continues with the record after it. This is the entire reason the length is
-in the record header, and it is what lets wire version 2 add a record type
-without breaking a consumer compiled against version 1.
+in the record header, and it is what lets a later wire version add a record
+type without breaking a consumer compiled against this one.
+
+Skipping an unknown type is not forward compatibility with an unknown
+`wire_version`. A version this consumer does not parse is refused, because a
+record type it does know may have changed shape underneath it: version 2's
+`Polyline` is 32 bytes longer than version 1's and carries two fields version
+1 never had, and a version 1 consumer reading one finds a plausible vertex
+count and then walks off the end of the payload.
 
 A consumer must not skip by a table of known sizes. The forward-probe record
 the library emits has a payload length that matches no other record on
@@ -147,8 +154,57 @@ UTF-8, padded with zeroes to a multiple of four. The name is not terminated.
 
 **3 `Line`**: prologue, then `f64 x0, y0, z0, x1, y1, z1`. 72 bytes.
 
-**4 `Polyline`**: prologue, `uint32 point_count`, `uint32 closed` (0 or 1),
-then `point_count` triples of `f64 x, y, z`.
+**4 `Polyline`**: prologue, then
+
+| Offset | Size | Field | Rule |
+| --- | --- | --- | --- |
+| 16 | 4 | `point_count` | `n`, at most `max_polyline_points` |
+| 20 | 4 | `closed` | 0 or 1 |
+| 24 | 4 | `bulge_count` | `bc`, either 0 or equal to `point_count` |
+| 28 | 4 | `reserved1` | 0 |
+| 32 | 24 | `f64 nx, ny, nz` | the entity's normal |
+| 56 | 24·n | `f64 x, y, z` × n | the vertices |
+| 56 + 24·n | 8·bc | `f64 bulge` × bc | one per vertex, absent when `bc` is 0 |
+
+`length` is `64 + 24n + 8bc`.
+
+`bulge[i]` is the bulge of the span from vertex `i` to vertex `i + 1`. For a
+closed polyline `bulge[n - 1]` is the closing span's, from the last vertex
+back to the first; for an open one it has no span and a consumer ignores it.
+`bulge_count` of 0 means every span is straight, which is the only other value
+the field takes: a consumer never has to work out which spans a shorter array
+covers. Record 8's `weight_count` is the same rule.
+
+A bulge is `tan(θ / 4)` for the arc's included angle `θ`, which is what DWG
+stores, and it is **positive when the arc runs counter-clockwise about the
+normal**, matching the `Arc` record's angles. So a bulge of 1 is a half turn
+counter-clockwise, `-1` is a half turn clockwise, and 0 is a straight span.
+
+The arc a bulge names, without ever computing a centre: with `c` the chord
+length, `d̂` the unit vector from the first vertex to the second, `N̂` the unit
+normal and `mid` the chord's midpoint, the arc's midpoint is
+
+    mid + (b · c / 2) · (d̂ × N̂)
+
+That is the well-conditioned direction, and it is exact at every magnitude of
+`b` a double can hold. Going the other way, to a centre and two angles, loses
+accuracy as `b` gets small: at `b = 1e-12` a reconstructed endpoint is already
+`2.6e-5` chord lengths from the vertex the record carries, and at `1e-17` the
+two angles come out exactly equal. Every arc-to-polyline conversion in every
+CAD tool leaves bulges of about `1e-15` on vertices it considers straight, so
+this is not a corner case.
+
+A consumer that wants segments should subdivide rather than solve. If the
+sagitta `(c / 2) · |b|` is inside its tolerance the span is the chord;
+otherwise the midpoint above splits it into two spans of bulge
+`b' = b / (1 + sqrt(1 + b²))`, and for `|b| > 1` the same value is
+`sign(b) / (r + sqrt(r² + 1))` with `r = 1 / |b|`, which is the form that does
+not overflow. Both were checked against `tan(atan(b) / 2)` from `1e-300` to
+`1e308`: the first is exact below 1 and `NaN` above `1e154`, the second is
+exact above 1 and 0 below `1e-300`, so the split at `|b| = 1` is load-bearing.
+Endpoints are never recomputed, so the pieces meet exactly at every depth.
+Thirty-two levels is a sensible cap. None of this paragraph is contractual;
+the record is.
 
 **5 `Arc`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
@@ -168,9 +224,11 @@ nz`. 120 bytes.
 then `control_count` triples of `f64 x, y, z`, then `weight_count` values of
 `f64`. `weight_count` is either 0 or equal to `control_count`.
 
-**9 `Polygon`**: prologue, `uint32 point_count`, `uint32 reserved1`, then
-`point_count` triples of `f64 x, y, z`. The boundary is closed implicitly;
-the first vertex is not repeated.
+**9 `Polygon`**: record 4's payload exactly, with `closed` always 1. The
+boundary is closed implicitly and the first vertex is not repeated, so the
+closing span is the one `bulge[n - 1]` describes. One layout means one reader
+serves both, and a hatch loop that turns out to carry a curved edge needs no
+second shape.
 
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
@@ -239,7 +297,10 @@ the length says it is.
 ## Curves keep their parameters
 
 `Arc`, `Circle`, `Ellipse` and `Spline` carry the parameters that define
-them and are never tessellated into segments by the producer. Tessellation
+them and are never tessellated into segments by the producer. A polyline's
+bulge crosses as a bulge, for the same reason: the arc it names is exact, and
+turning it into a chord or into a run of segments is the tolerance decision
+the producer is not in a position to make. Tessellation
 is a rendering decision and it needs a tolerance, which depends on the zoom
 level and the output device, neither of which the producer knows. A producer
 that flattens a curve has thrown that choice away, and a consumer cannot
@@ -278,12 +339,26 @@ drawing it could not fully represent.
 | Condition | Result |
 | --- | --- |
 | The first four bytes are not `VACB` | `VIPRS_ACAD_CORRUPT_INPUT` |
-| `wire_version` is not one this consumer parses | `VIPRS_ACAD_UNSUPPORTED_FORMAT` |
+| `wire_version` is not one this consumer parses | `VIPRS_ACAD_ABI_MISMATCH` |
 | Fewer than twelve bytes are available | `VIPRS_ACAD_CORRUPT_INPUT` |
 | `12 + payload_length` exceeds the buffer | `VIPRS_ACAD_CORRUPT_INPUT` |
 | Any of the four record rules above fails | `VIPRS_ACAD_CORRUPT_INPUT` |
 | `reserved` in a record header is not zero | `VIPRS_ACAD_CORRUPT_INPUT` |
+| A `Polyline` or `Polygon` whose `bulge_count` is neither 0 nor `point_count` | `VIPRS_ACAD_CORRUPT_INPUT` |
+| A `Polyline` or `Polygon` whose `length` is not `64 + 24n + 8bc` | `VIPRS_ACAD_CORRUPT_INPUT` |
+| An `f64` in a geometry record, types 3 to 10, that is `NaN` or infinite | `VIPRS_ACAD_CORRUPT_INPUT` |
 
 Refusing on an unknown `wire_version` rather than trying is the important
 one. A consumer that parses a version it does not know is reading a layout
-it is only assuming, and it will produce numbers rather than an error.
+it is only assuming, and it will produce numbers rather than an error. That
+refusal is `VIPRS_ACAD_ABI_MISMATCH` and not `VIPRS_ACAD_UNSUPPORTED_FORMAT`:
+the second is about the drawing, and means look at `dwg_version_min` and
+`dwg_version_max` and hand the file to something else. A foreign wire version
+is the two ends of this boundary disagreeing, and the remedy is to rebuild
+one of them.
+
+The last three rows are the payload rules, and they belong beside a record's
+layout rather than inside the framing loop. A parser walks record headers
+knowing nothing about what a payload means, which is what lets it skip an
+unknown type at all; a layout rule smuggled into that loop makes the parser
+wrong for every record type the day one of them changes.

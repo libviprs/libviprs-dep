@@ -92,7 +92,7 @@ namespace Viprs.Abi
 	internal static class AbiConstants
 	{
 		public const uint AbiVersion = 1u;
-		public const uint WireVersion = 1u;
+		public const uint WireVersion = 2u;
 		public const uint StructVersion = 1u;
 
 		// The inclusive AC10xx range the backing reader handles. ADR 0001

@@ -3,5 +3,5 @@
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00004 Warning handle=4C flags=1 code=NON_UNIFORM_BLOCK_SCALE message="LWPOLYLINE crossed under a block transform that is not a similarity, so its parameters describe a shape the transform does not preserve"
-00005 Polyline handle=4C flags=1 n=2 closed=0 pts=[(0.000000,0.000000,0.000000);(-10.000000,0.000000,0.000000)]
+00005 Polyline handle=4C flags=1 n=2 closed=0 pts=[(0.000000,0.000000,0.000000);(-10.000000,0.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00006 Arc handle=4C flags=1 c=[(-13.750000,5.000000,0.000000)] r=6.250000 a0=-0.927295 a1=0.927295 normal=[(0.000000,0.000000,1.000000)]

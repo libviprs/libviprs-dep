@@ -56,6 +56,8 @@ namespace Viprs.Wire
 					Prologue(p);
 					U32(p.Counts[0]);
 					U32(p.Counts[1]);
+					U32(p.Counts[2]);
+					U32(p.Counts[3]);
 					Doubles(p.Values, 0, p.Values.Length);
 					break;
 
@@ -89,6 +91,8 @@ namespace Viprs.Wire
 					Prologue(p);
 					U32(p.Counts[0]);
 					U32(p.Counts[1]);
+					U32(p.Counts[2]);
+					U32(p.Counts[3]);
 					Doubles(p.Values, 0, p.Values.Length);
 					break;
 

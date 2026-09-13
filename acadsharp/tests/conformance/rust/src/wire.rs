@@ -12,11 +12,11 @@
 //! quietly missing from a large drawing, months later.
 
 use crate::abi::{
-    VIPRS_ACAD_CORRUPT_INPUT, VIPRS_ACAD_INTERNAL_ERROR, VIPRS_ACAD_UNSUPPORTED_FORMAT,
+    VIPRS_ACAD_ABI_MISMATCH, VIPRS_ACAD_CORRUPT_INPUT, VIPRS_ACAD_INTERNAL_ERROR,
 };
 
 pub const MAGIC: [u8; 4] = [0x56, 0x41, 0x43, 0x42];
-pub const WIRE_VERSION: u16 = 1;
+pub const WIRE_VERSION: u16 = 2;
 
 /// magic(4) + wire_version(2) + flags(2) + payload_length(4)
 pub const BATCH_HEADER_BYTES: usize = 12;
@@ -99,7 +99,12 @@ impl<'a> Reader<'a> {
             // Refused rather than guessed. A consumer that parses a version it
             // does not know is reading a layout it is only assuming, and it
             // produces numbers instead of an error.
-            return Err(VIPRS_ACAD_UNSUPPORTED_FORMAT);
+            //
+            // ABI_MISMATCH rather than UNSUPPORTED_FORMAT, which is what this
+            // said until wire version 2. UNSUPPORTED_FORMAT is about the
+            // drawing; a foreign wire version is the two ends of this boundary
+            // disagreeing, and the remedy is to rebuild one of them.
+            return Err(VIPRS_ACAD_ABI_MISMATCH);
         }
 
         let flags = u16_at(buf, 6);
@@ -170,6 +175,82 @@ impl<'a> Reader<'a> {
         self.offset += length;
         Ok(Some(Record { kind, payload }))
     }
+}
+
+/// `(point_count, bulge_count)` for a wire version 2 `Polyline` or `Polygon`,
+/// or the code docs/WIRE.md refuses it with.
+///
+/// Beside the framing parser rather than inside it. `Reader` walks record
+/// headers and knows nothing about what a payload means, which is exactly what
+/// lets it skip a type it has never heard of; a layout rule pushed into that
+/// loop would make it wrong for every record type the day one of them changes.
+///
+/// Three rules, and the second is not implied by the first: a producer that
+/// wrote the bulge array and left the count at zero produces a record whose
+/// framing is perfect and whose trailing numbers nobody reads.
+pub fn polyline_shape(payload: &[u8], length: usize) -> Result<(usize, usize), u32> {
+    if payload.len() < 56 {
+        return Err(VIPRS_ACAD_CORRUPT_INPUT);
+    }
+
+    let n = u32_at(payload, 16) as usize;
+    let closed = u32_at(payload, 20);
+    let bulges = u32_at(payload, 24) as usize;
+    let reserved1 = u32_at(payload, 28);
+
+    if closed > 1 || reserved1 != 0 {
+        return Err(VIPRS_ACAD_CORRUPT_INPUT);
+    }
+    if bulges != 0 && bulges != n {
+        return Err(VIPRS_ACAD_CORRUPT_INPUT);
+    }
+    if length != 64 + (24 * n) + (8 * bulges) {
+        return Err(VIPRS_ACAD_CORRUPT_INPUT);
+    }
+
+    // The producer promises every f64 in a geometry record is finite. A
+    // consumer checks anyway: the bytes may not have come from that producer,
+    // and one NaN coordinate becomes a bounding box that is NaN in every
+    // direction and a renderer that draws nothing at all.
+    for k in 0..(3 + (3 * n) + bulges) {
+        if !f64_at(payload, 32 + (k * 8)).is_finite() {
+            return Err(VIPRS_ACAD_CORRUPT_INPUT);
+        }
+    }
+
+    Ok((n, bulges))
+}
+
+/// One Polyline or Polygon built field by field, so a test can lie about any
+/// one of them.
+pub fn build_vertex_record(
+    kind: u16,
+    n: usize,
+    bulges: usize,
+    closed: u32,
+    reserved1: u32,
+    values: &[f64],
+    length: Option<u32>,
+) -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend_from_slice(&0x4Du64.to_le_bytes());
+    body.extend_from_slice(&0u32.to_le_bytes());
+    body.extend_from_slice(&0u32.to_le_bytes());
+    body.extend_from_slice(&(n as u32).to_le_bytes());
+    body.extend_from_slice(&closed.to_le_bytes());
+    body.extend_from_slice(&(bulges as u32).to_le_bytes());
+    body.extend_from_slice(&reserved1.to_le_bytes());
+    for v in values {
+        body.extend_from_slice(&v.to_le_bytes());
+    }
+
+    let len = length.unwrap_or((RECORD_HEADER_BYTES + body.len()) as u32);
+    let mut out = Vec::new();
+    out.extend_from_slice(&kind.to_le_bytes());
+    out.extend_from_slice(&0u16.to_le_bytes());
+    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(&body);
+    out
 }
 
 /// Builds a batch by hand, for the malformed cases. `claimed_payload` is

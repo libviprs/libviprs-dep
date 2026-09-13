@@ -142,7 +142,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1860,
+      "output_bytes": 1892,
       "records": 13,
       "sha256": "a4a03f09a683e01acee05a5338f1dfdf1abd5209c666561c0a6ce970d3916bfb",
       "view_count": 2
@@ -204,7 +204,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1164,
+      "output_bytes": 1196,
       "records": 7,
       "sha256": "4f947ae65e647dbca558eb1d67ba961a38733718f20c8be66b8e197ffd39faaf",
       "view_count": 2
@@ -220,7 +220,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1100,
+      "output_bytes": 1164,
       "records": 7,
       "sha256": "85e3873b3ba01f03e1451e4dc2e941c432b69b39b03c8ce5e3e502d9e50c39ae",
       "view_count": 2
@@ -251,7 +251,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1204,
+      "output_bytes": 1300,
       "records": 8,
       "sha256": "815bf452eb40b0c5f75049e3155f13c0c2f3272b2d3464b92d01ee3636635bd3",
       "view_count": 2
@@ -283,7 +283,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1172,
+      "output_bytes": 1236,
       "records": 8,
       "sha256": "db6c6facccbce67169329528279cba795d4ddb0aaec26bbb8fe04f6475c68ee6",
       "view_count": 2
@@ -299,7 +299,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1876,
+      "output_bytes": 2068,
       "records": 16,
       "sha256": "41245b50e234db83f45be266a88539665b77f21833a14d2fd05a050fb91f933d",
       "view_count": 2
@@ -373,7 +373,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 99180,
+      "output_bytes": 99212,
       "records": 5,
       "sha256": "63495a02a7ef1f359f4be91b1964652ac099b6ac352c986367938882aecd1761",
       "view_count": 2
@@ -409,7 +409,7 @@
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 34784,
+      "output_bytes": 35840,
       "records": 354,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4
@@ -431,7 +431,7 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 35964,
+      "output_bytes": 37020,
       "records": 361,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4
@@ -440,23 +440,23 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "3aa1e4d9242d2ae6eb724a898fba7d497c2e7ed062d91d7b5a5615347599dfab",
+    "sha256": "929b9b5a5d30c860ffb049e683b4c0c57b499244b6e1d50ee2568a7bc6ad9bd2",
     "sources": {
-      "native/Abi.cs": "161f27cd0ecbc6148810727a365075868661ef4358e3fc01323e857996259163",
-      "native/Adapter/CanonicalDump.cs": "9737d009cca585254f09d037ee9a5bd045385c2a31e44b810c77b3856272547a",
-      "native/Adapter/Flattener.cs": "95d38f8aaba14ce9232b50f638cf6a9087fc42e1a5112b608b871ae81cbcef9a",
+      "native/Abi.cs": "6169a32c16fd47c83248a7cb914aa5408bbfd9959a9c85974659ac52fc7f8dc0",
+      "native/Adapter/CanonicalDump.cs": "bacdcd27e5e1605603dee2b2da9ea638268a38cf4ef5f352bd22655a7b44d01f",
+      "native/Adapter/Flattener.cs": "294374e37e56eda7cbbd94306690c3677eb90f13d6b416275dcef79ca6ba4ace",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
       "native/Adapter/WarningCodes.cs": "6644f9b752305e1a43dd7299e88a870ae950a3d74c35d3f4452af03c8db4e2e3",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "3df1067c4624f07bc1a14bbba06debdb182d47ba7366715e1b96d07f93d2811b",
       "native/Sources/IDocumentSource.cs": "3c27ce53933a313bb729e90c451d81e9e3f4ad1524aaf137ec6bfd9d22ea78db",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
-      "native/Sources/SyntheticSource.cs": "7d1371cec151149cb5c01abe41a54836acf2da161d4394b3f93600ec78271324",
+      "native/Sources/SyntheticSource.cs": "568c9e6aea293c18fe89238b16dd4c1bb3eeb393f504b2c0fac12790c50e0b67",
       "native/Wire/BatchWriter.cs": "4f0173612869a5ba4b86a6dd42b832defa4761b998cc5453ce726623cdd2cbf6",
       "native/Wire/DecodeSession.cs": "450109551fe954f749d7cd89a71640cdf49f592a8ed9e2d65650a7183ad901b0",
-      "native/Wire/Primitive.cs": "1445831454fb6ec52ef50af4f85866ae9ec86300957e5f3ced208f73692e50ee",
-      "native/Wire/RecordEncoder.cs": "16efc39e91ec2d7712c3471192b3b3eff45326b46dcc7bd2b5a5c7bef2e1f6d6",
-      "native/Wire/WireFormat.cs": "459a391e27be3cbc9f136a8a2de6f899ef9783997add47366696ddcb9734f4b4"
+      "native/Wire/Primitive.cs": "c30293d206694bb167cdc14ca2563876e110f065791e37558643f2d390d96ca8",
+      "native/Wire/RecordEncoder.cs": "9c939df2de69b38c03642fdc2e152b35e0ff87c276f8cbce0f8511abdaa397b4",
+      "native/Wire/WireFormat.cs": "867087a19b63bc9609995c7cc08eadda4855986514e3dcecf558945a7f868bfa"
     }
   }
 }

@@ -739,7 +739,8 @@ namespace Viprs.Cad
 
 			if (!anyBulge || n < 2)
 			{
-				yield return Primitive.Polyline(handle, flags, closed, points);
+				yield return Primitive.Polyline(
+					handle, flags, closed, points, null, normal.X, normal.Y, normal.Z);
 				yield break;
 			}
 
@@ -761,7 +762,7 @@ namespace Viprs.Cad
 					continue;
 				}
 
-				foreach (Primitive p in Flush(handle, flags, run))
+				foreach (Primitive p in Flush(handle, flags, run, normal))
 				{
 					yield return p;
 				}
@@ -769,7 +770,7 @@ namespace Viprs.Cad
 				yield return ArcFromBulge(handle, flags, points, i, j, b, normal);
 			}
 
-			foreach (Primitive p in Flush(handle, flags, run))
+			foreach (Primitive p in Flush(handle, flags, run, normal))
 			{
 				yield return p;
 			}
@@ -782,11 +783,13 @@ namespace Viprs.Cad
 			into.Add(points[(index * 3) + 2]);
 		}
 
-		private static IEnumerable<Primitive> Flush(ulong handle, uint flags, List<double> run)
+		private static IEnumerable<Primitive> Flush(
+			ulong handle, uint flags, List<double> run, XYZ normal)
 		{
 			if (run.Count >= 6)
 			{
-				yield return Primitive.Polyline(handle, flags, false, run.ToArray());
+				yield return Primitive.Polyline(
+					handle, flags, false, run.ToArray(), null, normal.X, normal.Y, normal.Z);
 			}
 
 			run.Clear();
@@ -951,7 +954,8 @@ namespace Viprs.Cad
 					CheckPointCount(pts.Length / 3, "a Polygon record");
 					yield return new Pending
 					{
-						Record = Primitive.Polygon(h, flags, pts),
+						Record = Primitive.Polygon(
+							h, flags, pts, null, hatch.Normal.X, hatch.Normal.Y, hatch.Normal.Z),
 						Depth = item.Depth,
 					};
 					continue;

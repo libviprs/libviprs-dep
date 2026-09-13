@@ -12,7 +12,7 @@ namespace Viprs.Wire
 		// so nothing here depends on the host's endianness.
 		public static readonly byte[] Magic = new byte[] { 0x56, 0x41, 0x43, 0x42 };
 
-		public const ushort Version = 1;
+		public const ushort Version = 2;
 
 		// magic(4) + wire_version(2) + flags(2) + payload_length(4)
 		public const int BatchHeaderBytes = 12;
@@ -60,6 +60,23 @@ namespace Viprs.Wire
 		public const ushort TypeDocumentEnd = 13;
 
 		internal const ushort ForwardProbe = (ushort)ForwardProbeFirst;
+
+		// The geometry records, 3 to 10, which are the ones docs/WIRE.md's
+		// finiteness guarantee covers.
+		//
+		// Named as a range rather than listed, because the numbering is frozen
+		// and the range is contiguous by construction. ViewBegin is outside it
+		// on purpose: its extents are a bounding box the source reports rather
+		// than a shape somebody draws, and a view holding nothing reports one
+		// that is not finite. Promising a finite extent would mean inventing a
+		// number for the empty case, which is worse than saying nothing.
+		public const ushort FirstGeometryType = TypeLine;
+		public const ushort LastGeometryType = TypeText;
+
+		public static bool IsGeometry(ushort type)
+		{
+			return type >= FirstGeometryType && type <= LastGeometryType;
+		}
 
 		public static int PadTo4(int n)
 		{

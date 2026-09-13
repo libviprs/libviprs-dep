@@ -74,8 +74,13 @@ extern "C" {
 #define VIPRS_ACAD_ABI_VERSION 1u
 
 /* The batch protocol version, documented in docs/WIRE.md. Carried in every
- * batch header so a consumer can refuse a stream it cannot parse. */
-#define VIPRS_ACAD_WIRE_VERSION 1u
+ * batch header so a consumer can refuse a stream it cannot parse.
+ *
+ * Moves on its own, without VIPRS_ACAD_ABI_VERSION: nothing in this header
+ * changes when a record's payload does, so a consumer that only calls the
+ * entry points is unaffected and a consumer that parses the stream is not.
+ * Version 2 gives Polyline and Polygon a normal and a per-vertex bulge. */
+#define VIPRS_ACAD_WIRE_VERSION 2u
 
 /* -------------------------------------------------------------------------
  * Result codes

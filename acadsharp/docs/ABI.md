@@ -63,6 +63,25 @@ anything else.
 
 `viprs_acad_capabilities_v1()` is the third, below.
 
+`VIPRS_ACAD_WIRE_VERSION` is a fourth number and it is not one of those three,
+because it does not describe this header at all. It is the version of the
+batch protocol in docs/WIRE.md, and it moves on its own: a record's payload
+can gain a field without a single declaration here changing, so a consumer
+that only calls the entry points carries on unaffected while a consumer that
+parses the stream must be rebuilt. Wire version 2 is exactly that, giving
+`Polyline` and `Polygon` a normal and a per-vertex bulge while
+`VIPRS_ACAD_ABI_VERSION` stayed 1. A bump in the other direction, with the
+wire standing still, is just as possible, which is why a consumer reads both
+rather than inferring either from the other.
+
+A stream whose `wire_version` is not one the consumer parses is
+`VIPRS_ACAD_ABI_MISMATCH`, the same code as a failed fingerprint handshake,
+because it is the same kind of failure: the two ends of this boundary were
+built against different contracts. It is deliberately not
+`VIPRS_ACAD_UNSUPPORTED_FORMAT`, which is about the drawing and tells a caller
+to look at `dwg_version_min` and `dwg_version_max` and find another reader.
+The remedy here is to rebuild, and the two ask for different things.
+
 ## Ownership
 
 Everything on this boundary has exactly one owner, and the owner is almost
