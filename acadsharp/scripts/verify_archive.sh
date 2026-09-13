@@ -30,9 +30,20 @@
 #   5. Every library is the architecture the filename claims, is the
 #      right kind of object, is not truncated, and exports every entry
 #      point the shipped header declares.
-#   6. A static library is a real `!<arch>` archive, never a GNU thin
-#      one, and `static_certified: true` is backed by an archive that
-#      actually links here when this host can link for this target.
+#   6. A static archive is a real `!<arch>` archive, never a GNU thin
+#      one, and holds no two members of the same name: duplicates link
+#      today only because the linker takes the first definition it finds,
+#      and they make `--whole-archive` on that file impossible.
+#   7. `static_certified: true` is backed by an archive that links *and
+#      runs* here, when this host can build for this target. Linking is
+#      not enough: an archive whose runtime initialiser was never forced
+#      links perfectly and aborts on the first managed call, so a
+#      link-only check cannot tell a working archive from a broken one.
+#      The probe allocates before it asks the library anything, and the
+#      documented cargo recipe is run against the archive too, because
+#      that is the path a consumer actually takes and the one where a
+#      requirement expressed as a link argument silently does not
+#      arrive.
 #
 # Why the binary readers are hand-rolled rather than `nm`: this script has
 # to verify a foreign-architecture archive on whatever runner is to hand.
@@ -116,6 +127,7 @@ fi
 
 SHARED_NAME="libacadsharp_native.$SHARED_EXT"
 STATIC_NAME="libacadsharp_native.a"
+STATIC_INIT_NAME="libacadsharp_native_init.a"
 
 # Smallest plausible sizes. A real NativeAOT shim is about 9.5 MB shared
 # and 44 MB static once the runtime archives are merged in, so anything
@@ -123,6 +135,9 @@ STATIC_NAME="libacadsharp_native.a"
 # library.
 MIN_SHARED_BYTES=100000
 MIN_STATIC_BYTES=100000
+# The initialiser archive is one small object and nothing else. A big one
+# means the merge put the runtime in the wrong file.
+MAX_STATIC_INIT_BYTES=65536
 
 WORK=$(mktemp -d)
 cleanup() { rm -rf "$WORK"; }
@@ -159,6 +174,11 @@ slice() {
 }
 
 le16() { local h="$1"; echo $(( 0x${h:2:2}${h:0:2} )); }
+be32() { local h="$1"; echo $(( 0x${h:0:2}${h:2:2}${h:4:2}${h:6:2} )); }
+be64() {
+  local h="$1"
+  echo $(( 0x${h:0:2}${h:2:2}${h:4:2}${h:6:2}${h:8:2}${h:10:2}${h:12:2}${h:14:2} ))
+}
 le32() { local h="$1"; echo $(( 0x${h:6:2}${h:4:2}${h:2:2}${h:0:2} )); }
 le64() {
   local h="$1"
@@ -371,13 +391,28 @@ root, want_platform, want_cpu, facts_path = sys.argv[1:5]
 SHARED_EXT = "dylib" if want_platform == "mac" else "so"
 EXPECTED_SHARED = f"lib/libacadsharp_native.{SHARED_EXT}"
 EXPECTED_STATIC = "lib/libacadsharp_native.a"
+EXPECTED_STATIC_INIT = "lib/libacadsharp_native_init.a"
 
 LINKINFO_FIELDS = (
     "schema_version", "artifact_version", "acadsharp_version", "acadsharp_commit",
     "dotnet_sdk", "target", "platform", "cpu", "abi_version", "wire_version",
-    "abi_header_sha256", "abi_fingerprint", "shared_library", "static_library",
-    "static_certified", "system_libraries", "link_args",
+    "abi_header_sha256", "abi_fingerprint", "shared_library", "shared_system_libraries",
+    "static_library", "static_init_library", "static_certified",
+    "static_system_libraries", "static_link_args",
 )
+# Present together when the static smoke ran and passed, absent together
+# otherwise. A field that describes the static link while static_certified
+# is false is a field a build.rs author will read as the shared link's.
+STATIC_FIELDS = (
+    "static_library", "static_init_library", "static_system_libraries",
+    "static_link_args",
+)
+# Any of these in static_link_args is refused. Not because forcing a
+# symbol is wrong, but because `cargo:rustc-link-arg` from a dependency's
+# build script binds to that package's own targets and never reaches a
+# dependent's link line, so a requirement expressed as an argument silently
+# does not arrive.
+SYMBOL_FORCING_FLAGS = ("-u", "--undefined", "--require-defined")
 BUILDINFO_FIELDS = (
     "driver_commit", "builder_image", "dotnet_version", "clang_version",
     "linker_version", "publish_aot", "invariant_globalization", "trimmer_roots",
@@ -414,18 +449,35 @@ link = load("LINKINFO.json")
 build = load("BUILDINFO.json")
 
 if link is not None:
+    certified = bool(link.get("static_certified"))
     for field in LINKINFO_FIELDS:
-        if field == "static_library":
+        if field in STATIC_FIELDS:
             continue
         if field not in link:
             problems.append(f"LINKINFO.json is missing the frozen field {field!r}")
+
     static_library = link.get("static_library")
-    if static_library is not None and not str(static_library).strip():
-        problems.append("LINKINFO.json has an empty static_library; it must be absent instead")
-    if link.get("static_certified") and static_library is None:
-        problems.append(
-            "LINKINFO.json says static_certified but carries no static_library"
-        )
+    static_init_library = link.get("static_init_library")
+    for field in ("static_library", "static_init_library"):
+        value = link.get(field)
+        if value is not None and not str(value).strip():
+            problems.append(f"LINKINFO.json has an empty {field}; it must be absent instead")
+
+    if certified:
+        for field in STATIC_FIELDS:
+            if field not in link:
+                problems.append(
+                    f"LINKINFO.json says static_certified but is missing {field!r}; the "
+                    "flag records that the static smoke linked and ran, so every part "
+                    "of that link was observed"
+                )
+    else:
+        for field in STATIC_FIELDS:
+            if field in link:
+                problems.append(
+                    f"LINKINFO.json carries {field!r} without static_certified; a static "
+                    "link nobody ran is not something to describe"
+                )
     if link.get("platform") != want_platform:
         problems.append(
             f"LINKINFO.json says platform {link.get('platform')!r}, "
@@ -453,25 +505,35 @@ if link is not None:
         )
     elif not os.path.isfile(os.path.join(root, EXPECTED_SHARED)):
         problems.append(f"LINKINFO.json shared_library {EXPECTED_SHARED} is not in the archive")
-    if static_library is not None:
-        if static_library != EXPECTED_STATIC:
+    for field, expected in (
+        ("static_library", EXPECTED_STATIC),
+        ("static_init_library", EXPECTED_STATIC_INIT),
+    ):
+        value = link.get(field)
+        if value is None:
+            continue
+        if value != expected:
             problems.append(
-                f"LINKINFO.json static_library is {static_library!r}, "
-                f"but the archive ships {EXPECTED_STATIC}"
+                f"LINKINFO.json {field} is {value!r}, but the archive ships {expected}"
             )
-        elif not os.path.isfile(os.path.join(root, EXPECTED_STATIC)):
-            problems.append(
-                f"LINKINFO.json static_library {EXPECTED_STATIC} is not in the archive"
-            )
-    for field in ("system_libraries", "link_args"):
+        elif not os.path.isfile(os.path.join(root, expected)):
+            problems.append(f"LINKINFO.json {field} {expected} is not in the archive")
+    for field in ("shared_system_libraries", "static_system_libraries", "static_link_args"):
         value = link.get(field)
         if value is not None and not isinstance(value, list):
             problems.append(f"LINKINFO.json field {field!r} is not a list")
-    for arg in link.get("link_args") or []:
+    for arg in link.get("static_link_args") or []:
         if "NativeAOT_StaticInitialization" in str(arg):
             problems.append(
-                f"LINKINFO.json link_args carries {arg!r}; that symbol does not exist "
-                "in .NET 10 and linking against it fails outright"
+                f"LINKINFO.json static_link_args carries {arg!r}; that symbol does not "
+                "exist in .NET 10 and linking against it fails outright"
+            )
+        elif any(flag in str(arg) for flag in SYMBOL_FORCING_FLAGS):
+            problems.append(
+                f"LINKINFO.json static_link_args carries {arg!r}, which forces a symbol. "
+                "cargo:rustc-link-arg from a dependency's build script binds to that "
+                "package's own targets and never reaches a dependent's link line, so the "
+                "requirement would silently not arrive. Ship it as static_init_library."
             )
 
     header = os.path.join(root, "include", "viprs_acadsharp.h")
@@ -492,9 +554,15 @@ if link is not None:
 
     facts["shared_library"] = str(link.get("shared_library", ""))
     facts["static_library"] = str(static_library or "")
-    facts["static_certified"] = "1" if link.get("static_certified") else "0"
-    facts["system_libraries"] = " ".join(str(x) for x in (link.get("system_libraries") or []))
-    facts["link_args"] = " ".join(str(x) for x in (link.get("link_args") or []))
+    facts["static_init_library"] = str(static_init_library or "")
+    facts["static_certified"] = "1" if certified else "0"
+    facts["abi_fingerprint"] = str(link.get("abi_fingerprint", ""))
+    facts["static_system_libraries"] = " ".join(
+        str(x) for x in (link.get("static_system_libraries") or [])
+    )
+    facts["static_link_args"] = " ".join(
+        str(x) for x in (link.get("static_link_args") or [])
+    )
 
 if build is not None:
     for field in BUILDINFO_FIELDS:
@@ -642,145 +710,301 @@ if [ -f "$SHARED_LIB" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# The static archive
+# The static archives
 # ---------------------------------------------------------------------------
 
 STATIC_LIB="$ROOT/lib/$STATIC_NAME"
-if [ -n "$STATIC_REL" ] && [ ! -f "$STATIC_LIB" ]; then
-  fail "LINKINFO.json promises $STATIC_REL but $STATIC_NAME is not in the archive"
-fi
+STATIC_INIT_LIB="$ROOT/lib/$STATIC_INIT_NAME"
+STATIC_INIT_REL=$(mfact static_init_library)
 
-if [ -f "$STATIC_LIB" ]; then
-  echo "---- $EXPECTED_DIR/lib/$STATIC_NAME ----"
-  if [ -z "$STATIC_REL" ]; then
-    fail "$STATIC_NAME is in the archive but LINKINFO.json does not mention it"
+for pair in "$STATIC_REL|$STATIC_LIB|$STATIC_NAME" \
+            "$STATIC_INIT_REL|$STATIC_INIT_LIB|$STATIC_INIT_NAME"
+do
+  rel=${pair%%|*}
+  rest=${pair#*|}
+  path=${rest%%|*}
+  label=${rest#*|}
+  if [ -n "$rel" ] && [ ! -f "$path" ]; then
+    fail "LINKINFO.json promises $rel but $label is not in the archive"
   fi
+  if [ -z "$rel" ] && [ -f "$path" ]; then
+    fail "$label is in the archive but LINKINFO.json does not mention it"
+  fi
+done
 
-  MAGIC=$(read_ascii "$STATIC_LIB" 0 8)
-  case "$MAGIC" in
+# walk_archive <path> <label> <min-objects> <symbols-out>
+#
+# Checks the ar magic, walks every member header, refuses a repeated
+# member name, checks every object's architecture and leaves the symbol
+# index in <symbols-out>. Returns non-zero when the archive is not
+# walkable at all.
+walk_archive() {
+  local lib="$1" label="$2" min_objects="$3" index_out="$4"
+  local magic size off members objects names hdr_magic name member_size data end data_size
+
+  magic=$(read_ascii "$lib" 0 8)
+  case "$magic" in
     '!<arch>')
       echo "  fat-archive magic ok"
       ;;
     '!<thin>')
-      fail "$STATIC_NAME is a GNU thin archive — it only references the build sandbox's objects"
+      fail "$label is a GNU thin archive — it only references the build sandbox's objects"
+      return 1
       ;;
     *)
-      fail "$STATIC_NAME has unexpected magic '$MAGIC'"
+      fail "$label has unexpected magic '$magic'"
+      return 1
       ;;
   esac
 
+  size=$(wc -c < "$lib" | tr -d ' ')
+  echo "  size: $size bytes"
+
+  off=8
+  members=0
+  objects=0
+  names="$WORK/$label-member-names.txt"
+  : > "$names"
+  : > "$index_out"
+  while [ "$off" -lt "$size" ] && [ "$members" -lt 4000 ]; do
+    hdr_magic=$(read_bytes "$lib" $((off + 58)) 2)
+    if [ "$hdr_magic" != "600a" ]; then
+      fail "$label member header at offset $off has bad magic '$hdr_magic' (truncated?)"
+      break
+    fi
+    name=$(read_ascii "$lib" "$off" 16)
+    member_size=$(read_ascii "$lib" $((off + 48)) 10 | tr -d ' ')
+    data=$((off + 60))
+    end=$((data + member_size))
+    members=$((members + 1))
+    # BSD ar stores any name longer than 16 bytes in the front of the
+    # member's own data and writes `#1/<len>` in the name field, so the
+    # object starts <len> bytes further in. Miss that and every member of
+    # a mac archive looks like garbage.
+    case "$name" in
+      '#1/'*)
+        local nlen=${name#\#1/}
+        name=$(read_ascii "$lib" "$data" "$nlen")
+        data=$((data + nlen))
+        ;;
+    esac
+    data_size=$((end - data))
+    case "$name" in
+      '/'|'__.SYMDEF'*|'/SYM64/')
+        # The names are at the back of the index, behind a count and an
+        # offset table. Reading the whole member and splitting on NUL
+        # glues that table's trailing bytes onto the first name, and
+        # those bytes are often printable: a one-symbol archive came
+        # back as `d_GLOBAL__sub_I_fixture`. So the header is parsed and
+        # only the name blob is read.
+        local count names_at names_len
+        case "$name" in
+          '/')
+            count=$(be32 "$(read_bytes "$lib" "$data" 4)")
+            names_at=$((data + 4 + 4 * count))
+            ;;
+          '/SYM64/')
+            count=$(be64 "$(read_bytes "$lib" "$data" 8)")
+            names_at=$((data + 8 + 8 * count))
+            ;;
+          *)
+            # BSD: a little-endian byte count for the ranlib table, the
+            # table, then a little-endian byte count for the names.
+            count=$(le32 "$(read_bytes "$lib" "$data" 4)")
+            names_at=$((data + 4 + count + 4))
+            ;;
+        esac
+        names_len=$((data + data_size - names_at))
+        if [ "$names_len" -gt 0 ]; then
+          slice "$lib" "$names_at" "$names_len" | tr '\000' '\n' \
+            | sed 's/^_//' > "$index_out"
+        fi
+        ;;
+      '//')
+        : # GNU long-name table, no objects in it
+        ;;
+      *)
+        objects=$((objects + 1))
+        echo "$name" >> "$names"
+        # Every object, not a sample. A merged NativeAOT archive holds a
+        # few hundred, and one of them being for another architecture is
+        # exactly the mislabelling a sampled check sails past.
+        object_arch_ok "$lib" "$data" "$label member '$name'" || true
+        ;;
+    esac
+    off=$end
+    if [ $((off % 2)) -ne 0 ]; then
+      off=$((off + 1))
+    fi
+  done
+
+  echo "  members: $members ($objects objects)"
+  if [ "$objects" -lt "$min_objects" ]; then
+    fail "$label holds $objects objects, expected at least $min_objects"
+  fi
+
+  # Two members of the same name link today only because the linker takes
+  # the first definition it finds, and they make --whole-archive on this
+  # file impossible, which is the one thing a consumer may have to do.
+  local dupes
+  dupes=$(sort "$names" | uniq -d | tr '\n' ' ')
+  if [ -n "$dupes" ]; then
+    fail "$label holds more than one member called: $dupes"
+  fi
+
+  if [ ! -s "$index_out" ]; then
+    fail "$label has no symbol index — consumers would need a manual ranlib"
+    return 1
+  fi
+  return 0
+}
+
+if [ -f "$STATIC_LIB" ]; then
+  echo "---- $EXPECTED_DIR/lib/$STATIC_NAME ----"
   STATIC_SIZE=$(wc -c < "$STATIC_LIB" | tr -d ' ')
-  echo "  size: $STATIC_SIZE bytes"
   if [ "$STATIC_SIZE" -lt "$MIN_STATIC_BYTES" ]; then
     fail "$STATIC_NAME is only $STATIC_SIZE bytes — expected at least $MIN_STATIC_BYTES"
   fi
-
-  if [ "$MAGIC" = '!<arch>' ]; then
-    # Walk the ar member headers: 60 bytes each, name[0:16], size[48:58],
-    # magic[58:60], data following and padded to an even offset. BSD ar
-    # stores any name longer than 16 bytes in the front of the member's
-    # own data and writes `#1/<len>` in the name field, so the object
-    # starts <len> bytes further in; miss that and every member of a mac
-    # archive looks like garbage.
-    OFF=8
-    MEMBERS=0
-    OBJECTS=0
-    INDEX_SYMS="$WORK/index-symbols.txt"
-    : > "$INDEX_SYMS"
-    while [ "$OFF" -lt "$STATIC_SIZE" ] && [ "$MEMBERS" -lt 2000 ]; do
-      HDR_MAGIC=$(read_bytes "$STATIC_LIB" $((OFF + 58)) 2)
-      if [ "$HDR_MAGIC" != "600a" ]; then
-        fail "$STATIC_NAME member header at offset $OFF has bad magic '$HDR_MAGIC' (truncated?)"
-        break
-      fi
-      NAME=$(read_ascii "$STATIC_LIB" "$OFF" 16)
-      SIZE=$(read_ascii "$STATIC_LIB" $((OFF + 48)) 10 | tr -d ' ')
-      DATA=$((OFF + 60))
-      END=$((DATA + SIZE))
-      MEMBERS=$((MEMBERS + 1))
-      case "$NAME" in
-        '#1/'*)
-          NLEN=${NAME#\#1/}
-          NAME=$(read_ascii "$STATIC_LIB" "$DATA" "$NLEN")
-          DATA=$((DATA + NLEN))
-          ;;
-      esac
-      DATA_SIZE=$((END - DATA))
-      case "$NAME" in
-        '/'|'__.SYMDEF'*|'/SYM64/')
-          slice "$STATIC_LIB" "$DATA" "$DATA_SIZE" | tr '\000' '\n' \
-            | sed 's/^_//' > "$INDEX_SYMS"
-          ;;
-        '//')
-          : # GNU long-name table, no objects in it
-          ;;
-        *)
-          OBJECTS=$((OBJECTS + 1))
-          # Every object, not a sample. A merged NativeAOT archive holds
-          # a few hundred, and one of them being for another architecture
-          # is exactly the mislabelling a sampled check sails past.
-          object_arch_ok "$STATIC_LIB" "$DATA" "$STATIC_NAME member '$NAME'" || true
-          ;;
-      esac
-      OFF=$END
-      if [ $((OFF % 2)) -ne 0 ]; then
-        OFF=$((OFF + 1))
-      fi
-    done
-
-    echo "  members: $MEMBERS ($OBJECTS objects)"
-    if [ "$OBJECTS" -lt 1 ]; then
-      fail "$STATIC_NAME holds no object files"
-    fi
-    if [ ! -s "$INDEX_SYMS" ]; then
-      fail "$STATIC_NAME has no symbol index — consumers would need a manual ranlib"
-    else
-      if require_symbols "$INDEX_SYMS" "$STATIC_NAME's symbol index"; then
-        echo "  symbol index defines every entry point the header declares"
-      fi
-    fi
-  fi
-
-  # `static_certified: true` is a claim that the static smoke linked and
-  # ran. When this host can link for this target, hold the claim to it.
-  if [ "$STATIC_CERTIFIED" = "1" ]; then
-    HOST_CPU=arm64
-    case "$(uname -m)" in
-      x86_64|amd64) HOST_CPU=x64 ;;
-      arm64|aarch64) HOST_CPU=arm64 ;;
-      *) HOST_CPU=unknown ;;
-    esac
-    HOST_PLATFORM=linux
-    if [ "$(uname -s)" = "Darwin" ]; then
-      HOST_PLATFORM=mac
-    elif ldd --version 2>&1 | sed -n 1p | grep -qi musl; then
-      HOST_PLATFORM=musl
-    fi
-    if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \
-       && command -v cc >/dev/null 2>&1; then
-      cat > "$WORK/probe.c" <<'PROBE'
-#include <stdint.h>
-extern uint32_t viprs_acad_abi_version(void);
-int main(void) { return viprs_acad_abi_version() == 0u; }
-PROBE
-      SYSLIB_FLAGS=""
-      for lib in $(mfact system_libraries); do
-        SYSLIB_FLAGS="$SYSLIB_FLAGS -l$lib"
-      done
-      LINK_ARGS=$(mfact link_args)
-      # shellcheck disable=SC2086  # both lists are deliberate word-split arg lists
-      if cc "$WORK/probe.c" "$STATIC_LIB" $LINK_ARGS $SYSLIB_FLAGS \
-            -o "$WORK/probe" > "$WORK/probe.log" 2>&1; then
-        echo "  static_certified holds: the archive links here"
-      else
-        fail "static_certified is true but the static smoke cannot link the archive:
-$(tail -20 "$WORK/probe.log")"
-      fi
-    else
-      echo "  static_certified: not link-tested (this host cannot link for $PLATFORM/$CPU)"
+  if walk_archive "$STATIC_LIB" "$STATIC_NAME" 1 "$WORK/static-index.txt"; then
+    if require_symbols "$WORK/static-index.txt" "$STATIC_NAME's symbol index"; then
+      echo "  symbol index defines every entry point the header declares"
     fi
   fi
 fi
+
+if [ -f "$STATIC_INIT_LIB" ]; then
+  echo "---- $EXPECTED_DIR/lib/$STATIC_INIT_NAME ----"
+  # One object, and a small one: this archive exists to carry the
+  # runtime's static initialiser and nothing else. Anything bigger means
+  # the merge put the runtime in the wrong file.
+  if walk_archive "$STATIC_INIT_LIB" "$STATIC_INIT_NAME" 1 "$WORK/init-index.txt"; then
+    INIT_OBJECTS=$(wc -l < "$WORK/$STATIC_INIT_NAME-member-names.txt" | tr -d ' ')
+    if [ "$INIT_OBJECTS" != "1" ]; then
+      fail "$STATIC_INIT_NAME holds $INIT_OBJECTS objects, expected exactly 1"
+    fi
+    INIT_SIZE=$(wc -c < "$STATIC_INIT_LIB" | tr -d ' ')
+    if [ "$INIT_SIZE" -gt "$MAX_STATIC_INIT_BYTES" ]; then
+      fail "$STATIC_INIT_NAME is $INIT_SIZE bytes, which is too big to be one initialiser"
+    fi
+    # The whole point of the file: the initialiser has to be reachable by
+    # name, because it is what the consumer's --whole-archive pulls in and
+    # what nothing else references.
+    # The index has had a leading underscore stripped, which is the
+    # Mach-O convention; ELF's own name starts with one too.
+    if ! grep -qE '^_*GLOBAL__sub_I' "$WORK/init-index.txt"; then
+      fail "$STATIC_INIT_NAME defines no _GLOBAL__sub_I* initialiser, so it carries nothing"
+    else
+      echo "  carries the runtime's static initialiser"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# `static_certified: true` is a claim that the static smoke linked and
+# ran. When this host can build for this target, hold the claim to it —
+# and to running, not only linking. An archive without the forced
+# initialiser links perfectly and aborts on the first managed call, so a
+# link-only check cannot tell a working archive from a broken one.
+# ---------------------------------------------------------------------------
+
+if [ "$STATIC_CERTIFIED" = "1" ] && [ -f "$STATIC_LIB" ] && [ -f "$STATIC_INIT_LIB" ]; then
+  HOST_CPU=unknown
+  case "$(uname -m)" in
+    x86_64|amd64) HOST_CPU=x64 ;;
+    arm64|aarch64) HOST_CPU=arm64 ;;
+  esac
+  HOST_PLATFORM=linux
+  if [ "$(uname -s)" = "Darwin" ]; then
+    HOST_PLATFORM=mac
+  elif ldd --version 2>&1 | sed -n 1p | grep -qi musl; then
+    HOST_PLATFORM=musl
+  fi
+
+  if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \
+     && command -v cc >/dev/null 2>&1; then
+    cat > "$WORK/probe.c" <<'PROBE'
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+extern uint32_t viprs_acad_abi_version(void);
+extern uint64_t viprs_acad_abi_fingerprint(void);
+
+int main(int argc, char **argv)
+{
+	/* Allocate before asking anything. A managed export that returns a
+	   constant can be answered by a binary whose runtime never came up;
+	   a megabyte off its heap cannot. */
+	char *scratch = (char *)malloc(1 << 20);
+	if (!scratch) {
+		return 3;
+	}
+	memset(scratch, 0x5a, 1 << 20);
+	if (scratch[4095] != 0x5a) {
+		return 4;
+	}
+	free(scratch);
+
+	char got[32];
+	snprintf(got, sizeof(got), "%016llx", (unsigned long long)viprs_acad_abi_fingerprint());
+	printf("ABI_VERSION=%u ABI_FINGERPRINT=%s\n", viprs_acad_abi_version(), got);
+	if (argc > 1 && strcmp(got, argv[1]) != 0) {
+		fprintf(stderr, "probe: library reports %s, manifest says %s\n", got, argv[1]);
+		return 5;
+	}
+	return 0;
+}
+PROBE
+    SYSLIB_FLAGS=""
+    for lib in $(mfact static_system_libraries); do
+      SYSLIB_FLAGS="$SYSLIB_FLAGS -l$lib"
+    done
+    LINK_ARGS=$(mfact static_link_args)
+    # The documented order: the initialiser archive whole, ahead of the
+    # main one. Reversed, the link fails on RhRegisterOSModule.
+    # shellcheck disable=SC2086  # both lists are deliberate word-split arg lists
+    if cc "$WORK/probe.c" \
+          -Wl,--whole-archive "$STATIC_INIT_LIB" -Wl,--no-whole-archive \
+          "$STATIC_LIB" $LINK_ARGS $SYSLIB_FLAGS \
+          -o "$WORK/probe" > "$WORK/probe.log" 2>&1; then
+      set +e
+      "$WORK/probe" "$(mfact abi_fingerprint)" > "$WORK/probe.out" 2>&1
+      PROBE_STATUS=$?
+      set -e
+      if [ "$PROBE_STATUS" -eq 0 ]; then
+        echo "  static_certified holds: the archive links and runs here"
+        sed 's/^/    /' "$WORK/probe.out"
+      else
+        fail "static_certified is true but the linked probe exits $PROBE_STATUS (134 is the
+    runtime aborting, which is what an unforced initialiser looks like):
+$(sed 's/^/    /' "$WORK/probe.out")"
+      fi
+    else
+      fail "static_certified is true but the static smoke cannot link the archive:
+$(tail -20 "$WORK/probe.log")"
+    fi
+
+    # The path MANUAL.md actually tells a consumer to take. The C link
+    # above proves the archives are linkable; only this proves the
+    # directives a dependency's build script emits reach the binary that
+    # needs them, which is where the requirement went missing once.
+    CONSUMER_SMOKE="$(dirname "$0")/link_consumer_smoke.sh"
+    if [ -x "$CONSUMER_SMOKE" ] && command -v cargo >/dev/null 2>&1; then
+      if bash "$CONSUMER_SMOKE" "$ROOT" > "$WORK/consumer.log" 2>&1; then
+        echo "  the documented cargo recipe links and runs against this archive"
+      else
+        fail "the documented cargo recipe fails against this archive:
+$(tail -25 "$WORK/consumer.log")"
+      fi
+    else
+      echo "  cargo recipe: not run (no cargo on this host)"
+    fi
+  else
+    echo "  static_certified: not link-tested (this host cannot build for $PLATFORM/$CPU)"
+  fi
+fi
+
 
 if [ "$FAIL" -ne 0 ]; then
   echo ""

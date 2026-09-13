@@ -741,10 +741,19 @@ container image. There is no Windows cell and there will not be one.
 
 **`--target RID`**
 
-:   A .NET runtime identifier, repeatable, as an alias for the cell. The
-    version comes from `acadsharp/VERSION` and is never a CLI argument:
-    it carries two numbers (`3.7.1-viprs.1`, upstream plus shim
-    revision) and both reach the manifest.
+:   A .NET runtime identifier, repeatable, as an alias for the cell.
+
+**`--version VERSION`**
+
+:   The artifact version to build, e.g. `3.7.1-viprs.1`. Defaults to the
+    contents of `acadsharp/VERSION`, which is the usual case. The release
+    workflow passes its `workflow_dispatch` override here, so the
+    archives, the tag, the release notes and `artifact_version` in
+    `LINKINFO.json` all agree on one number; without it a dispatch
+    override tagged one version and shipped another. It also makes the
+    throwaway pre-release G1.5 has to cut reachable without committing a
+    version bump and reverting it. The version carries two numbers
+    (upstream plus shim revision) and both reach the manifest.
 
 **`--plan`**
 
@@ -756,8 +765,9 @@ container image. There is no Windows cell and there will not be one.
 ```
 acadsharp-<platform>-<cpu>/
 ├── lib/
-│   ├── libacadsharp_native.so    # .dylib on mac
-│   └── libacadsharp_native.a     # only where the static smoke certified it
+│   ├── libacadsharp_native.so       # .dylib on mac
+│   ├── libacadsharp_native.a        # only where the static smoke certified it
+│   └── libacadsharp_native_init.a   # one object: the runtime's static initialiser
 ├── include/
 │   └── viprs_acadsharp.h         # the frozen C ABI, byte-identical to the repo's
 ├── metadata/
@@ -772,21 +782,33 @@ acadsharp-<platform>-<cpu>/
 
 `LINKINFO.json` is the one to read. It carries the Rust triple, the ABI
 and wire versions, the header's sha256 and its first eight bytes as the
-fingerprint `viprs_acad_abi_fingerprint()` returns, and the
-`system_libraries` and `link_args` measured on the real link for that
-target. Two fields need care:
+fingerprint `viprs_acad_abi_fingerprint()` returns, and the link facts
+measured on that target.
 
-- `static_library` is **absent**, not empty, on a target that shipped no
-  static archive. An empty string reads as a path to anything that only
-  checks the key exists.
-- `static_certified` is written by the driver and only when the static
-  smoke linked and ran on that target. Shared-only is a recorded outcome,
-  not a failure.
+The two linking modes have separate fields, because they measure
+different things and a consumer cannot tell which it is holding
+otherwise:
 
-Nothing puts `NativeAOT_StaticInitialization` in `link_args`. That symbol
-does not exist in .NET 10: linking with `--require-defined` for it fails
-outright, and without it the link succeeds and the binary matches the JIT
-oracle. The driver refuses a manifest carrying it in either spelling.
+| field | when | what |
+| --- | --- | --- |
+| `shared_system_libraries` | always | the shared library's own `NEEDED` list, libc and the loader dropped |
+| `static_library` | certified only | the merged archive |
+| `static_init_library` | certified only | one object, the runtime's static initialiser |
+| `static_system_libraries` | certified only | what the static link needed |
+| `static_link_args` | certified only | extra flags that link needed, normally empty |
+
+The four `static_*` fields are present together when `static_certified`
+is `true` and absent together when it is `false`. Absent, not empty: an
+empty string is a path and an empty list is a measurement of none, and
+neither means "not measured". `static_certified` is written by the driver
+and only when the static smoke linked **and ran** on that target;
+shared-only is a recorded outcome, not a failure.
+
+Nothing puts `NativeAOT_StaticInitialization` in `static_link_args`. That
+symbol does not exist in .NET 10: linking with `--require-defined` for it
+fails outright, and without it the link succeeds and the binary matches
+the JIT oracle. Nothing puts any other symbol-forcing flag there either,
+for a different and larger reason, in the next section.
 
 ### Verification
 
@@ -807,9 +829,17 @@ it produces before calling one done. It enforces:
    out of the bytes rather than through `nm`, because GNU `nm` cannot
    read Mach-O, macOS `nm` cannot read ELF, and a check that skips itself
    when the tool cannot read the file is not a check.
-6. A static archive is `!<arch>` and never a GNU thin one, and
-   `static_certified: true` is held to an archive that actually links,
-   whenever the host can link for that target.
+6. A static archive is `!<arch>`, never a GNU thin one, and holds no two
+   members of the same name. Duplicates link today only because the
+   linker takes the first definition it finds, and they make
+   `--whole-archive` on that file impossible.
+7. `libacadsharp_native_init.a` holds exactly one small object and
+   defines the initialiser the consumer's `--whole-archive` pulls in.
+8. `static_certified: true` is held to an archive that links **and runs**
+   here, whenever the host can build for that target, and to the cargo
+   recipe above when the host has cargo. Linking alone cannot tell a
+   working archive from a broken one: without its initialiser the link
+   is clean and the binary aborts at the first call, which is exit 134.
 
 It needs `python3`, which parses the manifests and the checksums; a
 missing interpreter is a refusal rather than a skipped check.
@@ -821,18 +851,64 @@ check only the build host can make.
 
 ### Consuming the artifacts
 
+Shared, which is the easy one:
+
 ```bash
 tar xzf acadsharp-linux-x64.tgz
 cc main.c -I acadsharp-linux-x64/include \
    -L acadsharp-linux-x64/lib -lacadsharp_native -o main
 ```
 
-From Rust, read `metadata/LINKINFO.json` rather than guessing: match its
-`target` against `TARGET`, check `abi_version`, `wire_version` and
-`abi_fingerprint` against the generated bindings, then emit
-`cargo:rustc-link-search`, one `cargo:rustc-link-lib` per
-`system_libraries` entry and one `cargo:rustc-link-arg` per `link_args`
-entry.
+Static needs the initialiser archive, whole and first:
+
+```bash
+cc main.c -I acadsharp-linux-x64/include \
+   -Wl,--whole-archive acadsharp-linux-x64/lib/libacadsharp_native_init.a \
+   -Wl,--no-whole-archive acadsharp-linux-x64/lib/libacadsharp_native.a \
+   -lm -o main
+```
+
+`libacadsharp_native_init.a` holds one object: the runtime's static
+initialiser, which lives in `.init_array` and **defines no symbol anyone
+references**. Link it as an ordinary archive and the linker leaves it
+out, the link succeeds, and the binary aborts on the first call into the
+library. Put it after the main archive and the link fails on
+`RhRegisterOSModule`.
+
+### Consuming from Rust
+
+Read `metadata/LINKINFO.json` rather than guessing: match its `target`
+against `TARGET`, check `abi_version`, `wire_version` and
+`abi_fingerprint` against the generated bindings, then, from a `-sys`
+crate's build script:
+
+```
+cargo:rustc-link-search=native=<archive>/lib
+cargo:rustc-link-lib=static:+whole-archive=acadsharp_native_init
+cargo:rustc-link-lib=static=acadsharp_native
+cargo:rustc-link-lib=<each static_system_libraries entry>
+```
+
+in that order, or, for the shared library, `cargo:rustc-link-lib=
+acadsharp_native` plus one `cargo:rustc-link-lib` per
+`shared_system_libraries` entry.
+
+**Do not express any of this as `cargo:rustc-link-arg`.** Cargo does not
+treat the directives alike. `rustc-link-search` and `rustc-link-lib`
+travel to the link line of everything that depends on the emitting
+crate; `rustc-link-arg` binds to that package's own targets and goes no
+further. A requirement written as an argument therefore reaches the
+`-sys` crate's own tests and examples, stays green there, and is missing
+from every binary that depends on it. That is why the initialiser ships
+as `static_init_library` and is pulled in with `static:+whole-archive`
+rather than forced with `-Wl,-u,<symbol>`, and why `static_link_args` is
+normally empty: anything in it has to be applied by the final binary's
+own package, not by a dependency.
+
+`acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs
+exactly that recipe through a two-crate workspace and executes the
+binary, and `acadsharp/scripts/verify_archive.sh` runs it too when the
+host can build for the archive's target.
 
 ### Examples
 

@@ -27,10 +27,13 @@ Two things this driver will not do, both measured in ADR 0001:
     in a container pinned to its own architecture and a foreign-arch cell
     on a Linux host needs a runner of that architecture. On an Apple
     Silicon host the amd64 cells run under Rosetta, which is not QEMU.
-  - It does not put `NativeAOT_StaticInitialization` in `link_args`. That
-    symbol does not exist in .NET 10; linking with `--require-defined`
-    for it fails outright, and `make_linkinfo` refuses a manifest that
-    carries it.
+  - It does not put `NativeAOT_StaticInitialization`, or any other
+    symbol-forcing flag, in `static_link_args`. That symbol does not
+    exist in .NET 10, and more importantly a link argument cannot carry
+    a requirement to the binary that needs it: a dependency's build
+    script emits `cargo:rustc-link-arg` for its own targets only. The
+    runtime's initialiser therefore ships as `static_init_library`, an
+    archive the consumer whole-archives ahead of the main one.
 """
 
 import argparse
@@ -164,6 +167,19 @@ STATIC_TARGETS = ("linux-x64", "linux-arm64", "linux-musl-x64", "linux-musl-arm6
 # assembly name); the archive ships a name `-lacadsharp_native` can take.
 SHARED_LIBRARY_STEM = "libacadsharp_native"
 STATIC_LIBRARY_NAME = "libacadsharp_native.a"
+# The runtime's static initialiser, on its own, in its own archive.
+#
+# It cannot live in the merged archive. libbootstrapperdll.o carries the
+# initialiser in .init_array and defines no global symbol, so nothing can
+# ever resolve against it and the linker leaves it out; the link then
+# succeeds and the binary aborts on the first managed call. Forcing it
+# with a link argument works for a hand-written cc line and does not work
+# for the consumer this ships to: `cargo:rustc-link-arg` binds only to the
+# emitting package's own targets and never reaches a dependent's link
+# line, while `cargo:rustc-link-lib` does. So the requirement is expressed
+# as a library rather than as an argument, and the consumer whole-archives
+# it ahead of the main one.
+STATIC_INIT_LIBRARY_NAME = "libacadsharp_native_init.a"
 PUBLISHED_ASSEMBLY = "viprs_acadsharp"
 
 # The manifest field lists are frozen. `acadsharp-rs`'s build.rs parses
@@ -184,10 +200,24 @@ LINKINFO_FIELDS = (
     "abi_header_sha256",
     "abi_fingerprint",
     "shared_library",
+    "shared_system_libraries",
     "static_library",
+    "static_init_library",
     "static_certified",
-    "system_libraries",
-    "link_args",
+    "static_system_libraries",
+    "static_link_args",
+)
+
+# The four that describe the static link appear together or not at all,
+# and only when the static smoke linked and ran. A field whose meaning
+# depends on another field's value is what a build.rs author gets wrong,
+# so "measured" and "absent" are the only two states here rather than
+# "present but describing the other linking mode".
+STATIC_LINKINFO_FIELDS = (
+    "static_library",
+    "static_init_library",
+    "static_system_libraries",
+    "static_link_args",
 )
 
 BUILDINFO_FIELDS = (
@@ -211,6 +241,14 @@ LINKINFO_SCHEMA_VERSION = 1
 # harden it, so `make_linkinfo` refuses it rather than trusting whoever
 # copied it out of the NativeAOT sample.
 DEAD_STATIC_INIT_SYMBOL = "NativeAOT_StaticInitialization"
+
+# Anything that forces a symbol is refused in `static_link_args`, whatever
+# symbol it names. Not because forcing is wrong, but because a link
+# argument cannot carry a requirement to the binary that needs it: a
+# dependency's build script emits `cargo:rustc-link-arg` for its own
+# targets only. A requirement that has to travel is a library, and
+# `static_init_library` is where this one went.
+SYMBOL_FORCING_FLAGS = ("-u", "--undefined", "--require-defined")
 
 
 class SourceTreeError(RuntimeError):
@@ -516,9 +554,9 @@ def header_entry_points(path=HEADER_PATH):
 def linkinfo_skeleton(plat, arch, version=None):
     """Everything in LINKINFO.json that is known before the link runs.
 
-    Deliberately without `system_libraries` and `link_args`: those are
-    measured on the target and passed to `make_linkinfo`. The example in
-    issue #48 is an example, not a default.
+    Deliberately without any of the measured link facts: those come off
+    the target and are passed to `make_linkinfo`. The example in issue
+    #48 is an example, not a default.
     """
     version = version or read_version()
     upstream, _shim = split_version(version)
@@ -544,62 +582,106 @@ def make_linkinfo(
     plat,
     arch,
     *,
-    system_libraries,
-    link_args,
+    shared_system_libraries,
     static_library=None,
+    static_init_library=None,
     static_certified=False,
+    static_system_libraries=None,
+    static_link_args=None,
     version=None,
 ):
     """The complete manifest for one target.
 
-    `static_library` is absent rather than empty on a target that built
-    none, because an empty string reads as "there is one, at path ''" to
-    anything that only checks the key exists. `static_certified` is only
-    ever `True` when the caller has actually run the static smoke; this
-    function refuses the combination that cannot be true.
+    The four `static_*` link fields are present exactly when the static
+    smoke linked and ran, and absent otherwise. Absent rather than empty,
+    because an empty string is a path and an empty list is a measurement,
+    and a consumer cannot tell either from "not measured".
+
+    `static_certified` is only ever `True` when the caller has actually
+    run that smoke; this function refuses the combinations that cannot be
+    true rather than trusting whoever filled the dict in.
     """
-    if static_library is not None and not static_library:
+    measured = {
+        "static_library": static_library,
+        "static_init_library": static_init_library,
+        "static_system_libraries": static_system_libraries,
+        "static_link_args": static_link_args,
+    }
+    given = {k: v for k, v in measured.items() if v is not None}
+
+    if static_certified:
+        missing = sorted(set(STATIC_LINKINFO_FIELDS) - set(given))
+        if missing:
+            raise ValueError(
+                f"static_certified is true but {missing} were not measured. The flag "
+                "records that the static smoke linked and ran, which means every part "
+                "of that link was observed."
+            )
+    elif given:
         raise ValueError(
-            "static_library must be absent, not empty, on a target that built no "
-            "static library. An empty path is a path."
-        )
-    if static_certified and static_library is None:
-        raise ValueError(
-            "static_certified cannot be true without a static_library. The flag "
-            "records that the static smoke linked and ran against a real archive."
+            f"{sorted(given)} were given without static_certified. A static link "
+            "nobody ran is not something to describe; ship shared-only instead."
         )
 
-    for name in system_libraries:
-        if name.startswith("-") or os.sep in name or name.endswith((".a", ".so", ".dylib")):
+    for field in ("static_library", "static_init_library"):
+        value = measured[field]
+        if value is not None and not value:
             raise ValueError(
-                f"system_libraries entries are bare library names, not flags or paths: "
-                f"{name!r}. build.rs emits cargo:rustc-link-lib={{}} for each, so a `-l` "
-                "here becomes `-l-lm` downstream."
+                f"{field} must be absent, not empty, on a target that built none. "
+                "An empty path is a path."
             )
-    for arg in link_args:
+
+    _check_bare_library_names(shared_system_libraries, "shared_system_libraries")
+    if static_system_libraries is not None:
+        _check_bare_library_names(static_system_libraries, "static_system_libraries")
+
+    for arg in static_link_args or []:
         if DEAD_STATIC_INIT_SYMBOL in arg:
             raise ValueError(
                 f"{arg!r} names {DEAD_STATIC_INIT_SYMBOL}, which does not exist in "
                 ".NET 10. ADR 0001 measured it: --require-defined for that symbol "
                 "fails the link outright, and without it the link succeeds and the "
-                "binary matches the JIT oracle. Take link_args from the real link."
+                "binary matches the JIT oracle. Take static_link_args from the real link."
+            )
+        if any(flag in arg for flag in SYMBOL_FORCING_FLAGS):
+            raise ValueError(
+                f"{arg!r} forces a symbol, and a link argument cannot carry that "
+                "requirement to the binary that needs it: a dependency's build script "
+                "emits cargo:rustc-link-arg for its own targets only, so the flag "
+                f"never reaches a dependent's link line. Ship it as "
+                f"{STATIC_INIT_LIBRARY_NAME} and let the consumer whole-archive it."
             )
 
     info = linkinfo_skeleton(plat, arch, version=version)
+    info["shared_system_libraries"] = list(shared_system_libraries)
     if static_library is not None:
         info["static_library"] = f"lib/{os.path.basename(static_library)}"
+    if static_init_library is not None:
+        info["static_init_library"] = f"lib/{os.path.basename(static_init_library)}"
     info["static_certified"] = bool(static_certified)
-    info["system_libraries"] = list(system_libraries)
-    info["link_args"] = list(link_args)
+    if static_system_libraries is not None:
+        info["static_system_libraries"] = list(static_system_libraries)
+    if static_link_args is not None:
+        info["static_link_args"] = list(static_link_args)
 
     expected = set(LINKINFO_FIELDS)
-    if static_library is None:
-        expected.discard("static_library")
+    if not static_certified:
+        expected -= set(STATIC_LINKINFO_FIELDS)
     if set(info) != expected:
         missing = sorted(expected - set(info))
         extra = sorted(set(info) - expected)
         raise ValueError(f"LINKINFO fields drifted: missing {missing}, unexpected {extra}")
     return {k: info[k] for k in LINKINFO_FIELDS if k in info}
+
+
+def _check_bare_library_names(names, field):
+    for name in names:
+        if name.startswith("-") or os.sep in name or name.endswith((".a", ".so", ".dylib")):
+            raise ValueError(
+                f"{field} entries are bare library names, not flags or paths: "
+                f"{name!r}. build.rs emits cargo:rustc-link-lib={{}} for each, so a `-l` "
+                "here becomes `-l-lm` downstream."
+            )
 
 
 def make_buildinfo(
@@ -705,6 +787,7 @@ def archive_smoke_source(entry_points=None):
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char *ENTRY_POINTS[] = {{
@@ -742,6 +825,16 @@ int main(int argc, char **argv)
 \tuint64_t (*fingerprint)(void) =
 \t\t(uint64_t (*)(void))dlsym(h, "viprs_acad_abi_fingerprint");
 
+\t/* Touch the heap through the library's own runtime before asking it
+\t * anything, so a build whose runtime never came up cannot answer. */
+\tchar *scratch = (char *)malloc(1 << 20);
+\tif (!scratch) {{
+\t\tfprintf(stderr, "smoke: out of memory\\n");
+\t\treturn 6;
+\t}}
+\tmemset(scratch, 0x5a, 1 << 20);
+\tfree(scratch);
+
 \tchar got[32];
 \tsnprintf(got, sizeof(got), "%016llx", (unsigned long long)fingerprint());
 \tprintf("ABI_VERSION=%u\\n", abi_version());
@@ -767,6 +860,7 @@ def static_smoke_source(entry_points=None):
 /* Generated by build_acadsharp.py from include/viprs_acadsharp.h. */
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 {externs}
@@ -776,6 +870,17 @@ int main(int argc, char **argv)
 {{
 \tuintptr_t sink = 0;
 {calls}
+\t/* Touch the heap. A managed export that only returns a constant can be
+\t * satisfied by a binary whose runtime never came up; allocating cannot. */
+\tchar *scratch = (char *)malloc(1 << 20);
+\tif (!scratch) {{
+\t\tfprintf(stderr, "static smoke: out of memory\\n");
+\t\treturn 6;
+\t}}
+\tmemset(scratch, 0x5a, 1 << 20);
+\tsink += (uintptr_t)scratch[4095];
+\tfree(scratch);
+
 \tif (argc < 2) {{
 \t\tfprintf(stderr, "usage: static_archive_smoke <expected-fingerprint-hex>\\n");
 \t\treturn 2;
@@ -956,6 +1061,7 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
         # error here rather than a silent shared-only downgrade.
         BOOTSTRAP=$(find "$HOME/.nuget/packages" -name 'libbootstrapperdll.o' | head -1)
         PACK=$(dirname "$BOOTSTRAP")
+        INIT_SYM=""
         if [ -n "$MANAGED" ] && [ -f "$BOOTSTRAP" ]; then
             # libbootstrapperdll.o carries the runtime's static
             # initialiser in .init_array and defines no global symbol at
@@ -964,27 +1070,64 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
             # NativeAOT_StaticInitialization, the symbol the sample says
             # to force, so there is nothing left to --require-defined.
             # Globalising the initialiser gives the link something to
-            # force, and that flag is what `link_args` then records.
+            # reach, and it ships in an archive of its own that the
+            # consumer whole-archives, because an argument that forces a
+            # symbol does not travel from a dependency's build script to
+            # the binary that needs it and a library does.
             INIT_SYM=$(nm "$BOOTSTRAP" \
                 | awk '$2 == "t" && $3 ~ /^_GLOBAL__sub_I/ { print $3; exit }')
-            if [ -z "$INIT_SYM" ]; then
-                echo "no static initialiser in $BOOTSTRAP; shipping shared-only"
+        fi
+        if [ -z "$INIT_SYM" ]; then
+            echo "no managed archive, runtime pack or static initialiser; shipping shared-only"
+        else
+            INIT_A="$STAGING/lib/libacadsharp_native_init.a"
+            MERGED="$STAGING/lib/libacadsharp_native.a"
+            rm -f "$INIT_A" "$MERGED"
+            objcopy --globalize-symbol="$INIT_SYM" "$BOOTSTRAP" /tmp/bootstrapperdll.o
+            ar rcs "$INIT_A" /tmp/bootstrapperdll.o
+
+            # Merge by extracting rather than by `ar addlib`, because
+            # addlib keeps each source's member names and two runtime
+            # archives ship objects of the same name. The result was an
+            # archive holding two members called entrypoints.c.o, which
+            # links today only because the linker takes the first
+            # definition it finds. Prefixing each member with the archive
+            # it came from keeps every object and leaves no two sharing a
+            # name.
+            MERGE_DIR=/tmp/merge
+            rm -rf "$MERGE_DIR"
+            mkdir -p "$MERGE_DIR"
+            MERGE_OK=1
+            for name in RUNTIME_ARCHIVE_LIST; do
+                [ -f "$PACK/$name" ] && echo "$PACK/$name"
+            done > /tmp/merge-sources.txt
+            echo "$MANAGED" >> /tmp/merge-sources.txt
+            while read -r src; do
+                [ -n "$src" ] || continue
+                stem=$(basename "$src" .a)
+                d="$MERGE_DIR/$stem"
+                mkdir -p "$d"
+                (cd "$d" && ar x "$src")
+                WANT=$(ar t "$src" | wc -l)
+                GOT=$(find "$d" -maxdepth 1 -type f | wc -l)
+                if [ "$WANT" -ne "$GOT" ]; then
+                    echo "$src holds $WANT members but extracted $GOT, so a member was lost"
+                    MERGE_OK=0
+                fi
+                for o in "$d"/*; do
+                    [ -f "$o" ] || continue
+                    mv "$o" "$MERGE_DIR/${stem}__$(basename "$o")"
+                done
+                rmdir "$d"
+            done < /tmp/merge-sources.txt
+
+            if [ "$MERGE_OK" != "1" ]; then
+                echo "the merge would have dropped an object; shipping shared-only"
+                rm -f "$INIT_A" "$MERGED"
             else
-                objcopy --globalize-symbol="$INIT_SYM" "$BOOTSTRAP" /tmp/bootstrapperdll.o
-                MERGED="$STAGING/lib/libacadsharp_native.a"
-                {
-                    echo "create $MERGED"
-                    echo "addlib $MANAGED"
-                    for name in RUNTIME_ARCHIVE_LIST; do
-                        [ -f "$PACK/$name" ] && echo "addlib $PACK/$name"
-                    done
-                    echo "addmod /tmp/bootstrapperdll.o"
-                    echo "save"
-                    echo "end"
-                } > /tmp/merge.mri
-                ar -M < /tmp/merge.mri && ranlib "$MERGED"
+                find "$MERGE_DIR" -maxdepth 1 -type f -print0 | xargs -0 ar rcs "$MERGED"
+                ranlib "$MERGED"
                 echo "---- static smoke ----"
-                LINK_ARG="-Wl,-u,$INIT_SYM"
                 LADDER='STATIC_SYSTEM_LIBRARY_LADDER'
                 OLDIFS=$IFS
                 IFS=';'
@@ -992,13 +1135,20 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                     IFS=$OLDIFS
                     SYSLIBS=""
                     for lib in $CAND; do SYSLIBS="$SYSLIBS -l$lib"; done
+                    # The documented link: the initialiser archive whole,
+                    # ahead of the main one. Reversing the two fails with
+                    # an undefined reference to RhRegisterOSModule, and
+                    # dropping the whole-archive links clean and aborts on
+                    # the first managed call.
                     # shellcheck disable=SC2086
-                    if cc -O1 "$WORK/static_archive_smoke.c" "$MERGED" "$LINK_ARG" \
-                            $SYSLIBS -o /tmp/static_smoke > /tmp/static_link.log 2>&1 \
+                    if cc -O1 "$WORK/static_archive_smoke.c" \
+                            -Wl,--whole-archive "$INIT_A" -Wl,--no-whole-archive \
+                            "$MERGED" $SYSLIBS -o /tmp/static_smoke \
+                            > /tmp/static_link.log 2>&1 \
                             && /tmp/static_smoke "$FINGERPRINT" > /tmp/static_smoke.out 2>&1; then
                         fact static_ok 1
                         fact static_system_libraries "$CAND"
-                        fact static_link_args "$LINK_ARG"
+                        fact static_link_args ""
                         cat /tmp/static_smoke.out
                         break
                     fi
@@ -1010,11 +1160,9 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                     echo "static smoke did not pass, shipping shared-only:"
                     tail -30 /tmp/static_link.log 2>/dev/null || true
                     tail -10 /tmp/static_smoke.out 2>/dev/null || true
-                    rm -f "$MERGED"
+                    rm -f "$MERGED" "$INIT_A"
                 fi
             fi
-        else
-            echo "no managed static archive or no NativeAOT runtime pack; shipping shared-only"
         fi
     else
         echo "static publish failed, shipping shared-only:"
@@ -1187,9 +1335,12 @@ def archive_readme(plat, arch, version):
     """The README.md that ships inside the archive."""
     name = staging_dir_name(plat, arch)
     static_note = (
-        "`lib/libacadsharp_native.a` is present only when the static smoke linked "
-        "and ran on this target; `metadata/LINKINFO.json` records that as "
-        "`static_certified`."
+        "`lib/libacadsharp_native.a` and `lib/libacadsharp_native_init.a` are "
+        "present only when the static smoke linked and ran on this target; "
+        "`metadata/LINKINFO.json` records that as `static_certified`. Link the "
+        "init archive whole and ahead of the main one: it carries the runtime's "
+        "static initialiser and nothing references it, so without "
+        "`--whole-archive` the link succeeds and the first call aborts."
     )
     return f"""\
 # {name}
@@ -1204,8 +1355,9 @@ ACadSharp {split_version(version)[0]} behind the VIPRS CAD C ABI, built with
 
 Read `metadata/LINKINFO.json` rather than guessing: it carries the Rust
 target triple, the ABI and wire versions, the header's sha256 and
-fingerprint, and the `system_libraries` and `link_args` measured on the
-real link for this target. {static_note}
+fingerprint, `shared_system_libraries` measured from the shared library's
+own NEEDED list, and, when the static smoke certified this target, the
+`static_*` fields measured from that link. {static_note}
 
 Verify the archive before using it:
 
@@ -1220,26 +1372,33 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
     """Write the manifests, the README and CHECKSUMS.txt into a staged tree."""
     version = version or read_version()
     static_path = os.path.join(staging_root, "lib", STATIC_LIBRARY_NAME)
-    certified = facts.get("static_ok") == "1" and os.path.isfile(static_path)
+    init_path = os.path.join(staging_root, "lib", STATIC_INIT_LIBRARY_NAME)
+    certified = (
+        facts.get("static_ok") == "1" and os.path.isfile(static_path) and os.path.isfile(init_path)
+    )
+
+    # Measured on every target, from the shared library's own NEEDED list
+    # with libc and the loader dropped, because nothing links those by
+    # name. This is the list a consumer linking the shared library needs,
+    # and it is not the static link's list; they used to share a field.
+    shared_system_libraries = facts.get("shared_needed", "").split()
 
     if certified:
-        # The static link is the harder of the two, so its requirements
-        # are what the manifest records; they are a superset of what the
-        # shared library needs.
-        system_libraries = facts.get("static_system_libraries", "").split()
+        linkinfo = make_linkinfo(
+            plat,
+            arch,
+            shared_system_libraries=shared_system_libraries,
+            static_library=STATIC_LIBRARY_NAME,
+            static_init_library=STATIC_INIT_LIBRARY_NAME,
+            static_certified=True,
+            static_system_libraries=facts.get("static_system_libraries", "").split(),
+            static_link_args=[a for a in facts.get("static_link_args", "").split() if a],
+            version=version,
+        )
     else:
-        system_libraries = facts.get("shared_needed", "").split()
-    link_args = [a for a in facts.get("static_link_args", "").split() if a]
-
-    linkinfo = make_linkinfo(
-        plat,
-        arch,
-        system_libraries=system_libraries,
-        link_args=link_args,
-        static_library=STATIC_LIBRARY_NAME if certified else None,
-        static_certified=certified,
-        version=version,
-    )
+        linkinfo = make_linkinfo(
+            plat, arch, shared_system_libraries=shared_system_libraries, version=version
+        )
 
     warnings = facts.get("aot_warning_count", "").strip()
     buildinfo = make_buildinfo(
@@ -1261,10 +1420,12 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
     with open(os.path.join(staging_root, "README.md"), "w") as f:
         f.write(archive_readme(plat, arch, version))
 
-    # An uncertified target must not ship a static archive nothing has
-    # linked. Shared-only is a recorded outcome; an unusable .a is not.
-    if not certified and os.path.isfile(static_path):
-        os.remove(static_path)
+    # An uncertified target must not ship either static archive. Shared-only
+    # is a recorded outcome; a `.a` nobody has linked is an invitation.
+    if not certified:
+        for path in (static_path, init_path):
+            if os.path.isfile(path):
+                os.remove(path)
 
     write_checksums(staging_root)
     return linkinfo
@@ -1553,8 +1714,8 @@ def release_notes(version):
         f"(shim revision {shim}). No .NET runtime is needed to use these.\n\n"
         "Each archive contains:\n"
         "- `lib/libacadsharp_native.so` (`.dylib` on mac) — the shared library\n"
-        "- `lib/libacadsharp_native.a` — the static archive, where the static smoke "
-        "certified it\n"
+        "- `lib/libacadsharp_native.a` and `lib/libacadsharp_native_init.a` — the "
+        "static archives, where the static smoke certified them\n"
         "- `include/viprs_acadsharp.h` — the frozen C ABI\n"
         "- `metadata/LINKINFO.json` — Rust triple, ABI fields and the measured link facts\n"
         "- `metadata/BUILDINFO.json` — what produced the binaries\n"
@@ -1661,6 +1822,16 @@ def main(argv=None):
         choices=sorted(TARGETS),
         help="a .NET runtime identifier to build, repeatable. An alias for the cell.",
     )
+    parser.add_argument(
+        "--version",
+        default=None,
+        metavar="VERSION",
+        help=(
+            "artifact version to build, e.g. 3.7.1-viprs.1. Defaults to the contents "
+            "of acadsharp/VERSION. The release workflow passes its dispatch override "
+            "here, so the archives, the tag and LINKINFO.json agree on one number."
+        ),
+    )
     parser.add_argument("--parallel", action="store_true", help="fan out every cell at once")
     parser.add_argument("--plan", action="store_true", help="print the commands and stop")
     parser.add_argument("--upload", action="store_true", help="verify, then publish to Releases")
@@ -1672,8 +1843,11 @@ def main(argv=None):
     except ValueError as exc:
         parser.error(str(exc))
 
-    version = read_version()
-    upstream, shim = split_version(version)
+    version = args.version or read_version()
+    try:
+        upstream, shim = split_version(version)
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         source_sha256(upstream)
         source_commit(upstream)

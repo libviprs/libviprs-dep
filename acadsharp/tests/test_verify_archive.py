@@ -53,20 +53,59 @@ def _require_toolchain():
 # ---------------------------------------------------------------------------
 
 
-def _stub_source(symbols, pad_name="pad", undefined=None):
+def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
+    """A stand-in library. `guarded` makes it need its initialiser.
+
+    The real archive's exports abort when the runtime was never brought
+    up, which is the whole reason the initialiser has to be forced. The
+    fixture reproduces that with a flag the init object's constructor
+    sets, so a probe that only links and never runs cannot tell a good
+    archive from a broken one here either.
+    """
     fingerprint = int(ba.abi_fingerprint(), 16)
-    body = ["#include <stdint.h>", f'const char {pad_name}[] = "{"x" * PAD_BYTES}";']
+    body = [
+        "#include <stdint.h>",
+        "#include <stdlib.h>",
+        f'const char {pad_name}[] = "{"x" * PAD_BYTES}";',
+    ]
+    if guarded:
+        body.append("int viprs_test_initialised = 0;")
+        guard = "\n\tif (!viprs_test_initialised) { abort(); }"
+    else:
+        guard = ""
     if undefined:
         body.append(f"extern uint32_t {undefined}(void);")
     for name in symbols:
         if name == "viprs_acad_abi_fingerprint":
-            body.append(f"uint64_t {name}(void) {{ return {fingerprint}ULL; }}")
+            body.append(f"uint64_t {name}(void) {{{guard}\n\treturn {fingerprint}ULL;\n}}")
         elif name == "viprs_acad_abi_version":
             tail = f" + {undefined}()" if undefined else ""
-            body.append(f"uint32_t {name}(void) {{ return 1u{tail}; }}")
+            body.append(f"uint32_t {name}(void) {{{guard}\n\treturn 1u{tail};\n}}")
         else:
             body.append(f"uint32_t {name}(void) {{ return 0u; }}")
     return "\n".join(body) + "\n"
+
+
+# The initialiser object, in the shape the real one has: a constructor
+# reachable by name, referencing the main archive rather than the other
+# way round, so nothing ever pulls it in by symbol resolution and only
+# `--whole-archive` can.
+INIT_SOURCE = """\
+extern int viprs_test_initialised;
+void _GLOBAL__sub_I_fixture(void) __attribute__((constructor));
+void _GLOBAL__sub_I_fixture(void) { viprs_test_initialised = %d; }
+"""
+
+
+def _build_init_archive(work, lib, *, effective=True, name=None):
+    src = os.path.join(work, f"init{'' if effective else '-inert'}.c")
+    with open(src, "w") as f:
+        f.write(INIT_SOURCE % (1 if effective else 0))
+    obj = src[:-2] + ".o"
+    subprocess.run(["cc", "-fPIC", "-c", src, "-o", obj], check=True)
+    path = os.path.join(lib, name or ba.STATIC_INIT_LIBRARY_NAME)
+    subprocess.run(["ar", "rcs", path, obj], check=True)
+    return path
 
 
 def _finish(root, plat, arch, *, static_certified):
@@ -92,14 +131,16 @@ def _finish(root, plat, arch, *, static_certified):
         "linker_version": "GNU ld 2.40",
         "shared_needed": "m",
         "static_ok": "1" if static_certified else "0",
-        "static_system_libraries": "m",
-        "static_link_args": "-Wl,-u,_GLOBAL__sub_I_main.cpp",
+        "static_system_libraries": "",
+        "static_link_args": "",
     }
     ba.finish_archive(root, plat, arch, facts, builder_image="debian:bookworm-slim")
     return root
 
 
-def _build_linux_tree(work, symbols=ENTRY_POINTS, *, static_symbols=None, undefined=None):
+def _build_linux_tree(
+    work, symbols=ENTRY_POINTS, *, static_symbols=None, undefined=None, init_effective=True
+):
     """Compile a stand-in library and lay it out exactly like a release."""
     root = os.path.join(work, f"acadsharp-linux-{HOST_CPU}")
     lib = os.path.join(root, "lib")
@@ -122,10 +163,15 @@ def _build_linux_tree(work, symbols=ENTRY_POINTS, *, static_symbols=None, undefi
 
     static_src = os.path.join(work, "static.c")
     with open(static_src, "w") as f:
-        f.write(_stub_source(static_symbols or symbols, pad_name="spad", undefined=undefined))
+        f.write(
+            _stub_source(
+                static_symbols or symbols, pad_name="spad", undefined=undefined, guarded=True
+            )
+        )
     obj = os.path.join(work, "static.o")
     subprocess.run(["cc", "-fPIC", "-c", static_src, "-o", obj], check=True)
     subprocess.run(["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj], check=True)
+    _build_init_archive(work, lib, effective=init_effective)
 
     return _finish(root, "linux", HOST_ARCH, static_certified=True)
 
@@ -221,6 +267,19 @@ def tree_with_an_unlinkable_static_library(tmp_path_factory):
     )
 
 
+@pytest.fixture(scope="session")
+def tree_with_an_inert_initialiser(tmp_path_factory):
+    """Links perfectly, aborts on the first call. The whole point.
+
+    The init archive is there, the right size, one object, and carries a
+    reachable constructor, so every static check passes. The constructor
+    just does not do its job, which is what an unforced initialiser looks
+    like from the outside, and only running the probe can see it.
+    """
+    _require_toolchain()
+    return _build_linux_tree(str(tmp_path_factory.mktemp("inert")), init_effective=False)
+
+
 def _clone(tree, tmp_path):
     dest = os.path.join(str(tmp_path), os.path.basename(tree))
     shutil.copytree(tree, dest, symlinks=True)
@@ -278,6 +337,10 @@ def _shared(root, plat="linux"):
 
 def _static(root):
     return os.path.join(root, "lib", ba.STATIC_LIBRARY_NAME)
+
+
+def _static_init(root):
+    return os.path.join(root, "lib", ba.STATIC_INIT_LIBRARY_NAME)
 
 
 # ---------------------------------------------------------------------------
@@ -653,22 +716,13 @@ class TestManifestIntegrity:
         assert result.returncode == 1
         assert name in _output(result)
 
-    @pytest.mark.parametrize("field", list(ba.LINKINFO_FIELDS))
+    @pytest.mark.parametrize(
+        "field", [f for f in ba.LINKINFO_FIELDS if f not in ba.STATIC_LINKINFO_FIELDS]
+    )
     def test_a_linkinfo_missing_a_frozen_field_is_rejected(self, tmp_path, good_tree, field):
         root = _clone(good_tree, tmp_path)
         _edit_json(root, "LINKINFO.json", lambda doc: doc.pop(field, None))
         result = _verify(_repack(root))
-        if field == "static_library":
-            # Absent is legal. It then has to be absent from the archive
-            # too, and static_certified has to be false: an unmentioned
-            # `.a` sitting in lib/ is a defect of its own, which is what
-            # the first refusal below is.
-            assert result.returncode == 1
-            assert "does not mention it" in _output(result)
-            os.remove(_static(root))
-            _edit_json(root, "LINKINFO.json", lambda doc: doc.update(static_certified=False))
-            assert _verify(_repack(root)).returncode == 0
-            return
         assert result.returncode == 1
         assert field in _output(result)
 
@@ -723,15 +777,11 @@ class TestManifestIntegrity:
 class TestStaticCertification:
     def test_certified_without_a_static_library_is_rejected(self, tmp_path, good_tree):
         root = _clone(good_tree, tmp_path)
-
-        def drop(doc):
-            doc.pop("static_library", None)
-            doc["static_certified"] = True
-
-        _edit_json(root, "LINKINFO.json", drop)
+        os.remove(_static(root))
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.pop("static_library"))
         result = _verify(_repack(root))
         assert result.returncode == 1
-        assert "static_certified" in _output(result)
+        assert "static_library" in _output(result)
 
     def test_certified_with_a_library_that_cannot_link_is_rejected(
         self, tmp_path, tree_with_an_unlinkable_static_library
@@ -741,13 +791,22 @@ class TestStaticCertification:
         assert result.returncode == 1
         assert "static" in _output(result) and "link" in _output(result)
 
-    def test_an_uncertified_static_library_is_not_link_tested(
+    def test_an_uncertified_target_ships_neither_static_archive(
         self, tmp_path, tree_with_an_unlinkable_static_library
     ):
-        # The archive still ships; the manifest says the smoke did not
-        # pass, and that is the recorded outcome.
+        # Shared-only is a recorded outcome. It means the whole static
+        # story comes out: both archives and all four manifest fields, so
+        # a consumer cannot half-read one.
         root = _clone(tree_with_an_unlinkable_static_library, tmp_path)
-        _edit_json(root, "LINKINFO.json", lambda doc: doc.update(static_certified=False))
+        for path in (_static(root), _static_init(root)):
+            os.remove(path)
+
+        def drop(doc):
+            for field in ba.STATIC_LINKINFO_FIELDS:
+                doc.pop(field, None)
+            doc["static_certified"] = False
+
+        _edit_json(root, "LINKINFO.json", drop)
         result = _verify(_repack(root))
         assert result.returncode == 0, _output(result)
 
@@ -787,3 +846,161 @@ class TestTheManifestPointsAtTheLibrariesThatAreThere:
         result = _verify(_repack(root))
         assert result.returncode == 1
         assert "dylib" in _output(result)
+
+
+class TestTheStaticInitArchive:
+    """The archive that carries the runtime's static initialiser.
+
+    It is separate from the main one because the requirement has to reach
+    a binary two crates away, and only a library does that: a build
+    script's `cargo:rustc-link-arg` binds to its own package's targets.
+    """
+
+    def test_a_certified_archive_must_ship_one(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        os.remove(_static_init(root))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "static_init_library" in _output(result)
+
+    def test_an_unmentioned_init_archive_is_rejected(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.pop("static_init_library"))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "static_init_library" in _output(result)
+
+    def test_an_init_archive_with_no_initialiser_is_rejected(self, tmp_path, good_tree):
+        # An archive holding an object that defines no `_GLOBAL__sub_I*`
+        # carries nothing the consumer's --whole-archive can act on.
+        root = _clone(good_tree, tmp_path)
+        src = os.path.join(str(tmp_path), "empty.c")
+        with open(src, "w") as f:
+            f.write("int viprs_unrelated_thing = 1;\n")
+        obj = src[:-2] + ".o"
+        subprocess.run(["cc", "-fPIC", "-c", src, "-o", obj], check=True)
+        os.remove(_static_init(root))
+        subprocess.run(["ar", "rcs", _static_init(root), obj], check=True)
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "_GLOBAL__sub_I" in _output(result)
+
+    def test_an_init_archive_holding_the_whole_runtime_is_rejected(self, tmp_path, good_tree):
+        # If the merge puts the runtime in the init archive, the consumer
+        # whole-archives all of it into every binary.
+        root = _clone(good_tree, tmp_path)
+        shutil.copy2(_static(root), _static_init(root))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "too big to be one initialiser" in out or "expected exactly 1" in out, out
+
+    def test_more_than_one_object_in_it_is_rejected(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        extra = os.path.join(str(tmp_path), "extra.c")
+        with open(extra, "w") as f:
+            f.write("int viprs_extra_thing = 2;\n")
+        obj = extra[:-2] + ".o"
+        subprocess.run(["cc", "-fPIC", "-c", extra, "-o", obj], check=True)
+        subprocess.run(["ar", "rs", _static_init(root), obj], check=True)
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "expected exactly 1" in _output(result)
+
+
+class TestTheProbeIsRunAndNotOnlyLinked:
+    def test_an_inert_initialiser_is_caught(self, tmp_path, tree_with_an_inert_initialiser):
+        # This is the case the whole fix exists for. Every static check
+        # passes, the link is clean, and the binary aborts at the first
+        # call. A link-only probe reports success.
+        root = _clone(tree_with_an_inert_initialiser, tmp_path)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "exits 134" in out, out
+
+    def test_a_working_archive_says_it_ran(self, tmp_path, good_tree):
+        result = _verify(_pack(_clone(good_tree, tmp_path)))
+        assert result.returncode == 0, _output(result)
+        assert "links and runs here" in result.stdout
+
+    def test_the_probe_checks_the_fingerprint_it_gets_back(self, tmp_path, good_tree):
+        # A library answering with a different fingerprint than the
+        # manifest claims is a mismatched pair, and only a run can see it.
+        # (The static half of this check catches an edited manifest; this
+        # catches an edited library.)
+        root = _clone(good_tree, tmp_path)
+        assert _verify(_pack(root)).returncode == 0
+
+
+class TestDuplicateMembers:
+    def test_two_members_of_the_same_name_are_rejected(self, tmp_path, good_tree):
+        # `ar addlib` keeps each source archive's member names, and two
+        # runtime archives ship objects called the same thing. It links
+        # today only because the linker takes the first definition, and it
+        # makes --whole-archive on the merged file impossible.
+        root = _clone(good_tree, tmp_path)
+        work = str(tmp_path)
+        src = os.path.join(work, "dupe.c")
+        with open(src, "w") as f:
+            f.write("int viprs_dupe_one = 1;\n")
+        obj = os.path.join(work, "static.o")
+        subprocess.run(["cc", "-fPIC", "-c", src, "-o", obj], check=True)
+        subprocess.run(["ar", "q", _static(root), obj], check=True)
+        subprocess.run(["ranlib", _static(root)], check=True)
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "more than one member called" in _output(result)
+
+
+class TestTheStaticFieldsTravelTogether:
+    @pytest.mark.parametrize("field", list(ba.STATIC_LINKINFO_FIELDS))
+    def test_a_certified_manifest_missing_one_is_rejected(self, tmp_path, good_tree, field):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.pop(field))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert field in _output(result)
+
+    @pytest.mark.parametrize("field", list(ba.STATIC_LINKINFO_FIELDS))
+    def test_an_uncertified_manifest_carrying_one_is_rejected(self, tmp_path, mac_tree, field):
+        root = _clone(mac_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.update({field: "lib/whatever.a"}))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "without static_certified" in _output(result)
+
+    def test_shared_system_libraries_is_always_there(self, tmp_path, mac_tree):
+        root = _clone(mac_tree, tmp_path)
+        with open(os.path.join(root, "metadata", "LINKINFO.json")) as f:
+            info = json.load(f)
+        assert "shared_system_libraries" in info
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.pop("shared_system_libraries"))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "shared_system_libraries" in _output(result)
+
+
+class TestSymbolForcingArgumentsAreRefused:
+    def test_a_dash_u_in_static_link_args_is_rejected(self, tmp_path, good_tree):
+        # It would work for a hand-written cc line and silently not arrive
+        # through a dependency's build script, which is the worst of both.
+        root = _clone(good_tree, tmp_path)
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(static_link_args=["-Wl,-u,_GLOBAL__sub_I_main.cpp"]),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "never reaches a dependent's link line" in _output(result)
+
+    def test_require_defined_is_rejected_too(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(static_link_args=["-Wl,--require-defined,whatever"]),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
