@@ -1,0 +1,13 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Arc handle=4C flags=1 c=[(10.000000,0.000000,0.000000)] r=4.000000 a0=0.000000 a1=1.570796 normal=[(0.000000,0.000000,1.000000)]
+00005 Circle handle=4D flags=1 c=[(10.000000,20.000000,0.000000)] r=3.000000 normal=[(0.000000,0.000000,1.000000)]
+00006 Ellipse handle=4E flags=1 c=[(10.000000,40.000000,0.000000)] major=[(5.000000,0.000000,0.000000)] ratio=0.500000 p0=0.000000 p1=1.570796 normal=[(0.000000,0.000000,1.000000)]
+00007 Warning handle=4C flags=1 code=NON_UNIFORM_BLOCK_SCALE message="ARC crossed under a block transform that is not a similarity, so its parameters describe a shape the transform does not preserve"
+00008 Arc handle=4C flags=1 c=[(-10.000000,0.000000,0.000000)] r=4.000000 a0=3.141593 a1=4.712389 normal=[(0.000000,0.000000,1.000000)]
+00009 Warning handle=4D flags=1 code=NON_UNIFORM_BLOCK_SCALE message="CIRCLE crossed under a block transform that is not a similarity, so its parameters describe a shape the transform does not preserve"
+00010 Circle handle=4D flags=1 c=[(-10.000000,20.000000,0.000000)] r=3.000000 normal=[(0.000000,0.000000,1.000000)]
+00011 Warning handle=4E flags=1 code=NON_UNIFORM_BLOCK_SCALE message="ELLIPSE crossed under a block transform that is not a similarity, so its parameters describe a shape the transform does not preserve"
+00012 Ellipse handle=4E flags=1 c=[(-10.000000,40.000000,0.000000)] major=[(-5.000000,0.000000,0.000000)] ratio=0.500000 p0=0.000000 p1=1.570796 normal=[(0.000000,0.000000,1.000000)]

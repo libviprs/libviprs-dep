@@ -235,6 +235,73 @@
       "sha256": "e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b",
       "view_count": 2
     },
+    "g13_ocs_mirror.dwg": {
+      "batches": 1,
+      "bytes": 10795,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 2,
+        "Circle": 2,
+        "Ellipse": 2,
+        "Warning": 7
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1900,
+      "records": 13,
+      "sha256": "b0fd5629a7fa9f9007f8cfe47df084b310eee3461d9fef208ebe98f562002c5f",
+      "view_count": 2
+    },
+    "g13_ocs_plane.dwg": {
+      "batches": 1,
+      "bytes": 10731,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Circle": 2,
+        "Polyline": 2,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1372,
+      "records": 9,
+      "sha256": "54d319f90623962bea7cb9ac76a70477a04c5352dfe13074dead668b85ef823e",
+      "view_count": 2
+    },
+    "g13_ocs_rotated.dwg": {
+      "batches": 1,
+      "bytes": 10731,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Circle": 1,
+        "Polyline": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1156,
+      "records": 7,
+      "sha256": "b981e5c5770ea29d23c0b329a153bb2a72fff9c20c7758348084ac688307ba4c",
+      "view_count": 2
+    },
+    "g13_ocs_skew.dwg": {
+      "batches": 1,
+      "bytes": 10828,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 1,
+        "Polyline": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1060,
+      "records": 6,
+      "sha256": "5d5242f2914922521e9bafff42e98700a2f3d62f64f1158fdffa2204747a8c90",
+      "view_count": 2
+    },
     "g13_polyline.dwg": {
       "batches": 1,
       "bytes": 10731,

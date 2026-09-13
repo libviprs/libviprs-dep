@@ -1,0 +1,7 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Circle handle=4C flags=1 c=[(-3.000000,0.000000,0.000000)] r=2.000000 normal=[(0.000000,0.000000,1.000000)]
+00005 Arc handle=4D flags=1 c=[(0.000000,0.000000,0.000000)] r=5.000000 a0=3.141593 a1=4.712389 normal=[(0.000000,0.000000,1.000000)]
+00006 Polyline handle=4E flags=1 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(-10.000000,0.000000,0.000000);(-10.000000,0.000000,10.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]
