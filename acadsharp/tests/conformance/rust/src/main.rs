@@ -365,6 +365,24 @@ fn the_input_bound_agrees_across_both_opens(t: &mut Tally) {
         ..Default::default()
     };
 
+    // A path is a pointer and a length here, so a caller can hand over one
+    // with a NUL inside. That is the caller's argument being wrong, not the
+    // input's problem, and it stays INVALID_ARGUMENT rather than becoming
+    // whatever the platform throws when asked to stat it.
+    let holed = b"/tmp/vip\0rs.dwg";
+    let mut nowhere: *mut viprs_cad_handle = std::ptr::null_mut();
+    t.check(
+        unsafe {
+            viprs_acad_open_path_utf8(
+                holed.as_ptr(),
+                holed.len() as u64,
+                std::ptr::null(),
+                &mut nowhere,
+            )
+        } == VIPRS_ACAD_INVALID_ARGUMENT,
+        "a path with a NUL inside it is INVALID_ARGUMENT, not a parse failure",
+    );
+
     let mut from_memory: *mut viprs_cad_handle = std::ptr::null_mut();
     let mut from_path: *mut viprs_cad_handle = std::ptr::null_mut();
     let (memory_rc, path_rc) = unsafe {

@@ -109,8 +109,14 @@ public static class Exports
 			}
 
 			string text = Encoding.UTF8.GetString(path, (int)pathLen);
-			if (text.Length == 0)
+			if (text.Length == 0 || text.IndexOf('\0') >= 0)
 			{
+				// An embedded NUL is the caller's argument being wrong, not
+				// the input's problem, and it is the one malformed path the
+				// platform rejects before it ever stats anything. Refusing it
+				// here keeps it INVALID_ARGUMENT, which is what ABI.md says a
+				// path that names nothing readable is. Everything else about
+				// the path is SourceFactory's.
 				return Result.InvalidArgument;
 			}
 

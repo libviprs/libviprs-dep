@@ -376,6 +376,15 @@ static void test_open_by_path(void)
 
 	rc = viprs_acad_open_path_utf8((const uint8_t *)"/nonexistent/viprs.dwg", 22, NULL, &doc);
 	check(rc == VIPRS_ACAD_INVALID_ARGUMENT, "a path that names nothing is INVALID_ARGUMENT");
+
+	/* A path is a pointer and a length on this boundary, so a caller can
+	 * hand over one with a NUL inside it. That is the caller's argument
+	 * being wrong rather than the input's problem, and it has to stay
+	 * INVALID_ARGUMENT rather than becoming whatever the platform throws
+	 * when it is asked to stat the thing. */
+	rc = viprs_acad_open_path_utf8((const uint8_t *)"/tmp/vip\0rs.dwg", 15, NULL, &doc);
+	check(rc == VIPRS_ACAD_INVALID_ARGUMENT,
+	      "a path with a NUL inside it is INVALID_ARGUMENT, not a parse failure");
 }
 
 /* max_input_bytes, through both open calls, on the same bytes.
