@@ -712,9 +712,10 @@ if [ -f "$STATIC_LIB" ]; then
           ;;
         *)
           OBJECTS=$((OBJECTS + 1))
-          if [ "$OBJECTS" -le 40 ]; then
-            object_arch_ok "$STATIC_LIB" "$DATA" "$STATIC_NAME member '$NAME'" || true
-          fi
+          # Every object, not a sample. A merged NativeAOT archive holds
+          # a few hundred, and one of them being for another architecture
+          # is exactly the mislabelling a sampled check sails past.
+          object_arch_ok "$STATIC_LIB" "$DATA" "$STATIC_NAME member '$NAME'" || true
           ;;
       esac
       OFF=$END
