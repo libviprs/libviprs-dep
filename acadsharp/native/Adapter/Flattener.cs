@@ -299,7 +299,7 @@ namespace Viprs.Cad
 					// batch writer counts every record it emits separately.
 					if (item.Record != null)
 					{
-						yield return item.Record;
+						yield return Finite(item.Record);
 						continue;
 					}
 
@@ -345,7 +345,7 @@ namespace Viprs.Cad
 							p.ItemHandle = item.HandleOverride;
 						}
 
-						yield return p;
+						yield return Finite(p);
 					}
 				}
 			}
@@ -356,6 +356,58 @@ namespace Viprs.Cad
 					stack.Pop().Items.Dispose();
 				}
 			}
+		}
+
+		// docs/WIRE.md's producer guarantee, applied once where the walk hands
+		// a primitive to the stream.
+		//
+		// Nothing in a drawing has to be finite. A DWG stores a bulge and a
+		// coordinate as plain doubles, and both NaN and the infinities survive
+		// the round trip: g13_nan_bulge.dwg carries one of each and they
+		// reached the wire, where a single NaN coordinate becomes a bounding
+		// box that is NaN in every direction and a renderer that draws nothing
+		// at all.
+		//
+		// The record is replaced rather than corrected. There is no right
+		// number to put in its place, and quietly substituting one would be
+		// this layer inventing geometry. The warning names the handle and the
+		// rest of the drawing still crosses, which is the difference between
+		// a drawing with one entity missing and a decode that failed.
+		//
+		// Here rather than in the encoder because here the handle is known and
+		// the record is nameable. The encoder has a backstop for the same
+		// condition, and that one throws: reaching it means this guard did not
+		// run, which is a bug in the library rather than a fact about the
+		// drawing.
+		private static Primitive Finite(Primitive p)
+		{
+			if (p == null || !WireFormat.IsGeometry(p.Type))
+			{
+				return p;
+			}
+
+			double[] values = p.Values;
+			for (int i = 0; i < values.Length; i++)
+			{
+				if (!double.IsNaN(values[i]) && !double.IsInfinity(values[i]))
+				{
+					continue;
+				}
+
+				Primitive w = Primitive.Warning(
+					WarningCodes.NonFiniteGeometry,
+					p.ItemHandle,
+					CanonicalDump.TypeName(p.Type)
+						+ " value " + i.ToString(CultureInfo.InvariantCulture)
+						+ " is " + values[i].ToString(CultureInfo.InvariantCulture)
+						+ ", and docs/WIRE.md promises no geometry record carries a value "
+						+ "that is not finite, so this entity is not emitted"
+				);
+				w.Flags = p.Flags;
+				return w;
+			}
+
+			return p;
 		}
 
 		private static IEnumerable<Pending> Root(IEnumerable<Entity> roots)

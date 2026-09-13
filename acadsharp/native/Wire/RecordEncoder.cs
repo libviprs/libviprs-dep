@@ -48,7 +48,7 @@ namespace Viprs.Wire
 
 				case WireFormat.TypeLine:
 					Prologue(p);
-					Doubles(p.Values, 0, 6);
+					GeometryDoubles(p, 0, 6);
 					break;
 
 				case WireFormat.TypePolyline:
@@ -58,22 +58,22 @@ namespace Viprs.Wire
 					U32(p.Counts[1]);
 					U32(p.Counts[2]);
 					U32(p.Counts[3]);
-					Doubles(p.Values, 0, p.Values.Length);
+					GeometryDoubles(p, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypeArc:
 					Prologue(p);
-					Doubles(p.Values, 0, 9);
+					GeometryDoubles(p, 0, 9);
 					break;
 
 				case WireFormat.TypeCircle:
 					Prologue(p);
-					Doubles(p.Values, 0, 7);
+					GeometryDoubles(p, 0, 7);
 					break;
 
 				case WireFormat.TypeEllipse:
 					Prologue(p);
-					Doubles(p.Values, 0, 12);
+					GeometryDoubles(p, 0, 12);
 					break;
 
 				case WireFormat.TypeSpline:
@@ -83,7 +83,7 @@ namespace Viprs.Wire
 						U32(p.Counts[i]);
 					}
 
-					Doubles(p.Values, 0, p.Values.Length);
+					GeometryDoubles(p, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypePolygon:
@@ -93,12 +93,12 @@ namespace Viprs.Wire
 					U32(p.Counts[1]);
 					U32(p.Counts[2]);
 					U32(p.Counts[3]);
-					Doubles(p.Values, 0, p.Values.Length);
+					GeometryDoubles(p, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypeText:
 					Prologue(p);
-					Doubles(p.Values, 0, 5);
+					GeometryDoubles(p, 0, 5);
 					Utf8WithLength(p.Text);
 					break;
 
@@ -235,6 +235,42 @@ namespace Viprs.Wire
 			for (int i = 0; i < count; i++)
 			{
 				U64((ulong)BitConverter.DoubleToInt64Bits(values[start + i]));
+			}
+		}
+
+		// The same, for a geometry record, plus docs/WIRE.md's producer
+		// guarantee: no record of type 3 to 10 carries an f64 that is NaN or
+		// infinite.
+		//
+		// A backstop, not the check. The walk replaces a primitive carrying
+		// one with a NON_FINITE_GEOMETRY warning long before the encoder sees
+		// it, and that is where the failure belongs: there the handle is
+		// known, the record is nameable, and the decode carries on and
+		// produces the rest of the drawing. Reaching here means that guard did
+		// not run, which is a bug in this library rather than a fact about the
+		// drawing, and INTERNAL_ERROR is exactly what docs/ABI.md says that
+		// is. Unreachable by construction, which is why the plan for this
+		// change removes the first guard and watches this one fire.
+		//
+		// ViewBegin goes through Doubles instead. Its extents are a bounding
+		// box the source reports rather than a shape anybody draws, and a view
+		// holding nothing has no finite one.
+		private void GeometryDoubles(Primitive p, int start, int count)
+		{
+			for (int i = 0; i < count; i++)
+			{
+				double v = p.Values[start + i];
+				if (double.IsNaN(v) || double.IsInfinity(v))
+				{
+					throw new AbiException(
+						Result.InternalError,
+						"a geometry record reached the encoder carrying a value that is "
+							+ "not finite, which docs/WIRE.md promises never crosses. The "
+							+ "walk's own guard should have replaced it with a warning."
+					);
+				}
+
+				U64((ulong)BitConverter.DoubleToInt64Bits(v));
 			}
 		}
 

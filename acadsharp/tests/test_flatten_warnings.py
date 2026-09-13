@@ -27,6 +27,7 @@ CODE_FIXTURES = {
     "HATCH_LOOP_NOT_POLYGON": "g13_hatch.dwg",
     "UNRESOLVED_BLOCK": "g13_xref.dwg",
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
+    "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
 }
 
 
@@ -173,6 +174,59 @@ class TestEveryCodeHasAFixture:
             f"{fixture} was supposed to produce {code} and produced {sorted(codes)}"
         )
 
+
+class TestNonFiniteGeometry:
+    """Nothing in a drawing has to be finite, and nothing non-finite crosses.
+
+    g13_nan_bulge.dwg carries a NaN bulge and an infinite coordinate. Both
+    survive the DWG round trip and both used to reach the wire: the bulged one
+    as an Arc whose centre, radius and both angles were NaN, the other as a
+    vertex reading (Infinity, NaN, NaN). One NaN coordinate is enough to make
+    a consumer's bounding box NaN in every direction and its renderer draw
+    nothing at all.
+    """
+
+    def test_both_entities_cross_as_warnings_and_neither_as_geometry(self):
+        counts = kinds("g13_nan_bulge.dwg")
+        assert set(counts) == {"Warning"}, (
+            f"a record other than a warning came out of the fixture: {counts}"
+        )
+        codes = [w["code"] for w in warnings("g13_nan_bulge.dwg")]
+        assert codes.count("NON_FINITE_GEOMETRY") == 2
+
+    def test_each_warning_names_the_handle_and_the_value(self):
+        found = [w for w in warnings("g13_nan_bulge.dwg") if w["code"] == "NON_FINITE_GEOMETRY"]
+        assert {w["handle"] for w in found} == {"49", "4A"}, (
+            "a warning about an entity has to carry that entity's handle, or nobody can "
+            f"find the thing in the drawing: {[w['handle'] for w in found]}"
+        )
+        assert any("NaN" in w["message"] for w in found)
+        assert any("Infinity" in w["message"] for w in found)
+
+    def test_the_decode_still_succeeds(self):
+        # The point of a warning rather than a refusal. A drawing with one bad
+        # entity is a drawing with one entity missing, not a failed decode.
+        assert MANIFEST["fixtures"]["g13_nan_bulge.dwg"]["decode_code"] == "OK"
+
+    def test_no_non_finite_double_reaches_the_wire(self):
+        # Measured on the bytes, not on the dump. The dump is what the walk
+        # produced and the encoder is the layer in between, so it is the only
+        # artefact that can answer this.
+        result = scenario("finiteness/nothing_non_finite_reaches_the_wire")["result"]
+        assert result["non_finite_exponents_in_output"] == 0, (
+            f"{result['non_finite_exponents_in_output']} places in the stream carry the "
+            "exponent pattern of a NaN or an infinity"
+        )
+        assert result["scanned_bytes"] > 0, "the scan ran over an empty stream"
+
+    def test_the_scan_finds_one_when_there_is_one(self):
+        # The control. Without it, a zero above is also what a scanner that
+        # stopped scanning would produce.
+        result = scenario("finiteness/nothing_non_finite_reaches_the_wire")["result"]
+        assert result["non_finite_exponents_in_control"] == 2
+
+
+class TestTheCodeTableIsComplete:
     def test_the_one_code_with_no_fixture_is_named_and_explained(self):
         # DIMENSION_WITHOUT_BLOCK is reachable and deliberately uncovered:
         # ACadSharp's DwgWriter generates a block for every dimension it

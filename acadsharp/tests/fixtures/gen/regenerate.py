@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import random
+import struct
 import subprocess
 import sys
 import time
@@ -395,6 +396,30 @@ def expectations(scratch):
         f.write("\n")
 
 
+def non_finite_exponents(data):
+    """Places in a raw batch stream that look like a non-finite f64's top two bytes.
+
+    An IEEE-754 binary64 is NaN or infinite exactly when its exponent field is
+    all ones, which in little-endian means the last two bytes satisfy
+    `b6 & 0xF0 == 0xF0` and `b7 & 0x7F == 0x7F`: the f87f and f07f patterns and
+    their negatives.
+
+    Deliberately crude, and deliberately not a parser. Nothing inside a record
+    is naturally aligned, so a scanner that walked the stream by record and
+    field would be a fourth implementation of docs/WIRE.md, and a bug in it
+    would look exactly like the thing it is checking for. This one reads every
+    offset and cannot miss: a zero means no non-finite double crossed, whatever
+    it sat on. A non-zero can be a false positive, which is a number somebody
+    looks at rather than a claim anybody acts on, and the control beside it is
+    what says the scan finds one when there is one.
+    """
+    hits = 0
+    for i in range(len(data) - 1):
+        if (data[i] & 0xF0) == 0xF0 and (data[i + 1] & 0x7F) == 0x7F:
+            hits += 1
+    return hits
+
+
 def fixture_arg(name):
     return f"/work/acadsharp/tests/fixtures/{name}"
 
@@ -649,6 +674,45 @@ def scenarios(scratch):
         ["--cancel"],
         "the flag is already up when the walk starts, and this document never "
         "yields a record, so only a poll inside the walk can notice it",
+    )
+
+    # docs/WIRE.md's producer guarantee, measured on the bytes rather than on
+    # the primitives one layer above them. The dump is what the walk produced;
+    # the encoder is the layer in between, and this is the only artefact that
+    # can say what actually left it.
+    raw_path = os.path.join(derived, "non_finite_stream.bin")
+    non_finite = decode(
+        scratch,
+        fixture_arg("g13_nan_bulge.dwg"),
+        "--batch",
+        BATCH_BYTES,
+        "--raw",
+        "/scratch/derived/non_finite_stream.bin",
+    )
+    with open(raw_path, "rb") as f:
+        stream = f.read()
+    non_finite["non_finite_exponents_in_output"] = non_finite_exponents(stream)
+    non_finite["non_finite_exponents_in_control"] = non_finite_exponents(
+        struct.pack("<dd", float("nan"), float("inf"))
+    )
+    non_finite["scanned_bytes"] = len(stream)
+    out["scenarios"].append(
+        {
+            "name": "finiteness/nothing_non_finite_reaches_the_wire",
+            "input": fixture_arg("g13_nan_bulge.dwg"),
+            "args": ["--raw"],
+            "note": (
+                "every batch the decode produced, scanned for the exponent pattern of a "
+                "non-finite double, with a two-double control that carries one of each"
+            ),
+            "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_nan_bulge.dwg")),
+            "result": non_finite,
+        }
+    )
+    print(
+        "finiteness/nothing_non_finite_reaches_the_wire: "
+        f"stream={non_finite['non_finite_exponents_in_output']} "
+        f"control={non_finite['non_finite_exponents_in_control']}"
     )
 
     # A spline's points were never counted. The encoder guarded Polyline and

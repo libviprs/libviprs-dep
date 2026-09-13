@@ -47,6 +47,14 @@ namespace Viprs.Cad
 		// transform does not preserve.
 		public const uint NonUniformBlockScale = 106u;
 
+		// A geometry record whose values are not all finite, which is what a
+		// NaN or an infinite coordinate, radius, angle, normal or bulge in the
+		// drawing turns into. The record is not emitted: docs/WIRE.md promises
+		// no record of type 3 to 10 carries a value that is not finite, and
+		// there is no correct number to put in its place. The handle names the
+		// entity so whoever owns the drawing can go and look.
+		public const uint NonFiniteGeometry = 107u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -58,6 +66,7 @@ namespace Viprs.Cad
 				case HatchLoopNotPolygon: return "HATCH_LOOP_NOT_POLYGON";
 				case UnresolvedBlock: return "UNRESOLVED_BLOCK";
 				case NonUniformBlockScale: return "NON_UNIFORM_BLOCK_SCALE";
+				case NonFiniteGeometry: return "NON_FINITE_GEOMETRY";
 				default: return "WARNING_" + code;
 			}
 		}

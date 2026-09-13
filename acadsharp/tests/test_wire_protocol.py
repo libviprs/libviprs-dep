@@ -514,6 +514,12 @@ class TestWireMdMatchesTheParser:
         )
         assert "tan" in section
 
+    def test_the_finiteness_guarantee_is_documented(self, wire_md):
+        assert re.search(r"never emits a record of type 3 to 10 carrying", wire_md), (
+            "WIRE.md does not promise that geometry records carry finite values, and a "
+            "consumer that cannot rely on it has to defend every field of every record"
+        )
+
     def test_the_midpoint_formula_is_documented(self, wire_md):
         section = polyline_section(wire_md)
         assert "mid + (b" in section, (

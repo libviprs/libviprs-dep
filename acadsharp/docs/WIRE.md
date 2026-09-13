@@ -247,6 +247,23 @@ record_count`, the number of records emitted for the view, its own
 **13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 24
 bytes.
 
+## Every number in a geometry record is finite
+
+A producer never emits a record of type 3 to 10 carrying an `f64` that is
+`NaN` or infinite. Not in a coordinate, not in a radius, not in an angle, not
+in a normal and not in a bulge. A drawing that holds one produces a `Warning`
+record naming the handle instead, and the rest of the drawing still crosses.
+
+The guarantee is scoped to geometry on purpose. `ViewBegin`'s extents are a
+bounding box the producer reports rather than a shape anybody draws, and a
+view holding nothing has no finite one; promising a number there would mean
+inventing one.
+
+A consumer should still refuse a non-finite `f64` in a geometry record rather
+than trust the guarantee, because the bytes may not have come from this
+producer. Trusting it is how a single `NaN` coordinate becomes a bounding box
+that is `NaN` in every direction and a renderer that draws nothing at all.
+
 ## Warning codes
 
 A `Warning` record's `code` is what a consumer branches on. The message
@@ -268,6 +285,7 @@ and 105 with these meanings, whatever it is built on.
 | 104 | `HATCH_LOOP_NOT_POLYGON` | A boundary loop carrying an elliptical or spline edge, which a closed polygon cannot express. The edges follow as their own records, so nothing is lost and nothing is approximated. |
 | 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
 | 106 | `NON_UNIFORM_BLOCK_SCALE` | An insertion scale that is not a similarity, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. |
+| 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 
 ### Reserved ranges
 
