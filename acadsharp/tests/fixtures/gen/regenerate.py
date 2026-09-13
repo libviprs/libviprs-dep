@@ -375,6 +375,18 @@ def support():
     return g13_support
 
 
+def ac18_forge():
+    """`tests/ac18_forge.py`, which writes the AC1018 inputs from nothing.
+
+    Same contract as `ac21_forge` below, one reader path over: the bytes this
+    records a run of and the bytes the test rebuilds come from one place.
+    """
+    sys.path.insert(0, os.path.join(ACAD_ROOT, "tests"))
+    import ac18_forge
+
+    return ac18_forge
+
+
 def ac21_forge():
     """`tests/ac21_forge.py`, which writes the AC1021 inputs from nothing.
 
@@ -1059,6 +1071,88 @@ def scenarios(scratch):
     print(
         f"declared/unmodified_control: open={control['result'].get('open_code')} "
         f"alloc_open={control['result'].get('alloc_open_bytes')}"
+    )
+
+    # The two guards in the AC18 descriptor loop, and the reason these inputs
+    # are written rather than derived. Both fields live inside the LZ77 stream
+    # the data-section map is stored as, so the four-byte rewrite above cannot
+    # reach either: the page header in front of that stream is the only part of
+    # the page in the clear.
+    #
+    # tests/ac18_forge.py writes a whole AC1018 file instead, which is possible
+    # because nothing between those bytes and the descriptor loop authenticates
+    # anything. The 0x6C block the reader calls encrypted is XORed with a
+    # keystream a generator seeded with 1 produces, the file ID mismatch inside
+    # it is a notification rather than an exception, every CRC is read into a
+    # local and dropped, and the AC18 LZ77 has a literal run that copies with no
+    # permutation.
+    #
+    # One of these is recorded patched and has never been run without the
+    # guards: a zero page size does not over-allocate, it hangs, because
+    # decompressSizeCounter advances by DecompressedSize and the gap fill at
+    # DwgReader.cs:929 has nothing else to reach the offset with. `run` below
+    # calls subprocess.run with no timeout on purpose, so a hang here is a
+    # recorder that never comes back rather than a measurement.
+    ac18 = ac18_forge()
+    for case in ac18.inputs():
+        name = case["name"]
+        path = os.path.join(derived, f"{name}.dwg")
+        with open(path, "wb") as f:
+            f.write(case["blob"])
+        entry = record(
+            f"declared/{name}",
+            f"/scratch/derived/{name}.dwg",
+            [],
+            f"a forged AC1018 file declaring {case['declared_text']} for its "
+            f"{case['site']}, from {case['field']}",
+        )
+        entry["derived"] = {
+            "kind": "ac18_declared_size",
+            "guard": case["guard"],
+            "site": case["site"],
+            "field": case["field"],
+            "declared": case["declared"],
+            "declared_text": case["declared_text"],
+            "source": "tests/ac18_forge.py",
+            "sha256": case["sha256"],
+            "bytes": case["bytes"],
+        }
+        result = entry["result"]
+        print(
+            f"declared/{name}: open={result.get('open_code')} "
+            f"alloc_open={result.get('alloc_open_bytes')}"
+        )
+
+    # The AC18 control, and the seven above need it: the same forge with every
+    # number inside the ceiling reaches both guards, passes both, has its
+    # section buffer assembled out of a real page and one zero-filled gap, and
+    # is then refused by a header variable the buffer does not contain. A
+    # ceiling that refused every forged AC18 map would look identical without
+    # this beside it.
+    ac18_control = ac18.control_case()
+    path = os.path.join(derived, "ac18_control.dwg")
+    with open(path, "wb") as f:
+        f.write(ac18_control["blob"])
+    entry = record(
+        "declared/ac18_control",
+        "/scratch/derived/ac18_control.dwg",
+        [],
+        "the same forge with every declared size and offset inside the ceiling",
+    )
+    entry["derived"] = {
+        "kind": "ac18_declared_size",
+        "guard": None,
+        "site": None,
+        "field": "descriptor DecompressedSize",
+        "declared": ac18_control["declared"],
+        "declared_text": str(ac18_control["declared"]),
+        "source": "tests/ac18_forge.py",
+        "sha256": ac18_control["sha256"],
+        "bytes": ac18_control["bytes"],
+    }
+    print(
+        f"declared/ac18_control: open={entry['result'].get('open_code')} "
+        f"alloc_open={entry['result'].get('alloc_open_bytes')}"
     )
 
     # The four AC21 sites, and the reason these inputs are written rather than

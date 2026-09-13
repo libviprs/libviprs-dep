@@ -411,6 +411,23 @@ the interleave is read into and once as the page decoded out of it.
 `tests/ac21_forge.py` writes those files and the `declared/ac21_*` scenarios in
 `tests/expectations/g13_scenarios.json` are the recorded runs.
 
+The AC18 data-section map is a third shape, and it is the one no byte edit
+reaches: the numbers that drive it sit inside the LZ77 stream the map is stored
+as, behind the page header the paragraph above rewrites. A descriptor declares
+how many pages it has and how large each decompressed page is, and each page
+declares a start offset the reader fills with empty pages until it gets there.
+None of those is a byte count on its own. A 440-byte AC1018 file written by
+`tests/ac18_forge.py` declaring a gigabyte for one page offset allocated
+1,219,322,360 bytes during the open, 2.8 million times its own length, and a
+sibling declaring an offset of 16,000,000 against an eight-byte page size
+allocated 260,525,624 while every byte quantity in it stayed under the ceiling,
+because what it inflated was the number of objects rather than the size of any
+one of them. That is the second bound the patch carries and the reason it is
+not the byte ceiling written twice: 1,048,576 pages per section, against a
+corpus whose largest page count is 79. A zero page size is refused outright,
+because the loop that fills the gap advances by it and so never reaches the
+offset at all. The `declared/ac18_*` scenarios are the recorded runs.
+
 None of that can be bounded from out here. The allocating types are `internal`
 to ACadSharp with no injection point, and the only process-wide lever is a GC
 hard limit, which kills the process and so breaks the promise above that a
