@@ -1,0 +1,534 @@
+name: Release acadsharp
+
+# Publishes every archive build_acadsharp.py knows how to make to the
+# acadsharp-<version> GitHub Release. A file of its own rather than a
+# branch inside release.yml, which is pdfium-shaped end to end (chromium
+# branch input, a lipo'd universal job, its own summary table), and
+# because an acadsharp flake should not colour a pdfium release run red.
+# release-zstd.yml exists for the same reason and this is its shape:
+# resolve-version, a preflight that refuses an unpinned version before
+# anything builds, create-release up front so the fan-out never races on
+# `gh release create`, then build, verify, upload per cell.
+#
+# One thing is deliberately not copied from release-zstd.yml. That
+# workflow registers an emulator and builds foreign-architecture cells
+# under it. ADR 0001 measured cross-compiling here: ILC produced the
+# object file and the native link then failed with `unrecognised
+# emulation mode: aarch64linux`, and the .NET runtime documents
+# qemu-user-static as unsupported. So every cell below runs on a runner
+# of its own architecture, and acadsharp/tests/test_release_workflow.py
+# refuses an emulator if anyone reintroduces one.
+#
+# The notes are generated, never typed. Every number in them is read out
+# of a manifest in the tree or out of a published archive's
+# metadata/LINKINFO.json, so bumping a pin cannot leave the release page
+# claiming the old value.
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "acadsharp version to publish (overrides acadsharp/VERSION)"
+        required: false
+
+concurrency:
+  # Two overlapping runs would race on the same tag's assets. Serialize
+  # per ref, and don't cancel: a release that is halfway through five
+  # uploads is worth finishing.
+  group: release-acadsharp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    # Everything that can be refused cheaply is refused here, in the job
+    # every other job waits on, so a bad pin dies once rather than five
+    # times on five claimed runners. No `permissions:` block: this job
+    # publishes nothing and has no business holding a token that could.
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve acadsharp version
+        id: v
+        # The dispatch input arrives through `env:` rather than being
+        # interpolated into the script. A `${{ }}` spliced straight into
+        # bash is the shape that turns a workflow input into shell, and
+        # release-zstd.yml had to be fixed for exactly that.
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -eu
+          if [ -n "$REQUESTED" ]; then
+            V="$REQUESTED"
+          else
+            V="$(tr -d '[:space:]' < acadsharp/VERSION)"
+          fi
+          [ -n "$V" ] || { echo "acadsharp/VERSION is empty" >&2; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=acadsharp-$V" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse a version the driver has no pinned source for
+        # Two refusals in one step, both asked of the driver rather than
+        # re-implemented here. split_version rejects an empty or
+        # malformed VERSION; source_sha256 rejects a bump whose upstream
+        # half has no SOURCE_SHA256 entry, which would otherwise mean
+        # downloading whatever GitHub serves that day.
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -eu
+          python3 - "$VERSION" <<'PY'
+          import importlib.util
+          import sys
+
+          spec = importlib.util.spec_from_file_location(
+              "build_acadsharp", "acadsharp/build_acadsharp.py"
+          )
+          driver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(driver)
+
+          try:
+              upstream, shim = driver.split_version(sys.argv[1])
+          except ValueError as exc:
+              sys.exit(str(exc))
+          try:
+              digest = driver.source_sha256(upstream)
+          except (KeyError, ValueError) as exc:
+              sys.exit(str(exc).strip("'"))
+          print(f"ACadSharp {upstream}, shim revision {shim}")
+          print(f"pinned sha256: {digest}")
+          PY
+
+      - name: Refuse a global.json with no SDK pin
+        # actions/setup-dotnet below reads this file, but a global.json
+        # that names no sdk.version is not something it fails loudly on,
+        # and the five build jobs would each discover the missing pin for
+        # themselves. Ask the question once, here.
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import json
+          import sys
+
+          path = "acadsharp/native/global.json"
+          with open(path) as f:
+              pinned = json.load(f)
+          version = pinned.get("sdk", {}).get("version")
+          if not version:
+              sys.exit(
+                  f"{path} names no sdk.version. The SDK pin is what makes a build "
+                  "reproducible, so an absent one is an error and not a default."
+              )
+          print(f"pinned SDK: {version}")
+          PY
+
+      - name: Prove the pinned SDK is installable
+        # The pin is read from global.json rather than repeated here, so
+        # an SDK that has aged out of the runner images fails in this job
+        # instead of in every build job at once.
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: acadsharp/native/global.json
+
+  create-release:
+    # Created up front so the fan-out jobs never race on `gh release
+    # create`. Re-running is safe: an existing tag is left alone and the
+    # uploads below use --clobber.
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate the release notes preamble
+        # Everything here is read out of a manifest. Nothing about the
+        # version, the SDK or the read range is typed into this file, so
+        # bumping a pin cannot leave the release page stating the old
+        # one. The per-target table is appended by release-notes once the
+        # archives exist, because static_certified and each archive's
+        # digest only exist after a build.
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -eu
+          python3 - "$VERSION" > release-notes.md <<'PY'
+          import importlib.util
+          import json
+          import re
+          import sys
+
+          version = sys.argv[1]
+
+          spec = importlib.util.spec_from_file_location(
+              "build_acadsharp", "acadsharp/build_acadsharp.py"
+          )
+          driver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(driver)
+          upstream, shim = driver.split_version(version)
+
+          with open("acadsharp/native/global.json") as f:
+              sdk = json.load(f)["sdk"]["version"]
+
+          with open("acadsharp/include/viprs_acadsharp.h") as f:
+              header = f.read()
+          # The header's capabilities block is the manifest for the read
+          # range: it is what viprs_acad_capabilities_v1 documents and
+          # what the adapter fills in at run time.
+          codes = re.search(r"numeric AC10xx codes, so (\d{4}) and (\d{4})", header)
+          if not codes:
+              sys.exit(
+                  "viprs_acadsharp.h no longer states the AC10xx read range where "
+                  "this generator looks for it, so the notes would be silent about "
+                  "what the build reads."
+              )
+          abi = re.search(r"VIPRS_ACAD_ABI_VERSION\s+(\d+)u", header)
+          wire = re.search(r"VIPRS_ACAD_WIRE_VERSION\s+(\d+)u", header)
+
+          print(f"ACadSharp {upstream} through the VIPRS NativeAOT shim, revision {shim}.")
+          print()
+          print("A plain C ABI over ACadSharp, published ahead of time, so a consumer")
+          print("links a library and never learns the code started life as C#.")
+          print()
+          print(f"- ACadSharp release: `v{upstream}`")
+          print(f"- Source: {driver.source_url(upstream)}")
+          print(f"- Source sha256: `{driver.source_sha256(upstream)}`")
+          print(f"- CSUtilities submodule: `{driver.CSUTILITIES_COMMIT}`")
+          print(f"- .NET SDK: `{sdk}`")
+          print(f"- DWG read range: AC{codes.group(1)} to AC{codes.group(2)}, inclusive")
+          if abi and wire:
+              print(f"- ABI version {abi.group(1)}, wire version {wire.group(1)}")
+          print()
+          print(
+              "Generated from acadsharp/VERSION, acadsharp/native/global.json, "
+              "acadsharp/include/viprs_acadsharp.h and acadsharp/build_acadsharp.py."
+          )
+          PY
+          cat release-notes.md
+
+      - name: Create or confirm release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "acadsharp $VERSION" \
+            --notes-file release-notes.md \
+            --prerelease
+
+      - name: Keep the preamble for the notes job
+        # release-notes rewrites the body with the per-target table
+        # appended. Handing it the preamble as an artifact means the
+        # generator above exists once rather than in two `run:` blocks
+        # that can drift.
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes-preamble
+          path: release-notes.md
+          if-no-files-found: error
+
+  build-linux:
+    # The four container cells. Each runs on a runner of its own
+    # architecture: ADR 0001 measured the native link failing when the
+    # host arch differs, and GitHub hosts arm64 runners for public
+    # repositories, which this is. fail-fast is off so one cell flaking
+    # does not discard three good archives.
+    needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux, cpu: x64, runner: ubuntu-latest }
+          - { platform: linux, cpu: arm64, runner: ubuntu-24.04-arm }
+          - { platform: musl, cpu: x64, runner: ubuntu-latest }
+          - { platform: musl, cpu: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build ${{ matrix.platform }}/${{ matrix.cpu }}
+        # No --upload. The driver can publish by itself, and doing that
+        # here would put the archive on the release page before the
+        # verifier had looked at it, which makes the verification
+        # decorative. The upload is a step of its own, below Verify.
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          python3 acadsharp/build_acadsharp.py \
+            --platform ${{ matrix.platform }} \
+            --cpu ${{ matrix.cpu }}
+
+      - name: Verify the ${{ matrix.platform }}/${{ matrix.cpu }} archive
+        # Named rather than globbed on purpose: a glob that matches
+        # nothing verifies nothing and still exits 0, which is a pass
+        # reported for a check that never ran. The platform and cpu go in
+        # too, so a cell that built the wrong target is caught instead of
+        # the verifier believing whatever filename it was handed.
+        run: |
+          bash acadsharp/scripts/verify_archive.sh \
+            "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
+            ${{ matrix.platform }} ${{ matrix.cpu }}
+
+      - name: Upload release asset ${{ matrix.platform }}/${{ matrix.cpu }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" --clobber
+
+      - name: Keep the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.platform }}-${{ matrix.cpu }}
+          path: bin/logs/
+          if-no-files-found: warn
+
+  build-mac:
+    # There is no macOS container image, so this one builds natively with
+    # the SDK global.json pins installed onto the runner. macos-15 is
+    # Apple Silicon, which is the only mac slice this repo ships.
+    needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: mac, cpu: arm64 }
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: acadsharp/native/global.json
+
+      - name: Build ${{ matrix.platform }}/${{ matrix.cpu }}
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          python3 acadsharp/build_acadsharp.py \
+            --platform ${{ matrix.platform }} \
+            --cpu ${{ matrix.cpu }}
+
+      - name: Verify the ${{ matrix.platform }}/${{ matrix.cpu }} archive
+        run: |
+          bash acadsharp/scripts/verify_archive.sh \
+            "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
+            ${{ matrix.platform }} ${{ matrix.cpu }}
+
+      - name: Upload release asset ${{ matrix.platform }}/${{ matrix.cpu }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" --clobber
+
+      - name: Keep the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.platform }}-${{ matrix.cpu }}
+          path: bin/logs/
+          if-no-files-found: warn
+
+  release-notes:
+    # Runs whatever happened above, because a partial publish is exactly
+    # the case it exists to report. A release that quietly ships four of
+    # five targets is worse than one that ships four and says so, so the
+    # notes are rewritten from what is actually on the release page
+    # rather than from what the jobs claim.
+    needs: [resolve-version, create-release, build-linux, build-mac]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch the notes preamble
+        if: needs.create-release.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes-preamble
+
+      - name: Download whatever published
+        if: needs.create-release.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          set -eu
+          mkdir -p assets
+          # A release with nothing on it yet is a normal outcome of a run
+          # where every cell failed, and the notes still have to be
+          # written for it.
+          gh release download "$TAG" --dir assets --pattern 'acadsharp-*.tgz' || true
+          ls -l assets || true
+
+      - name: Write the release notes
+        if: needs.create-release.result == 'success'
+        # TARGETS is the one place this workflow repeats its own matrix,
+        # because a job with no strategy of its own cannot read the cells
+        # of the jobs it waits on.
+        # acadsharp/tests/test_release_workflow.py compares this list
+        # against both build matrices, so the copy cannot drift.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+          LINUX_RESULT: ${{ needs.build-linux.result }}
+          MAC_RESULT: ${{ needs.build-mac.result }}
+          TARGETS: |
+            linux x64 build-linux
+            linux arm64 build-linux
+            musl x64 build-linux
+            musl arm64 build-linux
+            mac arm64 build-mac
+        run: |
+          set -eu
+          cp release-notes.md notes.md
+          python3 - >> notes.md <<'PY'
+          import hashlib
+          import json
+          import os
+          import tarfile
+
+          results = {
+              "build-linux": os.environ.get("LINUX_RESULT", "unknown"),
+              "build-mac": os.environ.get("MAC_RESULT", "unknown"),
+          }
+
+          def digest(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def linkinfo(path, stem):
+              """metadata/LINKINFO.json out of the archive, or None."""
+              try:
+                  with tarfile.open(path) as tf:
+                      member = tf.extractfile(f"{stem}/metadata/LINKINFO.json")
+                      if member is None:
+                          return None
+                      return json.loads(member.read().decode())
+              except (KeyError, OSError, ValueError):
+                  return None
+
+          published, missing, commits = [], [], set()
+          for line in os.environ["TARGETS"].split("\n"):
+              line = line.split()
+              if not line:
+                  continue
+              platform, cpu, job = line
+              stem = f"acadsharp-{platform}-{cpu}"
+              path = os.path.join("assets", f"{stem}.tgz")
+              if not os.path.exists(path):
+                  missing.append((platform, cpu, job))
+                  continue
+              info = linkinfo(path, stem) or {}
+              if info.get("acadsharp_commit"):
+                  commits.add(info["acadsharp_commit"])
+              published.append(
+                  {
+                      "archive": f"{stem}.tgz",
+                      "target": info.get("target", "unrecorded"),
+                      "static": info.get("static_certified"),
+                      "sha256": digest(path),
+                  }
+              )
+
+          if commits:
+              print()
+              print(f"- ACadSharp commit: `{', '.join(sorted(commits))}`")
+
+          print()
+          print("## Archives")
+          print()
+          if published:
+              print("| archive | rust target | static_certified | sha256 |")
+              print("| --- | --- | --- | --- |")
+              for row in published:
+                  static = "unrecorded" if row["static"] is None else str(row["static"]).lower()
+                  print(
+                      f"| `{row['archive']}` | `{row['target']}` | {static} | "
+                      f"`{row['sha256']}` |"
+                  )
+          else:
+              print("Nothing published.")
+
+          print()
+          if missing:
+              print("## Targets that did not publish")
+              print()
+              for platform, cpu, job in missing:
+                  print(f"- `{platform}/{cpu}` did not publish (job `{job}`, {results[job]})")
+              print()
+              print(
+                  "This release is incomplete. Re-run the failed job; uploads use "
+                  "`--clobber`, so a re-run replaces its own assets."
+              )
+          else:
+              print("Every target published.")
+
+          print()
+          print("Archive rows are read from each published archive's")
+          print("metadata/LINKINFO.json and hashed from the asset itself.")
+          PY
+          cat notes.md
+          gh release edit "$TAG" --notes-file notes.md
+
+      - name: Emit the run summary
+        if: always()
+        env:
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          set -eu
+          URL="https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          {
+            echo "## acadsharp release: \`$TAG\`"
+            echo ""
+            echo "Release URL: $URL"
+            echo ""
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "| resolve-version | ${{ needs.resolve-version.result }} |"
+            echo "| create-release  | ${{ needs.create-release.result }} |"
+            echo "| build-linux     | ${{ needs.build-linux.result }} |"
+            echo "| build-mac       | ${{ needs.build-mac.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

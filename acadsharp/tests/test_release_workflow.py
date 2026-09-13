@@ -34,11 +34,19 @@ functions exist, so the two lanes cannot drift apart quietly.
 import json
 import os
 import re
+import subprocess
+import sys
 
 import build_acadsharp as ba
 import pytest
+import test_acadsharp_targets
 
 yaml = pytest.importorskip("yaml")
+
+# The acceptance bullet's own pattern, borrowed rather than restated.
+# test_acadsharp_targets.py walks the acadsharp directory; this workflow
+# is not in it.
+MICROSOFT_TARGET = test_acadsharp_targets.TestNothingNamesAMicrosoftTarget.FORBIDDEN
 
 
 ACADSHARP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -87,6 +95,17 @@ def driver_attr(name):
     return getattr(ba, name, None)
 
 
+def driver_help():
+    """``build_acadsharp.py --help``, as the workflow would see it."""
+    done = subprocess.run(
+        [sys.executable, os.path.join(REPO_ROOT, DRIVER), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout + done.stderr
+
+
 def load_workflow():
     with open(WORKFLOW_PATH) as f:
         return yaml.safe_load(f)
@@ -95,6 +114,19 @@ def load_workflow():
 def workflow_text():
     with open(WORKFLOW_PATH) as f:
         return f.read()
+
+
+def workflow_code():
+    """The workflow with whole-line comments dropped.
+
+    A check that greps the whole file for a forbidden word fires on the
+    prose explaining why the word is forbidden, and the comment saying
+    why this workflow does not emulate is worth keeping. Same treatment
+    ``zstd/tests/test_ci_coverage.py`` gives ci.yml.
+    """
+    return "\n".join(
+        line for line in workflow_text().splitlines() if not line.lstrip().startswith("#")
+    )
 
 
 def read_readme():
@@ -187,14 +219,22 @@ class TestWorkflowShape:
             "release-acadsharp.yml so one dependency's flake cannot redden another's run"
         )
 
-    def test_nothing_names_a_windows_target_or_toolchain(self):
-        # The org ships no Microsoft-platform artifact for any dependency,
-        # and neither this workflow nor its runners may quietly introduce one.
-        blob = workflow_text().lower()
-        for word in ("windows", "win-x64", "win-arm64", "msvc", ".dll"):
-            assert word not in blob, (
-                f"release-acadsharp.yml names {word!r}; no Windows target is shipped here"
-            )
+    def test_nothing_names_a_microsoft_platform_target_or_toolchain(self):
+        # `test_acadsharp_targets.py` already makes this an acceptance
+        # check over the whole acadsharp directory, but it walks that
+        # directory only, and this workflow lives in .github/workflows.
+        # Its pattern is borrowed rather than restated: spelling the
+        # runtime identifiers out a second time would itself trip that
+        # guard, and one regex is easier to keep honest than two.
+        offenders = [
+            f"{lineno}: {line.strip()}"
+            for lineno, line in enumerate(workflow_text().splitlines(), 1)
+            if MICROSOFT_TARGET.search(line)
+        ]
+        assert not offenders, (
+            "release-acadsharp.yml names a runtime identifier or toolchain this org "
+            "ships no artifact for:\n  " + "\n  ".join(offenders)
+        )
 
 
 class TestTriggers:
@@ -449,15 +489,27 @@ class TestMatrixCoversEveryArchive:
 
     def test_each_cell_carries_the_cpu_the_archive_name_uses(self):
         # The matrix spells the cpu (`x64`) because that is what the
-        # archive filename and the verifier's third argument use. If the
-        # cell and the name ever disagree the workflow verifies and uploads
-        # a path that does not exist.
+        # archive filename and the verifier's third argument use. Anything
+        # else and the workflow verifies and uploads a path that does not
+        # exist.
         for cell in self.cells:
             assert cell["cpu"] in ("x64", "arm64"), (
                 f"{cell} names a cpu the archive naming convention does not use"
             )
-            assert cell["platform"] in ("linux", "musl", "mac")
-            assert expected_archive(cell["platform"], cell["cpu"]) in workflow_text()
+            assert cell["platform"] in ("linux", "musl", "mac"), (
+                f"{cell} names a platform the archive naming convention does not use"
+            )
+
+    def test_the_archive_name_is_built_from_the_cell(self):
+        # Not five literal filenames: the name the build produces, the
+        # name the verifier is handed and the name that is uploaded all
+        # come from the same two matrix keys, so a cell can never verify
+        # one archive and upload another.
+        templated = TAG_PREFIX + "${{ matrix.platform }}-${{ matrix.cpu }}.tgz"
+        assert templated in workflow_text(), (
+            f"no step names {templated}, so the archive name is typed somewhere "
+            "rather than derived from the matrix cell"
+        )
 
     def test_mac_builds_on_a_mac(self):
         assert str(self.wf["jobs"]["build-mac"]["runs-on"]).startswith("macos"), (
@@ -480,16 +532,27 @@ class TestMatrixCoversEveryArchive:
             )
 
     def test_no_cell_is_emulated(self):
-        # release-zstd.yml registers QEMU and builds foreign-arch cells
-        # under emulation. ADR 0001 rules that out here: .NET documents
-        # qemu-user-static as unsupported, and this workflow was copied
-        # from that one, so the guard is against inheriting it.
-        blob = workflow_text().lower()
+        # release-zstd.yml registers an emulator and builds foreign-arch
+        # cells under it. ADR 0001 rules that out here, and this workflow
+        # is a copy of that one, so the guard is against inheriting it.
+        # Comments are dropped first: the workflow explains the decision
+        # in prose and would otherwise fail its own check.
+        blob = workflow_code().lower()
         for word in ("setup-qemu", "binfmt", "qemu"):
             assert word not in blob, (
-                f"release-acadsharp.yml mentions {word!r}. ADR 0001 decides native "
-                "runners per architecture because .NET does not support QEMU"
+                f"release-acadsharp.yml runs {word!r}. ADR 0001 decides native runners "
+                "per architecture because the .NET runtime documents qemu-user-static "
+                "as unsupported"
             )
+
+    def test_the_workflow_records_why_it_does_not_emulate(self):
+        # The guard above reads code only, so without this the rationale
+        # could be deleted and nothing would notice. The next person to
+        # copy release-zstd.yml needs to find the reason in the file.
+        assert "qemu" in workflow_text().lower(), (
+            "nothing in release-acadsharp.yml says why it does not emulate, so the "
+            "next copy of release-zstd.yml will bring the emulator back"
+        )
 
     def test_the_build_jobs_run_where_the_matrix_says(self):
         # A container cell that hardcodes `runs-on: ubuntu-latest` makes
@@ -568,6 +631,33 @@ class TestReleaseNotesAreGenerated:
         assert "did not publish" in blob, (
             "the notes must carry a line per target that did not publish. Shipping "
             "four of five quietly is the failure this prevents"
+        )
+
+    def test_the_notes_job_knows_every_matrix_cell_and_whose_job_it_is(self):
+        # release-notes has no strategy of its own, and a job cannot read
+        # the matrix cells of the jobs it waits on, so its TARGETS list is
+        # the one place this workflow repeats its own matrix. That copy
+        # gets checked rather than trusted: a cell added to a build job
+        # and not to TARGETS would drop silently out of the notes, which
+        # is the failure mode the whole job exists to prevent.
+        step = step_named(self.notes, "Write the release notes")
+        listed = set()
+        for line in step["env"]["TARGETS"].split("\n"):
+            parts = line.split()
+            if not parts:
+                continue
+            assert len(parts) == 3, f"TARGETS line {line!r} is not `platform cpu job`"
+            listed.add(tuple(parts))
+
+        in_matrix = set()
+        for name in BUILD_JOBS:
+            for cell in matrix_cells(self.wf["jobs"][name]):
+                in_matrix.add((cell["platform"], cell["cpu"], name))
+
+        assert listed == in_matrix, (
+            "release-notes' TARGETS list and the build matrices disagree.\n"
+            f"  only in TARGETS: {sorted(listed - in_matrix)}\n"
+            f"  only in the matrix: {sorted(in_matrix - listed)}"
         )
 
     def test_the_notes_report_static_certified_per_target(self):
@@ -790,3 +880,21 @@ class TestTheDriverSpeaksTheSameContract:
         if not os.path.exists(script):
             pytest.skip(f"{VERIFIER} lands with issue #48")
         assert os.access(script, os.X_OK), f"{VERIFIER} is not executable"
+
+    def test_the_build_step_passes_flags_the_driver_accepts(self):
+        # The workflow selects a cell with --platform/--cpu, mirroring
+        # what build_zstd.py takes. Until #48 lands, that is an agreement
+        # rather than something the driver can confirm; the moment it can,
+        # this stops being a guess and a flag the driver never grew fails
+        # here instead of in five build jobs.
+        help_text = driver_help()
+        if "--platform" not in help_text:
+            pytest.skip("build_acadsharp.py grows --platform/--cpu with issue #48")
+        wf = load_workflow()
+        for name in BUILD_JOBS:
+            job = wf["jobs"][name]
+            run = job["steps"][step_index(job, "Build")].get("run", "")
+            for flag in sorted(set(re.findall(r"(?<!\S)--[a-z][a-z0-9-]*", run))):
+                assert flag in help_text, (
+                    f"{name}'s Build step passes {flag}, which {DRIVER} does not accept"
+                )
