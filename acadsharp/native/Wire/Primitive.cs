@@ -76,20 +76,88 @@ namespace Viprs.Wire
 			};
 		}
 
-		public static Primitive Polyline(ulong handle, uint flags, bool closed, double[] points)
+		// Wire version 2's Polyline: a vertex run, a closed flag, the entity's
+		// normal, and one bulge per vertex or none at all.
+		//
+		// `bulges` is either null, meaning every span is straight, or exactly
+		// one per vertex. The middle case, a few of them, is not expressible
+		// and should not be: a consumer that has to ask which spans an array
+		// covers is a consumer reading a length it inferred. The `Spline`
+		// record's weight_count is the same rule and the precedent.
+		//
+		// The values are laid out normal first, then the vertices, then the
+		// bulges, which is the order docs/WIRE.md gives and the order the
+		// encoder writes them in, so neither has to reorder anything.
+		public static Primitive Polyline(
+			ulong handle,
+			uint flags,
+			bool closed,
+			double[] points,
+			double[] bulges,
+			double nx,
+			double ny,
+			double nz
+		)
+		{
+			return Vertices(
+				WireFormat.TypePolyline, handle, flags, closed ? 1u : 0u, points, bulges, nx, ny, nz);
+		}
+
+		// Record 9 takes record 4's payload with `closed` always 1. One layout,
+		// one reader on the other side, and a hatch loop that turns out to
+		// carry a bulge needs no new shape.
+		public static Primitive Polygon(
+			ulong handle,
+			uint flags,
+			double[] points,
+			double[] bulges,
+			double nx,
+			double ny,
+			double nz
+		)
+		{
+			return Vertices(
+				WireFormat.TypePolygon, handle, flags, 1u, points, bulges, nx, ny, nz);
+		}
+
+		private static Primitive Vertices(
+			ushort type,
+			ulong handle,
+			uint flags,
+			uint closed,
+			double[] points,
+			double[] bulges,
+			double nx,
+			double ny,
+			double nz
+		)
 		{
 			if (points == null || points.Length % 3 != 0)
 			{
-				throw new ArgumentException("a polyline is a flat run of x, y, z triples");
+				throw new ArgumentException("a vertex run is a flat run of x, y, z triples");
 			}
+
+			int n = points.Length / 3;
+			bulges = bulges ?? Array.Empty<double>();
+			if (bulges.Length != 0 && bulges.Length != n)
+			{
+				throw new ArgumentException("bulges are either absent or one per vertex");
+			}
+
+			double[] values = new double[3 + points.Length + bulges.Length];
+			values[0] = nx;
+			values[1] = ny;
+			values[2] = nz;
+			Array.Copy(points, 0, values, 3, points.Length);
+			Array.Copy(bulges, 0, values, 3 + points.Length, bulges.Length);
 
 			return new Primitive
 			{
-				Type = WireFormat.TypePolyline,
+				Type = type,
 				ItemHandle = handle,
 				Flags = flags,
-				Counts = new uint[] { (uint)(points.Length / 3), closed ? 1u : 0u },
-				Values = points,
+				Counts = new uint[] { (uint)n, closed, (uint)bulges.Length, 0u },
+				Values = values,
 			};
 		}
 
@@ -234,23 +302,6 @@ namespace Viprs.Wire
 					0u,
 				},
 				Values = values.ToArray(),
-			};
-		}
-
-		public static Primitive Polygon(ulong handle, uint flags, double[] points)
-		{
-			if (points == null || points.Length % 3 != 0)
-			{
-				throw new ArgumentException("a polygon is a flat run of x, y, z triples");
-			}
-
-			return new Primitive
-			{
-				Type = WireFormat.TypePolygon,
-				ItemHandle = handle,
-				Flags = flags,
-				Counts = new uint[] { (uint)(points.Length / 3), 0u },
-				Values = points,
 			};
 		}
 

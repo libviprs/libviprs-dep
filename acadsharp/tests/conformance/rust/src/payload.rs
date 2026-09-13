@@ -119,6 +119,37 @@ impl Verifier {
         }
     }
 
+    /// Records 4 and 9, which share a payload in wire version 2.
+    ///
+    /// The counts and the length go through `wire::polyline_shape`, which is
+    /// the same function the malformed cases drive, so what runs against a
+    /// real stream and what runs against a hand-built one are the same code.
+    fn vertices(&mut self, r: &Record) {
+        self.prologue(r);
+        let length = r.payload.len() + wire::RECORD_HEADER_BYTES;
+        let (n, bulges) = match wire::polyline_shape(r.payload, length) {
+            Ok(shape) => shape,
+            Err(_) => {
+                self.fail("vertex record shape", "refused".into(), "accepted".into());
+                return;
+            }
+        };
+
+        if r.kind == wire::TYPE_POLYGON {
+            self.u32_at(r.payload, 20, 1, "Polygon closed");
+        }
+
+        // The synthetic document carries one bulge per vertex on purpose. The
+        // record also allows none, and a probe set that only ever saw that
+        // case would leave the trailing array unread by both consumers, which
+        // is the state this whole file exists to rule out.
+        if bulges != n {
+            self.fail("vertex record bulge_count", format!("{bulges}"), format!("{n}"));
+        }
+
+        self.probes(r.payload, 32, r.kind, 3 + (3 * n) + bulges, "vertex record");
+    }
+
     pub fn verify(&mut self, r: &Record) {
         let p = r.payload;
         match r.kind {
@@ -143,15 +174,7 @@ impl Verifier {
                 self.probes(p, 16, wire::TYPE_LINE, 6, "Line");
                 self.len_is(r, 72, "Line length");
             }
-            wire::TYPE_POLYLINE => {
-                self.prologue(r);
-                let n = u32_at(p, 16) as usize;
-                if u32_at(p, 20) > 1 {
-                    self.fail("Polyline closed", format!("{}", u32_at(p, 20)), "0 or 1".into());
-                }
-                self.probes(p, 24, wire::TYPE_POLYLINE, n * 3, "Polyline");
-                self.len_is(r, 8 + 16 + 8 + (24 * n), "Polyline length");
-            }
+            wire::TYPE_POLYLINE | wire::TYPE_POLYGON => self.vertices(r),
             wire::TYPE_ARC => {
                 self.prologue(r);
                 self.probes(p, 16, wire::TYPE_ARC, 9, "Arc");
@@ -181,13 +204,6 @@ impl Verifier {
                 let total = knots + (controls * 3) + weights;
                 self.probes(p, 40, wire::TYPE_SPLINE, total, "Spline");
                 self.len_is(r, 8 + 16 + 24 + (8 * total), "Spline length");
-            }
-            wire::TYPE_POLYGON => {
-                self.prologue(r);
-                let n = u32_at(p, 16) as usize;
-                self.u32_at(p, 20, 0, "Polygon reserved1");
-                self.probes(p, 24, wire::TYPE_POLYGON, n * 3, "Polygon");
-                self.len_is(r, 8 + 16 + 8 + (24 * n), "Polygon length");
             }
             wire::TYPE_TEXT => {
                 self.prologue(r);

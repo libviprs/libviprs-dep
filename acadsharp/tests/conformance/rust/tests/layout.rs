@@ -108,5 +108,5 @@ fn the_result_codes_keep_their_frozen_numbers() {
     assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_MISMATCH, 8);
     assert_eq!(viprs_conformance::VIPRS_ACAD_LIMIT_EXCEEDED, 9);
     assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_VERSION, 1);
-    assert_eq!(viprs_conformance::VIPRS_ACAD_WIRE_VERSION, 1);
+    assert_eq!(viprs_conformance::VIPRS_ACAD_WIRE_VERSION, 2);
 }

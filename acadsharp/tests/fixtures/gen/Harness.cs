@@ -48,6 +48,7 @@ namespace Viprs.Cad.Fixtures
 			public int CancelAfter = -1;
 			public string DumpPath;
 			public string CheckPath;
+			public string RawPath;
 			public bool NoDecode;
 		}
 
@@ -358,6 +359,16 @@ namespace Viprs.Cad.Fixtures
 			int grownTo = buf.Length;
 			ulong bytes = 0ul;
 			ulong batches = 0ul;
+
+			// Every batch, concatenated, when --raw asks for them.
+			//
+			// The dump is the canonical text of the primitives, which is one
+			// step before the encoder. A claim about what does or does not
+			// reach the wire cannot be checked against it: the encoder is
+			// exactly the layer in between. So --raw writes the bytes the
+			// caller would have received, and a scan over those is a statement
+			// about the stream rather than about the thing that feeds it.
+			MemoryStream raw = o.RawPath == null ? null : new MemoryStream();
 			uint decodeCode = Result.Ok;
 			string decodeDetail = null;
 
@@ -418,6 +429,10 @@ namespace Viprs.Cad.Fixtures
 
 				bytes += written;
 				batches++;
+				if (raw != null)
+				{
+					raw.Write(buf, 0, (int)written);
+				}
 
 				if (done != 0)
 				{
@@ -449,6 +464,12 @@ namespace Viprs.Cad.Fixtures
 			json.Num("managed_after_decode_kb", managedAfterDecode);
 			json.Num("managed_retained_kb", managedAfterDecode - managedAfterBegin);
 			json.Num("rss_after_collect_kb", rssAfterCollect);
+
+			if (raw != null)
+			{
+				File.WriteAllBytes(o.RawPath, raw.ToArray());
+				json.Num("raw_bytes", raw.Length);
+			}
 
 			// The dump is a second walk over the same document on purpose, so
 			// the measured decode never carries a list of strings beside it.
@@ -709,6 +730,9 @@ namespace Viprs.Cad.Fixtures
 						break;
 					case "--check":
 						o.CheckPath = args[++i];
+						break;
+					case "--raw":
+						o.RawPath = args[++i];
 						break;
 					default:
 						error = "unknown option " + a;

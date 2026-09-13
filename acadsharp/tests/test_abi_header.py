@@ -103,7 +103,7 @@ class TestTheSurfaceIsComplete:
 
     def test_the_abi_and_wire_versions_are_declared(self, code):
         assert re.search(r"#define\s+VIPRS_ACAD_ABI_VERSION\s+1u", code)
-        assert re.search(r"#define\s+VIPRS_ACAD_WIRE_VERSION\s+1u", code)
+        assert re.search(r"#define\s+VIPRS_ACAD_WIRE_VERSION\s+2u", code)
 
 
 class TestTheLayoutRules:

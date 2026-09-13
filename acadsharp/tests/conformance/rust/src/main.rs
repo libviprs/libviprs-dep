@@ -35,6 +35,75 @@ impl Tally {
     }
 }
 
+/// docs/WIRE.md's three payload rules for records 4 and 9, each with a record
+/// that breaks it and nothing else. Every one of these passes the four framing
+/// rules, which is the point: the framing loop cannot see any of them.
+fn vertex_payload_rules(t: &mut Tally) {
+    let values: Vec<f64> = (0..32).map(|k| 1.0 + k as f64).collect();
+
+    for kind in [wire::TYPE_POLYLINE, wire::TYPE_POLYGON] {
+        let name = if kind == wire::TYPE_POLYLINE { "Polyline" } else { "Polygon" };
+        let shape = |n: usize, bc: usize, closed: u32, reserved1: u32, vals: &[f64]| {
+            let rec = wire::build_vertex_record(kind, n, bc, closed, reserved1, vals, None);
+            let length = rec.len();
+            wire::polyline_shape(&rec[wire::RECORD_HEADER_BYTES..], length)
+        };
+
+        t.check(
+            shape(4, 4, 1, 0, &values[..19]) == Ok((4, 4)),
+            &format!("a well-formed {name} reads back its two counts"),
+        );
+        t.check(
+            shape(4, 0, 1, 0, &values[..15]) == Ok((4, 0)),
+            &format!("no bulges at all is the other legal {name} shape"),
+        );
+
+        // Three bulges for four vertices. Every byte is where it should be and
+        // the length agrees; what a consumer cannot do is work out which three
+        // spans they describe.
+        t.check(
+            shape(4, 3, 1, 0, &values[..18]).is_err(),
+            &format!("a {name} bulge_count that is neither 0 nor point_count"),
+        );
+
+        // The array written and the count left at zero: a record whose framing
+        // is perfect and whose trailing numbers nobody reads.
+        t.check(
+            shape(4, 0, 1, 0, &values[..19]).is_err(),
+            &format!("a zero {name} bulge_count with a bulge-inclusive length"),
+        );
+
+        t.check(shape(3, 0, 2, 0, &values[..12]).is_err(), &format!("a {name} closed flag of 2"));
+        t.check(
+            shape(3, 0, 1, 1, &values[..12]).is_err(),
+            &format!("a {name} reserved1 that is not zero"),
+        );
+
+        // The normal, a vertex and a bulge in turn, so the three places a NaN
+        // can hide are each covered rather than only the first one reached.
+        for slot in [0usize, 3, 14] {
+            let mut bad = values[..19].to_vec();
+            bad[slot] = f64::NAN;
+            t.check(
+                shape(4, 4, 1, 0, &bad).is_err(),
+                &format!("a non-finite value in a {name} is refused"),
+            );
+        }
+
+        let mut bad = values[..15].to_vec();
+        bad[5] = f64::INFINITY;
+        t.check(
+            shape(3, 3, 1, 0, &bad).is_err(),
+            &format!("an infinite value in a {name} is refused the same way"),
+        );
+
+        t.check(
+            shape(2, 0, 1, 0, &values[..20]).is_err(),
+            &format!("a {name} length that is merely large enough is still wrong"),
+        );
+    }
+}
+
 fn synthetic_input(views: u32, items: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity(16);
     out.extend_from_slice(b"VIPRSSYN");
@@ -1030,15 +1099,25 @@ fn malformed(t: &mut Tally) {
         "a batch with the wrong magic is CORRUPT_INPUT",
     );
 
-    let batch = wire::build_batch(2, body.len() as u32, &body);
+    // WIRE_VERSION + 1, not a literal. A literal 2 was the version from the
+    // future right up until the bump made it the present one.
+    let batch = wire::build_batch(wire::WIRE_VERSION + 1, body.len() as u32, &body);
     t.check(
-        Reader::open(&batch).err() == Some(VIPRS_ACAD_UNSUPPORTED_FORMAT),
+        Reader::open(&batch).err() == Some(VIPRS_ACAD_ABI_MISMATCH),
         "a wire version this consumer does not parse is refused, not guessed",
+    );
+
+    let batch = wire::build_batch(wire::WIRE_VERSION - 1, body.len() as u32, &body);
+    t.check(
+        Reader::open(&batch).err() == Some(VIPRS_ACAD_ABI_MISMATCH),
+        "and so is the version before this one, whose layout is 32 bytes shorter",
     );
 
     let batch = wire::build_batch(wire::WIRE_VERSION, 0, &[]);
     let mut reader = Reader::open(&batch).expect("an empty batch is legal");
     t.check(reader.next().unwrap().is_none(), "and it holds no records");
+
+    vertex_payload_rules(t);
 
     t.check(
         Reader::open(&batch[..4]).err() == Some(VIPRS_ACAD_CORRUPT_INPUT),

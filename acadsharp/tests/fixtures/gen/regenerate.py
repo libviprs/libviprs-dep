@@ -4,6 +4,11 @@
     python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --plan
     python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --all
 
+``--only corpus --write-only g13_slot`` writes just the fixtures whose name
+carries that substring, which is how a round that adds one DWG keeps the other
+twenty-five out of the diff: a DWG header carries timestamps, so rewriting an
+unchanged fixture still changes its bytes and its digest.
+
 Everything below runs inside the pinned .NET SDK container. The only host tools
 it needs are docker and python3, which is the rule the rest of this repository
 builds under.
@@ -33,6 +38,7 @@ import hashlib
 import json
 import os
 import random
+import struct
 import subprocess
 import sys
 import time
@@ -81,6 +87,10 @@ DUMPED = (
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",
     "g13_deep_blocks.dwg",
+    "g13_slot.dwg",
+    "g13_slot_block.dwg",
+    "g13_mirrored_bulge.dwg",
+    "g13_nan_bulge.dwg",
     "g13_wide_polyline.dwg",
     "g13_long_text.dwg",
     "g13_scale_1x.dwg",
@@ -248,8 +258,19 @@ def decode_unreadable(scratch, source_fixture, extra):
     return result
 
 
-def write_corpus(scratch):
-    run(docker_cmd(scratch, ["dotnet", DLL, "corpus", "/work/acadsharp/tests/fixtures"]))
+def write_corpus(scratch, only=None):
+    """Rewrite the corpus, or only the fixtures whose name contains `only`.
+
+    Every DWG carries creation and update timestamps, so rewriting one is a new
+    file even when nothing about its content changed, and every expectation is
+    pinned to the digest. A round that adds one fixture and rewrites the other
+    twenty-five produces a diff in which the change and the churn look the
+    same, so the default for a round like that is to name what it is writing.
+    """
+    args = ["dotnet", DLL, "corpus", "/work/acadsharp/tests/fixtures"]
+    if only:
+        args.append(only)
+    run(docker_cmd(scratch, args))
 
 
 def stem(fixture):
@@ -263,7 +284,12 @@ def main(argv=None):
     parser.add_argument("--plan", action="store_true", help="print the build command and stop")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--skip-corpus", action="store_true")
-    parser.add_argument("--only", help="run one stage: expectations, scenarios, benchmarks")
+    parser.add_argument(
+        "--write-only",
+        metavar="SUBSTR",
+        help="write only the corpus fixtures whose file name contains SUBSTR",
+    )
+    parser.add_argument("--only", help="one stage: corpus, expectations, scenarios, benchmarks")
     args = parser.parse_args(argv)
 
     scratch = os.path.abspath(args.scratch)
@@ -277,10 +303,10 @@ def main(argv=None):
     if args.plan:
         return 0
 
-    if not args.skip_corpus:
-        write_corpus(scratch)
-
     stage = args.only
+    if not args.skip_corpus and stage in (None, "corpus"):
+        write_corpus(scratch, args.write_only)
+
     if stage in (None, "expectations"):
         expectations(scratch)
     if stage in (None, "scenarios"):
@@ -368,6 +394,30 @@ def expectations(scratch):
     with open(os.path.join(EXPECTATIONS, "MANIFEST.json"), "w") as f:
         json.dump(manifest, f, indent=2, sort_keys=True)
         f.write("\n")
+
+
+def non_finite_exponents(data):
+    """Places in a raw batch stream that look like a non-finite f64's top two bytes.
+
+    An IEEE-754 binary64 is NaN or infinite exactly when its exponent field is
+    all ones, which in little-endian means the last two bytes satisfy
+    `b6 & 0xF0 == 0xF0` and `b7 & 0x7F == 0x7F`: the f87f and f07f patterns and
+    their negatives.
+
+    Deliberately crude, and deliberately not a parser. Nothing inside a record
+    is naturally aligned, so a scanner that walked the stream by record and
+    field would be a fourth implementation of docs/WIRE.md, and a bug in it
+    would look exactly like the thing it is checking for. This one reads every
+    offset and cannot miss: a zero means no non-finite double crossed, whatever
+    it sat on. A non-zero can be a false positive, which is a number somebody
+    looks at rather than a claim anybody acts on, and the control beside it is
+    what says the scan finds one when there is one.
+    """
+    hits = 0
+    for i in range(len(data) - 1):
+        if (data[i] & 0xF0) == 0xF0 and (data[i + 1] & 0x7F) == 0x7F:
+            hits += 1
+    return hits
 
 
 def fixture_arg(name):
@@ -471,6 +521,22 @@ def scenarios(scratch):
         fixture_arg("g13_wide_polyline.dwg"),
         ["--max-polyline", 2048],
         "a 4096-vertex polyline, 2048 allowed",
+    )
+    # max_polyline_points bounds vertices, and wire version 2 gave the record a
+    # second array of the same length. The slot is four vertices and four
+    # bulges: at a bound of four it decodes, and a bound that counted the
+    # bulges would see eight and refuse.
+    record(
+        "limits/bulged_polyline_at_the_bound",
+        fixture_arg("g13_slot.dwg"),
+        ["--max-polyline", 4],
+        "four vertices and four bulges, four allowed",
+    )
+    record(
+        "limits/bulged_polyline_past_the_bound",
+        fixture_arg("g13_slot.dwg"),
+        ["--max-polyline", 3],
+        "the control: the same file one vertex over the bound",
     )
     record(
         "limits/max_polyline_8192",
@@ -608,6 +674,45 @@ def scenarios(scratch):
         ["--cancel"],
         "the flag is already up when the walk starts, and this document never "
         "yields a record, so only a poll inside the walk can notice it",
+    )
+
+    # docs/WIRE.md's producer guarantee, measured on the bytes rather than on
+    # the primitives one layer above them. The dump is what the walk produced;
+    # the encoder is the layer in between, and this is the only artefact that
+    # can say what actually left it.
+    raw_path = os.path.join(derived, "non_finite_stream.bin")
+    non_finite = decode(
+        scratch,
+        fixture_arg("g13_nan_bulge.dwg"),
+        "--batch",
+        BATCH_BYTES,
+        "--raw",
+        "/scratch/derived/non_finite_stream.bin",
+    )
+    with open(raw_path, "rb") as f:
+        stream = f.read()
+    non_finite["non_finite_exponents_in_output"] = non_finite_exponents(stream)
+    non_finite["non_finite_exponents_in_control"] = non_finite_exponents(
+        struct.pack("<dd", float("nan"), float("inf"))
+    )
+    non_finite["scanned_bytes"] = len(stream)
+    out["scenarios"].append(
+        {
+            "name": "finiteness/nothing_non_finite_reaches_the_wire",
+            "input": fixture_arg("g13_nan_bulge.dwg"),
+            "args": ["--raw"],
+            "note": (
+                "every batch the decode produced, scanned for the exponent pattern of a "
+                "non-finite double, with a two-double control that carries one of each"
+            ),
+            "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_nan_bulge.dwg")),
+            "result": non_finite,
+        }
+    )
+    print(
+        "finiteness/nothing_non_finite_reaches_the_wire: "
+        f"stream={non_finite['non_finite_exponents_in_output']} "
+        f"control={non_finite['non_finite_exponents_in_control']}"
     )
 
     # A spline's points were never counted. The encoder guarded Polyline and

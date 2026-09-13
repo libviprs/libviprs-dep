@@ -18,6 +18,7 @@
  * word is a conformance run nobody can audit.
  */
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -872,7 +873,8 @@ static uint64_t view_records;
 static void verify_payload(const vacb_record *r)
 {
 	uint32_t len = r->payload_len + (uint32_t)VACB_RECORD_HEADER_BYTES;
-	uint32_t n;
+	uint32_t n = 0;
+	uint32_t bulges = 0;
 	uint32_t bytes;
 	uint32_t knots;
 	uint32_t controls;
@@ -903,14 +905,30 @@ static void verify_payload(const vacb_record *r)
 		want_len(len, 72, "Line length");
 		break;
 
+	/* Records 4 and 9 share a payload in wire version 2, so they share an
+	 * arm. The counts and the length go through vacb_polyline_shape, which is
+	 * the same function the malformed cases drive, so what runs against a real
+	 * stream and what runs against a hand-built one are the same code. */
 	case VACB_TYPE_POLYLINE:
+	case VACB_TYPE_POLYGON:
 		want_prologue(r);
-		n = vacb_u32(r->payload + 16);
-		if (vacb_u32(r->payload + 20) > 1u) {
-			count_fail("Polyline closed", vacb_u32(r->payload + 20), 1);
+		if (vacb_polyline_shape(r->payload, r->payload_len, len, &n, &bulges) !=
+		    VIPRS_ACAD_OK) {
+			count_fail("vertex record shape", 1, 0);
+			break;
 		}
-		want_probes(r->payload, 24, VACB_TYPE_POLYLINE, 0, n * 3u, "Polyline");
-		want_len(len, 8u + 16u + 8u + (24u * n), "Polyline length");
+		if (r->type == VACB_TYPE_POLYGON) {
+			want_u32(r->payload, 20, 1, "Polygon closed");
+		}
+		/* The synthetic document carries one bulge per vertex on purpose.
+		 * The record also allows none, and a probe set that only ever saw
+		 * that case would leave the trailing array unread by both
+		 * consumers, which is what this file exists to rule out. */
+		if (bulges != n) {
+			count_fail("vertex record bulge_count", bulges, n);
+		}
+		want_probes(r->payload, 32, r->type, 0, 3u + (3u * n) + bulges,
+			    "vertex record");
 		break;
 
 	case VACB_TYPE_ARC:
@@ -946,14 +964,6 @@ static void verify_payload(const vacb_record *r)
 			    knots + (controls * 3u) + weights, "Spline");
 		want_len(len, 8u + 16u + 24u + (8u * (knots + (controls * 3u) + weights)),
 			 "Spline length");
-		break;
-
-	case VACB_TYPE_POLYGON:
-		want_prologue(r);
-		n = vacb_u32(r->payload + 16);
-		want_u32(r->payload, 20, 0, "Polygon reserved1");
-		want_probes(r->payload, 24, VACB_TYPE_POLYGON, 0, n * 3u, "Polygon");
-		want_len(len, 8u + 16u + 8u + (24u * n), "Polygon length");
 		break;
 
 	case VACB_TYPE_TEXT:
@@ -1143,6 +1153,108 @@ static void test_decode_and_parse(void)
 	free(buf);
 }
 
+/* docs/WIRE.md's three payload rules for records 4 and 9, each with a record
+ * that breaks it and nothing else. Every one of these passes the four framing
+ * rules, which is the point: the framing loop cannot see any of them. */
+static void test_vertex_payload_rules(void)
+{
+	static const uint16_t kinds[2] = { VACB_TYPE_POLYLINE, VACB_TYPE_POLYGON };
+	uint8_t rec[512];
+	double values[32];
+	uint32_t rec_len;
+	uint32_t n;
+	uint32_t bulges;
+	uint32_t k;
+	int i;
+
+	for (k = 0; k < 32u; k++) {
+		values[k] = 1.0 + (double)k;
+	}
+
+	for (i = 0; i < 2; i++) {
+		uint16_t kind = kinds[i];
+
+		rec_len = vacb_build_vertex_record(rec, kind, 4, 4, 1, 0, values, 19, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_OK &&
+		      n == 4u && bulges == 4u,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "a well-formed Polyline reads back its two counts"
+			      : "a well-formed Polygon reads back its two counts");
+
+		rec_len = vacb_build_vertex_record(rec, kind, 4, 0, 1, 0, values, 15, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_OK &&
+		      bulges == 0u,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "no bulges at all is the other legal Polyline shape"
+			      : "no bulges at all is the other legal Polygon shape");
+
+		/* Three bulges for four vertices. Every byte is where it should
+		 * be and the length agrees; what a consumer cannot do is work
+		 * out which three spans they describe. */
+		rec_len = vacb_build_vertex_record(rec, kind, 4, 3, 1, 0, values, 18, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "a Polyline bulge_count that is neither 0 nor point_count"
+			      : "a Polygon bulge_count that is neither 0 nor point_count");
+
+		/* The array written and the count left at zero: a record whose
+		 * framing is perfect and whose trailing numbers nobody reads. */
+		rec_len = vacb_build_vertex_record(rec, kind, 4, 0, 1, 0, values, 19, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "a zero Polyline bulge_count with a bulge-inclusive length"
+			      : "a zero Polygon bulge_count with a bulge-inclusive length");
+
+		rec_len = vacb_build_vertex_record(rec, kind, 3, 0, 2, 0, values, 12, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE ? "a Polyline closed flag of 2"
+						 : "a Polygon closed flag of 2");
+
+		rec_len = vacb_build_vertex_record(rec, kind, 3, 0, 1, 1, values, 12, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE ? "a Polyline reserved1 that is not zero"
+						 : "a Polygon reserved1 that is not zero");
+
+		/* The normal, a vertex and a bulge in turn, so the three places
+		 * a NaN can hide are each covered rather than only the first the
+		 * loop reaches. */
+		for (k = 0; k < 3u; k++) {
+			uint32_t slot = k == 0 ? 0u : (k == 1u ? 3u : 14u);
+			values[slot] = (double)NAN;
+			rec_len = vacb_build_vertex_record(rec, kind, 4, 4, 1, 0, values, 19, 0);
+			values[slot] = 1.0 + (double)slot;
+			check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n,
+						  &bulges) == VIPRS_ACAD_CORRUPT_INPUT,
+			      kind == VACB_TYPE_POLYLINE
+				      ? "a non-finite value in a Polyline is refused"
+				      : "a non-finite value in a Polygon is refused");
+		}
+
+		values[5] = (double)INFINITY;
+		rec_len = vacb_build_vertex_record(rec, kind, 3, 3, 1, 0, values, 15, 0);
+		values[5] = 6.0;
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "an infinite value in a Polyline is refused the same way"
+			      : "an infinite value in a Polygon is refused the same way");
+
+		/* A length that is merely large enough rather than exact. */
+		rec_len = vacb_build_vertex_record(rec, kind, 2, 0, 1, 0, values, 20, 0);
+		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE
+			      ? "a Polyline length that is merely large enough is still wrong"
+			      : "a Polygon length that is merely large enough is still wrong");
+	}
+}
+
 static void test_malformed_batches(void)
 {
 	uint8_t buf[256];
@@ -1219,13 +1331,21 @@ static void test_malformed_batches(void)
 	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_CORRUPT_INPUT,
 	      "a batch with the wrong magic is CORRUPT_INPUT");
 
-	len = build_batch(buf, 2, body_len, body, body_len);
-	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_UNSUPPORTED_FORMAT,
+	/* VACB_WIRE_VERSION + 1, not a literal. A literal 2 was the version from
+	 * the future right up until the bump made it the present one. */
+	len = build_batch(buf, VACB_WIRE_VERSION + 1, body_len, body, body_len);
+	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_ABI_MISMATCH,
 	      "a wire version this consumer does not parse is refused, not guessed");
+
+	len = build_batch(buf, VACB_WIRE_VERSION - 1, body_len, body, body_len);
+	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_ABI_MISMATCH,
+	      "and so is the version before this one, whose layout is 32 bytes shorter");
 
 	len = build_batch(buf, VACB_WIRE_VERSION, 0, NULL, 0);
 	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_OK, "an empty batch is legal");
 	check(vacb_next(&reader, &record) == 0, "and holds no records");
+
+	test_vertex_payload_rules();
 
 	check(vacb_open(&reader, buf, 4) == VIPRS_ACAD_CORRUPT_INPUT,
 	      "a buffer too short to hold a batch header is CORRUPT_INPUT");

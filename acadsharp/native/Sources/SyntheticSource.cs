@@ -144,6 +144,13 @@ namespace Viprs.Sources
 			return ProbeHandleBase + type;
 		}
 
+		private static double[] Slice(double[] all, int from, int count)
+		{
+			double[] out_ = new double[count];
+			Array.Copy(all, from, out_, 0, count);
+			return out_;
+		}
+
 		private static double[] Probes(ushort type, int count)
 		{
 			double[] values = new double[count];
@@ -188,12 +195,25 @@ namespace Viprs.Sources
 
 					case 1:
 					{
+						// Every f64 of the wire version 2 payload: the normal,
+						// then the vertices, then one bulge per vertex, numbered
+						// as one run from zero so a consumer can tell the three
+						// apart by where they start rather than by their values.
+						// A bulge array of exactly point_count, because the
+						// alternative the record allows is none at all, and a
+						// probe set that only ever exercised the empty case
+						// would leave the trailing array unread.
 						int points = 3 + (int)(i % 4);
+						double[] all = Probes(WireFormat.TypePolyline, 3 + (points * 4));
 						yield return Primitive.Polyline(
 							ProbeHandle(WireFormat.TypePolyline),
 							0u,
 							i % 2 == 0,
-							Probes(WireFormat.TypePolyline, points * 3)
+							Slice(all, 3, points * 3),
+							Slice(all, 3 + (points * 3), points),
+							all[0],
+							all[1],
+							all[2]
 						);
 						break;
 					}
@@ -289,10 +309,15 @@ namespace Viprs.Sources
 					case 6:
 					{
 						int points = 3 + (int)(i % 3);
+						double[] all = Probes(WireFormat.TypePolygon, 3 + (points * 4));
 						yield return Primitive.Polygon(
 							ProbeHandle(WireFormat.TypePolygon),
 							0u,
-							Probes(WireFormat.TypePolygon, points * 3)
+							Slice(all, 3, points * 3),
+							Slice(all, 3 + (points * 3), points),
+							all[0],
+							all[1],
+							all[2]
 						);
 						break;
 					}

@@ -95,6 +95,10 @@ public static class Corpus
 		yield return Pair("g13_nonuniform.dwg", WriteNonUniform);
 		yield return Pair("g13_two_entities.dwg", WriteTwoEntities);
 		yield return Pair("g13_deep_blocks.dwg", WriteDeepBlocks);
+		yield return Pair("g13_slot.dwg", WriteSlot);
+		yield return Pair("g13_slot_block.dwg", WriteSlotBlock);
+		yield return Pair("g13_mirrored_bulge.dwg", WriteMirroredBulge);
+		yield return Pair("g13_nan_bulge.dwg", WriteNanBulge);
 		yield return Pair("g13_wide_polyline.dwg", WriteWidePolyline);
 		yield return Pair("g13_long_text.dwg", WriteLongText);
 		yield return Pair("g13_scale_1x.dwg", p => WriteScale(p, 1));
@@ -284,7 +288,8 @@ public static class Corpus
 		doc.Entities.Add(square);
 
 		// A loop carrying a circular arc. A bulge says that exactly, so this
-		// one is still one polygon and no curve is approximated.
+		// one is one polygon with a bulge on the arc's span and no curve is
+		// approximated anywhere.
 		Hatch rounded = new Hatch { Layer = L(doc), IsSolid = true };
 		Hatch.BoundaryPath arcLoop = new Hatch.BoundaryPath();
 		arcLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(20, 0), End = new XY(30, 0) });
@@ -300,6 +305,31 @@ public static class Corpus
 		arcLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(20, 10), End = new XY(20, 0) });
 		rounded.Paths.Add(arcLoop);
 		doc.Entities.Add(rounded);
+
+		// The same shape with the arc traversed the other way round.
+		//
+		// A boundary arc's direction is a flag, not a sign on the sweep, and
+		// upstream reads a clockwise edge as the arc from 2*pi - end to
+		// 2*pi - start, so the edge's own first point is the entity's last. A
+		// corpus with only counter-clockwise loops cannot tell a converter
+		// that handles the flag from one that ignores it: both produce the
+		// same bulge on every fixture there is. This one bulges inward, so
+		// getting the sign wrong puts the arc outside the rectangle.
+		Hatch clockwise = new Hatch { Layer = L(doc), IsSolid = true };
+		Hatch.BoundaryPath cwLoop = new Hatch.BoundaryPath();
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(60, 0), End = new XY(70, 0) });
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Arc
+		{
+			Center = new XY(70, 5),
+			Radius = 5,
+			StartAngle = Math.PI / 2.0,
+			EndAngle = -Math.PI / 2.0,
+			CounterClockWise = false,
+		});
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(70, 10), End = new XY(60, 10) });
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(60, 10), End = new XY(60, 0) });
+		clockwise.Paths.Add(cwLoop);
+		doc.Entities.Add(clockwise);
 
 		// A loop with a spline edge, which no closed polygon expresses. The
 		// edges have to cross as themselves rather than as a polygon that
@@ -385,6 +415,128 @@ public static class Corpus
 		}
 
 		doc.Entities.Add(new Insert(current) { InsertPoint = new XYZ(0, 0, 0), Layer = L(doc) });
+		Write(doc, path);
+	}
+
+	// ------------------------------------------------------- bulge shapes
+
+	// A closed slot: two straight sides and two semicircular ends, as one
+	// LwPolyline with bulges [0, 1, 0, 1].
+	//
+	// Three things about it are not in any other fixture. It is closed, and
+	// the closing span carries a bulge, so a producer that forgets either
+	// draws a different shape. A bulge of exactly 1 is a half turn, which is
+	// the largest sweep a single span can carry and the one place a
+	// centre-and-angles form has to pick a side. And the shape is convex and
+	// symmetric, so a sign error is visible as a bow tie rather than as a
+	// small numerical difference.
+	public const double SlotLength = 20.0;
+	public const double SlotWidth = 10.0;
+
+	private static LwPolyline Slot()
+	{
+		LwPolyline lw = new LwPolyline { IsClosed = true };
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(SlotLength, 0)) { Bulge = 1.0 });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(SlotLength, SlotWidth)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, SlotWidth)) { Bulge = 1.0 });
+		return lw;
+	}
+
+	public static void WriteSlot(string path)
+	{
+		CadDocument doc = NewDoc();
+		LwPolyline lw = Slot();
+		lw.Layer = L(doc);
+		doc.Entities.Add(lw);
+		Write(doc, path);
+	}
+
+	// The same slot, in a block, inserted three times.
+	//
+	// Under block expansion every instance emits the block entity's own
+	// handle, so three instances are three groups of records carrying one
+	// handle with nothing between them. Grouping by handle merges the three
+	// into one path; grouping by contiguity cannot find the seams. One record
+	// per instance is what makes the question go away.
+	public const int SlotInstanceCount = 3;
+
+	public static void WriteSlotBlock(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord block = new BlockRecord("VIPRS_G13_SLOT");
+		block.Entities.Add(Slot());
+		doc.BlockRecords.Add(block);
+
+		Layer layer = L(doc);
+		for (int i = 0; i < SlotInstanceCount; i++)
+		{
+			doc.Entities.Add(new Insert(block)
+			{
+				InsertPoint = new XYZ(0, i * 30.0, 0),
+				Layer = layer,
+			});
+		}
+
+		Write(doc, path);
+	}
+
+	// A bulged polyline inside a block inserted with XScale -1.
+	//
+	// A reflection flips which side of the chord an arc bulges to, and the
+	// bulge's sign does not follow the points on its own. The two scale
+	// magnitudes are equal, so nothing here is a non-uniform scale: the only
+	// thing this transform does that a rotation cannot is change handedness.
+	public const double MirroredBulge = 0.5;
+
+	public static void WriteMirroredBulge(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord block = new BlockRecord("VIPRS_G13_MIRROR");
+		LwPolyline lw = new LwPolyline();
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)) { Bulge = MirroredBulge });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+		block.Entities.Add(lw);
+		doc.BlockRecords.Add(block);
+
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			XScale = -1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
+		Write(doc, path);
+	}
+
+	// A polyline carrying a bulge that is not a number.
+	//
+	// Nothing in a drawing has to be finite. A file is bytes somebody else
+	// wrote, and an IEEE-754 double has 2^53 bit patterns that are NaN and two
+	// that are infinite; a producer that hands one of those to a consumer has
+	// put a value on the wire that no arithmetic on the other side recovers
+	// from. The corpus had no file that carried one.
+	public static void WriteNanBulge(string path)
+	{
+		CadDocument doc = NewDoc();
+		LwPolyline lw = new LwPolyline { Layer = L(doc) };
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)) { Bulge = double.NaN });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+		doc.Entities.Add(lw);
+
+		// A second polyline with an infinite coordinate, because a NaN and an
+		// infinity fail differently: a comparison against NaN is false whichever
+		// way it is written, and an infinity compares fine and then propagates.
+		LwPolyline inf = new LwPolyline { Layer = L(doc) };
+		inf.Vertices.Add(new LwPolyline.Vertex(new XY(20, 0)));
+		inf.Vertices.Add(new LwPolyline.Vertex(new XY(double.PositiveInfinity, 0)));
+		inf.Vertices.Add(new LwPolyline.Vertex(new XY(30, 10)));
+		doc.Entities.Add(inf);
+
 		Write(doc, path);
 	}
 

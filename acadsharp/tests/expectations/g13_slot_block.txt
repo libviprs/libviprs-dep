@@ -2,6 +2,6 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Polyline handle=49 flags=0 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(10.000000,0.000000,0.000000);(10.000000,10.000000,0.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]
-00005 Polyline handle=4A flags=0 n=3 closed=0 pts=[(20.000000,0.000000,0.000000);(30.000000,5.000000,0.000000);(40.000000,0.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00006 Polyline handle=4F flags=0 n=3 closed=0 pts=[(50.000000,0.000000,0.000000);(60.000000,5.000000,5.000000);(70.000000,0.000000,10.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00004 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,0.000000,0.000000);(20.000000,0.000000,0.000000);(20.000000,10.000000,0.000000);(0.000000,10.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00005 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,30.000000,0.000000);(20.000000,30.000000,0.000000);(20.000000,40.000000,0.000000);(0.000000,40.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00006 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,60.000000,0.000000);(20.000000,60.000000,0.000000);(20.000000,70.000000,0.000000);(0.000000,70.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
