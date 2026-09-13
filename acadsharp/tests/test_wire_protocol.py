@@ -60,6 +60,21 @@ RECORD_TYPES = {
     "DocumentEnd": 13,
 }
 
+# Records whose length never varies, as docs/WIRE.md states them. The number
+# is the record's `length`, so the eight-byte header is in it. These are
+# asserted against the bytes the library actually produces by both conformance
+# consumers; here they are held against the document, because a payload table
+# that disagrees with the producer is worse than no payload table.
+FIXED_RECORD_BYTES = {
+    "DocumentBegin": 24,
+    "Line": 72,
+    "Arc": 96,
+    "Circle": 80,
+    "Ellipse": 120,
+    "ViewEnd": 24,
+    "DocumentEnd": 24,
+}
+
 # Types at or above this carry no meaning in wire_version 1 and exist so a
 # consumer's skip path is exercised by a real stream rather than only by a
 # buffer a test built by hand.
@@ -302,6 +317,18 @@ class TestWireMdMatchesTheParser:
 
     def test_no_record_type_number_is_used_twice(self):
         assert len(set(RECORD_TYPES.values())) == len(RECORD_TYPES)
+
+    def test_every_fixed_size_record_states_its_length(self, wire_md):
+        flat = re.sub(r"\s+", " ", wire_md)
+        for name, size in FIXED_RECORD_BYTES.items():
+            number = RECORD_TYPES[name]
+            start = flat.index(f"**{number} `{name}`**")
+            paragraph = flat[start : start + 600].split("**" + str(number + 1) + " `")[0]
+            assert f"{size} bytes" in paragraph, (
+                f"WIRE.md does not say {name} is {size} bytes. A consumer sizes nothing "
+                "from that number, but a reader checks the field list against it, and a "
+                "field list nobody can check is a field list that drifts."
+            )
 
     def test_the_batch_size_range_is_documented(self, wire_md):
         assert "64 KiB" in wire_md and "1 MiB" in wire_md

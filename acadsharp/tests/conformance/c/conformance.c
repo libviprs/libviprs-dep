@@ -91,6 +91,30 @@ static uint32_t put_record(uint8_t *p, uint16_t type, uint32_t length, uint32_t 
 	return VACB_RECORD_HEADER_BYTES + payload_bytes;
 }
 
+/* Reads a batch to its end, or to its refusal.
+ *
+ * One call to vacb_next is not enough to test the short-record rule, which the
+ * mutation run proved: with the rule removed, a single call returns a record
+ * and nothing looks wrong. The cursor only fails to advance on the second
+ * call, so the case has to drain. The counter here is the test's own, separate
+ * from the parser's, so a parser with no bound of its own shows up as a failed
+ * assertion rather than as a job somebody has to kill. */
+#define VACB_DRAIN_CAP 100000
+
+static int drain(vacb_reader *r)
+{
+	vacb_record record;
+	int guard = VACB_DRAIN_CAP;
+	int rc;
+
+	while ((rc = vacb_next(r, &record)) == 1) {
+		if (--guard <= 0) {
+			return -2;
+		}
+	}
+	return rc;
+}
+
 /* ------------------------------------------------------------------------- */
 
 static void test_handshake(void)
@@ -392,6 +416,31 @@ static void test_small_buffer(void)
 	viprs_acad_close(doc);
 }
 
+/* docs/WIRE.md's lengths for the records whose length never varies, as the
+ * whole record including its eight-byte header. 0 means the record has a
+ * variable-length payload and there is nothing to check. */
+static uint32_t fixed_bytes(uint16_t type)
+{
+	switch (type) {
+	case VACB_TYPE_DOCUMENT_BEGIN:
+		return 24;
+	case VACB_TYPE_LINE:
+		return 72;
+	case VACB_TYPE_ARC:
+		return 96;
+	case VACB_TYPE_CIRCLE:
+		return 80;
+	case VACB_TYPE_ELLIPSE:
+		return 120;
+	case VACB_TYPE_VIEW_END:
+		return 24;
+	case VACB_TYPE_DOCUMENT_END:
+		return 24;
+	default:
+		return 0;
+	}
+}
+
 static void test_decode_and_parse(void)
 {
 	uint8_t synth[16];
@@ -407,6 +456,7 @@ static void test_decode_and_parse(void)
 	int expect_view_end = 0;
 	int last_flag_seen = 0;
 	int batches = 0;
+	int fixed_size_wrong = 0;
 	int rc;
 	int i;
 
@@ -460,6 +510,16 @@ static void test_decode_and_parse(void)
 			if (record.type < 16) {
 				seen[record.type] = 1;
 			}
+
+			/* The documented length of every record whose length does
+			 * not vary, checked against what the library actually
+			 * emitted. A payload table nobody compares against the
+			 * producer is a payload table that drifts. */
+			if (fixed_bytes(record.type) != 0 &&
+			    record.payload_len + VACB_RECORD_HEADER_BYTES !=
+				    fixed_bytes(record.type)) {
+				fixed_size_wrong = record.type;
+			}
 		}
 
 		check(rc == 0, "the batch ends cleanly rather than on a refusal");
@@ -476,6 +536,8 @@ static void test_decode_and_parse(void)
 	check(after_probe_was_view_end == 1,
 	      "the record after the unknown one was read, so the skip used its length");
 	check(last_flag_seen == 1, "the final batch carries the last-batch flag");
+	check(fixed_size_wrong == 0,
+	      "every fixed-size record is the length docs/WIRE.md gives it");
 
 	viprs_acad_decode_close(dec);
 	viprs_acad_close(doc);
@@ -514,21 +576,28 @@ static void test_malformed_batches(void)
 	      "a payload_length past the buffer end is CORRUPT_INPUT");
 
 	/* A record length below its own header. The parser must refuse it rather
-	 * than retry it forever. */
-	body_len = put_record(body, VACB_TYPE_LINE, 4, 64);
-	len = build_batch(buf, VACB_WIRE_VERSION, body_len, body, body_len);
-	check(vacb_open(&reader, buf, len) == VIPRS_ACAD_OK, "the short-record batch opens");
-	check(vacb_next(&reader, &record) == -1 && reader.error == VIPRS_ACAD_CORRUPT_INPUT,
-	      "a record length below its own header is CORRUPT_INPUT");
-	check(reader.ran_away == 0,
-	      "and it was refused outright, not retried until the iteration bound caught it");
-
-	body_len = put_record(body, VACB_TYPE_LINE, 0, 64);
-	len = build_batch(buf, VACB_WIRE_VERSION, body_len, body, body_len);
-	vacb_open(&reader, buf, len);
-	check(vacb_next(&reader, &record) == -1 && reader.error == VIPRS_ACAD_CORRUPT_INPUT,
-	      "a record length of zero is CORRUPT_INPUT");
-	check(reader.ran_away == 0, "and it did not loop either");
+	 * than retry it forever, and the case drains rather than calling once,
+	 * because a single call cannot tell a refusal from a cursor that has not
+	 * failed to advance yet. */
+	{
+		const uint32_t shorts[] = { 0, 4, 7 };
+		size_t i;
+		for (i = 0; i < sizeof shorts / sizeof shorts[0]; i++) {
+			char label[96];
+			body_len = put_record(body, VACB_TYPE_LINE, shorts[i], 64);
+			len = build_batch(buf, VACB_WIRE_VERSION, body_len, body, body_len);
+			check(vacb_open(&reader, buf, len) == VIPRS_ACAD_OK,
+			      "the short-record batch opens");
+			snprintf(label, sizeof label,
+				 "a record length of %u, below its own header, is CORRUPT_INPUT",
+				 shorts[i]);
+			check(drain(&reader) == -1 && reader.error == VIPRS_ACAD_CORRUPT_INPUT,
+			      label);
+			check(reader.ran_away == 0,
+			      "and it was refused outright, not retried until the parser's own "
+			      "bound caught it");
+		}
+	}
 
 	/* A length that is not a multiple of four. */
 	body_len = put_record(body, VACB_TYPE_LINE, 9, 64);

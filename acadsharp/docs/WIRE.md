@@ -49,10 +49,15 @@ Twelve bytes, then the records.
 A batch is therefore `12 + payload_length` bytes, and that is what
 `viprs_acad_decode_next_batch` reports through `written`.
 
-Batches target 64 KiB and never exceed 1 MiB. A batch never spans two calls,
-so a caller with a 1 MiB buffer never has to grow it. Smaller buffers are
-fine, and a caller that hands over one too small for the next batch gets
-`VIPRS_ACAD_LIMIT_EXCEEDED` with the size it needs.
+Batches target 64 KiB and never exceed 1 MiB, with one exception: a single
+record larger than 1 MiB is sent as a batch of its own, because a batch never
+splits a record and the limits allow records that large. A `Polyline` at the
+default `max_polyline_points` is 24 MB on its own, so this is not a corner
+nobody reaches.
+
+A batch never spans two calls. A caller that hands over a buffer too small for
+the next batch gets `VIPRS_ACAD_LIMIT_EXCEEDED` with the size it needs, which
+is the only thing a caller has to handle to be correct at any buffer size.
 
 An empty batch, `payload_length` zero, is legal. It is what a decode with
 nothing left to say looks like when it still has to tell the caller the
@@ -122,8 +127,9 @@ platform nobody tested.
 ## Payload layouts
 
 Offsets below are from the start of the payload, which is the record's ninth
-byte. `f64` is IEEE-754 binary64. Every geometry record opens with the same
-sixteen-byte prologue:
+byte. A size given for a record is its `length`, so the eight-byte record
+header is included in it. `f64` is IEEE-754 binary64. Every geometry record
+opens with the same sixteen-byte prologue:
 
 | Offset | Size | Field |
 | --- | --- | --- |
@@ -132,24 +138,24 @@ sixteen-byte prologue:
 | 12 | 4 | `reserved0` |
 
 **1 `DocumentBegin`**: `uint32 view_count`, `uint32 drawing_version` (the
-numeric AC10xx code, 0 when it is not known), `uint64 reserved0`. 16 bytes.
+numeric AC10xx code, 0 when it is not known), `uint64 reserved0`. 24 bytes.
 
 **2 `ViewBegin`**: `uint32 view_index`, `uint32 kind` (0 model, 1 layout, 2
 unknown), `f64 min_x`, `f64 min_y`, `f64 max_x`, `f64 max_y`, `uint64
 item_count`, `uint32 name_len`, `uint32 reserved0`, then `name_len` bytes of
 UTF-8, padded with zeroes to a multiple of four. The name is not terminated.
 
-**3 `Line`**: prologue, then `f64 x0, y0, z0, x1, y1, z1`. 64 bytes.
+**3 `Line`**: prologue, then `f64 x0, y0, z0, x1, y1, z1`. 72 bytes.
 
 **4 `Polyline`**: prologue, `uint32 point_count`, `uint32 closed` (0 or 1),
 then `point_count` triples of `f64 x, y, z`.
 
 **5 `Arc`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
-counter-clockwise, measured in the plane the normal defines. 88 bytes.
+counter-clockwise, measured in the plane the normal defines. 96 bytes.
 
 **6 `Circle`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64 nx, ny,
-nz`. 72 bytes.
+nz`. 80 bytes.
 
 **7 `Ellipse`**: prologue, then `f64 cx, cy, cz`, `f64 major_x, major_y,
 major_z` (the vector from the centre to the end of the major axis), `f64
@@ -178,9 +184,9 @@ prologue, because it is not geometry.
 
 **12 `ViewEnd`**: `uint32 view_index`, `uint32 reserved0`, `uint64
 record_count`, the number of records emitted for the view, its own
-`ViewBegin` and `ViewEnd` included. 16 bytes.
+`ViewBegin` and `ViewEnd` included. 24 bytes.
 
-**13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 16
+**13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 24
 bytes.
 
 ## Curves keep their parameters

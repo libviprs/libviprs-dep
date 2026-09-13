@@ -111,7 +111,7 @@ frozen by number:
 | Code | Name | What it means |
 | --- | --- | --- |
 | 0 | `VIPRS_ACAD_OK` | The call did what it says. |
-| 1 | `VIPRS_ACAD_INVALID_ARGUMENT` | A null pointer, a zero length where one is not allowed, an index out of range, a handle this library did not issue, or a struct whose `struct_size` it does not recognise. Nothing was written and nothing was allocated. |
+| 1 | `VIPRS_ACAD_INVALID_ARGUMENT` | A null pointer, a zero length where one is not allowed, an index out of range, a handle this library did not issue, a struct whose `struct_size` or `struct_version` it does not recognise, or a path that names nothing this process can read. Nothing was written and nothing was allocated. |
 | 2 | `VIPRS_ACAD_UNSUPPORTED_FORMAT` | The input is a format, or a version of one, this build does not read. Check `dwg_version_min` and `dwg_version_max`. |
 | 3 | `VIPRS_ACAD_CORRUPT_INPUT` | The input is the right format and is damaged. |
 | 4 | `VIPRS_ACAD_UNSUPPORTED_ENTITY` | Reserved for a caller that asks for one specific thing this build cannot produce. A drawing containing shapes the decoder has no record type for does not fail: it emits a `Warning` record and carries on. |
@@ -215,6 +215,12 @@ A caller sizes a buffer by calling once with a null pointer and a capacity
 of zero, reading `required`, allocating, and calling again. That first call
 is cheap and is allowed to be made every time.
 
+The sizing call returns `VIPRS_ACAD_OK`. It is not a failure, it is the
+documented way to ask, and this is the second exception to the atomicity rule
+above: the call fills whatever struct it was given as well as `required`. A
+null buffer with a capacity that is *not* zero is `VIPRS_ACAD_INVALID_ARGUMENT`,
+because that is a caller who has confused the two.
+
 If `cap` is smaller than the required length, the call writes nothing,
 sets `required`, and returns `VIPRS_ACAD_LIMIT_EXCEEDED`. It never writes a
 partial string, because a partial UTF-8 string can end mid-sequence and a
@@ -302,8 +308,10 @@ close
 `cap` is too small for the next one, the call returns
 `VIPRS_ACAD_LIMIT_EXCEEDED` and writes the size needed into `written`, so a
 caller that guessed low grows its buffer and retries rather than reasoning
-about a half-written record. Batches target 64 KiB and never exceed 1 MiB,
-so a 1 MiB buffer never sees that code for this reason.
+about a half-written record. Batches target 64 KiB and stay under 1 MiB
+unless a single record is larger than that, in which case it becomes a batch
+of its own, because a batch never splits a record. So a 1 MiB buffer almost
+never sees that code, and a caller still has to handle it.
 
 The final batch carries a flag in its own header as well as setting `done`,
 so a consumer that streams batches to something else can tell the last one

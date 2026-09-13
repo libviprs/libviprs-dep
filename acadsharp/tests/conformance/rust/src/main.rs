@@ -445,6 +445,22 @@ fn small_buffer(t: &mut Tally) {
     }
 }
 
+/// docs/WIRE.md's lengths for the records whose length never varies, as the
+/// whole record including its eight-byte header. `None` means the payload is
+/// variable-length and there is nothing to check.
+fn fixed_bytes(kind: u16) -> Option<usize> {
+    match kind {
+        wire::TYPE_DOCUMENT_BEGIN => Some(24),
+        wire::TYPE_LINE => Some(72),
+        wire::TYPE_ARC => Some(96),
+        wire::TYPE_CIRCLE => Some(80),
+        wire::TYPE_ELLIPSE => Some(120),
+        wire::TYPE_VIEW_END => Some(24),
+        wire::TYPE_DOCUMENT_END => Some(24),
+        _ => None,
+    }
+}
+
 fn decode_and_parse(t: &mut Tally) {
     // Enough primitives that the stream does not fit in one batch. A decode
     // that always fits in the first call never exercises the loop, and the
@@ -462,6 +478,7 @@ fn decode_and_parse(t: &mut Tally) {
     let mut expect_after_probe = false;
     let mut after_probe_was_view_end = false;
     let mut last_flag_seen = false;
+    let mut fixed_size_wrong = None;
 
     unsafe {
         if viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, std::ptr::null(), &mut doc)
@@ -515,6 +532,15 @@ fn decode_and_parse(t: &mut Tally) {
                         if (record.kind as usize) < seen.len() {
                             seen[record.kind as usize] = true;
                         }
+                        // The documented length of every record whose length
+                        // does not vary, against what the library emitted. A
+                        // payload table nobody compares against the producer
+                        // is a payload table that drifts.
+                        if let Some(expected) = fixed_bytes(record.kind) {
+                            if record.payload.len() + wire::RECORD_HEADER_BYTES != expected {
+                                fixed_size_wrong = Some(record.kind);
+                            }
+                        }
                     }
                     Ok(None) => break,
                     Err(_) => {
@@ -540,6 +566,29 @@ fn decode_and_parse(t: &mut Tally) {
         "the record after the unknown one was read, so the skip used its length",
     );
     t.check(last_flag_seen, "the final batch carries the last-batch flag");
+    t.check(
+        fixed_size_wrong.is_none(),
+        "every fixed-size record is the length docs/WIRE.md gives it",
+    );
+}
+
+const DRAIN_CAP: u32 = 100_000;
+
+/// Reads a batch to its end, or to its refusal.
+fn drain(reader: &mut Reader) -> Result<(), u32> {
+    let mut guard = DRAIN_CAP;
+    loop {
+        match reader.next() {
+            Ok(Some(_)) => {
+                guard -= 1;
+                if guard == 0 {
+                    return Err(VIPRS_ACAD_INTERNAL_ERROR);
+                }
+            }
+            Ok(None) => return Ok(()),
+            Err(code) => return Err(code),
+        }
+    }
 }
 
 fn malformed(t: &mut Tally) {
@@ -574,18 +623,23 @@ fn malformed(t: &mut Tally) {
         "a payload_length past the buffer end is CORRUPT_INPUT",
     );
 
+    // These drain rather than calling next() once. With the short-record rule
+    // removed, one call returns a record and nothing looks wrong: the cursor
+    // only fails to advance on the call after it. The counter is this test's
+    // own, separate from the parser's, so a parser with no bound shows up as a
+    // failed assertion rather than as a job somebody has to kill.
     for claimed in [0u32, 4, 7] {
         let body = wire::build_record(wire::TYPE_LINE, claimed, 64);
         let batch = wire::build_batch(wire::WIRE_VERSION, body.len() as u32, &body);
         let mut reader = Reader::open(&batch).expect("the short-record batch opens");
-        let outcome = reader.next();
+        let outcome = drain(&mut reader);
         t.check(
             outcome == Err(VIPRS_ACAD_CORRUPT_INPUT),
             &format!("a record length of {claimed}, below its own header, is CORRUPT_INPUT"),
         );
         t.check(
             !reader.ran_away,
-            "and it was refused outright, not retried until the iteration bound caught it",
+            "and it was refused outright, not retried until the parser's own bound caught it",
         );
     }
 
@@ -593,7 +647,7 @@ fn malformed(t: &mut Tally) {
     let batch = wire::build_batch(wire::WIRE_VERSION, body.len() as u32, &body);
     let mut reader = Reader::open(&batch).unwrap();
     t.check(
-        reader.next() == Err(VIPRS_ACAD_CORRUPT_INPUT),
+        drain(&mut reader) == Err(VIPRS_ACAD_CORRUPT_INPUT),
         "a record length that is not a multiple of four is CORRUPT_INPUT",
     );
 
@@ -601,7 +655,7 @@ fn malformed(t: &mut Tally) {
     let batch = wire::build_batch(wire::WIRE_VERSION, body.len() as u32, &body);
     let mut reader = Reader::open(&batch).unwrap();
     t.check(
-        reader.next() == Err(VIPRS_ACAD_CORRUPT_INPUT),
+        drain(&mut reader) == Err(VIPRS_ACAD_CORRUPT_INPUT),
         "a record length running past the payload is CORRUPT_INPUT",
     );
 
