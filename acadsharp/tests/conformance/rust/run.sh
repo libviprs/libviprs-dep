@@ -98,6 +98,30 @@ docker run --rm --platform "$platform" \
             echo "test exports: absent, so the cases that need them are skipped"
         fi
 
+        # A musl toolchain links crt-static by default, and this crate links
+        # a shared library, so the result is an executable that carries an
+        # INTERP because it needs one and never got told which. rustc omits
+        # -dynamic-linker under crt-static, ld falls back to its own aarch64
+        # default of /lib/ld-linux-aarch64.so.1, and Alpine has no such file.
+        # The binary then builds and links cleanly and the kernel refuses to
+        # exec it, which cargo reports as
+        #
+        #   error: could not execute process .../conformance (never executed)
+        #   Caused by: No such file or directory (os error 2)
+        #
+        # and that reads like a missing build far more than like a missing
+        # loader. Asking for a dynamic musl gets the interpreter written, and
+        # the consumer then NEEDs libc.musl-<arch>.so.1, the same libc as the
+        # shim it is testing. Appended rather than assigned so RUSTFLAGS set
+        # by a caller survives.
+        case "$(rustc -vV | sed -n "s/^host: //p")" in
+            *-musl)
+                RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static"
+                export RUSTFLAGS
+                echo "libc: musl, so the consumer is linked against a dynamic one"
+                ;;
+        esac
+
         cargo test --offline --tests
         cargo run --offline --quiet --bin conformance
     ' _ "$library"
