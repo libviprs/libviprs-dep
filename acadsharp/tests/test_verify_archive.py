@@ -14,6 +14,7 @@ exercise the reader, the manifest and the layout: the *real* mac archive is
 built on `macos-15` and verified there.
 """
 
+import ctypes
 import hashlib
 import json
 import os
@@ -27,11 +28,14 @@ import sys
 
 import build_acadsharp as ba
 import pytest
+import toolchain
 
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ACAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCRIPT_PATH = os.path.join(ACAD_DIR, "scripts", "verify_archive.sh")
 RETAIN_SECTIONS = os.path.join(ACAD_DIR, "scripts", "retain_sections.py")
 HEADER = os.path.join(ACAD_DIR, "include", "viprs_acadsharp.h")
+ABI_CS = os.path.join(ACAD_DIR, "native", "Abi.cs")
 
 HOST_CPU = "arm64" if platform.machine() in ("arm64", "aarch64") else "x64"
 HOST_ARCH = "arm64" if HOST_CPU == "arm64" else "amd64"
@@ -46,7 +50,11 @@ PAD_BYTES = 130000
 def _require_toolchain():
     for tool in ("cc", "ar"):
         if not shutil.which(tool):
-            pytest.skip(f"{tool} not available on this host")
+            toolchain.missing_tool(tool, "the fixture here is a real ELF built on this host")
+    # A platform skip, not a toolchain one, so it stays a skip under
+    # VIPRS_REQUIRE_COMPILED_FIXTURES: a mac cell genuinely cannot produce
+    # an ELF, and a flag that said otherwise would be lying in the other
+    # direction. Only ubuntu runs this suite in CI today.
     if sys.platform != "linux":
         pytest.skip("the compiled fixture is an ELF one; run this suite on Linux")
 
@@ -56,16 +64,53 @@ def _require_toolchain():
 # ---------------------------------------------------------------------------
 
 
-# What the stub answers when it is asked what it reads. The real library
-# answers out of AbiConstants; this pair is the fixture's own, so a test
-# that edits the manifest is putting the manifest at odds with a library
-# that has not moved. _finish records the same numbers as facts, which is
-# the path a real build takes from the smoke's output to LINKINFO.json.
-STUB_DWG_MIN = 1014
-STUB_DWG_MAX = 1032
+def _abi_constants_dwg_range(path=ABI_CS):
+    """The AC10xx range, read off the library's own constants.
+
+    The header never states this range. It says so itself, in the comment
+    above the capabilities struct and again in the verifier's probe, which
+    is the whole reason the verifier has to ask the running library rather
+    than read it out of the bytes. So `native/Abi.cs` is the only
+    machine-readable statement of it there is, and this reads it there
+    rather than repeating the digits, the same way
+    `test_release_workflow.py` reads `AbiConstants` for the manifest.
+    """
+    with open(path) as f:
+        code = f.read()
+    out = []
+    for name in ("DwgVersionMin", "DwgVersionMax"):
+        match = re.search(rf"\b{name}\s*=\s*(\d+)u", code)
+        if not match:
+            raise ValueError(
+                f"native/Abi.cs no longer declares AbiConstants.{name}. The fixture "
+                "answers what the real library answers rather than a pair of digits "
+                "typed here, so a rename has to be followed rather than absorbed."
+            )
+        out.append(int(match.group(1)))
+    return tuple(out)
 
 
-def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
+# What the stub answers when it is asked about itself, and every one of
+# these is derived rather than typed.
+#
+# They used to be literals, and the literal is what made this fixture wrong
+# every time the ABI moved: the stub answered abi_version 1 to a header
+# declaring 2, and nothing anywhere compared the two. A fixture that can
+# disagree with the ABI it claims to implement will, and when it does the
+# failure surfaces somewhere else and blames something that is correct.
+#
+# Note what is deliberately *not* here: a knob. `_stub_source` and
+# `_build_linux_tree` take an `abi_version` and a `caps_versions` override,
+# both defaulting to these, so a fixture that lies has to say so at the
+# call site. That is how the negative fixtures stay exempt without a list
+# of names to keep up to date: a tree built with no override agrees with
+# the header by construction, and the two trees that disagree spell out
+# which way in the call that builds them.
+STUB_ABI_VERSION, STUB_WIRE_VERSION = ba.header_versions()
+STUB_DWG_MIN, STUB_DWG_MAX = _abi_constants_dwg_range()
+
+
+def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False, abi_version=None):
     """A stand-in library. `guarded` makes it need its initialiser.
 
     The real archive's exports abort when the runtime was never brought
@@ -88,7 +133,14 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
     name, and the verifier's probe resolved that instead. It answered a
     read range of 0 to 0 and the verifier refused every good archive, with
     a message about a manifest that was correct.
+
+    `abi_version` is the one number a caller can make this library lie
+    about, and it exists so a test can build an archive whose library
+    disagrees with the header it ships. Left alone it is the header's own,
+    which is what every other fixture here gets.
     """
+    if abi_version is None:
+        abi_version = STUB_ABI_VERSION
     fingerprint = int(ba.abi_fingerprint(), 16)
     body = [
         "#include <stdint.h>",
@@ -107,7 +159,7 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
             body.append(f"uint64_t {name}(void) {{{guard}\n\treturn {fingerprint}ULL;\n}}")
         elif name == "viprs_acad_abi_version":
             tail = f" + {undefined}()" if undefined else ""
-            body.append(f"uint32_t {name}(void) {{{guard}\n\treturn 1u{tail};\n}}")
+            body.append(f"uint32_t {name}(void) {{{guard}\n\treturn {abi_version}u{tail};\n}}")
         elif name == ba.capabilities_entry_point():
             continue  # CAPABILITIES_SOURCE, compiled separately
         else:
@@ -130,13 +182,17 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
 # this fixture answer 1 to a header saying 2, which is the exact drift
 # that check exists to catch, reported against a fixture rather than
 # against a build.
+#
+# `%(abi)s` and `%(wire)s` are the macro names in every fixture but one.
+# The exception builds an archive whose capabilities call disagrees with
+# the header it ships, so the verifier's refusal has something to refuse.
 CAPABILITIES_SOURCE = """\
 #include <stdint.h>
 #include <string.h>
 
 #include "viprs_acadsharp.h"
 
-uint32_t %s(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
+uint32_t %(name)s(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
 \tuint64_t cap, uint64_t *required)
 {
 \tstatic const char VERSION[] = "3.7.1";
@@ -146,10 +202,10 @@ uint32_t %s(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
 \tif (caps->struct_size != (uint32_t)sizeof *caps) {
 \t\treturn 1u;
 \t}
-\tcaps->abi_version = VIPRS_ACAD_ABI_VERSION;
-\tcaps->wire_version = VIPRS_ACAD_WIRE_VERSION;
-\tcaps->dwg_version_min = %du;
-\tcaps->dwg_version_max = %du;
+\tcaps->abi_version = %(abi)s;
+\tcaps->wire_version = %(wire)s;
+\tcaps->dwg_version_min = %(dwg_min)du;
+\tcaps->dwg_version_max = %(dwg_max)du;
 \t*required = (uint64_t)(sizeof VERSION - 1);
 \tif (out && cap >= *required) {
 \t\tmemcpy(out, VERSION, (size_t)*required);
@@ -293,8 +349,17 @@ def _build_linux_tree(
     init_effective=True,
     unwind="private",
     plat="linux",
+    abi_version=None,
+    caps_versions=None,
 ):
     """Compile a stand-in library and lay it out exactly like a release.
+
+    `abi_version` and `caps_versions` are the two ways to build a library
+    that disagrees with the header it ships, and they exist so the
+    verifier's refusal has something to refuse. Both default to the
+    header's own numbers, so a fixture that does not name them cannot
+    drift: that is the whole of the exemption the negative fixtures need,
+    without a list of fixture names anywhere.
 
     `plat` is a label, not a toolchain: the compiler here is whatever the
     container has, and a musl fixture is the same ELF under a musl
@@ -307,9 +372,19 @@ def _build_linux_tree(
     lib = os.path.join(root, "lib")
     os.makedirs(lib)
 
+    caps_abi, caps_wire = caps_versions or ("VIPRS_ACAD_ABI_VERSION", "VIPRS_ACAD_WIRE_VERSION")
     caps_src = os.path.join(work, "caps.c")
     with open(caps_src, "w") as f:
-        f.write(CAPABILITIES_SOURCE % (ba.capabilities_entry_point(), STUB_DWG_MIN, STUB_DWG_MAX))
+        f.write(
+            CAPABILITIES_SOURCE
+            % {
+                "name": ba.capabilities_entry_point(),
+                "abi": caps_abi,
+                "wire": caps_wire,
+                "dwg_min": STUB_DWG_MIN,
+                "dwg_max": STUB_DWG_MAX,
+            }
+        )
     include = os.path.join(ACAD_DIR, "include")
 
     def with_caps(names, *sources):
@@ -324,7 +399,7 @@ def _build_linux_tree(
 
     shared_src = os.path.join(work, "shared.c")
     with open(shared_src, "w") as f:
-        f.write(_stub_source(symbols))
+        f.write(_stub_source(symbols, abi_version=abi_version))
     subprocess.run(
         [
             "cc",
@@ -343,7 +418,11 @@ def _build_linux_tree(
     with open(static_src, "w") as f:
         f.write(
             _stub_source(
-                static_symbols or symbols, pad_name="spad", undefined=undefined, guarded=True
+                static_symbols or symbols,
+                pad_name="spad",
+                undefined=undefined,
+                guarded=True,
+                abi_version=abi_version,
             )
         )
     obj = os.path.join(work, "static.o")
@@ -490,6 +569,41 @@ def tree_with_an_inert_initialiser(tmp_path_factory):
     """
     _require_toolchain()
     return _build_linux_tree(str(tmp_path_factory.mktemp("inert")), init_effective=False)
+
+
+@pytest.fixture(scope="session")
+def tree_whose_library_lies_about_its_abi(tmp_path_factory):
+    """`viprs_acad_abi_version()` answers something the header does not say.
+
+    Every byte of this archive is well-formed and every manifest field is
+    the header's own, so nothing that reads the tree can see it. The only
+    place the disagreement exists is in the compiled code, which is why
+    the verifier has to ask the library it has already linked.
+
+    The number is the header's plus five rather than a digit, so the day
+    the header reaches 7 this fixture is still wrong rather than suddenly
+    right.
+    """
+    _require_toolchain()
+    return _build_linux_tree(
+        str(tmp_path_factory.mktemp("abilie")), abi_version=STUB_ABI_VERSION + 5
+    )
+
+
+@pytest.fixture(scope="session")
+def tree_whose_capabilities_lie_about_the_versions(tmp_path_factory):
+    """The same disagreement, one call along.
+
+    A consumer reads the pair out of the capabilities struct rather than
+    out of `viprs_acad_abi_version()`, so a library that answers one way
+    through the entry point and another through the struct is a library
+    that half of its callers refuse.
+    """
+    _require_toolchain()
+    return _build_linux_tree(
+        str(tmp_path_factory.mktemp("capslie")),
+        caps_versions=(f"{STUB_ABI_VERSION + 5}u", f"{STUB_WIRE_VERSION + 5}u"),
+    )
 
 
 def _clone(tree, tmp_path):
@@ -1443,3 +1557,369 @@ class TestTheModuleSectionIsRetained:
         out = _output(result)
         assert "NOT RETAINED" in out, out
         assert "start-stop-gc" in out, out
+
+
+# ---------------------------------------------------------------------------
+# The fixture against the header it ships
+# ---------------------------------------------------------------------------
+
+# The verifier's own probe, kept down to the things it reads back.
+#
+# It includes the header out of the archive rather than out of this
+# checkout, because the question is whether the library in that tree agrees
+# with the header packed beside it, and it links the static archive the way
+# the verifier links it: the initialiser whole, ahead of the main one.
+#
+# The entry points are taken by address rather than called. Calling them
+# would need every real signature; taking the address needs only the
+# header's declaration, and the link still has to resolve all of them, so a
+# fixture that quietly stopped defining one cannot get past this.
+AGREEMENT_PROBE_SOURCE = """\
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "viprs_acadsharp.h"
+
+typedef void (*viprs_any_fn)(void);
+
+static const viprs_any_fn TAKEN[] = {
+__ENTRY_POINTS__
+};
+
+int main(void)
+{
+\tstruct viprs_acad_capabilities_v1 caps;
+\tuint64_t needed = 0;
+\tchar fingerprint[32];
+
+\tmemset(&caps, 0, sizeof caps);
+\tcaps.struct_size = (uint32_t)sizeof caps;
+\tcaps.struct_version = 1;
+\tif (VIPRS_CAPS_CALL(&caps, NULL, 0, &needed) != 0) {
+\t\tfprintf(stderr, "the capabilities sizing call refused\\n");
+\t\treturn 2;
+\t}
+\tsnprintf(fingerprint, sizeof fingerprint, "%016llx",
+\t\t(unsigned long long)viprs_acad_abi_fingerprint());
+
+\tprintf("entry_points=%u\\n", (unsigned)(sizeof TAKEN / sizeof *TAKEN));
+\tprintf("abi_version=%u\\n", (unsigned)viprs_acad_abi_version());
+\tprintf("abi_fingerprint=%s\\n", fingerprint);
+\tprintf("caps_abi_version=%u\\n", (unsigned)caps.abi_version);
+\tprintf("caps_wire_version=%u\\n", (unsigned)caps.wire_version);
+\tprintf("dwg_version_min=%u\\n", (unsigned)caps.dwg_version_min);
+\tprintf("dwg_version_max=%u\\n", (unsigned)caps.dwg_version_max);
+\tprintf("shipped_abi_version=%u\\n", (unsigned)VIPRS_ACAD_ABI_VERSION);
+\tprintf("shipped_wire_version=%u\\n", (unsigned)VIPRS_ACAD_WIRE_VERSION);
+\treturn 0;
+}
+"""
+
+
+def _probe_the_library(work, root):
+    """Ask the tree's own library what it is, the way the verifier does."""
+    taken = ",\n".join(f"\t(viprs_any_fn)&{name}" for name in ENTRY_POINTS)
+    src = os.path.join(work, "header_agreement.c")
+    with open(src, "w") as f:
+        f.write(AGREEMENT_PROBE_SOURCE.replace("__ENTRY_POINTS__", taken))
+    exe = os.path.join(work, "header_agreement")
+    build = subprocess.run(
+        [
+            "cc",
+            src,
+            "-I",
+            os.path.join(root, "include"),
+            f"-DVIPRS_CAPS_CALL={ba.capabilities_entry_point()}",
+            "-Wl,--whole-archive",
+            _static_init(root),
+            "-Wl,--no-whole-archive",
+            _static(root),
+            "-o",
+            exe,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert build.returncode == 0, (
+        "the probe would not link against the fixture's own archive, so the fixture "
+        f"does not define everything the header it ships declares:\n{_output(build)}"
+    )
+    run = subprocess.run([exe], capture_output=True, text=True, check=False)
+    assert run.returncode == 0, f"the probe ran and refused:\n{_output(run)}"
+    return dict(line.split("=", 1) for line in run.stdout.split())
+
+
+class TestTheFixtureAgreesWithTheHeaderItShips:
+    """A fixture is not generated from the header, so #72's guard cannot see it.
+
+    That guard compares the *generated* smoke against the header. This
+    fixture is hand-written C, and for three rounds it was free to answer
+    whatever it liked: it returned abi_version 1 to a header declaring 2,
+    and after the rename its generic arm emitted a `return 0u` under the
+    capabilities call's new name, so the verifier's probe resolved a stub
+    that read no drawing at all and refused every good archive while
+    blaming a manifest that was correct.
+
+    So the fixture gets asked the same questions the verifier asks, and the
+    answers are held to the header rather than to a comment.
+    """
+
+    def test_the_generated_stub_states_the_headers_abi_version(self):
+        # The control that needs no compiler, so it runs on the dev Mac
+        # too. Every other test here skips without cc, which is exactly how
+        # the last three of these reached CI.
+        source = _stub_source(ENTRY_POINTS)
+        wanted = f"uint32_t viprs_acad_abi_version(void) {{\n\treturn {STUB_ABI_VERSION}u;\n}}"
+        assert wanted in source, (
+            f"the stub does not answer the header's abi_version of {STUB_ABI_VERSION}. A "
+            "literal here is what made it answer 1 to a header declaring 2, for three "
+            f"rounds, with nothing anywhere comparing the two:\n{source}"
+        )
+
+    def test_the_stub_answers_what_the_header_declares(self, tmp_path, good_tree):
+        answers = _probe_the_library(str(tmp_path), good_tree)
+
+        assert int(answers["entry_points"]) == len(ENTRY_POINTS)
+        assert int(answers["abi_version"]) == STUB_ABI_VERSION, answers
+        assert int(answers["caps_abi_version"]) == STUB_ABI_VERSION, answers
+        assert int(answers["caps_wire_version"]) == STUB_WIRE_VERSION, answers
+        assert answers["abi_fingerprint"] == ba.abi_fingerprint(), answers
+        assert (int(answers["dwg_version_min"]), int(answers["dwg_version_max"])) == (
+            STUB_DWG_MIN,
+            STUB_DWG_MAX,
+        ), answers
+
+    def test_the_header_in_the_archive_is_the_header_this_check_read(self, tmp_path, good_tree):
+        # The probe compiles against the shipped header and this suite
+        # compares against the checkout's. They are the same file today and
+        # the archive's hash check says so, but a probe reading one and an
+        # assertion reading the other would pass over a tree where they had
+        # come apart, which is the shape of the bug this is here for.
+        answers = _probe_the_library(str(tmp_path), good_tree)
+        assert (int(answers["shipped_abi_version"]), int(answers["shipped_wire_version"])) == (
+            STUB_ABI_VERSION,
+            STUB_WIRE_VERSION,
+        ), answers
+
+    def test_the_shared_library_resolves_every_entry_point_by_name(self, good_tree):
+        # The static half is covered by the probe's link. This is the other
+        # library in the tree, and it is the one the verifier reads the
+        # export table out of.
+        lib = ctypes.CDLL(_shared(good_tree))
+        missing = [name for name in ENTRY_POINTS if not hasattr(lib, name)]
+        assert missing == [], f"the fixture's shared library does not define {missing}"
+
+    def test_the_read_range_is_the_librarys_own_rather_than_a_pair_of_digits(self):
+        # The range is not in the header, so this is the one number here
+        # that has to be read out of AbiConstants. A test that only checked
+        # the fixture against itself would be checking nothing.
+        assert (STUB_DWG_MIN, STUB_DWG_MAX) == _abi_constants_dwg_range()
+        with open(ABI_CS) as f:
+            code = f.read()
+        assert f"DwgVersionMin = {STUB_DWG_MIN}u" in code
+        assert f"DwgVersionMax = {STUB_DWG_MAX}u" in code
+
+
+class TestTheVerifierRefusesALibraryThatDisagreesWithItsHeader:
+    """The hole the fixture fell through, from the other side.
+
+    The probe already links and runs the library to check the fingerprint,
+    and it already printed `ABI_VERSION=`. It never compared it to
+    anything. So an archive whose `viprs_acad_abi_version()` answers 1 next
+    to a header declaring 2 passed every check this script has, and the
+    fixture that did exactly that shipped for three rounds.
+    """
+
+    def test_an_abi_version_the_header_does_not_declare_is_refused(
+        self, tmp_path, tree_whose_library_lies_about_its_abi
+    ):
+        root = _clone(tree_whose_library_lies_about_its_abi, tmp_path)
+        result = _verify(_pack(root))
+        out = _output(result)
+        assert result.returncode == 1, out
+        assert "VIPRS_ACAD_ABI_VERSION" in out, out
+        assert str(STUB_ABI_VERSION + 5) in out, (
+            f"the refusal has to name what the library answered:\n{out}"
+        )
+
+    def test_capabilities_versions_the_header_does_not_declare_are_refused(
+        self, tmp_path, tree_whose_capabilities_lie_about_the_versions
+    ):
+        root = _clone(tree_whose_capabilities_lie_about_the_versions, tmp_path)
+        result = _verify(_pack(root))
+        out = _output(result)
+        assert result.returncode == 1, out
+        assert "wire_version" in out, out
+        assert str(STUB_WIRE_VERSION + 5) in out, (
+            f"the refusal has to name what the library answered:\n{out}"
+        )
+
+    def test_the_good_archive_passes_the_same_check(self, tmp_path, good_tree):
+        # The control. A check that only ever fires on a library somebody
+        # broke could be firing on every library, and this pair is worth
+        # nothing without it.
+        result = _verify(_pack(_clone(good_tree, tmp_path)))
+        out = _output(result)
+        assert result.returncode == 0, out
+        assert f"abi_version {STUB_ABI_VERSION}" in out, (
+            f"the verifier never says which version it agreed on, so a run where the "
+            f"comparison never happened reads exactly like one where it passed:\n{out}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# The skip that hid all of this
+# ---------------------------------------------------------------------------
+
+_GATE_PROBE_CONFTEST = """\
+import sys
+
+sys.path.insert(0, {tests!r})
+
+from toolchain import pytest_terminal_summary  # noqa: F401
+"""
+
+_GATE_PROBE_TEST = """\
+import sys
+
+sys.path.insert(0, {tests!r})
+
+import toolchain
+
+
+def test_a_fixture_this_host_cannot_build():
+    toolchain.missing_tool("cc", "there is nothing to compile with here")
+"""
+
+
+def _run_gate_probe(tmp_path, **env_extra):
+    """A one-test suite whose only gate is a missing compiler, run for real.
+
+    A subprocess rather than pytester, because `pytest_plugins` may only be
+    declared in a rootdir conftest and this one is three directories down.
+    """
+    work = os.path.join(str(tmp_path), "gate")
+    os.makedirs(work, exist_ok=True)
+    for name, template in (
+        ("conftest.py", _GATE_PROBE_CONFTEST),
+        ("test_gate_probe.py", _GATE_PROBE_TEST),
+    ):
+        with open(os.path.join(work, name), "w") as f:
+            f.write(template.format(tests=TESTS_DIR))
+    env = {k: v for k, v in os.environ.items() if k not in ("CI", toolchain.REQUIRE_ENV)}
+    env.update(env_extra)
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", work],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+
+class TestASkippedCompiledFixtureIsNotAPass:
+    """`1718 passed, 122 skipped` is what this suite looks like with the
+    half that reads real bytes missing, and a summary line cannot tell the
+    difference. This directory is 114 tests lighter without a compiler than
+    with one, and the run that noticed was CI failing seven tests that had
+    just reported green locally.
+
+    So the gate mirrors `VIPRS_REQUIRE_LINK_TEST=1` in
+    `scripts/verify_archive.sh`: quiet on a dev machine, a failure anywhere
+    that claims it can compile.
+    """
+
+    def test_without_the_flag_it_stays_a_quiet_skip(self, tmp_path):
+        # This Mac has no host toolchain by design. A gate that failed here
+        # would make the suite unrunnable on the machine it is written on,
+        # which buys nothing.
+        result = _run_gate_probe(tmp_path)
+        out = _output(result)
+        assert result.returncode == 0, out
+        assert "1 skipped" in out, out
+
+    def test_the_flag_turns_it_into_a_failure(self, tmp_path):
+        result = _run_gate_probe(tmp_path, **{toolchain.REQUIRE_ENV: "1"})
+        out = _output(result)
+        assert result.returncode != 0, out
+        assert "1 failed" in out, out
+        assert toolchain.REQUIRE_ENV in out, out
+
+    def test_ci_is_an_environment_that_claims_it_can_compile(self, tmp_path):
+        # Derived rather than configured. The flag that has to be added to
+        # a workflow is the flag a new workflow forgets, and forgetting it
+        # is what this whole item is about.
+        result = _run_gate_probe(tmp_path, CI="true")
+        out = _output(result)
+        assert result.returncode != 0, out
+        assert "1 failed" in out, out
+
+    def test_a_ci_job_without_a_compiler_can_say_so(self, tmp_path):
+        # The other direction. A cell that genuinely has no toolchain opts
+        # out by name, in the open, rather than by nobody noticing.
+        result = _run_gate_probe(tmp_path, CI="true", **{toolchain.REQUIRE_ENV: "0"})
+        out = _output(result)
+        assert result.returncode == 0, out
+        assert "1 skipped" in out, out
+
+    def test_the_count_gets_a_line_of_its_own(self, tmp_path):
+        # The second half of the problem: the flag is off by default on a
+        # dev machine, so the skip still has to be loud enough that a
+        # summary line cannot hide it.
+        result = _run_gate_probe(tmp_path)
+        out = _output(result)
+        assert "compiled-fixture tests did not run on this host" in out, out
+        assert "cc is not on this host" in out, out
+
+
+class TestEveryToolchainGateGoesThroughTheDoorway:
+    """The drift half, in the style `test_shim_source_rules.py` already uses.
+
+    A gate that skips on a missing build tool by hand is invisible to the
+    flag, and this fixture has been re-broken three times by exactly that
+    kind of local copy. So the suites are read rather than trusted.
+    """
+
+    def _skip_arguments(self, text):
+        # Spelled in two halves so this file is not its own first offender.
+        needle = "pytest" + ".skip("
+        at = text.find(needle)
+        while at != -1:
+            start = at + len(needle)
+            depth = 1
+            end = start
+            while end < len(text) and depth:
+                if text[end] == "(":
+                    depth += 1
+                elif text[end] == ")":
+                    depth -= 1
+                end += 1
+            yield text[start : end - 1]
+            at = text.find(needle, end)
+
+    def test_no_suite_skips_on_a_missing_build_tool_by_hand(self):
+        offenders = []
+        for name in sorted(os.listdir(TESTS_DIR)):
+            if not name.startswith("test_") or not name.endswith(".py"):
+                continue
+            with open(os.path.join(TESTS_DIR, name)) as f:
+                text = f.read()
+            for argument in self._skip_arguments(text):
+                match = toolchain.BUILD_TOOL_RE.search(argument)
+                if match:
+                    offenders.append(f"{name}: {' '.join(argument.split())}")
+        assert offenders == [], (
+            "these gates skip on a missing build tool without going through "
+            f"toolchain.missing_tool(), so {toolchain.REQUIRE_ENV} cannot see them and "
+            "the tests behind them vanish from a green run:\n  " + "\n  ".join(offenders)
+        )
+
+    def test_the_scan_can_actually_find_one(self):
+        # The control. A scan whose pattern never matches anything reports
+        # a clean suite forever, and that is the same failure as the one it
+        # is looking for.
+        planted = "def f():\n    pytest" + '.skip("cargo is not installed on this host")\n'
+        found = [a for a in self._skip_arguments(planted) if toolchain.BUILD_TOOL_RE.search(a)]
+        assert len(found) == 1, found
