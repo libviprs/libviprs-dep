@@ -306,9 +306,7 @@ def arc_point(record, angle):
     c = record["c"]
     r = record["r"]
     u, v = plane_frame(record["normal"])
-    return tuple(
-        c[i] + r * (math.cos(angle) * u[i] + math.sin(angle) * v[i]) for i in range(3)
-    )
+    return tuple(c[i] + r * (math.cos(angle) * u[i] + math.sin(angle) * v[i]) for i in range(3))
 
 
 def ellipse_point(record, param):
@@ -324,9 +322,7 @@ def ellipse_point(record, param):
     u = normalize(major)
     v = cross(normalize(record["normal"]), u)
     b = a * record["ratio"]
-    return tuple(
-        c[i] + a * math.cos(param) * u[i] + b * math.sin(param) * v[i] for i in range(3)
-    )
+    return tuple(c[i] + a * math.cos(param) * u[i] + b * math.sin(param) * v[i] for i in range(3))
 
 
 def negate_x(p):

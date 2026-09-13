@@ -92,12 +92,21 @@ class TestNoViewReportsANumberThatIsNotOne:
 class TestExtentsThatAreNotNumbersBecomeTheAbsentBox:
     """g13_bad_extents.dwg holds a NaN and both infinities in one view."""
 
-    def test_the_fixture_still_carries_all_four_shapes(self):
-        # The fixture asks for NaN, -Infinity, +Infinity and NaN. If a future
-        # DwgWriter started refusing one of those, this module would go on
-        # passing while covering less, so the count is pinned here rather than
-        # assumed.
-        assert len(extents(BAD)) >= 1
+    def test_the_substitution_is_what_produced_that_box(self):
+        """The positive control, and the reason this module cannot go hollow.
+
+        Once the substitution works, a drawing whose extents are not numbers
+        reports the same four numbers as one whose extents are fine. So if a
+        future DwgWriter stopped round-tripping a NaN, the fixture would carry
+        four good extents, nothing would be substituted, and every other test
+        here would go on passing over a guard that had stopped running. The
+        shim counts the views it replaced and the capture records the count.
+        """
+        assert MANIFEST["fixtures"][BAD]["views_without_extents"] == len(extents(BAD)), (
+            f"{BAD} had no view whose extents needed replacing, so the file has "
+            "stopped carrying a value that is not a number and this module is "
+            "measuring nothing"
+        )
 
     @pytest.mark.parametrize("index", (0, 1))
     def test_the_view_says_it_has_no_extents(self, index):
@@ -129,6 +138,16 @@ class TestAViewWithRealExtentsIsStillDistinguishable:
     """
 
     @pytest.mark.parametrize("fixture", [f for f in FIXTURE_NAMES if f != BAD])
+    def test_nothing_else_in_the_corpus_needed_replacing(self, fixture):
+        # The other half of the control above. A substitution that fired on
+        # every drawing would satisfy every assertion in the class before this
+        # one.
+        assert MANIFEST["fixtures"][fixture]["views_without_extents"] == 0, (
+            f"{fixture} had a view whose extents were replaced, and its extents "
+            "are perfectly good numbers"
+        )
+
+    @pytest.mark.parametrize("fixture", [f for f in FIXTURE_NAMES if f != BAD])
     def test_min_is_not_past_max(self, fixture):
         for index, box in enumerate(extents(fixture)):
             assert box[0] <= box[2] and box[1] <= box[3], (
@@ -138,10 +157,7 @@ class TestAViewWithRealExtentsIsStillDistinguishable:
 
     def test_at_least_one_fixture_reports_a_box_with_area(self):
         wide = [
-            f
-            for f in FIXTURE_NAMES
-            for box in extents(f)
-            if box[2] > box[0] and box[3] > box[1]
+            f for f in FIXTURE_NAMES for box in extents(f) if box[2] > box[0] and box[3] > box[1]
         ]
         assert wide, (
             "no fixture in the corpus reports extents with any area, so the "

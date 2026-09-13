@@ -358,6 +358,13 @@ namespace Viprs.Cad.Fixtures
 			}
 
 			json.Strings("view_extents", extents);
+
+			// The positive control for the line above. With the substitution
+			// working, a drawing whose extents are not numbers reports the same
+			// four numbers as one whose extents are fine, so without this the
+			// corpus cannot tell the guard running from the fixture having
+			// quietly stopped carrying a NaN.
+			json.Num("views_without_extents", acad == null ? -1 : acad.ViewsWithoutExtents);
 			json.Num("notification_count", notes.Count);
 			json.Strings("notifications", notes);
 

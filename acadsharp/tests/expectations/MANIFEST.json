@@ -21,7 +21,8 @@
       "view_extents": [
         "-11.5,-22.25,101.5,202.25",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g11_shapes.dwg": {
       "batches": 1,
@@ -43,7 +44,8 @@
       "view_extents": [
         "-11.5,-22.25,101.5,202.25",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_arc.dwg": {
       "batches": 1,
@@ -62,7 +64,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_bad_extents.dwg": {
       "batches": 1,
@@ -81,7 +84,8 @@
       "view_extents": [
         "1E+20,1E+20,-1E+20,-1E+20",
         "1E+20,1E+20,-1E+20,-1E+20"
-      ]
+      ],
+      "views_without_extents": 2
     },
     "g13_circle.dwg": {
       "batches": 1,
@@ -100,7 +104,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_deep_blocks.dwg": {
       "batches": 1,
@@ -119,7 +124,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_dimension.dwg": {
       "batches": 1,
@@ -139,7 +145,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_dimension_shallow.dwg": {
       "batches": 1,
@@ -159,7 +166,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_ellipse.dwg": {
       "batches": 1,
@@ -178,7 +186,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_hatch.dwg": {
       "batches": 1,
@@ -198,7 +207,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_insert.dwg": {
       "batches": 1,
@@ -218,7 +228,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_line.dwg": {
       "batches": 1,
@@ -237,7 +248,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_long_text.dwg": {
       "batches": 1,
@@ -256,7 +268,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_mirrored_bulge.dwg": {
       "batches": 1,
@@ -275,7 +288,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_nan_bulge.dwg": {
       "batches": 1,
@@ -293,7 +307,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_nonuniform.dwg": {
       "batches": 1,
@@ -312,7 +327,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_ocs_mirror.dwg": {
       "batches": 1,
@@ -333,7 +349,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_ocs_plane.dwg": {
       "batches": 1,
@@ -354,7 +371,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_ocs_rotated.dwg": {
       "batches": 1,
@@ -375,7 +393,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_ocs_skew.dwg": {
       "batches": 1,
@@ -395,7 +414,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_polyline.dwg": {
       "batches": 1,
@@ -414,7 +434,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_scale_1x.dwg": {
       "batches": 1,
@@ -434,7 +455,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_slot.dwg": {
       "batches": 1,
@@ -453,7 +475,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_slot_block.dwg": {
       "batches": 1,
@@ -472,7 +495,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_spline.dwg": {
       "batches": 1,
@@ -491,7 +515,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_text.dwg": {
       "batches": 1,
@@ -510,7 +535,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_two_entities.dwg": {
       "batches": 1,
@@ -529,7 +555,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_unsupported.dwg": {
       "batches": 1,
@@ -547,7 +574,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_wide_polyline.dwg": {
       "batches": 3,
@@ -566,7 +594,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "g13_xref.dwg": {
       "batches": 1,
@@ -584,7 +613,8 @@
       "view_extents": [
         "25.7,19.5,231.3,175.5",
         "25.7,19.5,231.3,175.5"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "real_AC1018.dwg": {
       "batches": 1,
@@ -612,7 +642,8 @@
         "1.0499999523162842,0.7999999523162842,9.44999957084656,7.1999995708465585",
         "1.0499999523162842,0.7999999523162842,9.44999957084656,7.1999995708465585",
         "1.1359999048428264,0.793333355836042,10.223999143585445,7.140000202524382"
-      ]
+      ],
+      "views_without_extents": 0
     },
     "real_AC1032.dwg": {
       "batches": 1,
@@ -640,21 +671,22 @@
         "1.0499999523162842,0.7999999523162842,9.44999957084656,7.1999995708465585",
         "1.0499999523162842,0.7999999523162842,9.44999957084656,7.1999995708465585",
         "1.1359999048428264,0.793333355836042,10.223999143585445,7.140000202524382"
-      ]
+      ],
+      "views_without_extents": 0
     }
   },
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "74f881906eed630eb10eee7aaaf8eb05b2927694087c042522d09942933d59d3",
+    "sha256": "cbd0eaa2eb03d2a9ea8777410536329116b00a3b05a0ef0af03bda2b23883f4b",
     "sources": {
       "native/Abi.cs": "d718bb652005e9e874eaceebd62b802d2fa26adf360ddfc8d37d1925c82cd377",
       "native/Adapter/Flattener.cs": "59eaf3d8cdc8ff0d5b47acf87fd3ee9ec40da9f00a3c5d24b51e8217f441301b",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
-      "native/Adapter/WarningCodes.cs": "4353d888362af137a1219bfb96144e6c22c01f974d33250213c41d3be941df53",
+      "native/Adapter/WarningCodes.cs": "76a514c986c792786e596f2e01e0800bbd52ae9ab9c2c8a3faa9d7368d7a4ae4",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
-      "native/Sources/AcadSharpSource.cs": "f65334a62ec328d7253779f310621097b1bbea6c0e27f4b4f020ea26a5e9586e",
+      "native/Sources/AcadSharpSource.cs": "a88bf42225a427252cedf9a0e3b73d406ce7aeefdd2020c713a3bff6ce26913b",
       "native/Sources/IDocumentSource.cs": "3c27ce53933a313bb729e90c451d81e9e3f4ad1524aaf137ec6bfd9d22ea78db",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
       "native/Sources/SyntheticSource.cs": "568c9e6aea293c18fe89238b16dd4c1bb3eeb393f504b2c0fac12790c50e0b67",

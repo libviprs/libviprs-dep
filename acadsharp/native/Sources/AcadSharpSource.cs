@@ -29,6 +29,7 @@ namespace Viprs.Sources
 		private CadDocument _document;
 		private readonly ResolvedLimits _limits;
 		private readonly List<string> _notifications = new List<string>();
+		private int _viewsWithoutExtents;
 		private readonly List<SourceView> _views = new List<SourceView>();
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
 		private uint _drawingVersion;
@@ -42,6 +43,20 @@ namespace Viprs.Sources
 		public IReadOnlyList<string> Notifications
 		{
 			get { return _notifications; }
+		}
+
+		// How many views reported the absent box because their extents were
+		// not four finite numbers.
+		//
+		// Nothing on the boundary reads this and it is not on the wire. It
+		// exists so the corpus can tell a clamp that ran from a drawing whose
+		// extents were fine all along: once the substitution works, every
+		// capture shows four good numbers and the one fixture that carries a
+		// NaN looks exactly like the twenty-nine that do not. A guard nobody
+		// can watch fire is a guard that quietly stops firing.
+		public int ViewsWithoutExtents
+		{
+			get { return _viewsWithoutExtents; }
 		}
 
 		public uint DrawingVersion
@@ -240,6 +255,10 @@ namespace Viprs.Sources
 					&& Finite(l.MinExtents.Y)
 					&& Finite(l.MaxExtents.X)
 					&& Finite(l.MaxExtents.Y);
+				if (!usable)
+				{
+					_viewsWithoutExtents = _viewsWithoutExtents + 1;
+				}
 
 				_views.Add(
 					new SourceView

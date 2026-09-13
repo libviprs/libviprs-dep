@@ -389,6 +389,7 @@ def expectations(scratch):
             "kinds": counts,
             "view_count": result.get("view_count"),
             "view_extents": result.get("view_extents"),
+            "views_without_extents": result.get("views_without_extents"),
             "notification_count": result.get("notification_count"),
             "batches": result.get("batches"),
             "output_bytes": result.get("output_bytes"),

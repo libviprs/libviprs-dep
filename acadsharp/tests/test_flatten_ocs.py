@@ -174,7 +174,6 @@ class TestAnEntitysPlaneIsLiftedIntoWorldSpace:
         # plane is the entity's own, so the bulge crosses exactly as read.
         assert bulges == approx([0.0, 0.5, 0.0])
 
-
     def test_the_bulged_span_lands_on_the_arc_the_drawing_has(self):
         # In its own plane the span (10,0) to (10,10) with bulge 0.5 has its
         # midpoint at (12.5, 5), which is g13_polyline.dwg's pinned number.
@@ -229,9 +228,7 @@ class TestAnEntitysPlaneIsLiftedIntoWorldSpace:
         p2 = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "4D"]
         assert len(p2) == 1
         pts, bulges, normal = vertex_record(p2[0]["rest"])
-        assert flat(pts) == approx(
-            flat([(-20.0, 0.0, 0.0), (-30.0, 5.0, 0.0), (-40.0, 0.0, 0.0)])
-        )
+        assert flat(pts) == approx(flat([(-20.0, 0.0, 0.0), (-30.0, 5.0, 0.0), (-40.0, 0.0, 0.0)]))
         assert bulges == []
         assert normal == approx(FLIPPED)
 
@@ -254,9 +251,7 @@ class TestAnEntitysPlaneIsLiftedIntoWorldSpace:
         p3 = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "52"]
         assert len(p3) == 1
         pts, bulges, normal = vertex_record(p3[0]["rest"])
-        assert flat(pts) == approx(
-            flat([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)])
-        )
+        assert flat(pts) == approx(flat([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)]))
         assert bulges == []
         assert normal == approx((0.0, 0.0, 1.0))
 
@@ -385,9 +380,7 @@ class TestARecordsNormalFollowsTheTransform:
         assert len(rs) == 1
         pts, bulges, normal = vertex_record(rs[0]["rest"])
         assert normal == approx(self.EXTRUSION)
-        assert flat(pts) == approx(
-            flat([(0.0, 0.0, 0.0), (-10.0, 0.0, 0.0), (-10.0, 0.0, 10.0)])
-        )
+        assert flat(pts) == approx(flat([(0.0, 0.0, 0.0), (-10.0, 0.0, 0.0), (-10.0, 0.0, 10.0)]))
         # (12.5, 5, 0) in the block, which the insertion sends to
         # (-12.5, 0, 5). With the normal left at +Z the cross product in the
         # midpoint formula is parallel to the chord and collapses to zero, so
@@ -431,9 +424,7 @@ class TestASkewIsNotAUniformScale:
     def test_the_controls_beside_it(self):
         # Without these, "the skew warns" could be a warning everything
         # raises. A plain non-uniform scale still warns and a mirror does not.
-        assert "NON_UNIFORM_BLOCK_SCALE" in [
-            w["code"] for w in warnings("g13_nonuniform.dwg")
-        ]
+        assert "NON_UNIFORM_BLOCK_SCALE" in [w["code"] for w in warnings("g13_nonuniform.dwg")]
         assert "NON_UNIFORM_BLOCK_SCALE" not in [w["code"] for w in warnings(MIRROR)]
 
 
