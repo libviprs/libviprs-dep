@@ -4,6 +4,11 @@
     python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --plan
     python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --all
 
+``--only corpus --write-only g13_slot`` writes just the fixtures whose name
+carries that substring, which is how a round that adds one DWG keeps the other
+twenty-five out of the diff: a DWG header carries timestamps, so rewriting an
+unchanged fixture still changes its bytes and its digest.
+
 Everything below runs inside the pinned .NET SDK container. The only host tools
 it needs are docker and python3, which is the rule the rest of this repository
 builds under.
@@ -248,8 +253,19 @@ def decode_unreadable(scratch, source_fixture, extra):
     return result
 
 
-def write_corpus(scratch):
-    run(docker_cmd(scratch, ["dotnet", DLL, "corpus", "/work/acadsharp/tests/fixtures"]))
+def write_corpus(scratch, only=None):
+    """Rewrite the corpus, or only the fixtures whose name contains `only`.
+
+    Every DWG carries creation and update timestamps, so rewriting one is a new
+    file even when nothing about its content changed, and every expectation is
+    pinned to the digest. A round that adds one fixture and rewrites the other
+    twenty-five produces a diff in which the change and the churn look the
+    same, so the default for a round like that is to name what it is writing.
+    """
+    args = ["dotnet", DLL, "corpus", "/work/acadsharp/tests/fixtures"]
+    if only:
+        args.append(only)
+    run(docker_cmd(scratch, args))
 
 
 def stem(fixture):
@@ -263,7 +279,12 @@ def main(argv=None):
     parser.add_argument("--plan", action="store_true", help="print the build command and stop")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--skip-corpus", action="store_true")
-    parser.add_argument("--only", help="run one stage: expectations, scenarios, benchmarks")
+    parser.add_argument(
+        "--write-only",
+        metavar="SUBSTR",
+        help="write only the corpus fixtures whose file name contains SUBSTR",
+    )
+    parser.add_argument("--only", help="one stage: corpus, expectations, scenarios, benchmarks")
     args = parser.parse_args(argv)
 
     scratch = os.path.abspath(args.scratch)
@@ -277,10 +298,10 @@ def main(argv=None):
     if args.plan:
         return 0
 
-    if not args.skip_corpus:
-        write_corpus(scratch)
-
     stage = args.only
+    if not args.skip_corpus and stage in (None, "corpus"):
+        write_corpus(scratch, args.write_only)
+
     if stage in (None, "expectations"):
         expectations(scratch)
     if stage in (None, "scenarios"):

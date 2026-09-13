@@ -8,7 +8,7 @@ public static class Program
 	{
 		if (args.Length < 2)
 		{
-			Console.Error.WriteLine("usage: fixturegen write|write-codepage|read|corpus|decode <path> [options]");
+			Console.Error.WriteLine("usage: fixturegen write|write-codepage|read|corpus|corpus-large|fanout|decode <path> [options]");
 			return 2;
 		}
 
