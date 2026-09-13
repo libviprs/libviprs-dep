@@ -288,7 +288,8 @@ public static class Corpus
 		doc.Entities.Add(square);
 
 		// A loop carrying a circular arc. A bulge says that exactly, so this
-		// one is still one polygon and no curve is approximated.
+		// one is one polygon with a bulge on the arc's span and no curve is
+		// approximated anywhere.
 		Hatch rounded = new Hatch { Layer = L(doc), IsSolid = true };
 		Hatch.BoundaryPath arcLoop = new Hatch.BoundaryPath();
 		arcLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(20, 0), End = new XY(30, 0) });
@@ -304,6 +305,31 @@ public static class Corpus
 		arcLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(20, 10), End = new XY(20, 0) });
 		rounded.Paths.Add(arcLoop);
 		doc.Entities.Add(rounded);
+
+		// The same shape with the arc traversed the other way round.
+		//
+		// A boundary arc's direction is a flag, not a sign on the sweep, and
+		// upstream reads a clockwise edge as the arc from 2*pi - end to
+		// 2*pi - start, so the edge's own first point is the entity's last. A
+		// corpus with only counter-clockwise loops cannot tell a converter
+		// that handles the flag from one that ignores it: both produce the
+		// same bulge on every fixture there is. This one bulges inward, so
+		// getting the sign wrong puts the arc outside the rectangle.
+		Hatch clockwise = new Hatch { Layer = L(doc), IsSolid = true };
+		Hatch.BoundaryPath cwLoop = new Hatch.BoundaryPath();
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(60, 0), End = new XY(70, 0) });
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Arc
+		{
+			Center = new XY(70, 5),
+			Radius = 5,
+			StartAngle = Math.PI / 2.0,
+			EndAngle = -Math.PI / 2.0,
+			CounterClockWise = false,
+		});
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(70, 10), End = new XY(60, 10) });
+		cwLoop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(60, 10), End = new XY(60, 0) });
+		clockwise.Paths.Add(cwLoop);
+		doc.Entities.Add(clockwise);
 
 		// A loop with a spline edge, which no closed polygon expresses. The
 		// edges have to cross as themselves rather than as a polygon that

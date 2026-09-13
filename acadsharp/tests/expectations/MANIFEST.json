@@ -131,20 +131,18 @@
     },
     "g13_hatch.dwg": {
       "batches": 1,
-      "bytes": 10731,
+      "bytes": 10827,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 1,
-        "Line": 3,
-        "Polygon": 1,
+        "Polygon": 3,
         "Spline": 1,
-        "Warning": 7
+        "Warning": 6
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1892,
-      "records": 13,
-      "sha256": "a4a03f09a683e01acee05a5338f1dfdf1abd5209c666561c0a6ce970d3916bfb",
+      "output_bytes": 1836,
+      "records": 10,
+      "sha256": "c8697b49ce3eed4bffee80d60c69963d44bf3aa5c1661a33021737b153970da9",
       "view_count": 2
     },
     "g13_insert.dwg": {
@@ -435,11 +433,11 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "ced5bb66898708db62d06f355c49b73dff5d1bde4d96b42de8c88cab146f4178",
+    "sha256": "5ab3ef0e0add4e4a084061cecbac7d2229506f94dc972ed8ec2b237e6d2b3fe1",
     "sources": {
       "native/Abi.cs": "6169a32c16fd47c83248a7cb914aa5408bbfd9959a9c85974659ac52fc7f8dc0",
       "native/Adapter/CanonicalDump.cs": "bacdcd27e5e1605603dee2b2da9ea638268a38cf4ef5f352bd22655a7b44d01f",
-      "native/Adapter/Flattener.cs": "34580d059a3e217c88a3f17e7d53e134ac23ee5f1b95608160d193a0a5a21374",
+      "native/Adapter/Flattener.cs": "0a4b0e336c4a9b5c06d1b36b7c16b1a5761cdfd8fda9ab675ea674892a160dff",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
       "native/Adapter/WarningCodes.cs": "6644f9b752305e1a43dd7299e88a870ae950a3d74c35d3f4452af03c8db4e2e3",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",

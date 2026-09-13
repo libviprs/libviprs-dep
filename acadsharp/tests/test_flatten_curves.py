@@ -225,14 +225,60 @@ class TestBlockExpansionKeepsCurvesAsCurves:
 
 
 class TestTheHatchBoundaryIsNotStraightened:
-    def test_a_loop_of_straight_edges_is_one_polygon(self):
-        assert kinds("g13_hatch.dwg").get("Polygon", 0) == 1
+    """A loop of lines and circular arcs is one Polygon, curves and all.
 
-    def test_a_loop_with_an_arc_keeps_the_arc(self):
-        assert kinds("g13_hatch.dwg").get("Arc", 0) == 1
+    The fixture holds four hatches: a square, a loop with a counter-clockwise
+    arc, the same shape with the arc traversed clockwise, and a loop with a
+    spline edge. The first three are polygons now, because record 9 carries a
+    bulge per vertex and a bulge is exactly a circular arc. The fourth still
+    goes out as its own edges, because a spline is not one.
+    """
 
-    def test_a_loop_with_a_spline_keeps_the_spline(self):
-        assert kinds("g13_hatch.dwg").get("Spline", 0) == 1
+    def test_three_of_the_four_loops_are_polygons(self):
+        counts = kinds("g13_hatch.dwg")
+        assert counts.get("Polygon", 0) == 3
+        assert counts.get("Arc", 0) == 0, (
+            "an arc edge came out as its own Arc record, so the loop it belongs to was "
+            "broken up rather than carried"
+        )
+
+    def test_the_arc_loop_is_one_polygon_with_a_bulge_and_no_warning(self):
+        rs = [r for r in records("g13_hatch.dwg") if r["handle"] == "4A"]
+        assert [r["kind"] for r in rs] == ["Polygon"], (
+            f"handle 4A produced {[r['kind'] for r in rs]}, not one Polygon and nothing "
+            "else. A warning here would mean the loop was refused"
+        )
+        pts, bulges, normal = vertex_record(rs[0]["rest"])
+        assert bulges == [0.0, 1.0, 0.0, 0.0], (
+            "the semicircular edge is a half turn counter-clockwise, which is a bulge "
+            f"of exactly 1, and the record says {bulges}"
+        )
+        # The arc bulges away from the rectangle, so its midpoint is outside it.
+        point = arc_midpoint(pts[1], pts[2], bulges[1], normal)
+        assert point == pytest.approx((35.0, 5.0, 0.0), abs=1e-9)
+
+    def test_the_clockwise_loop_is_the_same_arc_with_the_sign_flipped(self):
+        # A boundary arc's direction is a flag, not a sign on the sweep. With
+        # only counter-clockwise loops in the corpus, a converter that ignored
+        # the flag produced the right answer on every fixture there was.
+        rs = [r for r in records("g13_hatch.dwg") if r["handle"] == "4B"]
+        assert [r["kind"] for r in rs] == ["Polygon"]
+        pts, bulges, normal = vertex_record(rs[0]["rest"])
+        assert bulges == [0.0, -1.0, 0.0, 0.0]
+        point = arc_midpoint(pts[1], pts[2], bulges[1], normal)
+        assert point == pytest.approx((65.0, 5.0, 0.0), abs=1e-9), (
+            f"the clockwise arc's midpoint is at {point}. It bulges into the rectangle, "
+            "so a converter that dropped the flag puts it at (75, 5), outside"
+        )
+
+    def test_a_loop_with_a_spline_still_keeps_the_spline(self):
+        counts = kinds("g13_hatch.dwg")
+        assert counts.get("Spline", 0) == 1
+        codes = [w["code"] for w in warnings("g13_hatch.dwg")]
+        assert "HATCH_LOOP_NOT_POLYGON" in codes, (
+            "nothing refused the spline loop, so either it is being approximated or the "
+            "fixture has stopped carrying one"
+        )
 
     def test_the_real_world_drawing_produces_polygons_and_curves_together(self):
         counts = kinds("real_AC1032.dwg")

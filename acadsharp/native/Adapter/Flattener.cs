@@ -753,14 +753,28 @@ namespace Viprs.Cad
 			XYZ normal
 		)
 		{
-			int n = points.Length / 3;
+			return Primitive.Polyline(
+				handle,
+				flags,
+				closed,
+				points,
+				BulgeArray(points.Length / 3, bulges, mirrored),
+				normal.X,
+				normal.Y,
+				normal.Z
+			);
+		}
 
-			// The array is left out when every span is straight, which keeps a
-			// plain polyline the size it was. This is the one place `== 0.0`
-			// on a double belongs in this file: it is a size decision, not a
-			// geometry one. A bulge of 1e-300 is emitted exactly as read,
-			// because calling it straight is a tolerance decision and the
-			// consumer is the only layer that knows its tolerance.
+		// The bulge array a record carries, or null when it carries none.
+		//
+		// The array is left out when every span is straight, which keeps a
+		// plain polyline the size it was. This is the one place `== 0.0` on a
+		// double belongs in this file: it is a size decision, not a geometry
+		// one. A bulge of 1e-300 is emitted exactly as read, because calling
+		// it straight is a tolerance decision and the consumer is the only
+		// layer that knows its tolerance.
+		private static double[] BulgeArray(int n, double[] bulges, bool mirrored)
+		{
 			double[] b = null;
 			for (int i = 0; i < n && i < bulges.Length; i++)
 			{
@@ -787,8 +801,30 @@ namespace Viprs.Cad
 				}
 			}
 
-			return Primitive.Polyline(
-				handle, flags, closed, points, b, normal.X, normal.Y, normal.Z);
+			return b;
+		}
+
+		// Record 9 takes record 4's payload, so it takes the same bulge array
+		// and the same mirror correction. A hatch loop of lines and circular
+		// arcs is one closed polygon with a bulge on the arc spans.
+		private static Primitive OnePolygon(
+			ulong handle,
+			uint flags,
+			double[] points,
+			double[] bulges,
+			bool mirrored,
+			XYZ normal
+		)
+		{
+			return Primitive.Polygon(
+				handle,
+				flags,
+				points,
+				BulgeArray(points.Length / 3, bulges, mirrored),
+				normal.X,
+				normal.Y,
+				normal.Z
+			);
 		}
 
 		private static Primitive NonUniform(ulong handle, uint flags, string what)
@@ -862,6 +898,8 @@ namespace Viprs.Cad
 			ulong h = hatch.Handle;
 			uint flags = item.Depth > 0 ? FlagFromBlock : 0u;
 			Transform t = item.Transform;
+			Basis basis = MeasureBasis(t);
+			bool identity = IsIdentityish(t);
 			int loops = 0;
 
 			foreach (Hatch.BoundaryPath path in hatch.Paths)
@@ -873,13 +911,30 @@ namespace Viprs.Cad
 
 				loops++;
 				double[] pts;
-				if (TryPolygon(path, hatch.Elevation, t, out pts))
+				double[] bulges;
+				if (TryPolygon(path, hatch.Elevation, t, out pts, out bulges))
 				{
 					CheckPointCount(pts.Length / 3, "a Polygon record");
+
+					// A bulged boundary under a non-uniform scale is an
+					// elliptical arc, exactly as a bulged polyline is, so it
+					// gets the same warning. A straight loop is not: a
+					// polygon's vertices transform exactly whatever the scale.
+					bool anyBulge = false;
+					foreach (double b in bulges)
+					{
+						anyBulge |= b != 0.0;
+					}
+
+					if (!identity && !basis.IsUniform && anyBulge)
+					{
+						Primitive squashed = NonUniform(h, flags, "HATCH");
+						yield return new Pending { Record = squashed, Depth = item.Depth };
+					}
+
 					yield return new Pending
 					{
-						Record = Primitive.Polygon(
-							h, flags, pts, null, hatch.Normal.X, hatch.Normal.Y, hatch.Normal.Z),
+						Record = OnePolygon(h, flags, pts, bulges, basis.Mirrored, hatch.Normal),
 						Depth = item.Depth,
 					};
 					continue;
@@ -952,20 +1007,31 @@ namespace Viprs.Cad
 			}
 		}
 
-		// A boundary loop becomes one closed polygon only when every edge is
-		// straight, because wire version 1's Polygon is a run of points and a
-		// curved edge is not one. A loop with any curve in it returns false
-		// and the caller emits the edges as their own records, which keeps
-		// every parameter rather than straightening it.
+		// A boundary loop becomes one closed polygon when every edge is a
+		// straight span or a circular arc, because wire version 2's Polygon
+		// carries a bulge per vertex and a bulge is exactly a circular arc.
+		// An ellipse or a spline edge still returns false and the caller emits
+		// the edges as their own records, which keeps every parameter rather
+		// than straightening it.
+		//
+		// The arc conversion is the one the shim does keep, and it runs in the
+		// direction that is well conditioned: from a sweep to tan(sweep / 4),
+		// never from a bulge to a centre. It goes through ACadSharp's own
+		// ToEntity, which is the same object the not-a-polygon path emits as
+		// an Arc record, so the two paths cannot disagree about what the edge
+		// means.
 		private static bool TryPolygon(
 			Hatch.BoundaryPath path,
 			double elevation,
 			Transform t,
-			out double[] points
+			out double[] points,
+			out double[] bulges
 		)
 		{
 			List<double> pts = new List<double>();
+			List<double> bs = new List<double>();
 			points = null;
+			bulges = null;
 
 			foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
 			{
@@ -973,20 +1039,35 @@ namespace Viprs.Cad
 				{
 					case Hatch.BoundaryPath.Line line:
 						Append(pts, t, new XYZ(line.Start.X, line.Start.Y, elevation));
+						bs.Add(0.0);
 						break;
 
-					case Hatch.BoundaryPath.Polyline poly:
-						if (poly.HasBulge)
+					case Hatch.BoundaryPath.Arc arc:
+					{
+						double bulge;
+						XY start;
+						if (!ArcEdge(arc, out start, out bulge))
 						{
 							return false;
 						}
 
+						Append(pts, t, new XYZ(start.X, start.Y, elevation));
+						bs.Add(bulge);
+						break;
+					}
+
+					case Hatch.BoundaryPath.Polyline poly:
+					{
+						// The bulge lives in the vertex's Z component, which is
+						// upstream's own storage and not a coordinate.
 						foreach (XYZ v in poly.Vertices)
 						{
 							Append(pts, t, new XYZ(v.X, v.Y, elevation));
+							bs.Add(v.Z);
 						}
 
 						break;
+					}
 
 					default:
 						return false;
@@ -999,6 +1080,59 @@ namespace Viprs.Cad
 			}
 
 			points = pts.ToArray();
+			bulges = bs.ToArray();
+			return true;
+		}
+
+		// One circular-arc edge as the vertex the loop enters it at and the
+		// bulge of the span leaving that vertex.
+		//
+		// A boundary arc is described by a centre, a radius, two angles and a
+		// direction flag, and the flag is not a sign on the sweep: upstream's
+		// ToEntity reads a clockwise edge as the arc from 2*pi - end to
+		// 2*pi - start, so the edge's own first point is the entity's last.
+		// Taking the entity and reading its endpoints back is what keeps this
+		// agreeing with the path that emits the same edge as an Arc record.
+		//
+		// A full circle is refused. One span cannot carry it: the included
+		// angle is 2*pi, a quarter of that is pi/2, and tan(pi/2) is not a
+		// number. Such a loop goes out as its own edges, the way an ellipse
+		// edge does.
+		private static bool ArcEdge(Hatch.BoundaryPath.Arc edge, out XY start, out double bulge)
+		{
+			start = default(XY);
+			bulge = 0.0;
+
+			ACadSharp.Entities.Arc entity = edge.ToEntity() as ACadSharp.Entities.Arc;
+			if (entity == null)
+			{
+				return false;
+			}
+
+			double sweep = entity.EndAngle - entity.StartAngle;
+			double twoPi = 2.0 * Math.PI;
+			sweep = sweep - (twoPi * Math.Floor(sweep / twoPi));
+			if (sweep <= Eps || sweep >= twoPi - Eps)
+			{
+				return false;
+			}
+
+			XY first = new XY(
+				entity.Center.X + (entity.Radius * Math.Cos(entity.StartAngle)),
+				entity.Center.Y + (entity.Radius * Math.Sin(entity.StartAngle))
+			);
+			XY last = new XY(
+				entity.Center.X + (entity.Radius * Math.Cos(entity.EndAngle)),
+				entity.Center.Y + (entity.Radius * Math.Sin(entity.EndAngle))
+			);
+
+			start = edge.CounterClockWise ? first : last;
+			bulge = Math.Tan(sweep / 4.0);
+			if (!edge.CounterClockWise)
+			{
+				bulge = -bulge;
+			}
+
 			return true;
 		}
 	}
