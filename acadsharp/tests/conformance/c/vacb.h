@@ -21,7 +21,7 @@
 #define VACB_MAGIC_2 0x43 /* 'C' */
 #define VACB_MAGIC_3 0x42 /* 'B' */
 
-#define VACB_WIRE_VERSION 1
+#define VACB_WIRE_VERSION 2
 
 #define VACB_BATCH_HEADER_BYTES 12
 #define VACB_RECORD_HEADER_BYTES 8
@@ -76,6 +76,23 @@ uint32_t vacb_open(vacb_reader *r, const uint8_t *buf, uint64_t len);
 /* 1 when *out was filled, 0 at the end of the batch, -1 on a refusal with
  * r->error holding the code. */
 int vacb_next(vacb_reader *r, vacb_record *out);
+
+/* (point_count, bulge_count) for a wire version 2 Polyline or Polygon, or the
+ * code docs/WIRE.md refuses it with. `length` is the record's length, the
+ * eight-byte header included.
+ *
+ * Beside the framing parser rather than inside it. vacb_next walks record
+ * headers and knows nothing about what a payload means, which is what lets it
+ * skip a type it has never heard of; a layout rule pushed into that loop would
+ * make it wrong for every record type the day one of them changes. */
+uint32_t vacb_polyline_shape(const uint8_t *payload, uint32_t payload_len, uint32_t length,
+			     uint32_t *point_count, uint32_t *bulge_count);
+
+/* One Polyline or Polygon built field by field, so a test can lie about any
+ * one of them. Returns the record's length in bytes. */
+uint32_t vacb_build_vertex_record(uint8_t *out, uint16_t kind, uint32_t n, uint32_t bulges,
+				  uint32_t closed, uint32_t reserved1, const double *values,
+				  uint32_t value_count, uint32_t claimed_length);
 
 /* Little-endian readers. Nothing inside a record is naturally aligned, because
  * the batch header is twelve bytes, so every scalar is assembled from bytes

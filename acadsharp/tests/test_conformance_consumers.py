@@ -331,6 +331,87 @@ class TestTheConstantsAgreeThreeWays:
             )
 
 
+class TestEveryWireVersionDeclarationAgrees:
+    """The wire version is written out in seven places, and all seven move together.
+
+    `test_all_three_agree_on_the_batch_framing` above compares the magic, the
+    twelve and the forward-probe start; it never looks at the version, so
+    bumping one declaration and leaving the other six alone was a change no
+    test in this repository could see. A stream would then carry a number one
+    consumer refuses, one consumer accepts and a third never hears about.
+
+    Each pattern is anchored to the one line that declares the value, and each
+    has to match exactly once. The count is the positive control: a regex that
+    stopped matching anything would otherwise leave a smaller set that still
+    agrees with itself, which is the shape of a guard that cannot fail.
+    """
+
+    DECLARATIONS = (
+        (
+            "the published header",
+            os.path.join(ACADSHARP, "include", "viprs_acadsharp.h"),
+            r"^#define\s+VIPRS_ACAD_WIRE_VERSION\s+(\d+)u\s*$",
+        ),
+        (
+            "the shim's ABI constants",
+            os.path.join(ACADSHARP, "native", "Abi.cs"),
+            r"^\s*public const uint WireVersion = (\d+)u;\s*$",
+        ),
+        (
+            "the shim's wire format",
+            WIRE_FORMAT_CS,
+            r"^\s*public const ushort Version = (\d+);\s*$",
+        ),
+        (
+            "the C consumer",
+            os.path.join(C_DIR, "vacb.h"),
+            r"^#define VACB_WIRE_VERSION (\d+)\s*$",
+        ),
+        (
+            "the crate's parser",
+            os.path.join(RUST_DIR, "src", "wire.rs"),
+            r"^pub const WIRE_VERSION: u16 = (\d+);\s*$",
+        ),
+        (
+            "the crate's layout table",
+            os.path.join(RUST_DIR, "tests", "layout.rs"),
+            r"VIPRS_ACAD_WIRE_VERSION,\s*(\d+)\)",
+        ),
+        (
+            "the reference parser",
+            os.path.join(HERE, "test_wire_protocol.py"),
+            r"^WIRE_VERSION = (\d+)\s*$",
+        ),
+    )
+
+    @staticmethod
+    def declared():
+        out = {}
+        for label, path, pattern in TestEveryWireVersionDeclarationAgrees.DECLARATIONS:
+            found = re.findall(pattern, read(path), re.M)
+            assert len(found) == 1, (
+                f"{label} ({os.path.relpath(path, ACADSHARP)}) declares the wire version "
+                f"{len(found)} times, and this check only means something when it is "
+                "exactly once"
+            )
+            out[label] = int(found[0])
+        return out
+
+    @pytest.mark.parametrize("label,path,pattern", DECLARATIONS)
+    def test_the_declaration_is_there_exactly_once(self, label, path, pattern):
+        assert len(re.findall(pattern, read(path), re.M)) == 1, (
+            f"{label} does not declare the wire version on a line matching {pattern!r}"
+        )
+
+    def test_all_seven_carry_the_same_number(self):
+        declared = self.declared()
+        assert len(set(declared.values())) == 1, (
+            f"the wire version is not the same everywhere: {declared}. A producer and a "
+            "consumer that disagree about it either refuse a stream that is fine or "
+            "parse a layout they are only assuming."
+        )
+
+
 class TestBothConsumersExerciseWhatTheEpicNamed:
     CASES = (
         ("unknown record type skipped", r"unknown"),

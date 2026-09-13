@@ -25,6 +25,8 @@ EXPECTED = {
     "limits/max_entities_default": ("OK", "OK", None),
     "limits/max_polyline_2048": ("OK", "LIMIT_EXCEEDED", None),
     "limits/max_polyline_8192": ("OK", "OK", None),
+    "limits/bulged_polyline_at_the_bound": ("OK", "OK", None),
+    "limits/bulged_polyline_past_the_bound": ("OK", "LIMIT_EXCEEDED", None),
     "limits/max_string_4096": ("OK", "LIMIT_EXCEEDED", None),
     "limits/max_string_16384": ("OK", "OK", None),
     "limits/max_output_2048": ("OK", "LIMIT_EXCEEDED", None),
@@ -87,12 +89,26 @@ class TestEveryLimitRefusesAndEveryControlPasses:
             "table the exports use, so this is the count a consumer would see"
         )
 
+    def test_the_bulge_array_does_not_count_against_max_polyline_points(self):
+        # The slot is four vertices and four bulges, so a bound that counted
+        # both would see eight. It decodes at a bound of four, and the pair
+        # above is the control: at three the same file is refused, so this is
+        # not a bound that stopped applying.
+        at = scenario("limits/bulged_polyline_at_the_bound")["result"]
+        assert at["decode_code"] == "OK", (
+            "a four-vertex polyline was refused at max_polyline_points 4, so the bound "
+            "is counting the bulge array as well. It bounds vertices: the array is one "
+            "f64 per vertex and adding it to the count silently halves the bound a "
+            "caller thinks it set"
+        )
+
     def test_each_refusal_has_a_control_beside_it(self):
         # The pairing is the point. A refusal with no passing control could be
         # a decoder that refuses everything.
         pairs = [
             ("limits/max_entities_1", "limits/max_entities_default"),
             ("limits/max_polyline_2048", "limits/max_polyline_8192"),
+            ("limits/bulged_polyline_past_the_bound", "limits/bulged_polyline_at_the_bound"),
             ("limits/max_string_4096", "limits/max_string_16384"),
             ("limits/max_block_depth_5", "limits/max_block_depth_7"),
             ("limits/max_input_below_size", "limits/max_input_default"),

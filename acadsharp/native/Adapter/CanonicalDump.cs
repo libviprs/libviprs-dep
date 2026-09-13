@@ -167,16 +167,22 @@ namespace Viprs.Cad
 					Triples(sb, "normal", p.Values, 9, 1);
 					break;
 
+				// Records 4 and 9 share a payload, so they share a line. The
+				// bulge array prints even when it is empty: `bulges=[]` is the
+				// difference between "every span is straight" and "the dump
+				// does not mention bulges", and without it dropping the array
+				// altogether would be invisible here.
 				case WireFormat.TypePolyline:
+				case WireFormat.TypePolygon:
+				{
+					int n = (int)p.Counts[0];
 					sb.Append(" n=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
 					sb.Append(" closed=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
-					Triples(sb, "pts", p.Values, 0, (int)p.Counts[0]);
+					Triples(sb, "pts", p.Values, 3, n);
+					Values(sb, "bulges", p.Values, 3 + (n * 3), (int)p.Counts[2]);
+					Triples(sb, "normal", p.Values, 0, 1);
 					break;
-
-				case WireFormat.TypePolygon:
-					sb.Append(" n=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
-					Triples(sb, "pts", p.Values, 0, (int)p.Counts[0]);
-					break;
+				}
 
 				case WireFormat.TypeSpline:
 				{

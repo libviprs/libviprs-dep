@@ -199,6 +199,65 @@ def warnings(fixture):
     return out
 
 
+TRIPLE_RE = re.compile(r"\(([-0-9.]+),([-0-9.]+),([-0-9.]+)\)")
+
+
+def vertex_record(rest):
+    """A dumped Polyline or Polygon as (points, bulges, normal).
+
+    Records 4 and 9 share a payload in wire version 2, so they share a line and
+    they share this reader. `bulges` comes back as an empty list when the
+    record carries no array at all, which the dump prints as `bulges=[]`: that
+    is a different statement from "every bulge is zero" and a test that could
+    not tell them apart would not notice the array being dropped.
+    """
+    fields = {}
+    for name in ("pts", "normal"):
+        m = re.search(rf" {name}=\[([^\]]*)\]", rest)
+        assert m, f"no {name}= in {rest!r}"
+        found = TRIPLE_RE.findall(m.group(1))
+        fields[name] = [(float(a), float(b), float(c)) for a, b, c in found]
+
+    m = re.search(r" bulges=\[([^\]]*)\]", rest)
+    assert m, f"no bulges= in {rest!r}"
+    body = m.group(1).strip()
+    bulges = [float(x) for x in body.split(",")] if body else []
+
+    assert len(fields["normal"]) == 1, "a record carries one normal"
+    return fields["pts"], bulges, fields["normal"][0]
+
+
+def closed_flag(rest):
+    m = re.search(r" closed=(\d+)", rest)
+    assert m, f"no closed= in {rest!r}"
+    return int(m.group(1))
+
+
+def arc_midpoint(start, end, bulge, normal):
+    """docs/WIRE.md's midpoint formula, written out here rather than imported.
+
+    `mid + (b * c / 2) * (d_hat x normal)`. The cross product is the whole of
+    the sign convention, so it is spelled out: a test that called a helper
+    which shared code with the producer would agree with the producer by
+    construction and say nothing about the document.
+    """
+    dx, dy, dz = (end[0] - start[0], end[1] - start[1], end[2] - start[2])
+    chord = (dx * dx + dy * dy + dz * dz) ** 0.5
+    d = (dx / chord, dy / chord, dz / chord)
+    cross = (
+        d[1] * normal[2] - d[2] * normal[1],
+        d[2] * normal[0] - d[0] * normal[2],
+        d[0] * normal[1] - d[1] * normal[0],
+    )
+    k = bulge * chord / 2.0
+    mid = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0, (start[2] + end[2]) / 2.0)
+    return (mid[0] + k * cross[0], mid[1] + k * cross[1], mid[2] + k * cross[2])
+
+
+def distance(a, b):
+    return sum((a[i] - b[i]) ** 2 for i in range(3)) ** 0.5
+
+
 def first_difference(expected, actual):
     """The first record two dumps disagree about, or None.
 

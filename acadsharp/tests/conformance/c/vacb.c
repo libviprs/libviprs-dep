@@ -1,5 +1,6 @@
 #include "vacb.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "../../../include/viprs_acadsharp.h"
@@ -53,8 +54,15 @@ uint32_t vacb_open(vacb_reader *r, const uint8_t *buf, uint64_t len)
 	if (vacb_u16(buf + 4) != VACB_WIRE_VERSION) {
 		/* Refused rather than guessed. A consumer that parses a version it
 		 * does not know is reading a layout it is only assuming, and it
-		 * produces numbers instead of an error. */
-		r->error = VIPRS_ACAD_UNSUPPORTED_FORMAT;
+		 * produces numbers instead of an error.
+		 *
+		 * ABI_MISMATCH rather than UNSUPPORTED_FORMAT, which is what this
+		 * said until wire version 2. UNSUPPORTED_FORMAT is about the
+		 * drawing: it means check dwg_version_min and dwg_version_max and
+		 * hand the file to something else. A foreign wire version is about
+		 * the two ends of this boundary disagreeing, and the remedy is to
+		 * rebuild one of them. docs/ABI.md always said ABI_MISMATCH. */
+		r->error = VIPRS_ACAD_ABI_MISMATCH;
 		return r->error;
 	}
 
@@ -133,4 +141,107 @@ int vacb_next(vacb_reader *r, vacb_record *out)
 	 * reason the length is in the record header. */
 	r->offset += length;
 	return 1;
+}
+
+uint32_t vacb_polyline_shape(const uint8_t *payload, uint32_t payload_len, uint32_t length,
+			     uint32_t *point_count, uint32_t *bulge_count)
+{
+	uint32_t n;
+	uint32_t closed;
+	uint32_t bulges;
+	uint32_t reserved1;
+	uint32_t k;
+	uint32_t values;
+
+	if (payload_len < 56u) {
+		return VIPRS_ACAD_CORRUPT_INPUT;
+	}
+
+	n = vacb_u32(payload + 16);
+	closed = vacb_u32(payload + 20);
+	bulges = vacb_u32(payload + 24);
+	reserved1 = vacb_u32(payload + 28);
+
+	if (closed > 1u || reserved1 != 0u) {
+		return VIPRS_ACAD_CORRUPT_INPUT;
+	}
+
+	/* Either one bulge per vertex or none at all. Anything between leaves a
+	 * consumer working out which spans the array covers, which is a length
+	 * it inferred rather than one the record gave it. */
+	if (bulges != 0u && bulges != n) {
+		return VIPRS_ACAD_CORRUPT_INPUT;
+	}
+
+	if (length != 64u + (24u * n) + (8u * bulges)) {
+		return VIPRS_ACAD_CORRUPT_INPUT;
+	}
+
+	/* The producer promises every f64 in a geometry record is finite. A
+	 * consumer checks anyway: the bytes may not have come from that
+	 * producer, and one NaN coordinate becomes a bounding box that is NaN in
+	 * every direction and a renderer that draws nothing at all. */
+	values = 3u + (3u * n) + bulges;
+	for (k = 0; k < values; k++) {
+		if (!isfinite(vacb_f64(payload + 32u + (k * 8u)))) {
+			return VIPRS_ACAD_CORRUPT_INPUT;
+		}
+	}
+
+	if (point_count != NULL) {
+		*point_count = n;
+	}
+	if (bulge_count != NULL) {
+		*bulge_count = bulges;
+	}
+	return VIPRS_ACAD_OK;
+}
+
+static void put_le32(uint8_t *p, uint32_t v)
+{
+	p[0] = (uint8_t)(v & 0xFFu);
+	p[1] = (uint8_t)((v >> 8) & 0xFFu);
+	p[2] = (uint8_t)((v >> 16) & 0xFFu);
+	p[3] = (uint8_t)((v >> 24) & 0xFFu);
+}
+
+uint32_t vacb_build_vertex_record(uint8_t *out, uint16_t kind, uint32_t n, uint32_t bulges,
+				  uint32_t closed, uint32_t reserved1, const double *values,
+				  uint32_t value_count, uint32_t claimed_length)
+{
+	uint32_t at = 8u;
+	uint32_t k;
+	uint32_t length;
+	uint64_t bits;
+
+	memset(out + at, 0, 8);
+	out[at] = 0x4D;
+	at += 8u;
+	put_le32(out + at, 0u);
+	at += 4u;
+	put_le32(out + at, 0u);
+	at += 4u;
+	put_le32(out + at, n);
+	at += 4u;
+	put_le32(out + at, closed);
+	at += 4u;
+	put_le32(out + at, bulges);
+	at += 4u;
+	put_le32(out + at, reserved1);
+	at += 4u;
+
+	for (k = 0; k < value_count; k++) {
+		memcpy(&bits, &values[k], sizeof bits);
+		put_le32(out + at, (uint32_t)(bits & 0xFFFFFFFFull));
+		put_le32(out + at + 4u, (uint32_t)(bits >> 32));
+		at += 8u;
+	}
+
+	length = claimed_length != 0u ? claimed_length : at;
+	out[0] = (uint8_t)(kind & 0xFFu);
+	out[1] = (uint8_t)((kind >> 8) & 0xFFu);
+	out[2] = 0;
+	out[3] = 0;
+	put_le32(out + 4, length);
+	return at;
 }

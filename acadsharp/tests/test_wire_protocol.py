@@ -22,6 +22,7 @@ state worth naming:
   zero-advance record trips the bound instead of spinning forever in CI.
 """
 
+import math
 import os
 import re
 import struct
@@ -33,7 +34,7 @@ ACADSHARP = os.path.dirname(HERE)
 WIRE_MD = os.path.join(ACADSHARP, "docs", "WIRE.md")
 
 MAGIC = b"VACB"
-WIRE_VERSION = 1
+WIRE_VERSION = 2
 BATCH_HEADER_BYTES = 12
 RECORD_HEADER_BYTES = 8
 FLAG_LAST = 1
@@ -81,8 +82,15 @@ FIXED_RECORD_BYTES = {
 FORWARD_PROBE_FIRST = 0x7F00
 
 OK = 0
-UNSUPPORTED_FORMAT = 2
 CORRUPT_INPUT = 3
+
+# A stream carrying a wire_version this consumer does not parse. Not
+# UNSUPPORTED_FORMAT, which is about the drawing and means check
+# dwg_version_min and dwg_version_max: this is the two ends of the boundary
+# disagreeing, and the remedy is to rebuild one of them. docs/ABI.md always
+# said so; WIRE.md and the three parsers said UNSUPPORTED_FORMAT until wire
+# version 2, which is the first time a real consumer meets a foreign version.
+ABI_MISMATCH = 8
 
 
 class ParserRanAway(AssertionError):
@@ -102,7 +110,7 @@ def parse_batch(buf):
         return CORRUPT_INPUT, []
     version, flags, payload_length = struct.unpack_from("<HHI", buf, 4)
     if version != WIRE_VERSION:
-        return UNSUPPORTED_FORMAT, []
+        return ABI_MISMATCH, []
     if BATCH_HEADER_BYTES + payload_length > len(buf):
         return CORRUPT_INPUT, []
 
@@ -138,6 +146,52 @@ def parse_batch(buf):
     return OK, records
 
 
+# Records 4 and 9 share one payload, so one function reads both.
+POLYLINE_TYPES = (RECORD_TYPES["Polyline"], RECORD_TYPES["Polygon"])
+
+
+def polyline_shape(payload, length):
+    """(point_count, bulge_count) for a Polyline or Polygon, or a refusal code.
+
+    Beside the framing parser rather than inside it. `parse_batch` walks record
+    headers and knows nothing about what a payload means, which is exactly what
+    lets it skip a type it has never heard of; a layout rule pushed into that
+    loop would make it wrong for every record type the day one of them changes.
+
+    The three rules are docs/WIRE.md's: `bulge_count` is 0 or `point_count` and
+    nothing else, `length` is `64 + 24n + 8bc` and not merely large enough, and
+    no `f64` in the record is NaN or infinite. The second is not implied by the
+    first: a producer that wrote the array and forgot the count produces a
+    payload whose bytes are all there and whose trailing array nobody reads.
+    """
+    if len(payload) < 56:
+        return CORRUPT_INPUT, None
+    n, closed, bc, reserved1 = struct.unpack_from("<IIII", payload, 16)
+    if closed > 1 or reserved1 != 0:
+        return CORRUPT_INPUT, None
+    if bc not in (0, n):
+        return CORRUPT_INPUT, None
+    if length != 64 + 24 * n + 8 * bc:
+        return CORRUPT_INPUT, None
+    for k in range(3 + (3 * n) + bc):
+        (value,) = struct.unpack_from("<d", payload, 32 + (8 * k))
+        if math.isnan(value) or math.isinf(value):
+            return CORRUPT_INPUT, None
+    return OK, (n, bc)
+
+
+def vertex_record(rtype, n, bc, closed=0, length=None, values=None, reserved1=0):
+    """One Polyline or Polygon, built field by field so a test can lie."""
+    body = struct.pack("<QII", 0x4D, 0, 0) + struct.pack("<IIII", n, closed, bc, reserved1)
+    if values is None:
+        values = [1.0] * (3 + (3 * n) + bc)
+    for v in values:
+        body += struct.pack("<d", v)
+    if length is None:
+        length = RECORD_HEADER_BYTES + len(body)
+    return struct.pack("<HHI", rtype, 0, length) + body
+
+
 def record(rtype, payload=b""):
     pad = (-len(payload)) % 4
     payload = payload + b"\0" * pad
@@ -149,6 +203,17 @@ def batch(records, flags=0, payload_length=None, version=WIRE_VERSION, magic=MAG
     if payload_length is None:
         payload_length = len(body)
     return magic + struct.pack("<HHI", version, flags, payload_length) + body
+
+
+def polyline_section(wire_md):
+    """WIRE.md's record 4 paragraph, on its own.
+
+    Sliced rather than searched whole, because the Arc record two paragraphs
+    down says "counter-clockwise" too, and a test that searched the document
+    would pass with the Polyline section saying nothing at all.
+    """
+    start = wire_md.index("**4 `Polyline`**")
+    return wire_md[start : wire_md.index("**5 `Arc`**", start)]
 
 
 @pytest.fixture(scope="module")
@@ -175,11 +240,23 @@ class TestAWellFormedBatch:
         assert code == CORRUPT_INPUT
 
     def test_an_unknown_wire_version_is_refused_not_guessed(self):
-        code, _ = parse_batch(batch([record(3)], version=2))
-        assert code == UNSUPPORTED_FORMAT, (
+        # WIRE_VERSION + 1 rather than a literal. A literal 2 was the version
+        # from the future until this bump made it the present one, and a test
+        # that keeps a literal there quietly starts asserting that the current
+        # version is refused.
+        code, _ = parse_batch(batch([record(3)], version=WIRE_VERSION + 1))
+        assert code == ABI_MISMATCH, (
             "a consumer that parses a version it does not know is reading a layout it "
             "is only assuming, which is worse than refusing the stream."
         )
+
+    def test_the_version_before_this_one_is_refused_too(self):
+        # Forward compatibility is the skip-by-length rule for record types.
+        # It is not a licence to parse an older layout: wire version 1's
+        # Polyline has no normal and no bulge array, so reading one as a v2
+        # record walks off the end of a payload that is 32 bytes shorter.
+        code, _ = parse_batch(batch([record(3)], version=WIRE_VERSION - 1))
+        assert code == ABI_MISMATCH
 
     def test_an_empty_batch_is_legal(self):
         code, records = parse_batch(batch([]))
@@ -271,6 +348,91 @@ class TestMalformedBatchesAreRefused:
         assert code == CORRUPT_INPUT
 
 
+class TestThePolylineAndPolygonPayloadRules:
+    """The v2 count, length and finiteness rules, one failing state each."""
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_a_well_formed_record_reads_back_its_two_counts(self, rtype):
+        raw = vertex_record(rtype, n=4, bc=4, closed=1)
+        code, records = parse_batch(batch([raw]))
+        assert code == OK
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (OK, (4, 4))
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_no_bulges_at_all_is_the_other_legal_shape(self, rtype):
+        raw = vertex_record(rtype, n=4, bc=0)
+        code, records = parse_batch(batch([raw]))
+        assert code == OK
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (OK, (4, 0))
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_a_bulge_count_that_is_neither_zero_nor_the_point_count(self, rtype):
+        # Three bulges for four vertices. The bytes are all there and the
+        # length is consistent, so nothing about the framing objects; what
+        # a consumer cannot do is work out which three spans they describe.
+        raw = vertex_record(rtype, n=4, bc=3)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_a_zero_bulge_count_with_a_bulge_inclusive_length(self, rtype):
+        # The array written and the count left at zero, which is the mistake
+        # that produces a record every framing rule accepts and whose trailing
+        # numbers nobody ever reads.
+        raw = vertex_record(rtype, n=4, bc=0, values=[1.0] * (3 + 12 + 4))
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert length == 64 + (24 * 4) + (8 * 4)
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_a_closed_flag_that_is_not_zero_or_one(self, rtype):
+        raw = vertex_record(rtype, n=3, bc=0, closed=2)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_reserved1_is_refused_when_it_is_not_zero(self, rtype):
+        raw = vertex_record(rtype, n=3, bc=0, reserved1=1)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    @pytest.mark.parametrize("slot", (0, 3, 14))
+    def test_a_non_finite_value_anywhere_in_the_record(self, rtype, slot):
+        # Slot 0 is the normal, 3 is the first vertex and 14 is a bulge, so
+        # the three places a NaN can hide are each covered rather than only
+        # whichever one the loop happens to reach first.
+        values = [1.0] * (3 + 12 + 4)
+        values[slot] = float("nan")
+        raw = vertex_record(rtype, n=4, bc=4, values=values)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_an_infinite_value_is_refused_the_same_way(self, rtype):
+        values = [1.0] * (3 + 9 + 3)
+        values[5] = float("inf")
+        raw = vertex_record(rtype, n=3, bc=3, values=values)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
+    def test_a_length_that_is_merely_large_enough_is_still_wrong(self, rtype):
+        raw = vertex_record(rtype, n=2, bc=0, values=[1.0] * 20)
+        _code, records = parse_batch(batch([raw]))
+        length = len(records[0][1]) + RECORD_HEADER_BYTES
+        assert length > 64 + (24 * 2)
+        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+
+
 class TestTheRunawayGuardItself:
     """The bounded-iteration guard is only worth having if it can fire."""
 
@@ -332,6 +494,50 @@ class TestWireMdMatchesTheParser:
 
     def test_the_batch_size_range_is_documented(self, wire_md):
         assert "64 KiB" in wire_md and "1 MiB" in wire_md
+
+    def test_the_polyline_payload_is_documented(self, wire_md):
+        section = polyline_section(wire_md)
+        for field in ("point_count", "closed", "bulge_count", "reserved1"):
+            assert field in section, f"WIRE.md's Polyline never mentions {field}"
+        assert "64 + 24" in section and "8" in section, (
+            "WIRE.md does not give the Polyline length formula, and a consumer that "
+            "cannot check the length against the counts accepts a record whose "
+            "trailing array nobody reads"
+        )
+
+    def test_the_bulge_sign_convention_is_documented(self, wire_md):
+        section = polyline_section(wire_md)
+        assert "counter-clockwise" in section, (
+            "WIRE.md's Polyline section does not say which way a positive bulge turns. "
+            "The Arc paragraph saying it is not enough: a consumer reading the Polyline "
+            "section has to be told there, or it guesses and draws every arc mirrored."
+        )
+        assert "tan" in section
+
+    def test_the_finiteness_guarantee_is_documented(self, wire_md):
+        assert re.search(r"never emits a record of type 3 to 10 carrying", wire_md), (
+            "WIRE.md does not promise that geometry records carry finite values, and a "
+            "consumer that cannot rely on it has to defend every field of every record"
+        )
+
+    def test_the_midpoint_formula_is_documented(self, wire_md):
+        section = polyline_section(wire_md)
+        assert "mid + (b" in section, (
+            "WIRE.md gives no way to turn a bulge into a point. A sign convention in "
+            "prose is not checkable; a formula is."
+        )
+
+    @pytest.mark.parametrize(
+        "rule",
+        (
+            r"`bulge_count` is neither 0 nor `point_count`",
+            r"`length` is not `64 \+ 24n \+ 8bc`",
+            r"types 3 to 10, that is `NaN` or infinite",
+        ),
+    )
+    def test_each_payload_refusal_has_a_row(self, wire_md, rule):
+        table = wire_md[wire_md.index("## Refusing a stream") :]
+        assert re.search(rule, table), f"no refusal row in WIRE.md matches {rule}"
 
     def test_curves_are_documented_as_never_tessellated(self, wire_md):
         assert re.search(r"never tessellat|not tessellat|no tessellat", wire_md, re.I), (
