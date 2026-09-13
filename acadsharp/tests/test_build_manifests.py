@@ -16,9 +16,12 @@ to each other so a field cannot be added here without a row over there.
 """
 
 import hashlib
+import inspect
 import json
 import os
 import re
+import shutil
+import subprocess
 
 import build_acadsharp as ba
 import pytest
@@ -203,7 +206,7 @@ class TestTheReadRangeIsAMeasuredFact:
 
     @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
     def test_the_staging_script_records_both(self, plat):
-        script = ba.stage_script(plat)
+        script = ba.stage_script()
         assert "fact dwg_version_min" in script and "fact dwg_version_max" in script, (
             f"the {plat} staging script records no read range, so finish_archive has "
             "no measurement to put in LINKINFO.json"
@@ -662,16 +665,104 @@ class TestTheContractDocumentsShip:
         )
 
 
-class TestTheGeneratedStagingScript:
-    """The script that measures the link facts is generated, so its holes
-    have to be filled. A placeholder left in place would be a shell script
-    that runs and silently records nothing."""
+class TestTheStagingScript:
+    """The script that measures the link facts is a tracked file.
+
+    It was 185 lines of shell inside a Python string with two placeholder
+    words substituted before it was written out, which meant
+    `tools/shellcheck-all.sh` never saw a line of it: that script
+    discovers its work with `git ls-files '*.sh'`, so the most intricate
+    shell in the repository was the one part of it no linter had ever
+    looked at, and the `# shellcheck disable` comment in it was addressed
+    to nobody.
+
+    The two lists arrive in the environment now, so the file that runs in
+    the container is byte for byte the file in the tree, and the tests
+    below are about that rather than about substitution.
+    """
+
+    def test_it_is_a_shell_script_the_linter_will_find(self):
+        assert os.path.isfile(ba.STAGE_SCRIPT), "there is no scripts/stage.sh"
+        assert ba.STAGE_SCRIPT.endswith(".sh"), (
+            "tools/shellcheck-all.sh discovers its work with `git ls-files '*.sh'`, so a "
+            "staging script under any other name is one shellcheck never opens"
+        )
+        assert os.access(ba.STAGE_SCRIPT, os.X_OK), "scripts/stage.sh is not executable"
+
+    def test_git_actually_tracks_it(self):
+        # The point of the move is that the repo-wide glob finds it, and
+        # an untracked file passes every check above and is still invisible
+        # to `git ls-files`.
+        listed = subprocess.run(
+            ["git", "ls-files", "*.sh"],
+            cwd=os.path.dirname(ACAD_DIR),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if listed.returncode != 0:
+            pytest.skip("not a git checkout")
+        assert "acadsharp/scripts/stage.sh" in listed.stdout.split(), (
+            "stage.sh is not tracked, so tools/shellcheck-all.sh does not lint it and "
+            "the move accomplished nothing"
+        )
+
+    def test_it_passes_shellcheck(self):
+        if not shutil.which("shellcheck"):
+            pytest.skip("shellcheck not installed")
+        done = subprocess.run(
+            ["shellcheck", ba.STAGE_SCRIPT], capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+
+    def test_the_driver_carries_no_shell_script_of_its_own(self):
+        with open(ba.__file__) as f:
+            driver = f.read()
+        assert "#!/bin/sh" not in driver, (
+            "build_acadsharp.py holds a shell script in a string again. Whatever it is, "
+            "shellcheck cannot see it: tools/shellcheck-all.sh only opens tracked *.sh"
+        )
+
+    def test_what_runs_is_what_is_in_the_tree(self):
+        with open(ba.STAGE_SCRIPT) as f:
+            assert ba.stage_script() == f.read()
 
     @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
-    def test_no_placeholder_survives_substitution(self, plat):
-        script = ba.stage_script(plat)
-        assert "RUNTIME_ARCHIVE_LIST" not in script
-        assert "STATIC_SYSTEM_LIBRARY_LADDER" not in script
+    def test_the_two_lists_arrive_in_the_environment(self, plat):
+        env = ba.stage_env(plat)
+        assert env["RUNTIME_ARCHIVES"].split() == list(ba.RUNTIME_ARCHIVES)
+        assert env["STATIC_SYSTEM_LIBRARY_LADDER"] == ";".join(
+            ba.STATIC_SYSTEM_LIBRARY_LADDER.get(plat, [""])
+        )
+
+    def test_a_list_that_never_arrives_is_a_refusal(self):
+        # Unset, `for name in $RUNTIME_ARCHIVES` is an empty loop: the
+        # merge produces an archive of one object, the static smoke fails
+        # to link it, and the cell ships shared-only, which is a recorded
+        # outcome nobody reads. `:?` makes it a failure instead.
+        script = ba.stage_script()
+        assert "${RUNTIME_ARCHIVES:?}" in script
+        assert "${STATIC_SYSTEM_LIBRARY_LADDER:?}" in script
+
+    @pytest.mark.parametrize("plat,arch", [("linux", "amd64"), ("musl", "arm64")])
+    def test_the_dockerfile_hands_them_over(self, plat, arch):
+        dockerfile = ba.make_dockerfile(ba.read_version(), plat, arch)
+        env = ba.stage_env(plat)
+        for name, value in env.items():
+            assert f'{name}="{value}"' in dockerfile, (
+                f"the {plat} Dockerfile does not set {name}, so stage.sh refuses at "
+                "the line that needs it"
+            )
+
+    def test_the_mac_path_hands_them_over_too(self):
+        # No Dockerfile there, so the same two have to reach the process
+        # environment. The mac cell never attempts a static link, and the
+        # ladder is empty for it, which the script only ever reads inside
+        # the half that does.
+        source = inspect.getsource(ba._build_mac_native)
+        assert 'stage_env("mac")' in source, (
+            "the mac build runs stage.sh without the lists the container gets"
+        )
 
     def test_it_ships_the_initialiser_as_its_own_archive(self):
         # libbootstrapperdll.o defines no global symbol at all, so nothing
@@ -679,7 +770,7 @@ class TestTheGeneratedStagingScript:
         # Forcing it with -Wl,-u works for a hand-written cc line and not
         # for the consumer, because a build script's link arguments do not
         # reach a dependent. So it ships as a library instead.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert "--globalize-symbol" in script
         assert "_GLOBAL__sub_I" in script
         assert ba.STATIC_INIT_LIBRARY_NAME in script
@@ -687,7 +778,7 @@ class TestTheGeneratedStagingScript:
     def test_the_static_smoke_links_it_whole_and_first(self):
         # Reversed, the link fails on RhRegisterOSModule; without the
         # whole-archive it links clean and aborts at the first call.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         whole = script.index('-Wl,--whole-archive "$INIT_A"')
         main = script.index('"$MERGED" $SYSLIBS')
         assert whole < main
@@ -696,7 +787,7 @@ class TestTheGeneratedStagingScript:
     @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
     def test_it_never_forces_a_symbol_on_the_link_line(self, plat):
         code = "\n".join(
-            line for line in ba.stage_script(plat).splitlines() if not line.lstrip().startswith("#")
+            line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
         )
         for flag in ba.SYMBOL_FORCING_FLAGS:
             assert f"-Wl,{flag}" not in code
@@ -707,7 +798,7 @@ class TestTheGeneratedStagingScript:
         # forecloses --whole-archive on the result.
         # Comments out first: the script explains at length why addlib
         # is not used, and a whole-file grep fires on the explanation.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
         assert "addlib" not in code
         assert "${stem}__" in code
@@ -719,9 +810,7 @@ class TestTheGeneratedStagingScript:
         # `without_comments()` for exactly this.
         for plat in ("linux", "musl", "mac"):
             code = "\n".join(
-                line
-                for line in ba.stage_script(plat).splitlines()
-                if not line.lstrip().startswith("#")
+                line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
             )
             assert ba.DEAD_STATIC_INIT_SYMBOL not in code
 
@@ -792,7 +881,7 @@ class TestEveryFileTheBuildReadsIsStaged:
     def test_the_build_context_carries_every_one_of_them(self, tmp_path):
         ctx = str(tmp_path / "ctx")
         os.makedirs(ctx)
-        ba._write_build_context(ctx, "linux")
+        ba._write_build_context(ctx)
         for name in self.project_inputs():
             assert os.path.isfile(os.path.join(ctx, name)), (
                 f"the csproj reads {name} during the build and the build context does "
@@ -802,7 +891,7 @@ class TestEveryFileTheBuildReadsIsStaged:
     def test_the_staged_version_is_the_repository_version(self, tmp_path):
         ctx = str(tmp_path / "ctx")
         os.makedirs(ctx)
-        ba._write_build_context(ctx, "linux")
+        ba._write_build_context(ctx)
         with open(os.path.join(ctx, "VERSION")) as f:
             staged = f.read().strip()
         assert staged == ba.read_version(), (
@@ -851,13 +940,13 @@ class TestTheShippedLibraryHasToSayWhatItIs:
         )
 
     def test_the_staging_script_compiles_it_against_the_staged_header(self):
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
         assert '-I"$WORK/include"' in stage, (
             "the smoke includes the header, so the compile line has to say where it is"
         )
 
     def test_the_backing_version_is_recorded_as_a_fact(self):
-        assert "fact backing_version" in ba.stage_script("linux")
+        assert "fact backing_version" in ba.stage_script()
 
 
 class TestAnUncertifiedStaticLibraryIsNotShipped:
@@ -986,26 +1075,24 @@ class TestTheMergeKeepsSourceOrder:
     """
 
     def test_the_managed_archive_goes_first(self):
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         managed = script.index('echo "$MANAGED" > /tmp/merge-sources.txt')
         runtime = script.index("for name in")
         assert managed < runtime
 
     def test_members_are_listed_in_each_archives_own_order(self):
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert 'ar t "$src" | while read -r member' in script
 
     def test_they_are_appended_rather_than_replaced(self):
         # `ar r` reorders on replace and xargs may split the list, so the
         # order only survives with `q`.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert 'xargs -0 ar qc "$MERGED"' in script
 
     def test_nothing_sorts_the_member_list(self):
         code = "\n".join(
-            line
-            for line in ba.stage_script("linux").splitlines()
-            if not line.lstrip().startswith("#")
+            line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
         )
         assert "merge-members.txt | sort" not in code
         assert "sort" not in code.split("merge-members.txt")[1].split("ranlib")[0]
@@ -1014,6 +1101,6 @@ class TestTheMergeKeepsSourceOrder:
         # Extracting fewer files than the archive lists means two members
         # shared a name inside one source archive and one overwrote the
         # other, which would drop a definition silently.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert "so a member was lost" in script
         assert "MERGE_OK=0" in script
