@@ -325,6 +325,26 @@ an artifact to verify and a release workflow to verify it in. A separate workflo
 file is exempt from the hardcoded-path guard and is the cheaper way in when the time
 comes.
 
+**Revisited 2026-09-13 (libviprs/libviprs-dep#59).** The time came and the way in was
+the separate file: `.github/workflows/acadsharp-conformance.yml`. The decision above
+is unchanged. ci.yml still carries no dotnet step and the Hook Mirror contract is
+untouched, because that guard and the hardcoded-path one both read ci.yml and nothing
+else. What the new file does, on a push that touches `acadsharp/`, is build the
+linux/arm64 archive, run both conformance consumers against the unpacked archive,
+then publish the AbiTest configuration in the image the archive build already made
+and run both consumers again against that. The second pass costs one publish rather
+than a second SDK, a second clang and a second package restore, and it is what covers
+the exception and handle-leak cases, whose exports exist in no other configuration.
+
+Two things this decision had been resting on turned out not to hold. "Covered by the
+recorded captures" is only true while the captures are captures of the code in the
+tree, and nothing said they were: a change to the flattener left every adapter test
+green against a recording of the old behaviour. `tests/expectations/MANIFEST.json`
+now carries a digest of every source the fixture generator compiles and
+`tests/test_shim_digest.py` refuses a stale one. And the AbiTest configuration had
+stopped compiling, because `Exports.cs` carried two methods with the same entry
+point, so neither consumer could be built at all and nothing anywhere said so.
+
 ## AOT and trim warnings
 
 16, and every one of them is in upstream code. The shim itself produces none.

@@ -491,6 +491,19 @@ def release_tag(version):
     return f"acadsharp-{version}"
 
 
+def builder_image_tag(version, plat, arch):
+    """The image one cell builds in: acadsharp-builder-3.7.1-viprs.1-linux-arm64
+
+    A function rather than an expression inside the build, because the image
+    outlives the build that made it and something else wants it by name.
+    `.github/workflows/acadsharp-conformance.yml` publishes the test
+    configuration in it, which costs one publish instead of a second SDK, a
+    second clang and a second package restore. A copy of this rule in that
+    file is a copy that goes stale on the first version bump.
+    """
+    return f"acadsharp-builder-{version}-{plat}-{normalize_arch(arch)}".lower()
+
+
 def shared_ext(plat):
     """Shared library extension for a platform."""
     return "dylib" if plat == "mac" else "so"
@@ -828,6 +841,20 @@ def archive_smoke_source(entry_points=None):
     and compares the fingerprint against the hash of the header being
     shipped beside it. This is the "when the smoke runs" half of the
     fingerprint check; the verifier does the static half from the bytes.
+
+    Then it asks the library what it is. `ABI.md` says
+    `viprs_acad_capabilities_v1` answers with "the pinned version of the
+    backing reader", and every archive published before this check answered
+    with nothing: the build staged `native/` and `include/` and never
+    `VERSION`, msbuild's `ReadLinesFromFile` returns nothing for a file that
+    is not there rather than failing, and the generated constant came out as
+    an empty string. Nothing looked, until the conformance consumer ran
+    against an unpacked archive in CI for the first time. So the smoke looks
+    now, in the container, before the archive is packed.
+
+    It includes the shipped header rather than declaring the struct, for the
+    same reason the conformance consumers do: a hand-written copy of a frozen
+    struct agrees with whoever typed it and with nothing else.
     """
     names = list(entry_points or header_entry_points())
     listing = "\n".join(f'\t"{name}",' for name in names)
@@ -838,6 +865,8 @@ def archive_smoke_source(entry_points=None):
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "viprs_acadsharp.h"
 
 static const char *ENTRY_POINTS[] = {{
 {listing}
@@ -893,6 +922,48 @@ int main(int argc, char **argv)
 \t\t\tgot, argv[2]);
 \t\treturn 5;
 \t}}
+
+\t/* And what does it say it is? An empty answer is not a version. */
+\tuint32_t (*caps_of)(struct viprs_acad_capabilities_v1 *, uint8_t *, uint64_t,
+\t\tuint64_t *) = (uint32_t (*)(struct viprs_acad_capabilities_v1 *, uint8_t *,
+\t\tuint64_t, uint64_t *))dlsym(h, "viprs_acad_capabilities_v1");
+\tif (!caps_of) {{
+\t\tfprintf(stderr, "smoke: viprs_acad_capabilities_v1 did not resolve\\n");
+\t\treturn 7;
+\t}}
+
+\tstruct viprs_acad_capabilities_v1 caps;
+\tmemset(&caps, 0, sizeof caps);
+\tcaps.struct_size = (uint32_t)sizeof caps;
+\tcaps.struct_version = 1;
+
+\tuint64_t needed = 0;
+\tuint32_t rc = caps_of(&caps, NULL, 0, &needed);
+\tif (rc != 0) {{
+\t\tfprintf(stderr, "smoke: the capabilities sizing call returned %u\\n", (unsigned)rc);
+\t\treturn 7;
+\t}}
+\tif (needed == 0) {{
+\t\tfprintf(stderr, "smoke: the library reports an empty backing version. ABI.md says "
+\t\t\t"this call answers with the pinned version of the backing reader, and a "
+\t\t\t"build that never saw acadsharp/VERSION answers with nothing\\n");
+\t\treturn 7;
+\t}}
+
+\tchar *backing = (char *)malloc((size_t)needed + 1);
+\tif (!backing) {{
+\t\tfprintf(stderr, "smoke: out of memory\\n");
+\t\treturn 6;
+\t}}
+\trc = caps_of(&caps, (uint8_t *)backing, needed, &needed);
+\tif (rc != 0) {{
+\t\tfprintf(stderr, "smoke: reading the backing version returned %u\\n", (unsigned)rc);
+\t\tfree(backing);
+\t\treturn 7;
+\t}}
+\tbacking[needed] = '\\0';
+\tprintf("BACKING_VERSION=%s\\n", backing);
+\tfree(backing);
 \treturn 0;
 }}
 """
@@ -1081,7 +1152,7 @@ NEEDED=$(read_needed "$STAGING/lib/libacadsharp_native.$EXT")
 fact shared_needed "$NEEDED"
 
 # --- shared smoke -----------------------------------------------------
-cc -O1 "$WORK/archive_smoke.c" -o /tmp/archive_smoke -ldl
+cc -O1 -I"$WORK/include" "$WORK/archive_smoke.c" -o /tmp/archive_smoke -ldl
 if /tmp/archive_smoke "$STAGING/lib/libacadsharp_native.$EXT" "$FINGERPRINT" \
         > /tmp/smoke.out 2>&1; then
     fact shared_smoke_ok 1
@@ -1090,8 +1161,10 @@ else
 fi
 MISSING=$(sed -n 's/^MISSING_EXPORT //p' /tmp/smoke.out | sort -u | tr '\n' ' ')
 LIVE_FP=$(sed -n 's/^ABI_FINGERPRINT=//p' /tmp/smoke.out | head -1)
+BACKING=$(sed -n 's/^BACKING_VERSION=//p' /tmp/smoke.out | head -1)
 fact missing_exports "$MISSING"
 fact live_fingerprint "$LIVE_FP"
+fact backing_version "$BACKING"
 echo "---- shared smoke ----"
 cat /tmp/smoke.out
 
@@ -1323,6 +1396,7 @@ RUN rmdir {src_root}/src/CSUtilities 2>/dev/null || true; \\
 # Step 4: the shim and the frozen header
 COPY native /work/native
 COPY include /work/include
+COPY VERSION /work/VERSION
 COPY archive_smoke.c static_archive_smoke.c stage.sh /work/
 
 # Step 5: publish the shared library. The log is kept because the AOT
@@ -1532,6 +1606,12 @@ def _write_build_context(ctx, plat):
     )
     os.makedirs(os.path.join(ctx, "include"), exist_ok=True)
     shutil.copy2(HEADER_PATH, os.path.join(ctx, "include", "viprs_acadsharp.h"))
+    # The csproj reads ../VERSION during the build and generates the string
+    # viprs_acad_capabilities_v1 reports. Without the file here, msbuild's
+    # ReadLinesFromFile returns nothing rather than failing, the generated
+    # constant comes out as "", and every archive published so far shipped a
+    # library that answers the version question with an empty string.
+    shutil.copy2(VERSION_FILE, os.path.join(ctx, "VERSION"))
     for name, text in (
         ("archive_smoke.c", archive_smoke_source()),
         ("static_archive_smoke.c", static_smoke_source()),
@@ -1565,11 +1645,15 @@ def build_for_job(version, plat, arch, output_dir, keep_going=False):
 
             if facts.get("shared_smoke_ok") != "1":
                 missing = facts.get("missing_exports", "").split()
-                detail = (
-                    f"the library does not export {', '.join(missing)}"
-                    if missing
-                    else "see the smoke output in the log"
-                )
+                if missing:
+                    detail = f"the library does not export {', '.join(missing)}"
+                elif not facts.get("backing_version"):
+                    detail = (
+                        "the library reports an empty backing version, so "
+                        "viprs_acad_capabilities_v1 cannot answer what it is"
+                    )
+                else:
+                    detail = "see the smoke output in the log"
                 raise RuntimeError(
                     f"the ABI smoke failed against the staged library: {detail}. "
                     f"The archive is at {path} for inspection; it is not shippable."
@@ -1592,7 +1676,7 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
     """Build inside a container pinned to the target architecture."""
     rid = rid_for(plat, arch)
     info = TARGETS[rid]
-    image_tag = f"acadsharp-builder-{version}-{plat}-{arch}".lower()
+    image_tag = builder_image_tag(version, plat, arch)
     container_name = f"acadsharp-extract-{version}-{plat}-{arch}".lower()
     dir_name = staging_dir_name(plat, arch)
     output_path = os.path.join(output_dir, archive_name(plat, arch))

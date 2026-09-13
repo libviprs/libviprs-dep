@@ -68,13 +68,17 @@ class TestTheExpectationsExist:
 
 
 class TestTheExpectationIsOfTheFixtureInTheTree:
-    """The one check that makes every other check in this file mean something.
+    """Half of what makes every other check in this file mean something.
 
     A committed dump and a committed fixture can disagree silently: the dump is
     text, the fixture is bytes, and nothing in a pytest run reads DWG. So the
     manifest records the sha256 the dump was produced from, and this recomputes
     it. Change a fixture without rerunning the generator and this is the test
     that goes red, naming the fixture.
+
+    The other half is test_shim_digest.py, which does the same for the code
+    that read the fixture. Either one alone leaves a way for a dump to be a
+    recording of something that is no longer here.
     """
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
