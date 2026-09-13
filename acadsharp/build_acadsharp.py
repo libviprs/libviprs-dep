@@ -1005,9 +1005,13 @@ def make_dockerfile(version, plat, arch):
     rid = rid_for(plat, arch)
     info = TARGETS[rid]
     base_image = MUSL_BUILD_IMAGE if plat == "musl" else LINUX_BUILD_IMAGE
-    url = source_url(version)
-    sha = source_sha256(version)
-    src_root = f"/build/ACadSharp-{version}"
+    # The artifact version carries the shim revision; upstream's tarball,
+    # digest and directory name do not know about it. Accepts either form
+    # so a caller holding only the upstream number still gets a build.
+    upstream = split_version(version)[0] if "-viprs." in version else version
+    url = source_url(upstream)
+    sha = source_sha256(upstream)
+    src_root = f"/build/ACadSharp-{upstream}"
     want_static = "1" if rid in STATIC_TARGETS else "0"
 
     if plat == "musl":
