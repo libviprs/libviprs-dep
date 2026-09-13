@@ -699,6 +699,276 @@ python3 zstd/build_zstd.py --parallel --upload
     scratch (`--no-cache`); if you are iterating by hand, remove the
     workspace under `<output-dir>/workspace-*` first.
 
+## ACADSHARP
+
+`build_acadsharp.py` publishes one archive per `(platform, cpu)` like the
+other two, but what is inside is different in kind: ACadSharp is a C#
+library, and the artifact is a .NET NativeAOT shim exposing a
+VIPRS-owned C ABI. A consumer links it with no .NET installed anywhere.
+
+### How it differs from the other two
+
+| | `build_zstd.py` | `build_acadsharp.py` |
+| --- | --- | --- |
+| Source | one pinned release tarball | a pinned *generated* GitHub tarball plus a pinned submodule commit, because `src/CSUtilities` is a submodule and generated tarballs never carry one |
+| Build system | CMake | `dotnet publish -p:PublishAot=true`, with ILC linking through clang |
+| Container arch | pinned to the target, emulated when foreign | pinned to the target, **never** emulated: .NET does not support QEMU and the SDK ships no cross toolchain, so a foreign cell needs a runner of that architecture |
+| Base image | `debian:bookworm-slim` / `alpine:3.20` | the same two, with the SDK installed by `dotnet-install.sh`; there is no bookworm SDK image and the stock one is noble, whose output needs GLIBC_2.38 |
+| Manifests | `cmake-args.txt` | `metadata/LINKINFO.json` and `metadata/BUILDINFO.json`, which `acadsharp-rs`'s `build.rs` parses |
+| mac | builds natively with CMake | builds natively with the SDK; NativeAOT cannot cross-compile to macOS at all, so `macos-15` is the only way to produce that cell |
+
+### The matrix, and it is five cells
+
+| archive | .NET runtime identifier | Rust triple in `LINKINFO.json` |
+| --- | --- | --- |
+| `acadsharp-linux-x64.tgz` | `linux-x64` | `x86_64-unknown-linux-gnu` |
+| `acadsharp-linux-arm64.tgz` | `linux-arm64` | `aarch64-unknown-linux-gnu` |
+| `acadsharp-musl-x64.tgz` | `linux-musl-x64` | `x86_64-unknown-linux-musl` |
+| `acadsharp-musl-arm64.tgz` | `linux-musl-arm64` | `aarch64-unknown-linux-musl` |
+| `acadsharp-mac-arm64.tgz` | `osx-arm64` | `aarch64-apple-darwin` |
+
+The default matrix is the first four. `mac` is reachable with `--platform
+mac --arch arm64` on a macOS host and is excluded from the default for
+the same reason it is in the other two drivers: there is no macOS
+container image. There is no Windows cell and there will not be one.
+
+### Options
+
+**`--platform {linux,musl,mac} [...]`**, **`--arch {amd64,arm64}`**,
+**`--parallel`**, **`--upload`**, **`--output-dir DIR`**
+
+:   As `build_zstd.py`, including the `x86_64`/`x64`/`aarch64` aliases.
+
+**`--target RID`**
+
+:   A .NET runtime identifier, repeatable, as an alias for the cell.
+
+**`--version VERSION`**
+
+:   The artifact version to build, e.g. `3.7.1-viprs.1`. Defaults to the
+    contents of `acadsharp/VERSION`, which is the usual case. The release
+    workflow passes its `workflow_dispatch` override here, so the
+    archives, the tag, the release notes and `artifact_version` in
+    `LINKINFO.json` all agree on one number; without it a dispatch
+    override tagged one version and shipped another. It also makes the
+    throwaway pre-release G1.5 has to cut reachable without committing a
+    version bump and reverting it. The version carries two numbers
+    (upstream plus shim revision) and both reach the manifest.
+
+**`--plan`**
+
+:   Print the cells, their runtime identifiers, their triples and the
+    `dotnet publish` commands, then stop. Runs no container.
+
+### Artifact layout
+
+```
+acadsharp-<platform>-<cpu>/
+├── lib/
+│   ├── libacadsharp_native.so       # .dylib on mac
+│   ├── libacadsharp_native.a        # only where the static smoke certified it
+│   └── libacadsharp_native_init.a   # one object: the runtime's static initialiser
+├── include/
+│   └── viprs_acadsharp.h         # the frozen C ABI, byte-identical to the repo's
+├── metadata/
+│   ├── LINKINFO.json             # the consumer contract
+│   ├── BUILDINFO.json            # what produced the binaries
+│   └── CHECKSUMS.txt             # sha256 of every other file in the archive
+├── LICENSES/
+│   ├── ACadSharp-LICENSE         # MIT, Copyright (c) 2021 Albert Domenech
+│   └── THIRD_PARTY_NOTICES       # the .NET runtime and every restored package
+└── README.md
+```
+
+`LINKINFO.json` is the one to read. It carries the Rust triple, the ABI
+and wire versions, the header's sha256 and its first eight bytes as the
+fingerprint `viprs_acad_abi_fingerprint()` returns, and the link facts
+measured on that target.
+
+The two linking modes have separate fields, because they measure
+different things and a consumer cannot tell which it is holding
+otherwise:
+
+| field | when | what |
+| --- | --- | --- |
+| `shared_system_libraries` | always | the shared library's own `NEEDED` list, libc and the loader dropped |
+| `static_library` | certified only | the merged archive |
+| `static_init_library` | certified only | one object, the runtime's static initialiser |
+| `static_system_libraries` | certified only | what the static link needed |
+| `static_link_args` | certified only | extra flags that link needed, normally empty |
+
+The four `static_*` fields are present together when `static_certified`
+is `true` and absent together when it is `false`. Absent, not empty: an
+empty string is a path and an empty list is a measurement of none, and
+neither means "not measured". `static_certified` is written by the driver
+and only when the static smoke linked **and ran** on that target;
+shared-only is a recorded outcome, not a failure.
+
+Nothing puts `NativeAOT_StaticInitialization` in `static_link_args`. That
+symbol does not exist in .NET 10: linking with `--require-defined` for it
+fails outright, and without it the link succeeds and the binary matches
+the JIT oracle. Nothing puts any other symbol-forcing flag there either,
+for a different and larger reason, in the next section.
+
+### Verification
+
+`acadsharp/scripts/verify_archive.sh <tgz> [platform] [cpu]` runs over
+the packaged tarball, and `build_acadsharp.py` runs it on every archive
+it produces before calling one done. It enforces:
+
+1. One top-level directory named after the tarball, with the full layout
+   above present.
+2. `CHECKSUMS.txt` covers every other file and every digest matches. A
+   file nobody listed is as much a defect as a wrong digest.
+3. Both manifests parse and carry every frozen field.
+4. `abi_header_sha256` is the hash of the header shipped beside it, and
+   `abi_fingerprint` is that hash's first eight bytes.
+5. Every library is the architecture the filename claims, is the right
+   kind of object, is not truncated, and **exports every entry point the
+   shipped header declares**. The ELF and Mach-O symbol tables are walked
+   out of the bytes rather than through `nm`, because GNU `nm` cannot
+   read Mach-O, macOS `nm` cannot read ELF, and a check that skips itself
+   when the tool cannot read the file is not a check.
+6. A static archive is `!<arch>`, never a GNU thin one, and holds no two
+   members of the same name. Duplicates link today only because the
+   linker takes the first definition it finds, and they make
+   `--whole-archive` on that file impossible.
+7. `libacadsharp_native_init.a` holds exactly one small object and
+   defines the initialiser the consumer's `--whole-archive` pulls in.
+8. `static_certified: true` is held to an archive that links **and runs**
+   here, whenever the host can build for that target, and to the cargo
+   recipe above when the host has cargo. Linking alone cannot tell a
+   working archive from a broken one: without its initialiser the link
+   is clean and the binary aborts at the first call, which is exit 134.
+
+It needs `python3`, which parses the manifests and the checksums; a
+missing interpreter is a refusal rather than a skipped check.
+
+Separately, the build itself compiles a program that `dlopen`s the staged
+library, resolves every entry point by bare name and compares the live
+`viprs_acad_abi_fingerprint()` against the header's hash. That is the
+check only the build host can make.
+
+### Consuming the artifacts
+
+Shared, which is the easy one:
+
+```bash
+tar xzf acadsharp-linux-x64.tgz
+cc main.c -I acadsharp-linux-x64/include \
+   -L acadsharp-linux-x64/lib -lacadsharp_native -o main
+```
+
+Static needs the initialiser archive, whole and first:
+
+```bash
+cc main.c -I acadsharp-linux-x64/include \
+   -Wl,--whole-archive acadsharp-linux-x64/lib/libacadsharp_native_init.a \
+   -Wl,--no-whole-archive acadsharp-linux-x64/lib/libacadsharp_native.a \
+   -lm -o main
+```
+
+`libacadsharp_native_init.a` holds one object: the runtime's static
+initialiser, which lives in `.init_array` and **defines no symbol anyone
+references**. Link it as an ordinary archive and the linker leaves it
+out, the link succeeds, and the binary aborts on the first call into the
+library. Put it after the main archive and the link fails on
+`RhRegisterOSModule`.
+
+### Consuming from Rust
+
+Read `metadata/LINKINFO.json` rather than guessing: match its `target`
+against `TARGET`, check `abi_version`, `wire_version` and
+`abi_fingerprint` against the generated bindings, then, from a `-sys`
+crate's build script:
+
+```
+cargo:rustc-link-search=native=<archive>/lib
+cargo:rustc-link-lib=static:-bundle,+whole-archive=acadsharp_native_init
+cargo:rustc-link-lib=static:-bundle=acadsharp_native
+cargo:rustc-link-lib=<each static_system_libraries entry>
+```
+
+in that order, or, for the shared library, `cargo:rustc-link-lib=
+acadsharp_native` plus one `cargo:rustc-link-lib` per
+`shared_system_libraries` entry.
+
+All three modifiers are load-bearing. `+whole-archive` on the init
+archive because nothing references what is in it. `-bundle` on **both**,
+because with the default `+bundle` rustc packs a static native library
+into the `-sys` crate's rlib, and that rlib lands on the link line before
+the whole-archived init archive: the linker reads left to right, has no
+reason to pull the runtime object defining `RhRegisterOSModule` while it
+is at the rlib, and cannot go back for it afterwards. And the init
+archive first, because it is the one with the dangling references.
+
+**Do not express any of this as `cargo:rustc-link-arg`.** Cargo does not
+treat the directives alike. `rustc-link-search` and `rustc-link-lib`
+travel to the link line of everything that depends on the emitting
+crate; `rustc-link-arg` binds to that package's own targets and goes no
+further. A requirement written as an argument therefore reaches the
+`-sys` crate's own tests and examples, stays green there, and is missing
+from every binary that depends on it. That is why the initialiser ships
+as `static_init_library` and is pulled in with `static:+whole-archive`
+rather than forced with `-Wl,-u,<symbol>`, and why `static_link_args` is
+normally empty: anything in it has to be applied by the final binary's
+own package, not by a dependency.
+
+`acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs
+exactly that recipe through a two-crate workspace and executes the
+binary, and `acadsharp/scripts/verify_archive.sh` runs it too when the
+host can build for the archive's target.
+
+### Examples
+
+```bash
+# The four container cells, sequentially
+python3 acadsharp/build_acadsharp.py
+
+# One cell, for iterating
+python3 acadsharp/build_acadsharp.py --platform musl --arch arm64
+
+# macOS, on a macOS host (no Docker involved)
+python3 acadsharp/build_acadsharp.py --platform mac --arch arm64
+
+# What it would run, without running it
+python3 acadsharp/build_acadsharp.py --plan
+```
+
+### Troubleshooting
+
+**`no sha256 for ACadSharp <version>`** or **`no upstream commit`**
+
+:   `acadsharp/VERSION` was bumped without adding the tarball digest to
+    `SOURCE_SHA256` or the tag's commit to `SOURCE_COMMIT` in
+    `build_acadsharp.py`. `acadsharp_commit` is a frozen manifest field,
+    so a tag with no commit cannot be packaged at all.
+
+**`sha256 mismatch` on a tag that has not moved**
+
+:   `SOURCE_SHA256` pins a GitHub *generated* tarball, and GitHub does
+    not promise those stay byte-for-byte stable forever. The fix is to
+    vendor the tree, not to relax the check.
+
+**`<projitems> is missing. src/CSUtilities is a git submodule`**
+
+:   The source tree is the tarball without the submodule.
+    `ACadSharp.csproj` imports `CSMath.projitems` during evaluation, so
+    the failure lands before restore and never mentions submodules.
+
+**`the ABI smoke failed against the staged library`**
+
+:   The shim does not export every entry point `viprs_acadsharp.h`
+    declares. The message names the missing ones. The archive is still
+    written, for inspection; it is not shippable.
+
+**`unrecognised emulation mode: aarch64linux` during the publish**
+
+:   An x64 container was asked to publish for arm64. ILC produces the
+    object file and the native link then fails, because the SDK image
+    ships no cross binutils or sysroot. Run the cell on a runner of its
+    own architecture.
+
 ## TROUBLESHOOTING
 
 ### `DlOpen { desc: "Dynamic loading not supported" }` from `pdfium-render`
