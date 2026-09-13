@@ -1,0 +1,16 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Polyline handle=4C flags=1 n=2 closed=0 pts=[(0.000000,0.000000,0.000000);(20.000000,0.000000,0.000000)]
+00005 Arc handle=4C flags=1 c=[(20.000000,5.000000,0.000000)] r=5.000000 a0=-1.570796 a1=1.570796 normal=[(0.000000,0.000000,1.000000)]
+00006 Polyline handle=4C flags=1 n=2 closed=0 pts=[(20.000000,10.000000,0.000000);(0.000000,10.000000,0.000000)]
+00007 Arc handle=4C flags=1 c=[(0.000000,5.000000,0.000000)] r=5.000000 a0=1.570796 a1=-1.570796 normal=[(0.000000,0.000000,1.000000)]
+00008 Polyline handle=4C flags=1 n=2 closed=0 pts=[(0.000000,30.000000,0.000000);(20.000000,30.000000,0.000000)]
+00009 Arc handle=4C flags=1 c=[(20.000000,35.000000,0.000000)] r=5.000000 a0=-1.570796 a1=1.570796 normal=[(0.000000,0.000000,1.000000)]
+00010 Polyline handle=4C flags=1 n=2 closed=0 pts=[(20.000000,40.000000,0.000000);(0.000000,40.000000,0.000000)]
+00011 Arc handle=4C flags=1 c=[(0.000000,35.000000,0.000000)] r=5.000000 a0=1.570796 a1=-1.570796 normal=[(0.000000,0.000000,1.000000)]
+00012 Polyline handle=4C flags=1 n=2 closed=0 pts=[(0.000000,60.000000,0.000000);(20.000000,60.000000,0.000000)]
+00013 Arc handle=4C flags=1 c=[(20.000000,65.000000,0.000000)] r=5.000000 a0=-1.570796 a1=1.570796 normal=[(0.000000,0.000000,1.000000)]
+00014 Polyline handle=4C flags=1 n=2 closed=0 pts=[(20.000000,70.000000,0.000000);(0.000000,70.000000,0.000000)]
+00015 Arc handle=4C flags=1 c=[(0.000000,65.000000,0.000000)] r=5.000000 a0=1.570796 a1=-1.570796 normal=[(0.000000,0.000000,1.000000)]

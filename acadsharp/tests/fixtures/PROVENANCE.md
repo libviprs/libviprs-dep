@@ -42,6 +42,8 @@ be refused. `tests/expectations/MANIFEST.json` pins these digests a second time
 and the stream tests recompute them, so changing a fixture without rerunning
 the generator is a red test that names the fixture.
 
+| File | sha256 | What it holds |
+| --- | --- | --- |
 | `g13_ac1009.dwg` | `0f7c1ae8358511b569895fd84f9d79cedccda520a8a9a762aeff7ae67223265d` | Not a drawing. The six bytes `AC1009` and then zeros, which is a DWG version this build does not read. ACadSharp's writer cannot produce an AC1009 file, so this one is written byte by byte. |
 | `g13_arc.dwg` | `c3b09b470908d35265ef50e2aa70db9551533286778dc9182018cd4f059785b1` | One ARC. |
 | `g13_circle.dwg` | `6122b77ff962a84e7b18a07c7a3b92da9934ec82044ca363032d53c45167a523` | One CIRCLE. |
@@ -55,11 +57,15 @@ the generator is a red test that names the fixture.
 | `g13_line.dwg` | `9e914e1c1cf03c55b88813679e1aa594b35b9c7c039c6debec799a8bc87c1476` | One LINE on a named layer. |
 | `g13_long_text.dwg` | `b9c8b8f42779c6785ff9d19e8f8dfc48384739423978dc41065f8d722c126775` | One MTEXT of 8192 bytes, for the max_string_bytes bound. |
 | `g13_many_inserts.dwg` | `72bb475c6071a567d7c672005518bc7e7323b0450cdbca00ebe9404e38047387` | One three-entity block inserted ten thousand times. The amplification benchmark is a decode of this. |
+| `g13_mirrored_bulge.dwg` | `4f947ae65e647dbca558eb1d67ba961a38733718f20c8be66b8e197ffd39faaf` | An LWPOLYLINE carrying a bulge, inside a block inserted with `XScale` -1. The two scale magnitudes are equal, so the only thing the transform does that a rotation cannot is change handedness, which is what flips the side of the chord the arc bulges to. |
+| `g13_nan_bulge.dwg` | `85e3873b3ba01f03e1451e4dc2e941c432b69b39b03c8ce5e3e502d9e50c39ae` | Two LWPOLYLINEs: one whose bulge is `NaN`, one whose second vertex has an infinite X. Nothing in a drawing has to be finite, and the corpus had no file that carried a value that is not. |
 | `g13_nonuniform.dwg` | `e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b` | A CIRCLE inside a block inserted with unequal X and Y scale. |
 | `g13_polyline.dwg` | `815bf452eb40b0c5f75049e3155f13c0c2f3272b2d3464b92d01ee3636635bd3` | An LWPOLYLINE carrying a bulge, a 2D POLYLINE and a 3D POLYLINE. |
 | `g13_scale_16x.dwg` | `a88ecd131e361a1db298d2fef7d20caeb2157cb2edb38456675cdb54b63414cd` | 2048 entities, the 16x point. |
 | `g13_scale_1x.dwg` | `b01dd0ad9a175400e6ba6d1c033e8df862a3a85264efda9dfbe362531617a087` | 128 entities, the 1x point of the streaming measurement. |
 | `g13_scale_4x.dwg` | `99ded530c49c5f23c2d7a02c62fdb9296cb647f0a1c32c09b849a7ab4a1641c1` | 512 entities, the 4x point. |
+| `g13_slot.dwg` | `db6c6facccbce67169329528279cba795d4ddb0aaec26bbb8fe04f6475c68ee6` | One closed LWPOLYLINE shaped like a slot: two straight sides and two semicircular ends, bulges `[0, 1, 0, 1]`. The closing span carries a bulge, and a bulge of exactly 1 is a half turn, which is the largest sweep one span can hold. |
+| `g13_slot_block.dwg` | `41245b50e234db83f45be266a88539665b77f21833a14d2fd05a050fb91f933d` | The same slot in a block, inserted three times. Every instance emits the block entity's own handle, so this is the file that says whether a consumer can tell three slots from one. |
 | `g13_spline.dwg` | `e2540a81ed652694385e89fba90eec7462c6a67e7d47cb3af45f4edd879b1a5a` | One SPLINE, degree 3, four control points and eight knots. |
 | `g13_text.dwg` | `c791143334c6d2ccda33a72e7e85fc2fd93e2c1b8e8acd5a75e1b2254aa54e0f` | One TEXT and one MTEXT. |
 | `g13_two_entities.dwg` | `d2955fa942a735f18c57a6cacf3e46175de2f6e2e76e0eea4d5697a3faaee757` | Exactly two LINEs, for the max_entities bound. |
