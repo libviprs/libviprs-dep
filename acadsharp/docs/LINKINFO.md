@@ -296,11 +296,14 @@ regardless. The exception is **gold**, which never implemented the flag: if you
 link with `-fuse-ld=gold` nothing here protects you, and that is untested rather
 than known-broken. gold is gone from binutils 2.44 and later.
 
-### On musl, the cargo recipe does not work yet
+### The runtime's libunwind ships under private names
 
-Measured on native x86_64 musl and native arm64 musl, rustc 1.98.1, against the
-published archives: the recipe above **fails** on both musl targets with about a
-dozen duplicate symbols.
+NativeAOT statically links its own copy of llvm-libunwind into the runtime
+archives, and rustc links a `self-contained/libunwind.a` of its own for every
+musl target and for no glibc one. Both define `__unw_step`,
+`unw_local_addr_space`, `libunwind::LocalAddressSpace::sThisAddressSpace` and
+about fifty-six more, so the cargo recipe above used to die on a musl target
+with a screen of
 
 ```
 multiple definition of `__unw_get_reg'
@@ -308,25 +311,40 @@ multiple definition of `__unw_get_reg'
   first defined in libacadsharp_native.a(libRuntime.WorkstationGC__libunwind.cpp.o)
 ```
 
-The runtime bundles its own copy of llvm-libunwind inside the merged archive,
-and rustc links a `self-contained/libunwind.a` of its own for musl targets and
-not for glibc ones, so the two collide. Nothing about `__modules` is involved
-and neither is lld: the linker here is GNU ld from the Alpine toolchain.
+Nothing about `__modules` is involved and neither is lld: the linker here is
+GNU ld from the Alpine toolchain.
 
-**The C recipe on this page works on musl**, and that is what
-`static_certified` records for those archives, so read that field as "the C
-static link was measured" rather than "every recipe on this page was".
+So the copy in these archives is renamed at build time, with `objcopy
+--redefine-syms` over the merged archive. `__unw_step` ships as
+`__viprs_unw_step`, `libunwind::` ships as `viprs_libunwind::`, and the two
+unwinders sit in the same binary under different names, each self-consistent:
+the runtime unwinds through ours, Rust panics unwind through rustc's.
 
-Two fixes that look obvious are measured dead. Dropping the runtime's libunwind
-member from the archive breaks the C recipe too, because the runtime references
-that copy's C++ internals and not only the `__unw_*` C API. And no stable
-consumer-side flag helps: `-C link-self-contained=no` breaks the build script's
-own link and `-C link-self-contained=-unwind` is rejected. What is left is
-renaming the symbols across the whole archive, which is real work and wants the
-conformance suite run on musl before anyone believes it.
+**`_Unwind_*` is untouched.** That is the public personality ABI a C++ or Rust
+landing pad calls by name rather than a name anything here chooses, and these
+archives define none of them.
 
-If you need a static musl link today, use the C recipe. If you need the cargo
-recipe, use a glibc target.
+Measured on native x86_64 musl and native arm64 musl, rustc 1.98.1, with the
+glibc archive through the same harness on the same machine as the control:
+after the rename the cargo recipe links and runs on both, the C recipe is
+unchanged, and one binary runs 3000 managed exceptions interleaved with 2000
+Rust panics through `catch_unwind` without incident, with and without
+`-C target-feature=+crt-static`.
+
+**Nothing is asked of you for this.** It is a property of the bytes you
+download, and `verify_archive.sh` reads the shipped symbol index to check it
+before the archive is published: an archive carrying the original names is
+refused, and so is one carrying neither name, because that is what the rename
+silently not running would look like from outside.
+
+Two fixes that look obvious are measured dead, so they are written down rather
+than tried again. Dropping the runtime's libunwind member from the archive
+breaks the C recipe too, because the runtime references that copy's C++
+internals (`libunwind::LocalAddressSpace::sThisAddressSpace`, reached from
+`UnixNativeCodeManager` and `RhRegisterOSModule`) and not only the `__unw_*`
+C API. And no stable consumer-side flag helps: `-C link-self-contained=no`
+breaks the build script's own link and `-C link-self-contained=-unwind` is
+rejected.
 
 ### Do not express any of this as a link argument
 
