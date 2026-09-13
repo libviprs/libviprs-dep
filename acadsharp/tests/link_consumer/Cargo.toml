@@ -1,0 +1,8 @@
+# The consumer path, as a workspace, so the check runs the same shape a
+# downstream crate does: a `-sys` crate with a build script, and a binary
+# that depends on it. Everything a real consumer would get wrong lives in
+# the gap between those two, because `cargo:rustc-link-arg` from the
+# first never reaches the second.
+[workspace]
+resolver = "2"
+members = ["acadsharp-sys", "consumer"]

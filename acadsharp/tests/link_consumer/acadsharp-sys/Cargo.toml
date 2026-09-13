@@ -1,0 +1,11 @@
+[package]
+name = "acadsharp-sys"
+version = "0.0.0"
+edition = "2021"
+publish = false
+links = "acadsharp_native"
+
+# No dependencies, on purpose: the check has to run offline in a build
+# container, so the manifest is read by hand rather than with serde_json.
+# A real consumer would use serde_json and should.
+[dependencies]
