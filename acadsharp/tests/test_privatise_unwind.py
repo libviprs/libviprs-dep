@@ -611,7 +611,10 @@ class TestTheBuildRunsTheRename:
         )
 
     def test_the_build_context_carries_it(self, tmp_path):
-        ctx = ba._write_build_context(str(tmp_path), "musl")
+        # No platform argument since #72: the two per-platform lists
+        # stage.sh used to have substituted into it arrive as environment
+        # variables now, so the context is the same for every cell.
+        ctx = ba._write_build_context(str(tmp_path))
         assert os.path.isfile(os.path.join(ctx, "privatise_unwind.sh"))
 
     def test_the_count_is_recorded(self):
