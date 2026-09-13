@@ -239,15 +239,21 @@ def lz77_decompress(stream):
             offset = ((opcode >> 2 & 3) | (opcode2 << 2)) + 1
         elif opcode < 0x20:
             compressed = _compressed_bytes(opcode, 0b0111, src)
-            offset = (opcode & 8) << 11
-            opcode, offset = _two_byte_offset(offset, 0x4000, src)
+            opcode, offset = _two_byte_offset((opcode & 8) << 11, 0x4000, src)
         else:
             compressed = _compressed_bytes(opcode, 0b00011111, src)
             opcode, offset = _two_byte_offset(0, 1, src)
 
-        # dst.Read/dst.Write through a temp buffer of Min(compressed, offset),
-        # which is how upstream copies a run longer than its own offset.
+        # dst.Read then dst.Write, through a temp buffer of Min(compressed,
+        # offset) bytes read once before any of them are written. That is how
+        # upstream copies a run longer than its own offset, and taking the
+        # snapshot first is what makes such a run repeat rather than extend.
         position = len(dst)
+        if position < offset:
+            raise AssertionError(
+                f"a back reference {offset} bytes behind a {position}-byte output is "
+                "a read before the start of the stream, which upstream throws on"
+            )
         chunk = bytes(dst[position - offset : position - offset + min(compressed, offset)])
         while compressed > 0:
             dst += chunk[: min(compressed, offset)]
@@ -312,9 +318,16 @@ def _compressed_bytes(opcode, valid_bits, src):
 
 
 def _two_byte_offset(offset, addend, src):
+    """Upstream returns the FIRST of the two bytes, which becomes the opcode.
+
+    Worth a line of its own because the obvious reading is that the second one
+    does, and `litCount = opcode1 & 3` two statements later is what the
+    difference comes out in.
+    """
     first = src.byte()
-    second = src.byte()
-    return second, offset + addend + (first >> 2) + (second << 6)
+    offset |= first >> 2
+    offset |= src.byte() << 6
+    return first, offset + addend
 
 
 # --------------------------------------------------------------------------

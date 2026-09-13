@@ -33,6 +33,7 @@ never comes back. The refusal is recorded; the hang is cited.
 
 import json
 import os
+import struct
 
 import pytest
 from ac18_forge import (
@@ -50,6 +51,7 @@ from ac18_forge import (
     SECTION_NAME,
     control_case,
     inputs,
+    lz77_decompress,
     read_back,
     section_map,
 )
@@ -250,6 +252,64 @@ class TestTheInputsAreTheOnesTheCapturesRecord:
         )
         assert len(empty) == 116
         assert len(one) == 132
+
+
+class TestTheOracleAgreesWithAPageUpstreamWrote:
+    """What says the transcription of `DecompressToDest` is the real thing.
+
+    `lz77_store` checks every run it writes against `lz77_decompress` before
+    the bytes reach a file, but both halves of that are this module's own, and
+    a store run never enters the back-reference loop. This is the other
+    direction: a page upstream's own writer produced, compressed with a
+    dictionary and back references, decompressed here and required to come out
+    at the length its page header declares. A transcription that got the
+    back-reference loop wrong comes out at the wrong length or not at all.
+    """
+
+    @staticmethod
+    def _page(label):
+        with open(os.path.join(FIXTURES, DECLARED_SIZE_SOURCE), "rb") as f:
+            data = f.read()
+        at = declared_size_offset(data, dict(DECLARED_SIZE_HEADERS)[label])
+        declared, _compressed, compression = struct.unpack_from("<iii", data, at)
+        assert compression == 2, label
+        # The page header is five raw longs and the declared size is the
+        # second, so the stream starts twelve bytes past this offset.
+        return declared, lz77_decompress(data[at + 16 :])
+
+    def test_the_page_map_comes_out_at_its_declared_length(self):
+        declared, out = self._page("page_map")
+        assert len(out) == declared
+
+    def test_the_section_map_comes_out_at_its_declared_length(self):
+        declared, out = self._page("section_map")
+        assert len(out) == declared
+
+    def test_and_it_parses_as_the_map_this_forge_writes(self):
+        """The same walk `read_back` does, over a real drawing's own map.
+
+        This is what says the layout the forge writes is the layout upstream
+        writes, rather than a shape that happens to satisfy the reader. The
+        descriptor names and the 0x7400 page size come out of a drawing
+        nobody here authored.
+        """
+        _declared, out = self._page("section_map")
+        count = struct.unpack_from("<i", out, 0)[0]
+        assert count > 0
+        at = 20
+        found = {}
+        for _ in range(count):
+            pages, page_size = struct.unpack_from("<ii", out, at + 8)
+            name = out[at + 32 : at + 96].split(b"\0")[0].decode("cp1252")
+            found[name] = (pages, page_size)
+            at += 96 + 16 * pages
+        assert at == len(out), (
+            "the descriptors in a real drawing's section map do not add up to the "
+            "map's own length under this layout, so the forge is writing a shape "
+            "upstream does not"
+        )
+        assert SECTION_NAME in found, sorted(found)
+        assert found[SECTION_NAME][1] == 0x7400
 
 
 class TestADeclaredCountIsRefusedRatherThanWalked:
