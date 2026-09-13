@@ -604,3 +604,48 @@ class TestTheVersionCanBeOverridden:
     def test_no_flag_falls_back_to_the_file(self):
         info = ba.make_linkinfo("linux", "amd64", **_shared_only())
         assert info["artifact_version"] == ba.read_version()
+
+
+class TestTheMergeKeepsSourceOrder:
+    """Member order in the merged archive is load-bearing.
+
+    The linker emits `.init_array` in the order it pulls members, so the
+    archive's own order decides what runs when. Built from the
+    filesystem's order the archive links perfectly and the binary
+    segfaults on the way out, reproducibly. Members therefore go in the
+    order each source archive lists them, managed archive first, which is
+    what ILC linked and what `ar addlib` used to produce.
+    """
+
+    def test_the_managed_archive_goes_first(self):
+        script = ba.stage_script("linux")
+        managed = script.index('echo "$MANAGED" > /tmp/merge-sources.txt')
+        runtime = script.index("for name in")
+        assert managed < runtime
+
+    def test_members_are_listed_in_each_archives_own_order(self):
+        script = ba.stage_script("linux")
+        assert 'ar t "$src" | while read -r member' in script
+
+    def test_they_are_appended_rather_than_replaced(self):
+        # `ar r` reorders on replace and xargs may split the list, so the
+        # order only survives with `q`.
+        script = ba.stage_script("linux")
+        assert 'xargs -0 ar qc "$MERGED"' in script
+
+    def test_nothing_sorts_the_member_list(self):
+        code = "\n".join(
+            line
+            for line in ba.stage_script("linux").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "merge-members.txt | sort" not in code
+        assert "sort" not in code.split("merge-members.txt")[1].split("ranlib")[0]
+
+    def test_a_lost_member_stops_the_merge(self):
+        # Extracting fewer files than the archive lists means two members
+        # shared a name inside one source archive and one overwrote the
+        # other, which would drop a definition silently.
+        script = ba.stage_script("linux")
+        assert "so a member was lost" in script
+        assert "MERGE_OK=0" in script

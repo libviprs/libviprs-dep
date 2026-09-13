@@ -1094,14 +1094,25 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
             # definition it finds. Prefixing each member with the archive
             # it came from keeps every object and leaves no two sharing a
             # name.
+            #
+            # Order is load-bearing and this is the expensive half of the
+            # lesson. Members go in the order each source archive lists
+            # them, managed archive first, which is the order ILC linked
+            # them in and the order addlib produced. Built from the
+            # filesystem's order instead, the archive links perfectly and
+            # the binary segfaults on the way out, every time: the
+            # linker emits .init_array in the order it pulls members, so
+            # the archive's own order decides what runs when. Only
+            # running the smoke catches that, which is why it is run.
             MERGE_DIR=/tmp/merge
             rm -rf "$MERGE_DIR"
             mkdir -p "$MERGE_DIR"
             MERGE_OK=1
+            echo "$MANAGED" > /tmp/merge-sources.txt
             for name in RUNTIME_ARCHIVE_LIST; do
                 [ -f "$PACK/$name" ] && echo "$PACK/$name"
-            done > /tmp/merge-sources.txt
-            echo "$MANAGED" >> /tmp/merge-sources.txt
+            done >> /tmp/merge-sources.txt
+            : > /tmp/merge-members.txt
             while read -r src; do
                 [ -n "$src" ] || continue
                 stem=$(basename "$src" .a)
@@ -1114,18 +1125,21 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                     echo "$src holds $WANT members but extracted $GOT, so a member was lost"
                     MERGE_OK=0
                 fi
-                for o in "$d"/*; do
-                    [ -f "$o" ] || continue
-                    mv "$o" "$MERGE_DIR/${stem}__$(basename "$o")"
-                done
-                rmdir "$d"
+                ar t "$src" | while read -r member; do
+                    [ -f "$d/$member" ] || continue
+                    mv "$d/$member" "$MERGE_DIR/${stem}__$member"
+                    echo "$MERGE_DIR/${stem}__$member"
+                done >> /tmp/merge-members.txt
+                rmdir "$d" 2>/dev/null || true
             done < /tmp/merge-sources.txt
 
             if [ "$MERGE_OK" != "1" ]; then
                 echo "the merge would have dropped an object; shipping shared-only"
                 rm -f "$INIT_A" "$MERGED"
             else
-                find "$MERGE_DIR" -maxdepth 1 -type f -print0 | xargs -0 ar rcs "$MERGED"
+                # `q` appends without reordering, so a list too long for
+                # one argv still goes in the order it was written.
+                tr '\n' '\0' < /tmp/merge-members.txt | xargs -0 ar qc "$MERGED"
                 ranlib "$MERGED"
                 echo "---- static smoke ----"
                 LADDER='STATIC_SYSTEM_LIBRARY_LADDER'
@@ -1447,7 +1461,15 @@ def verify_archive(path, log_file=None, prefix="verify"):
 
 def _write_build_context(ctx, plat):
     """Drop the generated helpers into a docker build context or work dir."""
-    shutil.copytree(NATIVE_DIR, os.path.join(ctx, "native"), dirs_exist_ok=True)
+    # bin/ and obj/ are whatever a local `dotnet publish` left behind.
+    # Copying them bloats the build context and puts a stale intermediate
+    # tree in front of the container's own restore.
+    shutil.copytree(
+        NATIVE_DIR,
+        os.path.join(ctx, "native"),
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("bin", "obj"),
+    )
     os.makedirs(os.path.join(ctx, "include"), exist_ok=True)
     shutil.copy2(HEADER_PATH, os.path.join(ctx, "include", "viprs_acadsharp.h"))
     for name, text in (
