@@ -43,6 +43,20 @@ jobs:
       # every */tests directory runs. pytest exits 5 when it collects
       # nothing, so a discovery regression fails the job rather than
       # passing vacuously.
+      #
+      # This run is strict about compiled fixtures, and nothing below sets
+      # it. Six suites compile a stand-in library before they assert
+      # anything, and on a host without a compiler all of them skip, which
+      # is 114 tests reading as a pass. acadsharp/tests/toolchain.py turns
+      # a missing build tool into a failure whenever CI is present, and
+      # Actions sets CI on every runner, so the strictness is derived here
+      # rather than configured here. That is deliberate: the flag above
+      # about pyyaml is in this file because somebody had to remember it,
+      # and a flag that has to be remembered is the failure mode both of
+      # these are about. VIPRS_REQUIRE_COMPILED_FIXTURES overrides the
+      # derivation in both directions, so a runner image that genuinely
+      # ships no compiler sets it to 0, here, with a note saying which
+      # runner and why.
       - run: pytest -v
 
   shellcheck:
