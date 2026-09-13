@@ -10,14 +10,14 @@
 # been written, and verify_archive.sh refuses the archive independently from
 # its bytes. Two independent refusals, neither of them silent.
 #
-# This used to be a 185-line string inside build_acadsharp.py with two
-# placeholder words substituted into it before it was written out, which
-# meant `tools/shellcheck-all.sh` never saw a line of it: that script
-# discovers its work with `git ls-files '*.sh'`, and the most intricate
-# shell in the repository was not a tracked *.sh. It is a file now, and the
-# two lists it used to have pasted into it arrive as environment variables
-# instead, so what runs in the container is byte for byte what is in the
-# tree.
+# This used to be a string inside build_acadsharp.py, 306 lines of which
+# 189 are shell, with two placeholder words substituted into it before it
+# was written out. That meant `tools/shellcheck-all.sh` never saw a line
+# of it: that script discovers its work with `git ls-files '*.sh'`, and
+# the most intricate shell in the repository was not a tracked *.sh. It is
+# a file now, and the two lists it used to have pasted into it arrive as
+# environment variables instead, so what runs in the container is byte for
+# byte what is in the tree.
 #
 # The environment it expects:
 #
