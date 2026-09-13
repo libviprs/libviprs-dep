@@ -210,6 +210,38 @@ the record is.
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
 counter-clockwise, measured in the plane the normal defines. 96 bytes.
 
+That fixes which way the angles run and not where they start from, and a
+consumer needs both or it cannot draw the arc. Zero is along the x axis the
+arbitrary axis algorithm gives for this record's own normal, which is the rule
+DXF states and which is written out here so this document stays sufficient on
+its own:
+
+    n = normalize(nx, ny, nz)
+    if |nx| < 1/64 and |ny| < 1/64:   ax = (0, 1, 0) × n
+    otherwise:                        ax = (0, 0, 1) × n
+    ax = normalize(ax)
+    ay = n × ax
+
+The first line is load-bearing and is the reason a producer emits every normal
+on this wire as a unit vector. `1/64` is a bound on a direction cosine, so it
+only means anything on a unit vector: a normal of `(1/64 + 1e-9, 0, 1)` is
+outside the band as written and inside it once normalized, and the two answers
+are ninety degrees apart. Normalize first, and do it even though the producer
+promises a unit normal, because the bytes may not have come from this producer.
+
+A point on the arc at angle `t` is then
+`centre + radius · (cos t · ax + sin t · ay)`. For a normal of `(0, 0, 1)`,
+which is what almost every drawing carries, zero is world `+X`. For a normal of
+`(0, 1, 0)` it is `(-1, 0, 0)`, which nobody guesses, and that is the whole
+reason this paragraph exists.
+
+`1/64` is a real number. Written as an integer division it is zero, the first
+branch never fires, and a normal just off the world z axis gets an x axis about
+ninety degrees from the one this defines: the cross product with `(0, 0, 1)`
+shrinks towards nothing there and what direction is left is decided by the last
+few bits of the normal. The band is what stops that, so an implementation that
+rounds it away is wrong in exactly the region it was written for.
+
 **6 `Circle`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64 nx, ny,
 nz`. 80 bytes.
 
@@ -245,7 +277,35 @@ record_count`, the number of records emitted for the view, its own
 `ViewBegin` and `ViewEnd` included. 24 bytes.
 
 **13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 24
-bytes.
+bytes. `total_records` counts every record in the stream, `DocumentBegin` and
+this record included, so it is `ViewEnd`'s `record_count` plus two.
+
+### Ceilings the counts cannot exceed
+
+Every count above is a `uint32` and a record's `length` is a `uint32` in the
+frame, but a producer writes that length from a signed 32-bit position, so no
+record longer than 2^31 - 1 bytes is ever emitted. Every count inherits a
+ceiling from that, and none of them reaches the top of its own field:
+
+| Field | Largest value a record can carry | Where it comes from |
+| --- | --- | --- |
+| `point_count` in records 4 and 9, `bulge_count` 0 | 89,478,482 | `64 + 24n` at most 2^31 - 1 |
+| `point_count` in records 4 and 9, one bulge per vertex | 67,108,861 | `64 + 32n` at most 2^31 - 1 |
+| `name_len` in record 2 | 2,147,483,580 | 2^31 - 1 less the record's fixed 64 bytes |
+| `byte_len` in record 10 | 2,147,483,572 | less its fixed 72 bytes |
+| `message_len` in record 11 | 2,147,483,612 | less its fixed 32 bytes |
+
+The three string ceilings are not simply 2^31 - 1 less the prefix: the padding
+to a multiple of four comes out of the same budget as the bytes, so each is
+that subtraction rounded down to where the padded record still fits. Record 8
+has no single ceiling because its three arrays share one, and
+`8 + 16 + 24 + 8·(knots + 3·controls + weights)` is the whole of it.
+
+A limit set above a ceiling is a limit the wire cannot carry. Nothing refuses
+such a limit when it is set, because a bound is about a drawing and a ceiling
+is about one record, and most drawings never build a record anywhere near one;
+a record that does reach a ceiling is refused with `VIPRS_ACAD_LIMIT_EXCEEDED`
+rather than emitted with a length that has wrapped.
 
 ## Every number in a geometry record is finite
 
@@ -258,6 +318,18 @@ The guarantee is scoped to geometry on purpose. `ViewBegin`'s extents are a
 bounding box the producer reports rather than a shape anybody draws, and a
 view holding nothing has no finite one; promising a number there would mean
 inventing one.
+
+That is not a licence to emit a `NaN` there either. `ViewBegin`'s extents are
+never `NaN` and never infinite. A view whose extents the source cannot give
+reports the inverted box instead, `min_x` and `min_y` at `1e20` and `max_x` and
+`max_y` at `-1e20`, which is the pair AutoCAD writes into its own `EXTMIN` and
+`EXTMAX` for a drawing with nothing in it. A consumer reads `min_x > max_x` as
+"this view has no usable extents", which is a comparison it can actually make,
+and `1e20` is not to be read as an extent.
+
+The box does not say why. A view that is empty and a view whose extents the
+drawing has damaged report the same box, and nothing else on this wire tells
+them apart.
 
 A consumer should still refuse a non-finite `f64` in a geometry record rather
 than trust the guarantee, because the bytes may not have come from this
@@ -284,7 +356,7 @@ and 105 with these meanings, whatever it is built on.
 | 103 | `HATCH_PATTERN_ONLY` | A hatch with no boundary loop that could become a `Polygon`. |
 | 104 | `HATCH_LOOP_NOT_POLYGON` | A boundary loop carrying an elliptical or spline edge, which a closed polygon cannot express. The edges follow as their own records, so nothing is lost and nothing is approximated. |
 | 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
-| 106 | `NON_UNIFORM_BLOCK_SCALE` | An insertion scale that is not a similarity, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. |
+| 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 
 ### Reserved ranges
@@ -311,6 +383,24 @@ and reading it produces numbers rather than an error. An unknown warning
 code means a record whose layout is fully known is saying something this
 consumer has no branch for, and the record after it is still exactly where
 the length says it is.
+
+### A message that did not fit
+
+`max_string_bytes` bounds every string on this wire, and a `Warning`'s message
+is the one string a producer may shorten rather than refuse. That message is
+the producer's own sentence about the file, and it often carries a name the
+file chose the length of, so ending a decode over it costs every record after
+it to protect a sentence nothing branches on.
+
+Record 10's bytes and record 2's name are never shortened. Those are the
+drawing's own text, a consumer has no way to tell one the file carries from one
+a producer cut, and a string past the bound there is refused.
+
+A shortened message is cut at a character boundary, so `message_len` always
+describes valid UTF-8, and it ends with the twelve bytes ` [truncated]`
+whenever those twelve fit inside the bound. A consumer needs no branch for it:
+`message_len` is the length of what is there, and the marker is for whoever
+reads the log.
 
 ## Curves keep their parameters
 

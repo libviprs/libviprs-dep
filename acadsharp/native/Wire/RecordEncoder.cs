@@ -102,7 +102,7 @@ namespace Viprs.Wire
 					c.U32(p.Counts[1]);
 					c.Doubles(p.Values, 0, 4);
 					c.U64(p.Count64);
-					Utf8WithLength(p.Text, ref c);
+					Utf8WithLength(p.Text, ref c, false);
 					break;
 
 				case WireFormat.TypeLine:
@@ -158,14 +158,14 @@ namespace Viprs.Wire
 				case WireFormat.TypeText:
 					Prologue(p, ref c);
 					c.GeometryDoubles(p.Values, 0, 5);
-					Utf8WithLength(p.Text, ref c);
+					Utf8WithLength(p.Text, ref c, false);
 					break;
 
 				case WireFormat.TypeWarning:
 					c.U32(p.Counts[0]);
 					c.U32(0u);
 					c.U64(p.ItemHandle);
-					Utf8WithLength(p.Text, ref c);
+					Utf8WithLength(p.Text, ref c, true);
 					break;
 
 				case WireFormat.TypeViewEnd:
@@ -206,6 +206,88 @@ namespace Viprs.Wire
 			}
 		}
 
+		// The twelve bytes appended to a message that had to be shortened.
+		//
+		// They come out of the caller's bound rather than being added on top of
+		// it: a marker that pushed the message past max_string_bytes would
+		// breach the thing it is there to satisfy.
+		internal const string TruncationMarker = " [truncated]";
+
+		// `text` cut to `maxBytes` of UTF-8 and marked, or `text` itself when it
+		// already fits.
+		//
+		// Shared with AcadSharpSource.OnNotification on purpose. A reader
+		// notification is stored during the open, long before any record is
+		// encoded, so there are two places a message this library wrote can be
+		// too long and only one rule about what to do with it. Two copies of
+		// that rule is two rules, and the one nobody runs is the one that is
+		// wrong.
+		//
+		// The walk counts UTF-8 widths rather than encoding a prefix and
+		// measuring it, so nothing is allocated until the answer is known, and
+		// it steps over a surrogate pair as one character: splitting one leaves
+		// a lone surrogate, which encodes as the replacement character, which
+		// is three bytes where the pair was going to be four. Utf8WithLength
+		// measures what comes back and still refuses it if it does not fit, so
+		// a mistake in the width table below is a refusal rather than a record
+		// whose message_len describes bytes that are not there.
+		internal static string TruncateMessage(string text, ulong maxBytes)
+		{
+			string value = text ?? string.Empty;
+			int bytes = Encoding.UTF8.GetByteCount(value);
+			if ((ulong)bytes <= maxBytes)
+			{
+				return value;
+			}
+
+			// bytes is an int and it is larger than maxBytes, so maxBytes fits
+			// in one too.
+			int max = (int)maxBytes;
+			bool marked = max >= TruncationMarker.Length;
+			int budget = marked ? max - TruncationMarker.Length : max;
+
+			int used = 0;
+			int chars = 0;
+			while (chars < value.Length)
+			{
+				char c = value[chars];
+				int step = 1;
+				int width;
+				if (c < 0x80)
+				{
+					width = 1;
+				}
+				else if (c < 0x800)
+				{
+					width = 2;
+				}
+				else if (char.IsHighSurrogate(c)
+					&& chars + 1 < value.Length
+					&& char.IsLowSurrogate(value[chars + 1]))
+				{
+					width = 4;
+					step = 2;
+				}
+				else
+				{
+					// Everything else in the basic plane, and a surrogate with
+					// no partner, which becomes the replacement character.
+					width = 3;
+				}
+
+				if (used + width > budget)
+				{
+					break;
+				}
+
+				used = used + width;
+				chars = chars + step;
+			}
+
+			string head = value.Substring(0, chars);
+			return marked ? head + TruncationMarker : head;
+		}
+
 		// The length is counted before the bytes exist, and the bound is
 		// checked against that count.
 		//
@@ -213,16 +295,40 @@ namespace Viprs.Wire
 		// array's length to max_string_bytes, so the one allocation the bound is
 		// there to prevent happened first every time. GetByteCount answers the
 		// same question without asking the allocator for anything.
-		private void Utf8WithLength(string text, ref Cursor c)
+		//
+		// `truncate` is true for exactly one record: the Warning. That message
+		// is a sentence this library wrote about the drawing, and ending the
+		// whole decode to protect it costs every record after it, on a string
+		// whose length is often the input's choice rather than ours. Text and
+		// the ViewBegin name are the drawing's own, and those stay a refusal:
+		// a consumer cannot tell a label the file carries from one this library
+		// shortened, so cutting them quietly would be worse than refusing them
+		// loudly.
+		private void Utf8WithLength(string text, ref Cursor c, bool truncate)
 		{
 			string value = text ?? string.Empty;
 			int bytes = Encoding.UTF8.GetByteCount(value);
 			if ((ulong)bytes > _limits.MaxStringBytes)
 			{
-				throw new AbiException(
-					Result.LimitExceeded,
-					"a string in this record is longer than max_string_bytes allows"
-				);
+				if (!truncate)
+				{
+					throw new AbiException(
+						Result.LimitExceeded,
+						"a string in this record is longer than max_string_bytes allows"
+					);
+				}
+
+				value = TruncateMessage(value, _limits.MaxStringBytes);
+				bytes = Encoding.UTF8.GetByteCount(value);
+				if ((ulong)bytes > _limits.MaxStringBytes)
+				{
+					throw new AbiException(
+						Result.LimitExceeded,
+						"a warning message is still past max_string_bytes after being "
+							+ "shortened, which is this library miscounting UTF-8 rather "
+							+ "than anything about the drawing"
+					);
+				}
 			}
 
 			c.U32((uint)bytes);
@@ -270,10 +376,49 @@ namespace Viprs.Wire
 
 			// The span to write `n` bytes into, or an empty one when this pass
 			// is only counting or has already run past the end.
+			//
+			// Every byte of every record goes through here, so this is the one
+			// place the position can run away and the one place that has to
+			// stop it. A record's `length` is a uint32 on the wire but it is
+			// written from this int, so the wire cannot carry a record longer
+			// than 2147483647 bytes whatever a caller's limits say, and
+			// docs/WIRE.md now states the ceiling every count inherits from
+			// that.
+			//
+			// Neither refusal is hypothetical. max_polyline_points is a uint64
+			// the caller picks, and a polyline past about 268 million vertices
+			// reaches Doubles with a count whose product with eight overflows
+			// int, which arrives here below zero. _pos wrapped with it and the
+			// record went out carrying a length header that described bytes
+			// nobody had written.
 			private Span<byte> Take(int n)
 			{
 				int at = _pos;
-				_pos = _pos + n;
+				if (n < 0)
+				{
+					throw new AbiException(
+						Result.LimitExceeded,
+						"a count in this record times the width of what it counts "
+							+ "is past what a record's length can hold, so no limit a "
+							+ "caller sets can make this record cross"
+					);
+				}
+
+				if (n > int.MaxValue - at)
+				{
+					throw new AbiException(
+						Result.LimitExceeded,
+						"this record is longer than the 2147483647 bytes a record's "
+							+ "length is written from"
+					);
+				}
+
+				// The two guards above have already proved this cannot
+				// overflow. The checked context is what keeps that true: an
+				// edit that gets one of them wrong faults here instead of
+				// wrapping quietly, which is the failure this path exists to
+				// remove and the one nothing downstream can see.
+				_pos = checked(at + n);
 				if (_measureOnly || _overflow || n == 0)
 				{
 					return default;

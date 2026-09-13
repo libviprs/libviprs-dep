@@ -678,7 +678,7 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "392fccb9e72f6342108933bc831b03fedd93ca01968081a03dc23c9b53e36175",
+    "sha256": "982dfc4901b2f34f105069f74e7de3e87f4ea806f44181d4c46eada80a9d5ea4",
     "sources": {
       "native/Abi.cs": "d718bb652005e9e874eaceebd62b802d2fa26adf360ddfc8d37d1925c82cd377",
       "native/Adapter/Flattener.cs": "436a7237c8367ba6f0c19305192f910c4247e6bf8699014924c0a6efcba3a322",
@@ -686,14 +686,14 @@
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
       "native/Adapter/WarningCodes.cs": "76a514c986c792786e596f2e01e0800bbd52ae9ab9c2c8a3faa9d7368d7a4ae4",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
-      "native/Sources/AcadSharpSource.cs": "f4f9a4dd2f375d636136ca0d026ab64444fda1deb3ea6b9bbb66e4a859924069",
+      "native/Sources/AcadSharpSource.cs": "d763ea5cc3ed411f43a7006199a30923141aa5b8cf0618c8db2af9d8c2f7e9a7",
       "native/Sources/IDocumentSource.cs": "3c27ce53933a313bb729e90c451d81e9e3f4ad1524aaf137ec6bfd9d22ea78db",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
       "native/Sources/SyntheticSource.cs": "568c9e6aea293c18fe89238b16dd4c1bb3eeb393f504b2c0fac12790c50e0b67",
       "native/Wire/BatchWriter.cs": "15750764021f6aa5b0cd86565ff896aece342ac3028467459dbaaf0c0a8afae6",
       "native/Wire/DecodeSession.cs": "450109551fe954f749d7cd89a71640cdf49f592a8ed9e2d65650a7183ad901b0",
       "native/Wire/Primitive.cs": "47c94f73d6f9b150ff7e3a5ec6ea2709e8d9e68ebfe68baba6ab2a9e790e006a",
-      "native/Wire/RecordEncoder.cs": "184588cd594d68f70aeaf3df409270089d293a1365cf47443ee7f7a123b0b81b",
+      "native/Wire/RecordEncoder.cs": "255a425bb8b25c45c1659a351944ef3352c36ca4a4b0daf812ce8707aa851a61",
       "native/Wire/WireFormat.cs": "867087a19b63bc9609995c7cc08eadda4855986514e3dcecf558945a7f868bfa"
     }
   }

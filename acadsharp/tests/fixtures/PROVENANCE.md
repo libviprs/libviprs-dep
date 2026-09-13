@@ -73,6 +73,7 @@ the generator is a red test that names the fixture.
 | `g13_wide_polyline.dwg` | `63495a02a7ef1f359f4be91b1964652ac099b6ac352c986367938882aecd1761` | One LWPOLYLINE of 4096 vertices, for the max_polyline_points bound. |
 | `g13_wide_spline.dwg` | `dfd4283a4f67ec1a63897e6a9e94a2bc898c7b5123736eccea5b8117ee4fd6f8` | One SPLINE of 20000 control points. max_polyline_points did not apply to splines at all, and the encoder's own guard ran after the points were already gathered. |
 | `g13_xref.dwg` | `4e78ce6186919f14ccfe47a442a787c918391070760d5de27962c76887f363ae` | An INSERT of a block record that names an external reference nothing resolves. |
+| `g13_xref_long.dwg` | `dbd8b31faf5c6dda27c61de9923179cd01c825389aac223844758624abe1f8b4` | The same INSERT with an 8192-byte reference path, so the warning this library writes about it is longer than a max_string_bytes a caller can set. The path is padded with U+00E9, two bytes each, because the budget a 4096-byte bound leaves is odd and a cut that counted bytes would split one. |
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
