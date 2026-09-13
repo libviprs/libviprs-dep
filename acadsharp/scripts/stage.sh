@@ -93,7 +93,16 @@ cp "$SRC/LICENSE" "$STAGING/LICENSES/ACadSharp-LICENSE"
     echo "below. ACadSharp's own licence is in ACadSharp-LICENSE."
     echo
     echo "== NuGet packages restored for this publish =="
-    (cd "$WORK/native" && dotnet list package --include-transitive 2>/dev/null) || true
+    # Without the filter this block carries `Restored ... (in 198 ms).`,
+    # so two builds of one commit ship a different THIRD_PARTY_NOTICES,
+    # a different CHECKSUMS.txt and a different archive digest. Measured:
+    # building the same tree twice, the notices file was the only thing
+    # in the archive besides BUILDINFO's timestamp that moved, and the
+    # release notes publish those digests. What belongs here is which
+    # packages were restored, never how long it took.
+    (cd "$WORK/native" && dotnet list package --include-transitive 2>/dev/null \
+        | sed -e '/Determining projects to restore/d' \
+              -e '/^ *Restored /d') || true
     echo
     NOTICES=$(find "$HOME/.nuget/packages" -maxdepth 3 -iname 'THIRD-PARTY-NOTICES*' \
         2>/dev/null | sort -u)

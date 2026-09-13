@@ -754,6 +754,21 @@ class TestTheStagingScript:
                 "the line that needs it"
             )
 
+    def test_the_notices_carry_no_restore_timing(self):
+        # `dotnet list package` restores first and prints how long that
+        # took, so the notices file carried `Restored ... (in 198 ms).`
+        # and two builds of one commit produced a different
+        # THIRD_PARTY_NOTICES, a different CHECKSUMS.txt and a different
+        # archive digest. Measured while proving this move changed
+        # nothing: that line was the only thing in the archive besides
+        # BUILDINFO's timestamp that moved between two builds of the same
+        # tree, and the release notes publish those digests.
+        script = ba.stage_script()
+        assert "/^ *Restored /d" in script, (
+            "the package list goes into THIRD_PARTY_NOTICES with its restore timing, "
+            "so the archive's digest depends on how fast the runner was"
+        )
+
     def test_the_mac_path_hands_them_over_too(self):
         # No Dockerfile there, so the same two have to reach the process
         # environment. The mac cell never attempts a static link, and the
