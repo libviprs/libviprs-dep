@@ -162,7 +162,7 @@ class TestTheAbiFieldsComeFromTheHeader:
 
     def test_abi_and_wire_versions_are_read_out_of_the_header(self):
         abi, wire = ba.header_versions()
-        assert (abi, wire) == (1, 2)
+        assert (abi, wire) == (2, 2)
         info = ba.linkinfo_skeleton("linux", "amd64")
         assert info["abi_version"] == abi
         assert info["wire_version"] == wire

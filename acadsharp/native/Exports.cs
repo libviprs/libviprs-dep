@@ -28,7 +28,7 @@ public static class Exports
 	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_abi_fingerprint")]
 	public static ulong AbiFingerprintOf() => AbiFingerprint.Value;
 
-	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_capabilities_v1")]
+	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_get_capabilities_v1")]
 	public static unsafe uint Capabilities(
 		viprs_acad_capabilities_v1* outCaps,
 		byte* versionUtf8,
@@ -231,11 +231,11 @@ public static class Exports
 		}
 	}
 
-	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_view_info_v1")]
+	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_get_view_info_v1")]
 	public static unsafe uint ViewInfo(
 		IntPtr handle,
 		uint index,
-		viprs_view_info_v1* outInfo,
+		viprs_acad_view_info_v1* outInfo,
 		byte* nameUtf8,
 		ulong nameCap,
 		ulong* nameRequired
@@ -248,7 +248,7 @@ public static class Exports
 				return Result.InvalidArgument;
 			}
 
-			if (outInfo->struct_size != (uint)sizeof(viprs_view_info_v1))
+			if (outInfo->struct_size != (uint)sizeof(viprs_acad_view_info_v1))
 			{
 				return Result.InvalidArgument;
 			}

@@ -473,13 +473,14 @@ namespace Viprs.Cad.Fixtures
 					break;
 				}
 
-				// LIMIT_EXCEEDED means two different things and docs/WIRE.md
-				// says how to tell them apart: a buffer too small for the
-				// next batch reports the size it needs through written, and a
-				// bound that was actually breached does not. A real consumer
-				// grows and retries, so the harness does too rather than
-				// recording a refusal the ABI did not make.
-				if (r == Result.LimitExceeded && written > (ulong)buf.Length)
+				// A buffer too small for the next batch has its own code
+				// since ABI v2, so this is now a test of the code rather than
+				// of a convention about *written. It used to read
+				// "LimitExceeded and written past my cap", which is exactly
+				// the inference no document ever asked a consumer to make. A
+				// real consumer grows and retries, so the harness does too
+				// rather than recording a refusal the ABI did not make.
+				if (r == Result.BufferTooSmall)
 				{
 					buf = new byte[written];
 					grownTo = buf.Length;
@@ -520,8 +521,58 @@ namespace Viprs.Cad.Fixtures
 			long managedAfterDecode = GC.GetTotalMemory(true) / 1024;
 			long rssAfterCollect = Rss();
 
+			// One more call, whatever happened above.
+			//
+			// This is the question nothing asked. A decode that refuses is
+			// over, because the record stream behind it is produced lazily and
+			// a producer that has already failed is finished. Without a latch
+			// in DecodeSession, the writer read that as "no more records",
+			// framed an empty batch with the last-batch flag and answered OK
+			// with done 1, so a caller following the header's grow-and-retry
+			// got a complete-looking stream missing everything after the
+			// bound. Every scenario stopped at the first non-OK result, so the
+			// corpus never looked.
+			//
+			// After the measurements on purpose: this call allocates, and the
+			// alloc and RSS numbers above are pinned.
+			uint afterCode;
+			ulong afterWritten = 777ul;
+			byte afterDone = 9;
+			try
+			{
+				for (int i = 0; i < WireFormat.BatchHeaderBytes; i++)
+				{
+					buf[i] = 0;
+				}
+
+				fixed (byte* p = buf)
+				{
+					afterCode = session.NextBatch(
+						p,
+						(ulong)buf.Length,
+						out afterWritten,
+						out afterDone
+					);
+				}
+			}
+			catch (AbiException ex)
+			{
+				afterCode = ex.Code;
+				afterWritten = 0ul;
+				afterDone = 0;
+			}
+			catch (Exception)
+			{
+				afterCode = Result.InternalError;
+				afterWritten = 0ul;
+				afterDone = 0;
+			}
+
 			json.Str("decode_code", Name(decodeCode));
 			json.Str("decode_detail", decodeDetail);
+			json.Str("code_after_refusal", Name(afterCode));
+			json.UNum("written_after_refusal", afterWritten);
+			json.Num("done_after_refusal", afterDone);
 			json.UNum("batches", batches);
 			json.UNum("output_bytes", bytes);
 			json.Bool("framed_batch_after_refusal", framedAfterRefusal);
@@ -741,6 +792,7 @@ namespace Viprs.Cad.Fixtures
 				case Result.InternalError: return "INTERNAL_ERROR";
 				case Result.AbiMismatch: return "ABI_MISMATCH";
 				case Result.LimitExceeded: return "LIMIT_EXCEEDED";
+				case Result.BufferTooSmall: return "BUFFER_TOO_SMALL";
 				default: return "UNKNOWN_" + code.ToString(CultureInfo.InvariantCulture);
 			}
 		}

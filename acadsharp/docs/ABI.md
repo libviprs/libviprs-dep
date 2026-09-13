@@ -1,4 +1,4 @@
-# The VIPRS CAD C ABI, version 1
+# The VIPRS CAD C ABI, version 2
 
 This is the prose half of `include/viprs_acadsharp.h`. The header is the
 contract; this document says what the contract means, in enough detail that
@@ -37,6 +37,14 @@ the header changes in a way a compiled consumer would notice. It is the
 coarse check: a consumer built for version 1 must refuse a library that
 reports 2.
 
+Version 2 is the first bump. It gave the two calls whose names ended `_v1` a
+`get_`, so that neither of them shares a name with the struct it fills; put
+every type on the boundary under one `viprs_acad_` prefix, which the two
+opaque handles did not have; and added `VIPRS_ACAD_BUFFER_TOO_SMALL`. A
+version 1 consumer will not link against a version 2 library anyway, because
+two of the symbols it wants are gone, but it should refuse on the number
+first and get a code rather than a loader error.
+
 `viprs_acad_abi_fingerprint()` is the fine one. It returns the first eight
 bytes of the sha256 of the published header, read big-endian, so a digest
 beginning `aabbccddeeff0011...` becomes `0xAABBCCDDEEFF0011`. The value is
@@ -45,6 +53,16 @@ assigned by hand, and that is the whole point: a constant somebody typed
 drifts from the file it describes the first time the file changes, and it
 drifts in the one direction that does damage, by continuing to report
 agreement.
+
+The digest is over the published header file exactly as it ships, byte for
+byte, and not over some canonicalised form of its declarations. A comment-only
+edit therefore moves the fingerprint, and that is intended rather than a
+defect to work around. Canonicalising first would need one whitespace-and-
+comment algorithm implemented independently on both sides of every pair that
+ever does this handshake, and drift between any two of those implementations
+is a false `VIPRS_ACAD_ABI_MISMATCH` on a pair that works, which is a worse
+failure than the one it removes. The fingerprint's job is "the same file", and
+`VIPRS_ACAD_ABI_VERSION` already has the job "the same contract".
 
 That digest is deliberately made up. An earlier draft of this paragraph
 printed a real one, and it went stale the first time the header changed, which
@@ -61,7 +79,7 @@ from where the consumer believes it is. A mismatch is
 `VIPRS_ACAD_ABI_MISMATCH` and the consumer must stop there rather than call
 anything else.
 
-`viprs_acad_capabilities_v1()` is the third, below.
+`viprs_acad_get_capabilities_v1()` is the third, below.
 
 `VIPRS_ACAD_WIRE_VERSION` is a fourth number and it is not one of those three,
 because it does not describe this header at all. It is the version of the
@@ -87,7 +105,7 @@ The remedy here is to rebuild, and the two ask for different things.
 Everything on this boundary has exactly one owner, and the owner is almost
 always the caller.
 
-**Handles.** `viprs_cad_handle` and `viprs_decode_handle` are created by
+**Handles.** `viprs_acad_handle` and `viprs_acad_decode_handle` are created by
 `viprs_acad_open_path_utf8`, `viprs_acad_open_memory` and
 `viprs_acad_decode_begin`, and released by `viprs_acad_close` and
 `viprs_acad_decode_close`. They are opaque: the caller never dereferences
@@ -126,12 +144,16 @@ and nothing here is re-entrant.
 Two handles may be used from two threads, including two decode handles on
 the same document. Opening and closing are independent.
 
-`cancel_flag` is the one word two threads touch at once. It is a
-`const uint32_t *` the caller owns; the decoder reads it between batches and
-never writes it. Any non-zero value stops the decode with
-`VIPRS_ACAD_CANCELED` on the next `viprs_acad_decode_next_batch`. The read
-is a plain load, so a caller that wants the flag observed promptly should
-write it with whatever release ordering its own language offers. There is no
+`cancel_flag` is the one word two threads touch at once, and the decoder's
+read of it is volatile rather than plain. It is a `const uint32_t *` the
+caller owns; the decoder reads it between batches and never writes it. Any
+non-zero value stops the decode with `VIPRS_ACAD_CANCELED` on the next
+`viprs_acad_decode_next_batch`. Volatile is part of the contract and not an
+implementation detail: an implementation may not hoist the read out of a loop
+and reuse the first answer for the rest of the decode, because that turns a
+cancel into something that arrives eventually or not at all, which is the
+worst version of a cancel. A caller should still write the flag with whatever
+release ordering its own language offers. There is no
 callback in version 1, deliberately: a callback across this boundary would
 put a caller's code on the library's stack, and every question about which
 locks are held at that moment has an answer nobody wants to maintain.
@@ -152,7 +174,8 @@ frozen by number:
 | 6 | `VIPRS_ACAD_CANCELED` | `cancel_flag` was non-zero. |
 | 7 | `VIPRS_ACAD_INTERNAL_ERROR` | A bug in the library. Everything the implementation can throw, in any language it happens to be written in, arrives here. |
 | 8 | `VIPRS_ACAD_ABI_MISMATCH` | The fingerprint handshake failed, or a stream carries a `wire_version` this consumer does not parse. |
-| 9 | `VIPRS_ACAD_LIMIT_EXCEEDED` | A bound in `viprs_acad_limits_v1` was reached, or the buffer handed to `viprs_acad_decode_next_batch` is too small for the next batch. |
+| 9 | `VIPRS_ACAD_LIMIT_EXCEEDED` | A bound in `viprs_acad_limits_v1` was reached, and nothing else. Terminal for a decode. |
+| 10 | `VIPRS_ACAD_BUFFER_TOO_SMALL` | The caller's memory cannot hold what this call would write. The size needed comes back through `required` or through `written`, nothing at all was written, and the call may be retried once the caller has more room. |
 
 There is no error string anywhere on this boundary, in either direction, and
 no call that returns one. A consumer must never parse text to decide what to
@@ -160,12 +183,19 @@ do; it switches on the number. Human-readable detail about a particular
 drawing arrives as `Warning` records inside the stream, which is data, not
 control flow.
 
+Those last two were one code until version 2, told apart by whether the
+callee wrote a number larger than the capacity it was handed, which no
+document ever stated. A consumer holding one number for both either retried a
+decode that was already over, and got nothing, or gave up on a buffer it could
+simply have grown. `VIPRS_ACAD_LIMIT_EXCEEDED` from a decode is terminal;
+`VIPRS_ACAD_BUFFER_TOO_SMALL` is deliberately not terminal, and never was
+about the decode at all.
+
 Failure is atomic per call. A call that returns non-zero has written nothing
 through its out parameters and has allocated nothing the caller must
 release. The one documented exception is `viprs_acad_decode_next_batch`
-returning `VIPRS_ACAD_LIMIT_EXCEEDED` for a buffer that is too small, which
-writes the required size through `written` precisely so the caller can act
-on it.
+returning `VIPRS_ACAD_BUFFER_TOO_SMALL`, which writes the required size
+through `written` precisely so the caller can act on it.
 
 `VIPRS_ACAD_INTERNAL_ERROR` deserves one more sentence, because it is the
 code that proves the boundary is real. The implementation is allowed to
@@ -177,8 +207,15 @@ observed rather than something the wrapper looks like it does.
 
 ## Capability metadata
 
-`viprs_acad_capabilities_v1` answers what a build can do at run time instead
-of leaving a consumer to infer it from the version it compiled against.
+`viprs_acad_get_capabilities_v1` answers what a build can do at run time
+instead of leaving a consumer to infer it from the version it compiled
+against. The `get_` in the name is the whole reason the structs on this
+boundary are bare tags: until version 2 this call and the struct it fills had
+one name between them, and in C a typedef name and a function name are the
+same kind of identifier, so the header could not typedef that struct, and a
+uniform rule was cheaper than a rule with one exception.
+
+The struct it fills is `viprs_acad_capabilities_v1`:
 
 ```c
 uint32_t struct_size;      /* set by the caller, sizeof the struct it knows */
@@ -218,8 +255,8 @@ paper-space layouts, and a decode runs over exactly one of them.
 to that count minus one, and an index outside the range is
 `VIPRS_ACAD_INVALID_ARGUMENT`.
 
-`viprs_acad_view_info_v1()` fills a `viprs_view_info_v1` and writes the
-view's name into a caller buffer using the convention below:
+`viprs_acad_get_view_info_v1()` fills a `viprs_acad_view_info_v1` and writes
+the view's name into a caller buffer using the convention below:
 
 ```c
 uint32_t struct_size;      /* set by the caller */
@@ -255,9 +292,11 @@ null buffer with a capacity that is *not* zero is `VIPRS_ACAD_INVALID_ARGUMENT`,
 because that is a caller who has confused the two.
 
 If `cap` is smaller than the required length, the call writes nothing,
-sets `required`, and returns `VIPRS_ACAD_LIMIT_EXCEEDED`. It never writes a
+sets `required`, and returns `VIPRS_ACAD_BUFFER_TOO_SMALL`. It never writes a
 partial string, because a partial UTF-8 string can end mid-sequence and a
-consumer has no way to tell that from a complete one.
+consumer has no way to tell that from a complete one. Nothing about this is a
+bound the caller set, which is why it is not the limits code: allocate
+`required` bytes and call again.
 
 `required` never includes a terminator, because there is none.
 
@@ -332,11 +371,12 @@ boundary expands into edge entities that expand again. A bound that counted
 only insertions would be a bound with a way round it, and the way round it
 ends in the stack overflow this field exists to prevent.
 
-Exceeding any of them is `VIPRS_ACAD_LIMIT_EXCEEDED`. It is never a crash
-and never a silently truncated stream, which matters more than it sounds:
-a consumer that cannot tell a complete decode from a truncated one will
-render a drawing with pieces missing and no indication that anything went
-wrong.
+Exceeding any of them is `VIPRS_ACAD_LIMIT_EXCEEDED`, and that code means one
+of these bounds and nothing else. It is never a crash and never a silently
+truncated stream, which matters more than it sounds: a consumer that cannot
+tell a complete decode from a truncated one will render a drawing with pieces
+missing and no indication that anything went wrong. The terminal rule under
+Decoding is the other half of that promise, and for a while it was missing.
 
 `struct_size` is checked. A `viprs_acad_limits_v1` whose `struct_size` is
 not a size this build knows returns `VIPRS_ACAD_INVALID_ARGUMENT`, and so
@@ -345,9 +385,9 @@ does a `struct_version` it does not recognise.
 ## Decoding
 
 ```
-open_path_utf8 / open_memory  ->  viprs_cad_handle
-  view_count, view_info_v1
-  decode_begin(view)          ->  viprs_decode_handle
+open_path_utf8 / open_memory  ->  viprs_acad_handle
+  view_count, get_view_info_v1
+  decode_begin(view)          ->  viprs_acad_decode_handle
     decode_next_batch ... until done is 1
   decode_close
 close
@@ -356,12 +396,38 @@ close
 `viprs_acad_decode_next_batch` writes one complete batch per call and sets
 `done` to 1 when the stream is finished. A batch never spans two calls. If
 `cap` is too small for the next one, the call returns
-`VIPRS_ACAD_LIMIT_EXCEEDED` and writes the size needed into `written`, so a
+`VIPRS_ACAD_BUFFER_TOO_SMALL` and writes the size needed into `written`, so a
 caller that guessed low grows its buffer and retries rather than reasoning
-about a half-written record. Batches target 64 KiB and stay under 1 MiB
-unless a single record is larger than that, in which case it becomes a batch
-of its own, because a batch never splits a record. So a 1 MiB buffer almost
-never sees that code, and a caller still has to handle it.
+about a half-written record. Nothing was written and nothing was consumed, so
+the batch that did not fit is still the next one. Batches target 64 KiB and
+stay under 1 MiB unless a single record is larger than that, in which case it
+becomes a batch of its own, because a batch never splits a record. So a 1 MiB
+buffer almost never sees that code, and a caller still has to handle it.
+
+### A refusal ends the decode
+
+Every other refusal is final, and this is the part a caller cannot discover by
+experiment. Once a decode fails for a reason of its own, that code is latched:
+every later call on that handle returns the same code, writes nothing, and
+reports `done` 0. That covers `VIPRS_ACAD_CANCELED`,
+`VIPRS_ACAD_LIMIT_EXCEEDED` and anything an implementation reports as
+`VIPRS_ACAD_INTERNAL_ERROR`.
+
+`VIPRS_ACAD_BUFFER_TOO_SMALL` is excluded, on purpose. It is about the
+caller's memory and not about the decode, and latching it would make the
+grow-and-retry in the paragraph above impossible. So is the
+`VIPRS_ACAD_INVALID_ARGUMENT` a null pointer or a zero `cap` earns, which is
+refused before it reaches the decode at all.
+
+The rule is here because its absence was a silent truncation. A record stream
+is produced lazily, and a producer that has already failed is finished, so
+without the latch the call after a breached bound framed an empty batch
+carrying the last-batch flag, reported `done` 1 and returned `VIPRS_ACAD_OK`.
+A caller that grew its buffer and retried, which is exactly what this document
+told it to do, got a well-formed complete-looking stream with every record
+after the breach missing and no code to look at. A second implementation of
+this boundary has to latch as well, in whatever way its own language makes a
+lazy producer fail.
 
 The final batch carries a flag in its own header as well as setting `done`,
 so a consumer that streams batches to something else can tell the last one
@@ -370,7 +436,9 @@ framing.
 
 A cancel flag that is already non-zero before the first call to
 `viprs_acad_decode_next_batch` returns `VIPRS_ACAD_CANCELED` immediately,
-having written nothing. Cancellation is checked before work, not after.
+having written nothing. Cancellation is checked before work, not after, and it
+latches like any other refusal: a caller that clears its own flag and asks
+again gets `VIPRS_ACAD_CANCELED`, not the rest of the drawing.
 
 ## The synthetic document
 

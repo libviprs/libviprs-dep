@@ -17,7 +17,7 @@ using Viprs.Wire;
 namespace Viprs.Sources
 {
 	// One view's metadata, as the source knows it. It becomes both
-	// viprs_view_info_v1 and the ViewBegin record, which is why the name is
+	// viprs_acad_view_info_v1 and the ViewBegin record, which is why the name is
 	// a string here and a length-prefixed byte run in both of those.
 	internal struct SourceView
 	{

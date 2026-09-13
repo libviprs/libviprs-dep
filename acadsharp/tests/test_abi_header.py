@@ -116,19 +116,25 @@ class TestTheSurfaceIsComplete:
         # they are different numbers now.
         assert re.search(r"#define\s+VIPRS_ACAD_BUFFER_TOO_SMALL\s+10u", code)
 
-    def test_the_limit_code_no_longer_describes_a_buffer(self, header):
+    def test_the_short_buffer_paragraph_names_the_new_code(self, header):
         # In the prose as well as in the constant. A header that still tells a
         # consumer author to expect LIMIT_EXCEEDED for a short buffer has
         # documented the bug rather than the fix.
-        decode = header[header.index("uint32_t viprs_acad_decode_next_batch") - 3000 :]
-        decode = decode[: decode.index("uint32_t viprs_acad_decode_next_batch")]
-        assert "VIPRS_ACAD_BUFFER_TOO_SMALL" in decode, (
+        #
+        # The block comment immediately above the declaration, not a window of
+        # so many characters: the comment grew when the latch was documented,
+        # and a fixed window would have started reading the paragraph above it.
+        decl = header.index("uint32_t viprs_acad_decode_next_batch")
+        start = header.rindex("/*", 0, decl)
+        comment = header[start:decl]
+        assert "VIPRS_ACAD_BUFFER_TOO_SMALL" in comment, (
             "the decode_next_batch comment never names the buffer code, so a consumer "
             "author reading the header still writes the LIMIT_EXCEEDED branch"
         )
-        assert "VIPRS_ACAD_LIMIT_EXCEEDED" not in decode, (
-            "the decode_next_batch comment still promises LIMIT_EXCEEDED for a short "
-            "buffer, which is the conflation this change removes"
+        short = comment[: comment.index("Every other refusal")]
+        assert "VIPRS_ACAD_LIMIT_EXCEEDED" not in short, (
+            "the short-buffer half of the decode_next_batch comment still promises "
+            "LIMIT_EXCEEDED, which is the conflation this change removes"
         )
 
     def test_the_header_says_a_refusal_is_terminal(self, header):
