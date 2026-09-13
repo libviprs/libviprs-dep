@@ -9,6 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>false</SignAssembly>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Configurations>Debug;Release;AbiTest</Configurations>
     <!-- Upstream's own warnings, which this project does not own and cannot fix
          without a patch. AOT and trim warnings are deliberately not in here. -->
     <NoWarn>$(NoWarn);CS0618;CS0162</NoWarn>
@@ -44,6 +45,85 @@
   <ItemGroup Condition="'$(AcadSharpProject)' != ''">
     <ProjectReference Include="$(AcadSharpProject)" />
   </ItemGroup>
+
+
+  <!-- AbiTest is Release plus the one export whose whole job is to throw, so
+       the C conformance consumer can show that a managed exception comes back
+       as a result code and the process keeps running. Nothing published to a
+       consumer is built this way.
+
+       It is not called "Test", which is the obvious name and the wrong one:
+       the SDK turns the configuration name into a preprocessor symbol, and the
+       vendored upstream source carries `#if TEST` regions that do not compile
+       on their own (they use collection types the file never imports). A
+       configuration name is therefore part of this project's build contract
+       with a dependency, which is not somewhere I expected to find one. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'AbiTest'">
+    <DefineConstants>$(DefineConstants);VIPRS_ACAD_TEST_EXPORTS</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- The ABI fingerprint, generated rather than assigned.
+
+       viprs_acad_abi_fingerprint() returns the first eight bytes of the sha256
+       of the published header, big-endian. A constant somebody typed would be
+       right until the first time the header changed and then wrong in the only
+       direction that does damage: it would keep reporting agreement while a
+       consumer read a struct field four bytes from where it actually is.
+
+       So the number comes from the file, during the build, every build. The
+       generated source lands in the intermediate directory and is never
+       checked in, because a checked-in generated file is a hand-assigned one
+       with extra steps: it becomes the stale copy on the first build that
+       skips the target. -->
+  <PropertyGroup>
+    <ViprsAbiHeader>$(MSBuildProjectDirectory)/../include/viprs_acadsharp.h</ViprsAbiHeader>
+    <ViprsVersionFile>$(MSBuildProjectDirectory)/../VERSION</ViprsVersionFile>
+  </PropertyGroup>
+
+  <Target Name="GenerateAbiFingerprint" BeforeTargets="BeforeCompile">
+    <Error
+      Condition="!Exists('$(ViprsAbiHeader)')"
+      Text="$(ViprsAbiHeader) is missing. The fingerprint is defined as the hash of the published header, so there is nothing to generate and nothing this library could honestly report." />
+
+    <GetFileHash Files="$(ViprsAbiHeader)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="ViprsAbiHeaderHashRaw" />
+    </GetFileHash>
+
+    <PropertyGroup>
+      <ViprsAbiHeaderSha256>$(ViprsAbiHeaderHashRaw.ToLowerInvariant())</ViprsAbiHeaderSha256>
+      <ViprsAbiFingerprintRaw>$(ViprsAbiHeaderSha256.Substring(0,16))</ViprsAbiFingerprintRaw>
+      <ViprsAbiFingerprintHex>$(ViprsAbiFingerprintRaw.ToUpperInvariant())</ViprsAbiFingerprintHex>
+    </PropertyGroup>
+
+    <ReadLinesFromFile File="$(ViprsVersionFile)">
+      <Output TaskParameter="Lines" ItemName="ViprsVersionLine" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <ViprsShimVersion>@(ViprsVersionLine)</ViprsShimVersion>
+    </PropertyGroup>
+
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)AbiFingerprint.g.cs"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+      Lines="// &lt;auto-generated /&gt;;// Generated from include/viprs_acadsharp.h by the GenerateAbiFingerprint target.;// Never edit this and never check it in.;namespace Viprs.Abi;{;%09internal static class AbiFingerprint;%09{;%09%09public const ulong Value = 0x$(ViprsAbiFingerprintHex)UL%3B;%09%09public const string HeaderSha256 = &quot;$(ViprsAbiHeaderSha256)&quot;%3B;%09};}" />
+
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)AcadSharpVersion.g.cs"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+      Lines="// &lt;auto-generated /&gt;;// Generated from acadsharp/VERSION by the GenerateAbiFingerprint target.;namespace Viprs.Abi;{;%09internal static class AcadSharpVersion;%09{;%09%09public const string Text = &quot;$(ViprsShimVersion)&quot;%3B;%09};}" />
+
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)AbiFingerprint.g.cs" />
+      <Compile Include="$(IntermediateOutputPath)AcadSharpVersion.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)AbiFingerprint.g.cs" />
+      <FileWrites Include="$(IntermediateOutputPath)AcadSharpVersion.g.cs" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="RequireAcadSharpProject" BeforeTargets="BeforeBuild">
     <Error
