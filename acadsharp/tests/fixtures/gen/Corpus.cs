@@ -98,7 +98,12 @@ public static class Corpus
 		yield return Pair("g13_slot.dwg", WriteSlot);
 		yield return Pair("g13_slot_block.dwg", WriteSlotBlock);
 		yield return Pair("g13_mirrored_bulge.dwg", WriteMirroredBulge);
+		yield return Pair("g13_ocs_plane.dwg", WriteOcsPlane);
+		yield return Pair("g13_ocs_mirror.dwg", WriteOcsMirror);
+		yield return Pair("g13_ocs_rotated.dwg", WriteOcsRotated);
+		yield return Pair("g13_ocs_skew.dwg", WriteOcsSkew);
 		yield return Pair("g13_nan_bulge.dwg", WriteNanBulge);
+		yield return Pair("g13_bad_extents.dwg", WriteBadExtents);
 		yield return Pair("g13_wide_polyline.dwg", WriteWidePolyline);
 		yield return Pair("g13_long_text.dwg", WriteLongText);
 		yield return Pair("g13_scale_1x.dwg", p => WriteScale(p, 1));
@@ -508,6 +513,295 @@ public static class Corpus
 			ZScale = 1.0,
 			Layer = L(doc),
 		});
+
+		Write(doc, path);
+	}
+
+	// ------------------------------------------------- object coordinates
+
+	// An entity's coordinates are in the object coordinate system its
+	// extrusion direction defines, and the arbitrary-axis algorithm is what
+	// turns one into a world coordinate. Every fixture above this point has an
+	// extrusion of +Z, where that algorithm is the identity, so a shim that
+	// never ran it produced exactly the right answer on the whole corpus.
+	//
+	// These four are the ones where it is not the identity.
+
+	// The extrusion the whole OCS set is built on.
+	//
+	// -Z is the one a real drawing produces constantly: mirroring an entity in
+	// AutoCAD flips the extrusion rather than the geometry, so half the arcs
+	// and circles in a drawing somebody has edited carry it. Its arbitrary
+	// axis is x = (-1, 0, 0), y = (0, 1, 0), so the lift negates x and z and
+	// leaves y alone: a probe with x = 0 is a fixed point and says nothing.
+	public static readonly XYZ OcsFlipped = new XYZ(0, 0, -1);
+
+	// And an extrusion that is not on an axis at all, so the lift is a general
+	// rotation rather than a pair of sign flips. Deliberately not a unit
+	// vector in the file: a drawing is allowed to store one that is not, and
+	// the algorithm normalises.
+	public static readonly XYZ OcsOblique = new XYZ(1, 2, 2);
+
+	// The OCS z of the oblique circle, which is what makes it a probe. A point
+	// at OCS z = k lands on the plane { p : p . N = k }, whatever frame the
+	// algorithm picks inside that plane, so the test can pin the lift without
+	// reimplementing the choice of x axis.
+	public const double OcsObliqueElevation = 7.0;
+
+	public static void WriteOcsPlane(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		// Centre (4, 3, 0) in the entity's own plane, which is (-4, 3, 0) in
+		// the world. x moves and y does not, so the x is the probe.
+		doc.Entities.Add(new Arc
+		{
+			Center = new XYZ(4, 3, 0),
+			Radius = 2.0,
+			StartAngle = 0.0,
+			EndAngle = Math.PI / 2.0,
+			Normal = OcsFlipped,
+			Layer = L(doc),
+		});
+
+		// A non-zero OCS z as well, so the fixture covers the third column of
+		// the lift and not only the two in the plane.
+		doc.Entities.Add(new Circle
+		{
+			Center = new XYZ(6, -2, 1),
+			Radius = 3.0,
+			Normal = OcsFlipped,
+			Layer = L(doc),
+		});
+
+		// A bulged LWPOLYLINE in the same plane. Its elevation is the OCS z of
+		// every vertex, which is the part a shim that lifted only the x and y
+		// of a vertex would drop.
+		LwPolyline lw = new LwPolyline { Normal = OcsFlipped, Elevation = 2.0, Layer = L(doc) };
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)) { Bulge = MirroredBulge });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+		doc.Entities.Add(lw);
+
+		// The oblique one, whose lift is a rotation no pair of sign flips
+		// reproduces.
+		doc.Entities.Add(new Circle
+		{
+			Center = new XYZ(5, 0, OcsObliqueElevation),
+			Radius = 1.0,
+			Normal = OcsOblique,
+			Layer = L(doc),
+		});
+
+		// A 2D POLYLINE in the same plane, which is the other half of the
+		// IPolyline arm. An LWPOLYLINE and a POLYLINE reach the flattener
+		// through different cases, and this is the one that shares its case
+		// with the 3D polyline below, so without it the lift on that arm is
+		// never run at all.
+		Polyline2D p2 = new Polyline2D { Normal = OcsFlipped, Elevation = 2.0, Layer = L(doc) };
+		p2.Vertices.Add(new Vertex2D(new XY(20, 0)));
+		p2.Vertices.Add(new Vertex2D(new XY(30, 5)));
+		p2.Vertices.Add(new Vertex2D(new XY(40, 0)));
+		doc.Entities.Add(p2);
+
+		// The control, and the reason this is not "lift every polyline".
+		// POLYLINE's 3D flag is exactly the flag that says its vertices are
+		// world coordinates, so lifting these three would move points that are
+		// already where they belong. The extrusion is still -Z, so a lift
+		// applied here would be visible rather than silently the identity.
+		doc.Entities.Add(new Polyline3D(
+			new List<XYZ> { new XYZ(1, 2, 3), new XYZ(4, 5, 6), new XYZ(7, 8, 9) },
+			false)
+		{
+			Normal = OcsFlipped,
+			Layer = L(doc),
+		});
+
+		Write(doc, path);
+	}
+
+	// The arc, circle and ellipse of a mirrored insertion, with the same block
+	// inserted unmirrored beside them as the control.
+	//
+	// g13_mirrored_bulge.dwg pins the polyline half of this. An ARC's
+	// start_angle and end_angle are counter-clockwise about its normal and a
+	// reflection flips what counter-clockwise means, so an arc that follows
+	// nothing is drawn as a different arc; an ELLIPSE's two parameters are the
+	// same statement. A CIRCLE has neither and is the control inside the
+	// control: it has to come out as the plain mirror image.
+	//
+	// The two inserts share the block, so the mirrored records are the
+	// unmirrored ones with x negated and nothing else. That relation is what
+	// the test asserts, which means the fixture carries its own expected
+	// values rather than the test carrying a number somebody typed.
+	public const string OcsMirrorBlockName = "VIPRS_G13_OCS_MIRROR";
+
+	public static void WriteOcsMirror(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord block = new BlockRecord(OcsMirrorBlockName);
+
+		// A quarter turn starting on the x axis. Its midpoint is at 45
+		// degrees, off both axes, so the reflection moves it: an arc from 0 to
+		// pi would have its midpoint at (10, 4) on the mirror's own axis and
+		// could not tell a correct answer from the wrong one.
+		block.Entities.Add(new Arc
+		{
+			Center = new XYZ(10, 0, 0),
+			Radius = 4.0,
+			StartAngle = 0.0,
+			EndAngle = Math.PI / 2.0,
+		});
+
+		block.Entities.Add(new Circle { Center = new XYZ(10, 20, 0), Radius = 3.0 });
+
+		block.Entities.Add(new Ellipse
+		{
+			Center = new XYZ(10, 40, 0),
+			MajorAxisEndPoint = new XYZ(5, 0, 0),
+			RadiusRatio = 0.5,
+			StartParameter = 0.0,
+			EndParameter = Math.PI / 2.0,
+		});
+
+		doc.BlockRecords.Add(block);
+
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			XScale = 1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			XScale = -1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
+		Write(doc, path);
+	}
+
+	// An insertion whose own extrusion is +Y, which takes the block's XY plane
+	// to the world's XZ plane.
+	//
+	// Every record here carries a normal, and until this fixture existed the
+	// shim copied the entity's own normal onto the wire and never transformed
+	// it. Under a transform that stays inside the XY plane that is invisible,
+	// because +Z goes to +Z. Here it is a plane at right angles to the one the
+	// record claims, and a bulge measured about the wrong normal puts the arc
+	// somewhere the drawing does not have one.
+	public static readonly XYZ OcsRotatedExtrusion = new XYZ(0, 1, 0);
+
+	public static void WriteOcsRotated(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord block = new BlockRecord("VIPRS_G13_OCS_ROTATED");
+
+		block.Entities.Add(new Circle { Center = new XYZ(3, 0, 0), Radius = 2.0 });
+		block.Entities.Add(new Arc
+		{
+			Center = new XYZ(0, 0, 0),
+			Radius = 5.0,
+			StartAngle = 0.0,
+			EndAngle = Math.PI / 2.0,
+		});
+
+		LwPolyline lw = new LwPolyline();
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)) { Bulge = MirroredBulge });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+		block.Entities.Add(lw);
+
+		doc.BlockRecords.Add(block);
+
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			Normal = OcsRotatedExtrusion,
+			XScale = 1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
+		Write(doc, path);
+	}
+
+	// A uniform scale composed with a rotation, which is not a uniform scale.
+	//
+	// The outer insertion scales x by three and the inner one is turned
+	// forty-five degrees inside it, so the two basis vectors come out the same
+	// length and stop being at right angles to each other. A circle under this
+	// is an ellipse. The gate that decides whether NON_UNIFORM_BLOCK_SCALE is
+	// raised compared the two lengths and nothing else, so it called this
+	// uniform and said nothing, which is the one direction that does damage:
+	// a consumer is told the parameters describe the shape.
+	public static void WriteOcsSkew(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		BlockRecord inner = new BlockRecord("VIPRS_G13_OCS_SKEW_INNER");
+		inner.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 4.0 });
+		LwPolyline lw = new LwPolyline();
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(0, 0)));
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 0)) { Bulge = MirroredBulge });
+		lw.Vertices.Add(new LwPolyline.Vertex(new XY(10, 10)));
+		inner.Entities.Add(lw);
+		doc.BlockRecords.Add(inner);
+
+		BlockRecord outer = new BlockRecord("VIPRS_G13_OCS_SKEW");
+		outer.Entities.Add(new Insert(inner)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			Rotation = Math.PI / 4.0,
+		});
+		doc.BlockRecords.Add(outer);
+
+		doc.Entities.Add(new Insert(outer)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			XScale = 3.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
+		Write(doc, path);
+	}
+
+	// ------------------------------------------------------- view extents
+
+	// A drawing whose view extents are not numbers.
+	//
+	// docs/WIRE.md's finiteness guarantee covers records 3 to 10 and stops
+	// short of ViewBegin, on the grounds that its extents are a bounding box
+	// the source reports rather than a shape anybody draws, and a view holding
+	// nothing has no finite one. That is defensible and it is also a hole: a
+	// consumer reading min_x as NaN gets exactly the failure the guarantee
+	// exists to prevent, and a bounding box that is NaN in one direction is NaN
+	// in every direction by the time anything has compared it.
+	//
+	// A layout's extents are four doubles a file holds, so all three shapes are
+	// reachable, and this fixture carries a NaN and both infinities in one view.
+	// The line is there so the view is not empty: "no extents" and "nothing to
+	// have extents of" are the two cases the record has to be able to tell
+	// apart, and this is the first.
+	public static void WriteBadExtents(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(10, 5, 0)) { Layer = L(doc) });
+
+		foreach (Layout l in doc.Layouts)
+		{
+			l.MinExtents = new XYZ(double.NaN, double.NegativeInfinity, 0.0);
+			l.MaxExtents = new XYZ(double.PositiveInfinity, double.NaN, 0.0);
+		}
 
 		Write(doc, path);
 	}
