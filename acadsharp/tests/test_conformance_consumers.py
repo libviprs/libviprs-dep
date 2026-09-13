@@ -340,6 +340,11 @@ class TestBothConsumersExerciseWhatTheEpicNamed:
         ("null argument matrix", r"null"),
         ("cancel flag", r"cancel"),
         ("limits struct_size", r"struct_size"),
+        # Both open calls have to be shown refusing the same too-large input
+        # with the same code. The bound used to be applied in three layers
+        # with three mappings, so which code a caller saw was a race.
+        ("max_input_bytes through both opens", r"max_input_bytes"),
+        ("the same code from both open calls", r"same code for the same too-large input"),
     )
 
     @pytest.mark.parametrize("label,pattern", CASES)

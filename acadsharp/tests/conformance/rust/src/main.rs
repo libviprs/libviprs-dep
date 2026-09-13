@@ -108,6 +108,14 @@ fn capabilities(t: &mut Tally) {
         caps.supports_warnings <= 1 && caps.supports_block_expansion <= 1,
         "a flag is 0 or 1 and nothing else",
     );
+    t.check(
+        text == VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION,
+        "capabilities writes the pinned upstream version the header promises",
+    );
+    t.check(
+        !text.contains("viprs"),
+        "and not the artifact version, which names the archive and not the reader",
+    );
 
     let mut small = [b'Z'; 4];
     let rc = unsafe {
@@ -327,6 +335,104 @@ fn arguments(t: &mut Tally) {
 /// defend against: it has been told the call succeeded and that twelve bytes
 /// are there to read. The arena is filled with a byte nothing else writes, so
 /// a single stray write shows up.
+/// `max_input_bytes`, through both open calls, on the same bytes.
+///
+/// The bound was enforced in three layers with three different mappings for a
+/// failed stat, so which code a caller saw depended on which layer noticed
+/// first, which depends on a race. The assertion that matters is not that
+/// either call refuses: it is that they refuse identically, so a caller can
+/// write one branch. The loosened pair at the end is the control, because a
+/// bound only ever seen refusing might be refusing everything.
+fn the_input_bound_agrees_across_both_opens(t: &mut Tally) {
+    let synth = synthetic_input(2, 9);
+    let path = std::env::temp_dir().join("viprs-synthetic-bound.bin");
+    if std::fs::write(&path, &synth).is_err() {
+        t.check(false, "could not write the synthetic document to a file");
+        return;
+    }
+    let path_bytes = path.to_string_lossy().into_owned().into_bytes();
+
+    let tight = viprs_acad_limits_v1 {
+        struct_size: std::mem::size_of::<viprs_acad_limits_v1>() as u32,
+        struct_version: 1,
+        max_input_bytes: 8, // the input is 16
+        ..Default::default()
+    };
+    let loose = viprs_acad_limits_v1 {
+        struct_size: std::mem::size_of::<viprs_acad_limits_v1>() as u32,
+        struct_version: 1,
+        max_input_bytes: 4096,
+        ..Default::default()
+    };
+
+    // A path is a pointer and a length here, so a caller can hand over one
+    // with a NUL inside. That is the caller's argument being wrong, not the
+    // input's problem, and it stays INVALID_ARGUMENT rather than becoming
+    // whatever the platform throws when asked to stat it.
+    let holed = b"/tmp/vip\0rs.dwg";
+    let mut nowhere: *mut viprs_cad_handle = std::ptr::null_mut();
+    t.check(
+        unsafe {
+            viprs_acad_open_path_utf8(
+                holed.as_ptr(),
+                holed.len() as u64,
+                std::ptr::null(),
+                &mut nowhere,
+            )
+        } == VIPRS_ACAD_INVALID_ARGUMENT,
+        "a path with a NUL inside it is INVALID_ARGUMENT, not a parse failure",
+    );
+
+    let mut from_memory: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut from_path: *mut viprs_cad_handle = std::ptr::null_mut();
+    let (memory_rc, path_rc) = unsafe {
+        (
+            viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, &tight, &mut from_memory),
+            viprs_acad_open_path_utf8(
+                path_bytes.as_ptr(),
+                path_bytes.len() as u64,
+                &tight,
+                &mut from_path,
+            ),
+        )
+    };
+    println!("      too large: open_memory={memory_rc} open_path={path_rc}");
+    t.check(
+        memory_rc == VIPRS_ACAD_LIMIT_EXCEEDED,
+        "an input past max_input_bytes is LIMIT_EXCEEDED through open_memory",
+    );
+    t.check(path_rc == VIPRS_ACAD_LIMIT_EXCEEDED, "and through open_path_utf8");
+    t.check(
+        memory_rc == path_rc,
+        "the two open calls report the same code for the same too-large input",
+    );
+    t.check(
+        from_memory.is_null() && from_path.is_null(),
+        "and neither refusal handed back a handle",
+    );
+
+    let (memory_rc, path_rc) = unsafe {
+        (
+            viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, &loose, &mut from_memory),
+            viprs_acad_open_path_utf8(
+                path_bytes.as_ptr(),
+                path_bytes.len() as u64,
+                &loose,
+                &mut from_path,
+            ),
+        )
+    };
+    t.check(
+        memory_rc == VIPRS_ACAD_OK && path_rc == VIPRS_ACAD_OK,
+        "the same input under a bound above its size opens through both calls",
+    );
+    unsafe {
+        viprs_acad_close(from_memory);
+        viprs_acad_close(from_path);
+    }
+    let _ = std::fs::remove_file(&path);
+}
+
 fn short_buffer_is_never_written_past(t: &mut Tally) {
     const TINY: [u64; 3] = [1, 4, 11];
     let synth = synthetic_input(1, 9);
@@ -986,6 +1092,8 @@ fn main() {
     capabilities(&mut t);
     println!("--- arguments");
     arguments(&mut t);
+    println!("--- max_input_bytes through both opens");
+    the_input_bound_agrees_across_both_opens(&mut t);
     println!("--- views");
     views(&mut t);
     println!("--- cancellation");

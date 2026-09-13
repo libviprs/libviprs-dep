@@ -355,11 +355,19 @@ having written nothing. Cancellation is checked before work, not after.
 
 ## The synthetic document
 
-`viprs_acad_open_memory` recognises one magic byte sequence and opens a
-document this library generates instead of parsing the bytes as a drawing:
-the eight ASCII bytes `VIPRSSYN`, optionally followed by two little-endian
-`uint32` values giving the number of views and the number of primitives per
-view.
+**Both** `viprs_acad_open_memory` and `viprs_acad_open_path_utf8` recognise one
+magic byte sequence and open a document this library generates instead of
+parsing the bytes as a drawing: the eight ASCII bytes `VIPRSSYN`, optionally
+followed by two little-endian `uint32` values giving the number of views and
+the number of primitives per view.
+
+Both, not just the one that takes bytes. The sniff happens where an input's
+first bytes are read, which is the same place on either route, and a second
+implementation written from a document that named only `open_memory` would
+have got that wrong in the direction hardest to notice: it would work on
+every real drawing. On the path route the magic is the file's first eight
+bytes and the two optional counts are the eight after them, exactly as they
+are in a buffer.
 
 It exists because a conformance consumer has to be able to reach every entry
 point and every record type without a drawing file, and because I would

@@ -14,9 +14,11 @@ exercise the reader, the manifest and the layout: the *real* mac archive is
 built on `macos-15` and verified there.
 """
 
+import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import stat
 import struct
@@ -804,6 +806,62 @@ class TestManifestIntegrity:
         result = _verify(_repack(root))
         assert result.returncode == 1
         assert "abi_header_sha256" in _output(result)
+
+    @pytest.mark.parametrize(
+        "field,macro",
+        [
+            ("abi_version", "VIPRS_ACAD_ABI_VERSION"),
+            ("wire_version", "VIPRS_ACAD_WIRE_VERSION"),
+        ],
+    )
+    def test_a_version_field_that_disagrees_with_the_header_is_rejected(
+        self, tmp_path, good_tree, field, macro
+    ):
+        # Both were listed as required fields and neither was ever compared
+        # against the header shipped beside it, so a manifest claiming
+        # abi_version 7 next to a version-1 header passed every check. A
+        # consumer refuses a library whose abi_version it does not know, so
+        # the number it refuses on has to be the header's.
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.update({field: 7}))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert field in out and macro in out, out
+
+    @pytest.mark.parametrize("field", ["abi_version", "wire_version"])
+    def test_the_good_archive_states_the_headers_own_numbers(self, good_tree, field):
+        # The control for the pair above. A check that only ever fires on a
+        # value somebody broke could be firing on every value.
+        with open(os.path.join(good_tree, "metadata", "LINKINFO.json")) as f:
+            link = json.load(f)
+        versions = dict(zip(("abi_version", "wire_version"), ba.header_versions()))
+        assert link[field] == versions[field]
+
+    def test_a_header_without_the_version_defines_is_rejected(self, tmp_path, good_tree):
+        # The other half: the check has to fail loudly when it cannot read
+        # the header rather than skip itself into a pass.
+        root = _clone(good_tree, tmp_path)
+        path = os.path.join(root, "include", "viprs_acadsharp.h")
+        with open(path) as f:
+            header = f.read()
+        stripped = re.sub(r"^#define\s+VIPRS_ACAD_WIRE_VERSION\s+.*$", "", header, flags=re.M)
+        assert stripped != header
+        with open(path, "w") as f:
+            f.write(stripped)
+        # The hash moves too, so this archive is wrong twice; both have to
+        # be reported and the version one is what this is here for.
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(
+                abi_header_sha256=hashlib.sha256(stripped.encode()).hexdigest(),
+                abi_fingerprint=hashlib.sha256(stripped.encode()).hexdigest()[:16],
+            ),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "VIPRS_ACAD_WIRE_VERSION" in _output(result)
 
     def test_a_platform_or_cpu_that_disagrees_with_the_filename_is_rejected(
         self, tmp_path, good_tree

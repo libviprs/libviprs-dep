@@ -31,6 +31,15 @@
 #error "run.sh must pass -DVIPRS_EXPECTED_FINGERPRINT, computed from the header"
 #endif
 
+/* The upstream release the shim was built over, read out of acadsharp/VERSION
+ * by run.sh and never typed here. The header promises this call writes "the
+ * pinned ACadSharp version", and it wrote the artifact version for a while,
+ * so the consumer that reads the string is the right place to hold it to the
+ * one file that decides it. */
+#ifndef VIPRS_EXPECTED_ACADSHARP_VERSION
+#error "run.sh must pass -DVIPRS_EXPECTED_ACADSHARP_VERSION, read from acadsharp/VERSION"
+#endif
+
 #ifdef VIPRS_WITH_TEST_EXPORTS
 /* Not in the published header on purpose: it is compiled only into the test
  * configuration of the shim, so a consumer that wants it declares it. */
@@ -171,6 +180,10 @@ static void test_capabilities(void)
 	      "capabilities reports the documented AC10xx range");
 	check(caps.supports_warnings == 0 || caps.supports_warnings == 1,
 	      "a flag is 0 or 1 and nothing else");
+	check(strcmp(text, VIPRS_EXPECTED_ACADSHARP_VERSION) == 0,
+	      "capabilities writes the pinned upstream version the header promises");
+	check(strstr(text, "viprs") == NULL,
+	      "and not the artifact version, which names the archive and not the reader");
 	free(text);
 
 	/* A buffer smaller than the string writes nothing and says so. */
@@ -363,6 +376,77 @@ static void test_open_by_path(void)
 
 	rc = viprs_acad_open_path_utf8((const uint8_t *)"/nonexistent/viprs.dwg", 22, NULL, &doc);
 	check(rc == VIPRS_ACAD_INVALID_ARGUMENT, "a path that names nothing is INVALID_ARGUMENT");
+
+	/* A path is a pointer and a length on this boundary, so a caller can
+	 * hand over one with a NUL inside it. That is the caller's argument
+	 * being wrong rather than the input's problem, and it has to stay
+	 * INVALID_ARGUMENT rather than becoming whatever the platform throws
+	 * when it is asked to stat the thing. */
+	rc = viprs_acad_open_path_utf8((const uint8_t *)"/tmp/vip\0rs.dwg", 15, NULL, &doc);
+	check(rc == VIPRS_ACAD_INVALID_ARGUMENT,
+	      "a path with a NUL inside it is INVALID_ARGUMENT, not a parse failure");
+}
+
+/* max_input_bytes, through both open calls, on the same bytes.
+ *
+ * The bound was enforced in three layers with three different mappings for a
+ * failed stat, so which code a caller saw depended on which layer noticed
+ * first, which depends on a race. The interesting assertion is not that either
+ * call refuses: it is that they refuse identically, and that a caller can
+ * therefore write one branch. The loosened pair below is the control, because
+ * a bound that has only ever been seen refusing might be refusing everything.
+ */
+static void test_the_input_bound_agrees_across_both_opens(void)
+{
+	const char *path = "/tmp/viprs-synthetic-bound.bin";
+	uint8_t synth[16];
+	struct viprs_acad_limits_v1 tight;
+	struct viprs_acad_limits_v1 loose;
+	viprs_cad_handle *from_memory = NULL;
+	viprs_cad_handle *from_path = NULL;
+	uint32_t memory_rc;
+	uint32_t path_rc;
+	FILE *f;
+
+	synthetic_input(synth, 2, 9);
+	f = fopen(path, "wb");
+	if (!f) {
+		check(0, "could not write the synthetic document to a file");
+		return;
+	}
+	fwrite(synth, 1, sizeof synth, f);
+	fclose(f);
+
+	memset(&tight, 0, sizeof tight);
+	tight.struct_size = (uint32_t)sizeof tight;
+	tight.struct_version = 1;
+	tight.max_input_bytes = 8; /* the input is 16 */
+
+	memory_rc = viprs_acad_open_memory(synth, sizeof synth, &tight, &from_memory);
+	path_rc = viprs_acad_open_path_utf8((const uint8_t *)path, strlen(path), &tight, &from_path);
+
+	printf("      too large: open_memory=%u open_path=%u\n", memory_rc, path_rc);
+	check(memory_rc == VIPRS_ACAD_LIMIT_EXCEEDED,
+	      "an input past max_input_bytes is LIMIT_EXCEEDED through open_memory");
+	check(path_rc == VIPRS_ACAD_LIMIT_EXCEEDED,
+	      "and through open_path_utf8");
+	check(memory_rc == path_rc,
+	      "the two open calls report the same code for the same too-large input");
+	check(from_memory == NULL && from_path == NULL,
+	      "and neither refusal handed back a handle");
+
+	memset(&loose, 0, sizeof loose);
+	loose.struct_size = (uint32_t)sizeof loose;
+	loose.struct_version = 1;
+	loose.max_input_bytes = 4096;
+
+	memory_rc = viprs_acad_open_memory(synth, sizeof synth, &loose, &from_memory);
+	path_rc = viprs_acad_open_path_utf8((const uint8_t *)path, strlen(path), &loose, &from_path);
+	check(memory_rc == VIPRS_ACAD_OK && path_rc == VIPRS_ACAD_OK,
+	      "the same input under a bound above its size opens through both calls");
+	viprs_acad_close(from_memory);
+	viprs_acad_close(from_path);
+	remove(path);
 }
 
 
@@ -1186,6 +1270,8 @@ int main(void)
 	test_null_arguments_on_a_live_handle();
 	printf("--- opening by path\n");
 	test_open_by_path();
+	printf("--- max_input_bytes through both opens\n");
+	test_the_input_bound_agrees_across_both_opens();
 	printf("--- views\n");
 	test_views();
 	printf("--- cancellation\n");

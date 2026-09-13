@@ -4,11 +4,16 @@ A NativeAOT shim over [ACadSharp](https://github.com/DomCR/ACadSharp), so
 [libviprs](https://github.com/libviprs/libviprs) can read DWG and DXF through a
 plain C ABI without a .NET runtime anywhere near the consumer.
 
-This directory currently holds the feasibility spike for
-[#45](https://github.com/libviprs/libviprs-dep/issues/45) and the skeleton the
-rest of the epic builds in. Read
+The feasibility spike for
+[#45](https://github.com/libviprs/libviprs-dep/issues/45) said yes and the rest
+of EPIC G built on it: the C ABI is frozen in
+[include/viprs_acadsharp.h](include/viprs_acadsharp.h), the batch protocol in
+[docs/WIRE.md](docs/WIRE.md), the ownership and error model in
+[docs/ABI.md](docs/ABI.md), and the adapter behind them flattens DWG into that
+record stream. Read
 [docs/adr/0001-nativeaot-feasibility.md](docs/adr/0001-nativeaot-feasibility.md)
-first: it carries the go/no-go and every measurement behind it.
+for the go/no-go and every measurement behind it; read the three contract
+documents for what a consumer is actually written against.
 
 ## Downloads
 
@@ -122,10 +127,19 @@ needing GLIBC_2.38, which will not load on the glibc 2.36 floor the rest of
 this repo ships against. ADR 0001 has the measurement.
 
 ```bash
-python3 acadsharp/build_acadsharp.py --plan                  # print the commands
-python3 acadsharp/build_acadsharp.py --target linux-arm64    # shared library
-python3 acadsharp/build_acadsharp.py --target linux-x64 --static
+python3 acadsharp/build_acadsharp.py --plan                   # print the commands
+python3 acadsharp/build_acadsharp.py --target linux-arm64     # one cell
+python3 acadsharp/build_acadsharp.py --platform musl          # musl, both cpus
+python3 acadsharp/build_acadsharp.py                          # the four container cells
 ```
+
+There is no `--static` flag and there never was one. Every Linux cell in
+`STATIC_TARGETS` publishes the static archive alongside the shared library as
+part of the same run, so a cell either produces both or fails; `--plan` prints
+the second publish command for those cells, which is the closest thing to a
+switch. `tests/test_doc_examples.py` runs every invocation above through the
+driver's own argument parser, because this block used to show `--static` and
+the driver has always rejected it.
 
 ## Conformance
 
@@ -168,12 +182,25 @@ coverage section says why.
 acadsharp/
   build_acadsharp.py        # pins, target list, and the publish commands
   VERSION                   # 3.7.1-viprs.1
-  native/                   # the shim: csproj, exports, probe, SDK pin, lock file
-  patches/                  # empty; upstream patches go here if a site needs one
+  include/                  # viprs_acadsharp.h, the frozen C ABI
   docs/                     # ABI.md, WIRE.md and LINKINFO.md, the three frozen
                             # contracts; every one ships inside the archive
   docs/adr/                 # 0001 is the spike's verdict, and stays in the repo
-  tests/                    # pytest guards over the pins, the project and the captures
+  native/                   # the shim: exports, ABI structs, sources, adapter, wire
+  scripts/                  # verify_archive.sh and the link-consumer smoke
+  patches/                  # empty; upstream patches go here if a site needs one
+  tests/                    # pytest guards over the pins, the shim and the captures
+  tests/conformance/c/      # the C consumer, built against the published header
+  tests/conformance/rust/   # the generated consumer, declarations from that header
+  tests/link_consumer/      # a two-crate workspace that links an unpacked archive
   tests/fixtures/gen/       # writes the DWG fixtures with ACadSharp's own DwgWriter
   tests/fixtures/captures/  # the recorded JIT and NativeAOT reads of each fixture
+  tests/expectations/       # the canonical record dump per fixture, and the scenarios
+  tests/benchmarks/         # the amplification, streaming and path-versus-memory runs
 ```
+
+Neither conformance consumer runs under pytest, for the reason
+[Conformance](#conformance) gives. What pytest holds between runs is that
+neither of them carries its own copy of the boundary, and that the captures
+under `tests/expectations/` are a recording of the shim in the tree rather
+than of whatever it used to be.

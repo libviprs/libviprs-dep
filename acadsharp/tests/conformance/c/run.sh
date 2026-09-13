@@ -48,6 +48,18 @@ esac
 echo "library: $library"
 echo "image:   $image ($platform)"
 
+# The upstream half of acadsharp/VERSION, which is what the header promises
+# viprs_acad_capabilities_v1 writes. Read here rather than compiled in, for the
+# same reason the fingerprint is: a number this program carried would agree
+# with the shim on the day it was typed.
+version="$(tr -d '[:space:]' < "$repo/acadsharp/VERSION")"
+acadsharp_version="${version%%-viprs.*}"
+if [ "$acadsharp_version" = "$version" ]; then
+    echo "acadsharp/VERSION reads '$version', which is not <upstream>-viprs.<revision>" >&2
+    exit 2
+fi
+echo "upstream: $acadsharp_version"
+
 docker run --rm --platform "$platform" \
     "${mounts[@]}" \
     -w "$here" \
@@ -58,6 +70,7 @@ docker run --rm --platform "$platform" \
         header="$1"
         library="$2"
         lib_dir="$3"
+        acadsharp_version="$4"
 
         digest=$(sha256sum "$header" | cut -d" " -f1)
         fingerprint=$(printf "%s" "$digest" | cut -c1-16)
@@ -90,10 +103,12 @@ docker run --rm --platform "$platform" \
         gcc -std=c11 -Wall -Wextra -Werror -O1 \
             -DVIPRS_EXPECTED_FINGERPRINT=0x${fingerprint}ULL \
             -DVIPRS_EXPECTED_HEADER_SHA256=\"$digest\" \
+            -DVIPRS_EXPECTED_ACADSHARP_VERSION=\"$acadsharp_version\" \
             $test_exports \
             conformance.c vacb.c \
             "$library" -Wl,-rpath,"$lib_dir" \
             -o /tmp/viprs_conformance
 
         /tmp/viprs_conformance
-    ' _ "$repo/acadsharp/include/viprs_acadsharp.h" "$library" "$lib_dir"
+    ' _ "$repo/acadsharp/include/viprs_acadsharp.h" "$library" "$lib_dir" \
+        "$acadsharp_version"

@@ -124,3 +124,99 @@ class TestReleaseNotes:
     def test_an_unpinned_version_has_no_notes(self):
         with pytest.raises(KeyError):
             ba.release_notes("0.0.0-viprs.1")
+
+
+class TestBothFrozenSurfacesAnswerTheSameQuestion:
+    """`viprs_acad_capabilities_v1` writes what the header calls "the pinned
+    ACadSharp version", and `LINKINFO.json` records `acadsharp_version`. They
+    are the same question asked at run time and at link time, and for a while
+    they gave different answers: the MSBuild target read `VERSION` verbatim, so
+    the call wrote `3.7.1-viprs.1` while the manifest said `3.7.1`.
+
+    Nothing here runs a compiler. What it can check is that the generator takes
+    the upstream half, that both conformance consumers hold the string against
+    `VERSION` rather than against a copy, and that neither of them types it.
+    """
+
+    CSPROJ = os.path.join(ACAD_DIR, "native", "Viprs.ACadSharp.Native.csproj")
+    CONFORMANCE = os.path.join(ACAD_DIR, "tests", "conformance")
+
+    @staticmethod
+    def read(path):
+        with open(path) as f:
+            return f.read()
+
+    def test_the_generator_takes_the_upstream_half(self):
+        csproj = self.read(self.CSPROJ)
+        generated = re.search(r"AcadSharpVersion\.g\.cs\"(.*?)/>", csproj, re.S)
+        assert generated, "the project no longer generates AcadSharpVersion.g.cs"
+        assert "$(ViprsUpstreamVersion)" in generated.group(1), (
+            "the capability string is generated from something other than the upstream "
+            "half of VERSION. The header documents it as the pinned ACadSharp version, "
+            "and LINKINFO.json's acadsharp_version is that half and nothing else."
+        )
+        assert "$(ViprsShimVersion)" not in generated.group(1)
+
+    def test_the_upstream_half_is_derived_and_not_typed(self):
+        csproj = self.read(self.CSPROJ)
+        assert "-viprs." in csproj, (
+            "nothing in the project splits VERSION on the shim suffix, so the upstream "
+            "half is coming from somewhere other than the file that decides it"
+        )
+        upstream, _ = ba.split_version(ba.read_version())
+        assert upstream not in csproj, (
+            f"the project types {upstream!r}. VERSION is the single source of truth and "
+            "a bump would leave this claiming the old release."
+        )
+
+    # Each consumer keeps its own prefix: the C one already compiles in
+    # VIPRS_EXPECTED_FINGERPRINT, the crate's build.rs already reads
+    # VIPRS_ACAD_HEADER, and a name that matched neither would be the odd one.
+    EXPECTED_NAME = {
+        "c": "VIPRS_EXPECTED_ACADSHARP_VERSION",
+        "rust": "VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION",
+    }
+
+    @pytest.mark.parametrize("consumer", ["c", "rust"])
+    def test_each_consumer_reads_the_version_out_of_the_file(self, consumer):
+        runner = self.read(os.path.join(self.CONFORMANCE, consumer, "run.sh"))
+        assert "acadsharp/VERSION" in runner, (
+            f"the {consumer} runner does not read acadsharp/VERSION, so whatever the "
+            "consumer compares the capability string against is a copy"
+        )
+        assert "-viprs." in runner, (
+            f"the {consumer} runner does not take the upstream half, so it would hold "
+            "the call to the artifact version the manifest disagrees with"
+        )
+        assert self.EXPECTED_NAME[consumer] in runner
+
+    def test_the_c_consumer_compares_the_exact_string(self):
+        code = self.read(os.path.join(self.CONFORMANCE, "c", "conformance.c"))
+        assert "VIPRS_EXPECTED_ACADSHARP_VERSION" in code
+        assert re.search(r"strcmp\(text, VIPRS_EXPECTED_ACADSHARP_VERSION\) == 0", code), (
+            "the C consumer never compares the capability string against the expected "
+            "one, so it reads a string and asserts nothing about it"
+        )
+
+    def test_the_generated_consumer_compares_the_exact_string(self):
+        code = self.read(os.path.join(self.CONFORMANCE, "rust", "src", "main.rs"))
+        assert "VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION" in code
+        assert re.search(r"text == VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION", code)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            os.path.join("c", "conformance.c"),
+            os.path.join("rust", "src", "main.rs"),
+            os.path.join("rust", "build.rs"),
+        ],
+    )
+    def test_no_consumer_types_the_version(self, path):
+        version = ba.read_version()
+        upstream, _ = ba.split_version(version)
+        code = self.read(os.path.join(self.CONFORMANCE, path))
+        for literal in (version, upstream):
+            assert literal not in code, (
+                f"tests/conformance/{path} types {literal!r}. acadsharp/VERSION already "
+                "says it, and a copy here passes the day it is written and never again."
+            )

@@ -45,8 +45,25 @@ fn main() {
         digest
     ));
     out.push_str(&format!(
-        "pub const VIPRS_ACAD_EXPECTED_FINGERPRINT: u64 = 0x{:016X};\n\n",
+        "pub const VIPRS_ACAD_EXPECTED_FINGERPRINT: u64 = 0x{:016X};\n",
         fingerprint
+    ));
+
+    // The upstream release the shim was built over, handed in by run.sh from
+    // acadsharp/VERSION. The header promises viprs_acad_capabilities_v1 writes
+    // "the pinned ACadSharp version" and it wrote the artifact version for a
+    // while, so the consumer holds the string against the one file that
+    // decides it rather than against a copy in its own source.
+    println!("cargo:rerun-if-env-changed=VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION");
+    let upstream = env::var("VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION")
+        .expect("VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION is not set, so there is nothing to hold the capability string against");
+    assert!(
+        !upstream.is_empty() && !upstream.contains("viprs"),
+        "VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION is {upstream:?}, which is not the upstream half of acadsharp/VERSION"
+    );
+    out.push_str(&format!(
+        "pub const VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION: &str = \"{}\";\n\n",
+        upstream
     ));
     out.push_str(&generate(&text));
 

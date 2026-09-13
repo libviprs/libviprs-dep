@@ -189,6 +189,53 @@ record_count`, the number of records emitted for the view, its own
 **13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 24
 bytes.
 
+## Warning codes
+
+A `Warning` record's `code` is what a consumer branches on. The message
+beside it is for a person reading a log, and nothing on this boundary parses
+it for control flow, so the codes have to be written down here or a warning
+is a thing a consumer can only count.
+
+They are VIPRS-owned. The list below is the whole VIPRS-defined set, and it
+does not depend on which backend read the drawing: a second implementation
+that can tell an unsupported entity from an unresolved insertion emits 100
+and 105 with these meanings, whatever it is built on.
+
+| Code | Name | What it says |
+| --- | --- | --- |
+| 100 | `UNSUPPORTED_ENTITY` | An entity kind this build does not flatten. The message names the source format's type and `item_handle` is the entity's, which together are enough to find it in the drawing. |
+| 101 | `READER_NOTIFICATION` | Something the backing reader had to say about the file, passed through. `item_handle` is 0: it is about the document. |
+| 102 | `DIMENSION_WITHOUT_BLOCK` | A dimension with no geometry block to take its lines and text from, so nothing was emitted for it. |
+| 103 | `HATCH_PATTERN_ONLY` | A hatch with no boundary loop that could become a `Polygon`. |
+| 104 | `HATCH_LOOP_NOT_POLYGON` | A boundary loop carrying an elliptical or spline edge, which a closed polygon cannot express. The edges follow as their own records, so nothing is lost and nothing is approximated. |
+| 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
+| 106 | `NON_UNIFORM_BLOCK_SCALE` | An insertion scale that is not a similarity, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. |
+
+### Reserved ranges
+
+| Range | Who allocates it |
+| --- | --- |
+| 1 to 999 | VIPRS. Every value in use is in the table above, and a new one is added to this document in the change that first emits it. |
+| 1000 and up | The backing source. A number here means something to the implementation that produced the stream and is not part of this specification, so a consumer is entitled to know none of them. This library's own synthetic document uses 1100 for its probe warning. |
+
+Zero is not a warning code. A `Warning` record carrying 0 is malformed.
+
+### A code you do not know
+
+A consumer **skips a code it does not know** and carries on: it counts the
+warning, it may log the message, and it does not refuse the stream. This is
+the same rule as an unknown record type and it exists for the same reason.
+Adding a warning code is not a wire version bump, so a consumer that refused
+on one would start failing the first time this library described something
+new, on files it had read correctly the day before.
+
+That is the opposite of the rule for `wire_version`, deliberately. An
+unknown wire version means the layout is not the one this consumer parses,
+and reading it produces numbers rather than an error. An unknown warning
+code means a record whose layout is fully known is saying something this
+consumer has no branch for, and the record after it is still exactly where
+the length says it is.
+
 ## Curves keep their parameters
 
 `Arc`, `Circle`, `Ellipse` and `Spline` carry the parameters that define

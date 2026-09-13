@@ -1,14 +1,18 @@
-// The numeric warning codes the ACadSharp adapter emits.
+// The numeric warning codes this adapter emits.
 //
-// docs/WIRE.md fixes the Warning record's shape and says the code is a
-// uint32, and deliberately does not enumerate the values: the codes are
-// payload, not ABI, so adding one is not a wire version bump. This is that
-// enumeration for the codes this source produces.
+// docs/WIRE.md owns them. It fixes the Warning record's shape, enumerates
+// every VIPRS-defined code with its meaning, and splits the number space:
+// 1 to 999 is VIPRS, 1000 and up belongs to whichever source read the
+// drawing. This file is the C# spelling of the VIPRS half, and a code added
+// here without a row in WIRE.md is a number a consumer is told to branch on
+// and given no way to learn.
 //
-// Numbering starts at 100 because SyntheticSource already uses 1 for its own
-// "nothing is wrong with this document" warning, and two sources sharing a
-// number would make a consumer's dispatch table wrong in a way no test in
-// either lane would notice.
+// That was the state of it until this was written down: the codes lived here,
+// the specification said only that the field was a uint32, and the one thing
+// a consumer could do with a warning was count it. Adding a code is still not
+// a wire version bump, because a consumer skips a code it does not know
+// rather than refusing the stream. That rule is in WIRE.md too, and it is
+// what makes the range split safe.
 namespace Viprs.Cad
 {
 	internal static class WarningCodes
