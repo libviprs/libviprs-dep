@@ -69,57 +69,33 @@ def _stub_source(symbols, pad_name="pad", undefined=None):
     return "\n".join(body) + "\n"
 
 
-def _licences(root):
+def _finish(root, plat, arch, *, static_certified):
+    """Fill in everything the driver fills in, through the driver itself.
+
+    The fixture goes through `finish_archive`, so these tests cover the
+    real packaging path rather than a copy of it: the manifests, the
+    README, the removal of an uncertified static archive and CHECKSUMS.txt
+    are all the production code.
+    """
+    os.makedirs(os.path.join(root, "include"), exist_ok=True)
+    shutil.copy2(HEADER, os.path.join(root, "include", "viprs_acadsharp.h"))
     os.makedirs(os.path.join(root, "LICENSES"), exist_ok=True)
     with open(os.path.join(root, "LICENSES", "ACadSharp-LICENSE"), "w") as f:
         f.write("MIT License\n\nCopyright (c) 2021 Albert Domenech\n")
     with open(os.path.join(root, "LICENSES", "THIRD_PARTY_NOTICES"), "w") as f:
         f.write("The .NET runtime, MIT.\n")
 
-
-def _manifests(root, plat, arch, *, static_library, static_certified, linkinfo=None):
-    meta = os.path.join(root, "metadata")
-    os.makedirs(meta, exist_ok=True)
-    if linkinfo is None:
-        linkinfo = ba.make_linkinfo(
-            plat,
-            arch,
-            system_libraries=[],
-            link_args=[],
-            static_library=static_library,
-            static_certified=static_certified,
-        )
-    with open(os.path.join(meta, "LINKINFO.json"), "w") as f:
-        json.dump(linkinfo, f, indent=2)
-        f.write("\n")
-    buildinfo = ba.make_buildinfo(
-        driver_commit="0" * 40,
-        builder_image="debian:bookworm-slim",
-        dotnet_version=ba.DOTNET_SDK_VERSION,
-        clang_version="clang version 14.0.6",
-        linker_version="GNU ld 2.40",
-        aot_warning_count=16,
-    )
-    with open(os.path.join(meta, "BUILDINFO.json"), "w") as f:
-        json.dump(buildinfo, f, indent=2)
-        f.write("\n")
-
-
-def _finish(root, plat, arch, *, static_library, static_certified, linkinfo=None):
-    os.makedirs(os.path.join(root, "include"), exist_ok=True)
-    shutil.copy2(HEADER, os.path.join(root, "include", "viprs_acadsharp.h"))
-    _licences(root)
-    with open(os.path.join(root, "README.md"), "w") as f:
-        f.write(f"# {os.path.basename(root)}\n")
-    _manifests(
-        root,
-        plat,
-        arch,
-        static_library=static_library,
-        static_certified=static_certified,
-        linkinfo=linkinfo,
-    )
-    ba.write_checksums(root)
+    facts = {
+        "aot_warning_count": "16",
+        "dotnet_version": ba.DOTNET_SDK_VERSION,
+        "clang_version": "clang version 14.0.6",
+        "linker_version": "GNU ld 2.40",
+        "shared_needed": "m",
+        "static_ok": "1" if static_certified else "0",
+        "static_system_libraries": "m",
+        "static_link_args": "-Wl,-u,_GLOBAL__sub_I_main.cpp",
+    }
+    ba.finish_archive(root, plat, arch, facts, builder_image="debian:bookworm-slim")
     return root
 
 
@@ -151,13 +127,7 @@ def _build_linux_tree(work, symbols=ENTRY_POINTS, *, static_symbols=None, undefi
     subprocess.run(["cc", "-fPIC", "-c", static_src, "-o", obj], check=True)
     subprocess.run(["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj], check=True)
 
-    return _finish(
-        root,
-        "linux",
-        HOST_ARCH,
-        static_library=ba.STATIC_LIBRARY_NAME,
-        static_certified=True,
-    )
+    return _finish(root, "linux", HOST_ARCH, static_certified=True)
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +180,7 @@ def _build_mac_tree(work, symbols=ENTRY_POINTS, cputype=CPU_TYPE_ARM64):
     lib = os.path.join(root, "lib")
     os.makedirs(lib)
     synth_macho_dylib(os.path.join(lib, ba.shared_library_name("mac")), symbols, cputype=cputype)
-    return _finish(root, "mac", "arm64", static_library=None, static_certified=False)
+    return _finish(root, "mac", "arm64", static_certified=False)
 
 
 # ---------------------------------------------------------------------------
