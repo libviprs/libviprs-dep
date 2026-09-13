@@ -113,6 +113,15 @@ PUBLISHING_JOBS = ("create-release", "build-linux", "build-mac", "release-notes"
 BUILD_JOBS = ("build-linux", "build-mac")
 
 VERIFIER = "acadsharp/scripts/verify_archive.sh"
+# The container cells go through the wrapper instead. Both musl cells run
+# on glibc runners, and verify_archive.sh link-tests `static_certified`
+# only when the host can build for the target, so those two got a "not
+# link-tested" line in a log and a green job while shipping a cargo recipe
+# nothing had run. The wrapper puts a musl archive in front of a musl
+# host, in a container on the same runner, and exports
+# VIPRS_REQUIRE_LINK_TEST so a skip is a failure.
+MATCHED_HOST_VERIFIER = "acadsharp/scripts/verify_archive_matched_host.sh"
+VERIFIER_FOR = {"build-linux": MATCHED_HOST_VERIFIER, "build-mac": VERIFIER}
 DRIVER = "acadsharp/build_acadsharp.py"
 
 
@@ -569,7 +578,21 @@ class TestBuildJobsVerifyBeforeTheyUpload:
     def test_verify_invokes_the_acadsharp_verifier(self, name):
         job = self.wf["jobs"][name]
         run = job["steps"][step_index(job, "Verify")].get("run", "")
-        assert VERIFIER in run
+        assert VERIFIER_FOR[name] in run
+
+    def test_the_container_cells_verify_on_a_host_that_matches_the_archive(self):
+        """The musl cells are the reason, and they share a job with the glibc ones.
+
+        One step covers all four, so the wrapper decides per archive
+        rather than the workflow carrying a condition that can drift from
+        the matrix.
+        """
+        job = self.wf["jobs"]["build-linux"]
+        run = job["steps"][step_index(job, "Verify")].get("run", "")
+        assert MATCHED_HOST_VERIFIER in run, (
+            "build-linux calls the verifier directly, so its two musl cells verify "
+            "on a glibc runner and the consumer link never runs"
+        )
 
     @pytest.mark.parametrize("name", BUILD_JOBS)
     def test_verify_tells_the_verifier_what_the_archive_should_be(self, name):
@@ -1451,10 +1474,11 @@ class TestTheDriverSpeaksTheSameContract:
     def test_the_container_cells_are_what_the_driver_builds_by_default(self):
         assert ba.resolve_jobs(None, None) == DEFAULT_JOBS_EXPECTED
 
-    def test_the_verifier_the_workflow_calls_exists(self):
-        script = os.path.join(REPO_ROOT, VERIFIER)
-        assert os.path.exists(script), f"the workflow calls {VERIFIER}, which is not there"
-        assert os.access(script, os.X_OK), f"{VERIFIER} is not executable"
+    @pytest.mark.parametrize("name", sorted(set(VERIFIER_FOR.values())))
+    def test_the_verifier_the_workflow_calls_exists(self, name):
+        script = os.path.join(REPO_ROOT, name)
+        assert os.path.exists(script), f"the workflow calls {name}, which is not there"
+        assert os.access(script, os.X_OK), f"{name} is not executable"
 
     def test_both_paths_to_this_tag_create_the_same_kind_of_release(self):
         # build_acadsharp.upload_release() publishes to the same tag from

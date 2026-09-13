@@ -539,29 +539,48 @@ class TestNoDocumentPrintsALiveDigest:
         )
 
 
-class TestTheMuslLimitationIsStated:
-    """`static_certified` on a musl archive means less than it looks.
+class TestTheUnwinderRenameIsStated:
+    """These archives ship a renamed libunwind, and the document says so.
 
-    The C recipe was measured there and the cargo recipe was never run,
-    because `verify_archive.sh` only runs it when the host can build for
-    the target. It fails, measured on both musl architectures, so the
-    document that ships inside the archive has to say which recipe the
-    field is talking about.
+    For a while it said the opposite: the cargo recipe did not work on
+    musl, because the runtime's bundled llvm-libunwind collided with the
+    self-contained one rustc links for every musl target. The rename
+    fixed that, and the reason the section stays is that a reader who
+    runs `nm` on the archive finds `__viprs_unw_step` where the rest of
+    the world has `__unw_step` and deserves to know why. The two fixes
+    that are measured dead stay written down for the same reason: the
+    next person to meet this should not spend the day.
     """
 
-    def test_it_names_the_collision_and_which_recipe_still_works(self, linkinfo):
+    def test_it_names_the_collision_a_reader_would_have_seen(self, linkinfo):
         para = "\n\n".join(
-            block for block in linkinfo.split("\n\n") if "musl" in block and "recipe" in block
+            block for block in linkinfo.split("\n\n") if "musl" in block and "unwind" in block
         )
-        assert para, "nothing in LINKINFO.md mentions the musl limitation"
+        assert para, "nothing in LINKINFO.md mentions the unwinder at all"
         assert "__unw_get_reg" in linkinfo, (
             "the duplicate symbol is what a reader sees in their own link output"
         )
-        assert re.search(r"C recipe .*works|works on musl", linkinfo), (
-            "a reader needs to be told what does work, not only what does not"
+        assert "self-contained" in linkinfo, (
+            "the other half of the collision is rustc's own libunwind, and a reader "
+            "who does not know that cannot tell whose copy is whose"
         )
 
-    def test_it_does_not_claim_the_cargo_recipe_works_everywhere(self, linkinfo_flat):
-        assert "every target" not in linkinfo_flat.lower().split("on musl")[0][-400:], (
-            "a blanket claim above the limitation would contradict it"
+    def test_it_says_the_personality_abi_is_untouched(self, linkinfo_flat):
+        assert "`_Unwind_*` is untouched" in linkinfo_flat, (
+            "a reader linking their own C++ has to be told the rename stops short "
+            "of the names a landing pad calls"
+        )
+
+    def test_it_says_the_consumer_has_nothing_to_do(self, linkinfo_flat):
+        assert "Nothing is asked of you" in linkinfo_flat, (
+            "a section about a linker collision reads as a consumer-side workaround "
+            "unless it says it is not one"
+        )
+
+    def test_the_dead_fixes_stay_written_down(self, linkinfo_flat):
+        assert "link-self-contained=no" in linkinfo_flat
+        assert "link-self-contained=-unwind" in linkinfo_flat
+        assert "measured dead" in linkinfo_flat, (
+            "without saying they were tried, these read as options rather than as "
+            "roads already walked"
         )

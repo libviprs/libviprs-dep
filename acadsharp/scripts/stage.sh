@@ -307,6 +307,46 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                 # one argv still goes in the order it was written.
                 tr '\n' '\0' < /tmp/merge-members.txt | xargs -0 ar qc "$MERGED"
                 ranlib "$MERGED"
+
+                # Rename the runtime's own llvm-libunwind, so a
+                # consumer's copy can live beside it. rustc links a
+                # self-contained libunwind.a for every musl target and
+                # for no glibc one, the two copies define the same
+                # fifty-odd __unw_* and libunwind::* symbols, and the
+                # documented cargo recipe against a musl archive died at
+                # the link on all of them. Both musl archives shipped
+                # that way because the consumer link in verify_archive.sh
+                # only runs where the host libc matches, and the musl
+                # cells build on glibc runners.
+                #
+                # After the merge, because it has to reach every member
+                # at once: a definition and the references to it move
+                # together or the archive stops linking at all. Before
+                # the smoke below, so the C recipe is measured against
+                # the archive that ships rather than the one before the
+                # rename. Runs on glibc too, even though nothing collides
+                # there, so the cheap linux cells exercise the same code
+                # path the musl ones depend on.
+                #
+                # Not piped into sed: a pipeline reports the last
+                # command's status, so a failed rename read as a success
+                # and the archive shipped anyway. The log goes to a file
+                # and the status is the `if`.
+                if sh "$WORK/privatise_unwind.sh" "$MERGED" "$INIT_A" \
+                        > /tmp/privatise.log 2>&1; then
+                    cat /tmp/privatise.log
+                    fact privatised_unwind_symbols "$(sed -n \
+                        's/^privatise_unwind: renamed \([0-9]*\).*/\1/p' /tmp/privatise.log)"
+                else
+                    # Deleting the archives is the downgrade to
+                    # shared-only, which the manifest contract records as
+                    # an outcome. The static smoke below then fails on
+                    # the missing file and says so, which is the path
+                    # every other static failure here already takes.
+                    echo "the libunwind rename failed, so the archives are being dropped:"
+                    cat /tmp/privatise.log
+                    rm -f "$MERGED" "$INIT_A"
+                fi
                 echo "---- static smoke ----"
                 LADDER="${STATIC_SYSTEM_LIBRARY_LADDER:?}"
                 OLDIFS=$IFS
