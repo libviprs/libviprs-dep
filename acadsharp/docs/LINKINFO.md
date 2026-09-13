@@ -290,6 +290,38 @@ regardless. The exception is **gold**, which never implemented the flag: if you
 link with `-fuse-ld=gold` nothing here protects you, and that is untested rather
 than known-broken. gold is gone from binutils 2.44 and later.
 
+### On musl, the cargo recipe does not work yet
+
+Measured on native x86_64 musl and native arm64 musl, rustc 1.98.1, against the
+published archives: the recipe above **fails** on both musl targets with about a
+dozen duplicate symbols.
+
+```
+multiple definition of `__unw_get_reg'
+  libunwind.cpp:(.text.__unw_get_reg+0x0)
+  first defined in libacadsharp_native.a(libRuntime.WorkstationGC__libunwind.cpp.o)
+```
+
+The runtime bundles its own copy of llvm-libunwind inside the merged archive,
+and rustc links a `self-contained/libunwind.a` of its own for musl targets and
+not for glibc ones, so the two collide. Nothing about `__modules` is involved
+and neither is lld: the linker here is GNU ld from the Alpine toolchain.
+
+**The C recipe on this page works on musl**, and that is what
+`static_certified` records for those archives, so read that field as "the C
+static link was measured" rather than "every recipe on this page was".
+
+Two fixes that look obvious are measured dead. Dropping the runtime's libunwind
+member from the archive breaks the C recipe too, because the runtime references
+that copy's C++ internals and not only the `__unw_*` C API. And no stable
+consumer-side flag helps: `-C link-self-contained=no` breaks the build script's
+own link and `-C link-self-contained=-unwind` is rejected. What is left is
+renaming the symbols across the whole archive, which is real work and wants the
+conformance suite run on musl before anyone believes it.
+
+If you need a static musl link today, use the C recipe. If you need the cargo
+recipe, use a glibc target.
+
 ### Do not express any of this as a link argument
 
 `cargo:rustc-link-arg` does **not** propagate from a dependency's build script

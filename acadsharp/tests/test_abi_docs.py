@@ -537,3 +537,31 @@ class TestNoDocumentPrintsALiveDigest:
         assert digest[:16] in pretend.lower(), (
             "the containment test itself is broken, so the assertions above prove nothing"
         )
+
+
+class TestTheMuslLimitationIsStated:
+    """`static_certified` on a musl archive means less than it looks.
+
+    The C recipe was measured there and the cargo recipe was never run,
+    because `verify_archive.sh` only runs it when the host can build for
+    the target. It fails, measured on both musl architectures, so the
+    document that ships inside the archive has to say which recipe the
+    field is talking about.
+    """
+
+    def test_it_names_the_collision_and_which_recipe_still_works(self, linkinfo):
+        para = "\n\n".join(
+            block for block in linkinfo.split("\n\n") if "musl" in block and "recipe" in block
+        )
+        assert para, "nothing in LINKINFO.md mentions the musl limitation"
+        assert "__unw_get_reg" in linkinfo, (
+            "the duplicate symbol is what a reader sees in their own link output"
+        )
+        assert re.search(r"C recipe .*works|works on musl", linkinfo), (
+            "a reader needs to be told what does work, not only what does not"
+        )
+
+    def test_it_does_not_claim_the_cargo_recipe_works_everywhere(self, linkinfo_flat):
+        assert "every target" not in linkinfo_flat.lower().split("on musl")[0][-400:], (
+            "a blanket claim above the limitation would contradict it"
+        )
