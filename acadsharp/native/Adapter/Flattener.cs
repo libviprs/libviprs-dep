@@ -72,7 +72,7 @@ namespace Viprs.Cad
 		{
 			public Entity Entity;
 			public Primitive Record;
-			public Transform Transform;
+			public Placement Placement;
 			public int Depth;
 			// Non-zero when the record should be labelled with the handle of
 			// the entity it was generated for rather than the synthesised one
@@ -88,15 +88,9 @@ namespace Viprs.Cad
 
 		// ------------------------------------------------------- geometry
 
-		private static double[] Xyz(Transform t, XYZ p)
+		private static void Append(List<double> into, Placement place, XYZ p)
 		{
-			XYZ v = t.ApplyTransform(p);
-			return new double[] { v.X, v.Y, v.Z };
-		}
-
-		private static void Append(List<double> into, Transform t, XYZ p)
-		{
-			XYZ v = t.ApplyTransform(p);
+			XYZ v = place.Apply(p);
 			into.Add(v.X);
 			into.Add(v.Y);
 			into.Add(v.Z);
@@ -106,7 +100,7 @@ namespace Viprs.Cad
 		// measured rather than decomposed. A composed chain of insertions is
 		// not guaranteed to decompose into the translate, rotate and scale it
 		// was built from, and a measurement of the basis always is.
-		private struct Basis
+		internal struct Basis
 		{
 			public double ScaleX;
 			public double ScaleY;
@@ -137,37 +131,99 @@ namespace Viprs.Cad
 			}
 		}
 
-		private static Basis MeasureBasis(Transform t)
+		// One transform, and what it measures out to, computed at most once.
+		//
+		// A transform belongs to a block instance, not to an entity: every
+		// entity under one INSERT crosses under the same matrix. The basis and
+		// the identity test used to be recomputed for each of them, and before
+		// the switch rather than inside it, so six 4x4 multiplies, three square
+		// roots and an atan2 ran for every LINE, SPLINE, DIMENSION, HATCH and
+		// unsupported entity in the document, none of which reads either
+		// number. This holds the answer beside the transform and works it out
+		// the first time something asks.
+		//
+		// A class rather than a struct on purpose: the Pending items that share
+		// a placement have to share the memo as well, and a struct would give
+		// each of them a copy that measures again.
+		internal sealed class Placement
 		{
-			XYZ o = t.ApplyTransform(XYZ.Zero);
-			XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
-			XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
-			Basis b = new Basis();
-			b.ScaleX = x.GetLength();
-			b.ScaleY = y.GetLength();
-			b.Rotation = Math.Atan2(x.Y, x.X);
-			b.Mirrored = (x.X * y.Y) - (x.Y * y.X) < 0.0;
-			return b;
+			public readonly Matrix4 Matrix;
+
+			private Basis _basis;
+			private bool _identity;
+			private bool _measured;
+
+			public Placement(Matrix4 matrix)
+			{
+				Matrix = matrix;
+			}
+
+			// Exactly what Transform.ApplyTransform does, which is the matrix
+			// multiply and the RoundZero pass and nothing else.
+			//
+			// The matrix rather than the Transform, because CSMath's
+			// Transform(Matrix4) constructor decomposes the matrix it is handed
+			// into a translation, a scale and a quaternion turned into Euler
+			// angles, allocating on the way, and this file has never read any
+			// of the three. One composed insertion was paying for a full
+			// decomposition it then threw away.
+			public XYZ Apply(XYZ p)
+			{
+				return (Matrix * p).RoundZero();
+			}
+
+			public Basis Basis
+			{
+				get
+				{
+					Measure();
+					return _basis;
+				}
+			}
+
+			public bool IsIdentity
+			{
+				get
+				{
+					Measure();
+					return _identity;
+				}
+			}
+
+			// The two used to walk the basis separately, three transform
+			// applications each. They are the same three, so they are applied
+			// once and both answers fall out of them.
+			private void Measure()
+			{
+				if (_measured)
+				{
+					return;
+				}
+
+				_measured = true;
+				XYZ o = Apply(XYZ.Zero);
+				XYZ x = Apply(XYZ.AxisX) - o;
+				XYZ y = Apply(XYZ.AxisY) - o;
+
+				_basis.ScaleX = x.GetLength();
+				_basis.ScaleY = y.GetLength();
+				_basis.Rotation = Math.Atan2(x.Y, x.X);
+				_basis.Mirrored = (x.X * y.Y) - (x.Y * y.X) < 0.0;
+
+				_identity = o.GetLength() < Eps
+					&& Math.Abs(x.X - 1.0) < Eps && Math.Abs(x.Y) < Eps
+					&& Math.Abs(y.Y - 1.0) < Eps && Math.Abs(y.X) < Eps;
+			}
 		}
 
-		private static bool IsIdentityish(Transform t)
+		private static Matrix4 Identity()
 		{
-			XYZ o = t.ApplyTransform(XYZ.Zero);
-			XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
-			XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
-			return o.GetLength() < Eps
-				&& Math.Abs(x.X - 1.0) < Eps && Math.Abs(x.Y) < Eps
-				&& Math.Abs(y.Y - 1.0) < Eps && Math.Abs(y.X) < Eps;
+			return Matrix4.Identity;
 		}
 
-		private static Transform Identity()
+		private static Matrix4 Compose(Matrix4 outer, Matrix4 inner)
 		{
-			return new Transform(Matrix4.Identity);
-		}
-
-		private static Transform Compose(Transform outer, Transform inner)
-		{
-			return new Transform(outer.Matrix * inner.Matrix);
+			return outer * inner;
 		}
 
 		// ----------------------------------------------------------- bounds
@@ -338,7 +394,7 @@ namespace Viprs.Cad
 						continue;
 					}
 
-					foreach (Primitive p in Map(item.Entity, item.Transform, item.Depth))
+					foreach (Primitive p in Map(item.Entity, item.Placement, item.Depth))
 					{
 						if (item.HandleOverride != 0ul)
 						{
@@ -397,7 +453,7 @@ namespace Viprs.Cad
 				Primitive w = Primitive.Warning(
 					WarningCodes.NonFiniteGeometry,
 					p.ItemHandle,
-					CanonicalDump.TypeName(p.Type)
+					RecordName.Of(p.Type)
 						+ " value " + i.ToString(CultureInfo.InvariantCulture)
 						+ " is " + values[i].ToString(CultureInfo.InvariantCulture)
 						+ ", and docs/WIRE.md promises no geometry record carries a value "
@@ -412,10 +468,10 @@ namespace Viprs.Cad
 
 		private static IEnumerable<Pending> Root(IEnumerable<Entity> roots)
 		{
-			Transform identity = Identity();
+			Placement identity = new Placement(Identity());
 			foreach (Entity e in roots)
 			{
-				yield return new Pending { Entity = e, Transform = identity, Depth = 0 };
+				yield return new Pending { Entity = e, Placement = identity, Depth = 0 };
 			}
 		}
 
@@ -478,7 +534,7 @@ namespace Viprs.Cad
 
 		private IEnumerable<Pending> InsertBody(Insert insert, BlockRecord block, Pending item)
 		{
-			Transform local = insert.GetTransform();
+			Matrix4 local = insert.GetTransform().Matrix;
 			int rows = insert.RowCount < 1 ? 1 : insert.RowCount;
 			int cols = insert.ColumnCount < 1 ? 1 : insert.ColumnCount;
 
@@ -490,7 +546,7 @@ namespace Viprs.Cad
 				yield return new Pending
 				{
 					Entity = att,
-					Transform = item.Transform,
+					Placement = item.Placement,
 					Depth = item.Depth,
 				};
 			}
@@ -499,26 +555,29 @@ namespace Viprs.Cad
 			{
 				for (int c = 0; c < cols; c++)
 				{
-					Transform cell = local;
+					Matrix4 cell = local;
 					if (r != 0 || c != 0)
 					{
 						double dx = c * insert.ColumnSpacing;
 						double dy = r * insert.RowSpacing;
 						double cosr = Math.Cos(insert.Rotation);
 						double sinr = Math.Sin(insert.Rotation);
-						Transform offset = Transform.CreateTranslation(
+						Matrix4 offset = Transform.CreateTranslation(
 							new XYZ((dx * cosr) - (dy * sinr), (dx * sinr) + (dy * cosr), 0.0)
-						);
+						).Matrix;
 						cell = Compose(offset, local);
 					}
 
-					Transform composed = Compose(item.Transform, cell);
+					// One placement per cell of the array, shared by every
+					// entity the cell holds, so the basis behind it is
+					// measured at most once however many entities that is.
+					Placement composed = new Placement(Compose(item.Placement.Matrix, cell));
 					foreach (Entity e in block.Entities)
 					{
 						yield return new Pending
 						{
 							Entity = e,
-							Transform = composed,
+							Placement = composed,
 							Depth = item.Depth + 1,
 						};
 					}
@@ -533,20 +592,22 @@ namespace Viprs.Cad
 			return Primitive.Warning(WarningCodes.ReaderNotification, 0ul, message);
 		}
 
-		private IEnumerable<Primitive> Map(Entity e, Transform t, int depth)
+		private IEnumerable<Primitive> Map(Entity e, Placement place, int depth)
 		{
 			ulong h = e.Handle;
 			uint flags = depth > 0 ? FlagFromBlock : 0u;
-			Basis basis = MeasureBasis(t);
-			bool identity = IsIdentityish(t);
 
+			// The basis and the identity test are read inside the arms that
+			// use them and nowhere else. Half these arms never look at either,
+			// and measuring for them was six transform applications, three
+			// square roots and an atan2 spent on an answer nothing read.
 			switch (e)
 			{
 				case Line line:
 				{
-					double[] a = Xyz(t, line.StartPoint);
-					double[] b = Xyz(t, line.EndPoint);
-					yield return Primitive.Line(h, flags, a[0], a[1], a[2], b[0], b[1], b[2]);
+					XYZ a = place.Apply(line.StartPoint);
+					XYZ b = place.Apply(line.EndPoint);
+					yield return Primitive.Line(h, flags, a.X, a.Y, a.Z, b.X, b.Y, b.Z);
 					yield break;
 				}
 
@@ -554,19 +615,21 @@ namespace Viprs.Cad
 				// the other order silently turns every arc into a full circle.
 				case Arc arc:
 				{
+					Basis basis = place.Basis;
+					bool identity = place.IsIdentity;
 					if (!identity && !basis.IsSimilarity)
 					{
 						yield return NonUniform(h, flags, "ARC");
 					}
 
-					double[] c = Xyz(t, arc.Center);
+					XYZ c = place.Apply(arc.Center);
 					double turn = identity ? 0.0 : basis.Rotation;
 					yield return Primitive.Arc(
 						h,
 						flags,
-						c[0],
-						c[1],
-						c[2],
+						c.X,
+						c.Y,
+						c.Z,
 						arc.Radius * basis.ScaleX,
 						arc.StartAngle + turn,
 						arc.EndAngle + turn,
@@ -579,18 +642,19 @@ namespace Viprs.Cad
 
 				case Circle circle:
 				{
-					if (!identity && !basis.IsSimilarity)
+					Basis basis = place.Basis;
+					if (!place.IsIdentity && !basis.IsSimilarity)
 					{
 						yield return NonUniform(h, flags, "CIRCLE");
 					}
 
-					double[] c = Xyz(t, circle.Center);
+					XYZ c = place.Apply(circle.Center);
 					yield return Primitive.Circle(
 						h,
 						flags,
-						c[0],
-						c[1],
-						c[2],
+						c.X,
+						c.Y,
+						c.Z,
 						circle.Radius * basis.ScaleX,
 						circle.Normal.X,
 						circle.Normal.Y,
@@ -601,13 +665,13 @@ namespace Viprs.Cad
 
 				case Ellipse ellipse:
 				{
-					if (!identity && !basis.IsSimilarity)
+					if (!place.IsIdentity && !place.Basis.IsSimilarity)
 					{
 						yield return NonUniform(h, flags, "ELLIPSE");
 					}
 
-					XYZ tc = t.ApplyTransform(ellipse.Center);
-					XYZ tm = t.ApplyTransform(ellipse.Center + ellipse.MajorAxisEndPoint) - tc;
+					XYZ tc = place.Apply(ellipse.Center);
+					XYZ tm = place.Apply(ellipse.Center + ellipse.MajorAxisEndPoint) - tc;
 					yield return Primitive.Ellipse(
 						h,
 						flags,
@@ -640,10 +704,19 @@ namespace Viprs.Cad
 					CheckPointCount(spline.ControlPoints.Count, "a Spline record's control points");
 					CheckPointCount(spline.Knots.Count, "a Spline record's knots");
 
-					List<double> ctrl = new List<double>(spline.ControlPoints.Count * 3);
+					// Straight into an array of the size the count already
+					// gives, rather than a List that is grown and then copied
+					// out. A spline's control points used to be copied four
+					// times between the document and the wire.
+					double[] ctrl = new double[spline.ControlPoints.Count * 3];
+					int at = 0;
 					foreach (XYZ p in spline.ControlPoints)
 					{
-						Append(ctrl, t, p);
+						XYZ v = place.Apply(p);
+						ctrl[at] = v.X;
+						ctrl[at + 1] = v.Y;
+						ctrl[at + 2] = v.Z;
+						at += 3;
 					}
 
 					yield return Primitive.Spline(
@@ -652,7 +725,7 @@ namespace Viprs.Cad
 						(uint)spline.Degree,
 						(uint)spline.Flags,
 						spline.Knots.ToArray(),
-						ctrl.ToArray(),
+						ctrl,
 						spline.Weights.ToArray()
 					);
 					yield break;
@@ -661,18 +734,24 @@ namespace Viprs.Cad
 				case LwPolyline lw:
 				{
 					CheckPointCount(lw.Vertices.Count, "a Polyline record");
-					List<double> pts = new List<double>(lw.Vertices.Count * 3);
+					double[] pts = new double[lw.Vertices.Count * 3];
 					double[] lwBulges = new double[lw.Vertices.Count];
 					bool lwAnyBulge = false;
 					for (int i = 0; i < lw.Vertices.Count; i++)
 					{
 						LwPolyline.Vertex v = lw.Vertices[i];
-						Append(pts, t, new XYZ(v.Location.X, v.Location.Y, lw.Elevation));
+						XYZ at = place.Apply(
+							new XYZ(v.Location.X, v.Location.Y, lw.Elevation)
+						);
+						pts[i * 3] = at.X;
+						pts[(i * 3) + 1] = at.Y;
+						pts[(i * 3) + 2] = at.Z;
 						lwBulges[i] = v.Bulge;
 						lwAnyBulge |= v.Bulge != 0.0;
 					}
 
-					if (!identity && !basis.IsUniform && lwAnyBulge)
+					Basis basis = place.Basis;
+					if (!place.IsIdentity && !basis.IsUniform && lwAnyBulge)
 					{
 						yield return NonUniform(h, flags, "LWPOLYLINE");
 					}
@@ -681,7 +760,7 @@ namespace Viprs.Cad
 						h,
 						flags,
 						lw.IsClosed,
-						pts.ToArray(),
+						pts,
 						lwBulges,
 						basis.Mirrored,
 						lw.Normal
@@ -701,12 +780,13 @@ namespace Viprs.Cad
 						double x = loc.Dimension > 0 ? loc[0] : 0.0;
 						double y = loc.Dimension > 1 ? loc[1] : 0.0;
 						double z = loc.Dimension > 2 ? loc[2] : poly.Elevation;
-						Append(pts, t, new XYZ(x, y, z));
+						Append(pts, place, new XYZ(x, y, z));
 						bulges.Add(v.Bulge);
 						anyBulge |= v.Bulge != 0.0;
 					}
 
-					if (!identity && !basis.IsUniform && anyBulge)
+					Basis basis = place.Basis;
+					if (!place.IsIdentity && !basis.IsUniform && anyBulge)
 					{
 						yield return NonUniform(h, flags, "POLYLINE");
 					}
@@ -725,13 +805,15 @@ namespace Viprs.Cad
 
 				case MText mtext:
 				{
-					double[] p = Xyz(t, mtext.InsertPoint);
+					Basis basis = place.Basis;
+					bool identity = place.IsIdentity;
+					XYZ p = place.Apply(mtext.InsertPoint);
 					yield return Primitive.TextAt(
 						h,
 						flags,
-						p[0],
-						p[1],
-						p[2],
+						p.X,
+						p.Y,
+						p.Z,
 						mtext.Height * basis.ScaleY,
 						mtext.Rotation + (identity ? 0.0 : basis.Rotation),
 						mtext.Value ?? string.Empty
@@ -744,13 +826,15 @@ namespace Viprs.Cad
 				// actually shows.
 				case TextEntity text:
 				{
-					double[] p = Xyz(t, text.InsertPoint);
+					Basis basis = place.Basis;
+					bool identity = place.IsIdentity;
+					XYZ p = place.Apply(text.InsertPoint);
 					yield return Primitive.TextAt(
 						h,
 						flags,
-						p[0],
-						p[1],
-						p[2],
+						p.X,
+						p.Y,
+						p.Z,
 						text.Height * basis.ScaleY,
 						text.Rotation + (identity ? 0.0 : basis.Rotation),
 						text.Value ?? string.Empty
@@ -923,7 +1007,7 @@ namespace Viprs.Cad
 					yield return new Pending
 					{
 						Entity = e,
-						Transform = item.Transform,
+						Placement = item.Placement,
 						Depth = item.Depth + 1,
 					};
 				}
@@ -949,9 +1033,7 @@ namespace Viprs.Cad
 		{
 			ulong h = hatch.Handle;
 			uint flags = item.Depth > 0 ? FlagFromBlock : 0u;
-			Transform t = item.Transform;
-			Basis basis = MeasureBasis(t);
-			bool identity = IsIdentityish(t);
+			Placement place = item.Placement;
 			int loops = 0;
 
 			foreach (Hatch.BoundaryPath path in hatch.Paths)
@@ -964,7 +1046,7 @@ namespace Viprs.Cad
 				loops++;
 				double[] pts;
 				double[] bulges;
-				if (TryPolygon(path, hatch.Elevation, t, out pts, out bulges))
+				if (TryPolygon(path, hatch.Elevation, place, out pts, out bulges))
 				{
 					CheckPointCount(pts.Length / 3, "a Polygon record");
 
@@ -978,7 +1060,8 @@ namespace Viprs.Cad
 						anyBulge |= b != 0.0;
 					}
 
-					if (!identity && !basis.IsUniform && anyBulge)
+					Basis basis = place.Basis;
+					if (!place.IsIdentity && !basis.IsUniform && anyBulge)
 					{
 						Primitive squashed = NonUniform(h, flags, "HATCH");
 						yield return new Pending { Record = squashed, Depth = item.Depth };
@@ -1011,7 +1094,7 @@ namespace Viprs.Cad
 					yield return new Pending
 					{
 						Entity = edge.ToEntity(),
-						Transform = t,
+						Placement = place,
 						Depth = item.Depth + 1,
 						HandleOverride = h,
 					};
@@ -1041,7 +1124,7 @@ namespace Viprs.Cad
 				yield return new Pending
 				{
 					Entity = e,
-					Transform = t,
+					Placement = place,
 					Depth = item.Depth + 1,
 					HandleOverride = h,
 				};
@@ -1075,7 +1158,7 @@ namespace Viprs.Cad
 		private static bool TryPolygon(
 			Hatch.BoundaryPath path,
 			double elevation,
-			Transform t,
+			Placement place,
 			out double[] points,
 			out double[] bulges
 		)
@@ -1090,7 +1173,7 @@ namespace Viprs.Cad
 				switch (edge)
 				{
 					case Hatch.BoundaryPath.Line line:
-						Append(pts, t, new XYZ(line.Start.X, line.Start.Y, elevation));
+						Append(pts, place, new XYZ(line.Start.X, line.Start.Y, elevation));
 						bs.Add(0.0);
 						break;
 
@@ -1103,7 +1186,7 @@ namespace Viprs.Cad
 							return false;
 						}
 
-						Append(pts, t, new XYZ(start.X, start.Y, elevation));
+						Append(pts, place, new XYZ(start.X, start.Y, elevation));
 						bs.Add(bulge);
 						break;
 					}
@@ -1114,7 +1197,7 @@ namespace Viprs.Cad
 						// upstream's own storage and not a coordinate.
 						foreach (XYZ v in poly.Vertices)
 						{
-							Append(pts, t, new XYZ(v.X, v.Y, elevation));
+							Append(pts, place, new XYZ(v.X, v.Y, elevation));
 							bs.Add(v.Z);
 						}
 

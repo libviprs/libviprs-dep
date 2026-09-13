@@ -509,3 +509,76 @@ class TestTheHostileCorpusFailsInMoreThanOnePlace:
             r = scenario(name)["result"]
             if "live_handles" in r:
                 assert r["live_handles"] == 0, f"{name} left a handle open"
+
+
+class TestMaxOutputBytesIsAnExactCeiling:
+    """The bound is checked before the batch is committed, not after it.
+
+    It used to be checked after `written` had been set and the batch framed, so
+    a caller allowing 2 KiB of output got one whole 64 KiB batch handed to it
+    and then a refusal. The effective ceiling was "max_output_bytes plus a
+    batch", which nothing documented and no caller could plan around.
+    """
+
+    SCENARIO = "limits/max_output_2048"
+
+    def allowed(self):
+        args = scenario(self.SCENARIO)["args"]
+        assert args[0] == "--max-output", args
+        return int(args[1])
+
+    def test_it_refused(self):
+        assert scenario(self.SCENARIO)["result"]["decode_code"] == "LIMIT_EXCEEDED"
+
+    def test_it_produced_something_before_refusing(self):
+        # The positive control, and it is the whole reason this class exists.
+        # The refusal used to arrive as a throw that left *written at zero, so
+        # a test asserting only "no more than 2048 bytes" passed against a
+        # decode that had really written 65,548 of them into the caller's
+        # buffer. Zero output is the shape of that bug, not of a fix.
+        produced = scenario(self.SCENARIO)["result"]["output_bytes"]
+        assert produced > 0, (
+            "the decode reported no output at all before refusing, which is what "
+            "a refusal that discards its own byte count looks like"
+        )
+
+    def test_it_stopped_inside_the_bound(self):
+        r = scenario(self.SCENARIO)["result"]
+        allowed = self.allowed()
+        assert r["output_bytes"] <= allowed, (
+            f"the decode handed back {r['output_bytes']} bytes with max_output_bytes "
+            f"set to {allowed}, so the ceiling is really the ceiling plus a batch"
+        )
+
+
+class TestARefusalNeverLeavesAFramedBatchBehind:
+    """A call that refuses must not have written a batch into the buffer.
+
+    The harness clears the twelve header bytes before every call, so the flag
+    it records afterwards is about the call that just returned and nothing
+    earlier. A framed batch beside a non-OK code and `*written` of zero is the
+    one shape a caller cannot defend against: it has been told there is nothing
+    there.
+    """
+
+    REFUSALS = sorted(
+        s["name"]
+        for s in ALL["scenarios"]
+        if (s.get("result") or {}).get("decode_code") not in (None, "OK", "SKIPPED", "NOT_REACHED")
+    )
+
+    def test_there_are_refusals_to_look_at(self):
+        assert len(self.REFUSALS) >= 5, (
+            f"only {len(self.REFUSALS)} scenarios refuse during the decode, so the "
+            "check below is about almost nothing"
+        )
+
+    @pytest.mark.parametrize("name", REFUSALS)
+    def test_the_refusing_call_framed_nothing(self, name):
+        r = scenario(name)["result"]
+        assert "framed_batch_after_refusal" in r, (
+            f"{name} was recorded by a harness that did not look, so this cannot fail"
+        )
+        assert r["framed_batch_after_refusal"] is False, (
+            f"{name} returned {r['decode_code']} with a framed batch sitting in the caller's buffer"
+        )

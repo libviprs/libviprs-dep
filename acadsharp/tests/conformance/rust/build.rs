@@ -73,7 +73,18 @@ fn main() {
     // by hand.
     println!("cargo:rustc-check-cfg=cfg(viprs_test_exports)");
     println!("cargo:rerun-if-env-changed=VIPRS_ACAD_TEST_EXPORTS");
-    if env::var("VIPRS_ACAD_TEST_EXPORTS").is_ok() {
+    // Set-but-empty is off, not on.
+    //
+    // is_ok() made `VIPRS_ACAD_TEST_EXPORTS=` turn the cfg on, so the crate
+    // declared two extern symbols against a library that was not built with
+    // them and the link failed. run.sh unsets the variable rather than
+    // clearing it for exactly that reason, which put the real rule in a
+    // different file from the decision: a caller who exports an empty value,
+    // or a CI image that does, gets a link error and nothing in this file says
+    // why. The unset over there is still worth having, because an image that
+    // exports a non-empty value against a library without the exports needs
+    // it, but it is no longer the thing holding this up.
+    if env::var("VIPRS_ACAD_TEST_EXPORTS").map_or(false, |v| !v.is_empty()) {
         out.push_str(
             "\nextern \"C\" {\n                 pub fn viprs_acad__test_throw(kind: u32) -> u32;\n                 pub fn viprs_acad__test_live_handles() -> u64;\n}\n",
         );
@@ -94,25 +105,30 @@ fn main() {
 /// The header with block comments removed. Comments carry the reasons, and a
 /// parser that read them would pick up a type name out of a sentence.
 fn strip_block_comments(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
     let bytes = text.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
             i += 2;
             while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
                 if bytes[i] == b'\n' {
-                    out.push('\n');
+                    out.push(b'\n');
                 }
                 i += 1;
             }
             i += 2;
             continue;
         }
-        out.push(bytes[i] as char);
+        // Bytes, not chars. `bytes[i] as char` reinterprets anything above
+        // 0x7F as Latin-1, so one non-ASCII character anywhere outside a
+        // comment came out as two mojibake characters and the declaration it
+        // sat next to was parsed from mangled text. Every cut here is at an
+        // ASCII `/*` or `*/`, so what is copied is whole UTF-8 sequences.
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+    String::from_utf8(out).expect("the header stopped being UTF-8 with its comments removed")
 }
 
 fn generate(header: &str) -> String {

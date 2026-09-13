@@ -26,7 +26,6 @@ impl Tally {
     fn check(&mut self, ok: bool, what: &str) {
         self.checks += 1;
         if ok {
-            self.failures += 0;
             println!("ok    {what}");
         } else {
             self.failures += 1;

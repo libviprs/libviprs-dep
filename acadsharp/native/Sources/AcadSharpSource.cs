@@ -21,6 +21,11 @@ namespace Viprs.Sources
 {
 	internal sealed class AcadSharpSource : IDocumentSource
 	{
+		// Interned at compile time, so reporting an out-of-memory refusal
+		// costs no string.
+		private const string OutOfMemoryMessage =
+			"the reader ran out of memory reading this document";
+
 		private CadDocument _document;
 		private readonly ResolvedLimits _limits;
 		private readonly List<string> _notifications = new List<string>();
@@ -159,9 +164,16 @@ namespace Viprs.Sources
 
 				BuildViews();
 			}
-			catch (OutOfMemoryException ex)
+			catch (OutOfMemoryException)
 			{
-				throw new AbiException(Result.OutOfMemory, ex.GetType().Name + ": " + ex.Message);
+				// A constant, not a concatenation of the exception's type and
+				// message. The one resource that is certainly gone on this
+				// path is memory, and building a sentence out of three strings
+				// to say so is asking the allocator for something at the exact
+				// moment it has just refused. The exception object itself is
+				// the smallest allocation that can carry a code at all, and
+				// there is no version of this that needs none.
+				throw new AbiException(Result.OutOfMemory, OutOfMemoryMessage);
 			}
 			catch (AbiException)
 			{

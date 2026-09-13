@@ -32,6 +32,45 @@ BATCH = BENCH["batch_bytes"]
 OUTPUT_BYTES_CEILING = 2_800_000
 PEAK_RSS_CEILING_KB = 120_000
 
+# What the decode asks the allocator for, per byte it hands back.
+#
+# Retention and peak RSS were the only two numbers the decode had, and neither
+# of them is about churn: retention is near zero by construction because the
+# stream is an iterator, and peak RSS on a managed runtime moves by megabytes
+# between identical runs. So DECISION.md could attribute RSS movement to
+# "a managed collector's allocation churn" without anything ever having
+# measured the churn. alloc_decode_bytes is that measurement, bracketing the
+# decode loop with the same instrument the open has two lines away.
+#
+# Written out, not derived. The number this guards is
+# AMP["alloc_decode_per_output_byte"], and a ceiling computed from it would
+# move every time the benchmark is rerun, which is a budget that cannot fail.
+#
+# Measured 2026-09-13 on g13_many_inserts.dwg, arm64 containers, the Debug
+# build regenerate.py records with: 122,722,280 bytes allocated for 2,481,264
+# bytes of output, a ratio of 49.46, byte-identical across reruns. main at
+# b782c7f measured 140,563,048 bytes and 56.65 on the same fixture, so this
+# ceiling is below what the code this replaced produced and reverting any of
+# the three allocation fixes puts it red.
+#
+# Re-checked after wire version 2 landed rather than recomputed from the new
+# reading. A Polyline record grew by 32 bytes, so the denominator moved without
+# anything about allocation changing, and a ceiling that followed the
+# measurement would have absorbed that silently. It did not need to move: 54.0
+# still sits between what main produces and what this does.
+ALLOC_PER_OUTPUT_BYTE_CEILING = 54.0
+
+# The same number for the three streaming fixtures, which have no block
+# expansion in them and so sit an order lower: an expanded INSERT costs
+# allocation for entities that emit nothing of their own, and that cost lands
+# entirely on the amplification fixture. One ceiling for both would have been a
+# ceiling three times above what either actually does.
+#
+# Measured 2026-09-13: 15.11, 15.84 and 16.04 across the 1x, 4x and 16x
+# fixtures. main at b782c7f measured 25.63, 26.98 and 27.35. Re-checked rather
+# than recomputed, for the reason above.
+STREAMING_ALLOC_PER_OUTPUT_BYTE_CEILING = 18.0
+
 # The stream is pulled record by record and never collected, so what a decode
 # retains must not scale with what it produces. Four batch sizes is the issue's
 # budget and it is two orders of magnitude above what this actually retains, so
@@ -77,6 +116,56 @@ class TestAmplification:
             f"the decode retained {AMP['managed_retained_kb']} KB across "
             "30,004 records, so the flattened stream is being accumulated somewhere"
         )
+
+    def test_the_decode_allocation_was_measured_at_all(self):
+        # The positive control. A harness that stopped bracketing the decode
+        # records nothing here, and a ceiling on a missing number is a ceiling
+        # that passes forever: every assertion below would still be green
+        # against a benchmark that measured nothing.
+        allocated = AMP.get("alloc_decode_bytes")
+        assert allocated, (
+            "the benchmark carries no alloc_decode_bytes, so the decode's "
+            "allocation was not measured and the ceiling below guards nothing"
+        )
+        assert allocated > AMP["output_bytes"], (
+            f"the decode allocated {allocated} bytes to produce "
+            f"{AMP['output_bytes']}. Less than one byte of allocation per byte "
+            "of output is not a decoder that got clever, it is an instrument "
+            "that stopped reading"
+        )
+
+    def test_the_recorded_ratio_is_the_recorded_numbers(self):
+        # The ratio is stored rounded, so it could quietly stop describing the
+        # two numbers beside it. This is what makes the ceiling a statement
+        # about the measurement rather than about a third number.
+        recorded = AMP["alloc_decode_per_output_byte"]
+        computed = AMP["alloc_decode_bytes"] / AMP["output_bytes"]
+        assert abs(recorded - computed) < 0.01, (
+            f"amplification.json records a ratio of {recorded} beside "
+            f"{AMP['alloc_decode_bytes']} bytes and {AMP['output_bytes']} bytes, "
+            f"which divide to {computed:.3f}"
+        )
+
+    def test_the_decode_allocation_has_not_grown(self):
+        recorded = AMP["alloc_decode_per_output_byte"]
+        assert recorded <= ALLOC_PER_OUTPUT_BYTE_CEILING, (
+            f"the decode now allocates {recorded} bytes for every byte it emits, "
+            f"against a {ALLOC_PER_OUTPUT_BYTE_CEILING} ceiling. That is churn the "
+            "collector has to clear while the decode runs, and it is the number "
+            "DECISION.md's account of peak RSS rests on"
+        )
+
+    def test_every_streaming_size_is_measured_the_same_way(self):
+        # The three sizes exist to show retention does not track the stream.
+        # The same three now show whether churn does, so a regression that only
+        # appears at scale has somewhere to appear.
+        for s in STREAM:
+            assert s.get("alloc_decode_bytes"), f"{s['fixture']} carries no alloc_decode_bytes"
+            assert s["alloc_decode_per_output_byte"] <= STREAMING_ALLOC_PER_OUTPUT_BYTE_CEILING, (
+                f"{s['fixture']} allocated {s['alloc_decode_per_output_byte']} bytes "
+                f"per byte of output, against a "
+                f"{STREAMING_ALLOC_PER_OUTPUT_BYTE_CEILING} ceiling"
+            )
 
     def test_it_took_more_than_one_batch(self):
         assert AMP["batches"] > 1, (
@@ -228,6 +317,19 @@ class TestTheDecisionIsWrittenDownAgainstTheseNumbers:
             text = f.read()
         assert "max_output_bytes" in text
         assert re.search(r"revisit", text, re.I)
+
+    def test_it_quotes_the_decode_allocation(self):
+        # The document says peak RSS moving during a decode is "a managed
+        # collector's allocation churn". That was an attribution with no
+        # measurement under it until alloc_decode_bytes existed, so the
+        # document now carries the number and this is what keeps the two
+        # together.
+        with open(DECISION) as f:
+            text = f.read()
+        assert f"{AMP['alloc_decode_bytes']:,}" in text, (
+            "DECISION.md attributes RSS movement to allocation churn and does not "
+            "carry the churn number the benchmark recorded"
+        )
 
     def test_it_quotes_the_padded_measurement(self):
         with open(DECISION) as f:

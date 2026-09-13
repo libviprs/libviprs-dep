@@ -74,24 +74,40 @@ make the stream harder to consume rather than cheaper.
 
 ## The two measurements beside it
 
-**Streaming.** Across 1x, 4x and 16x entity fixtures the decoder retains 1 KB
-in every case, and `g13_many_inserts.dwg` at 30,004 records retains 1 KB too.
-Peak RSS during a decode moves by a few hundred kilobytes to a few megabytes
-and does not track the record count: 2,052 records grew RSS by 2,700 KB and
-30,004 records grew it by 636 KB. That is a managed collector's allocation
+**Streaming.** Across 1x, 4x and 16x entity fixtures the decoder retains a
+kilobyte or less, and `g13_many_inserts.dwg` at 30,004 records retains 1 KB.
+Peak RSS during a decode moves by a few hundred kilobytes to a megabyte or so
+and does not track the record count: 2,052 records grew RSS by 1,252 KB and
+30,004 records grew it by 420 KB. That is a managed collector's allocation
 churn, not the stream accumulating, and the retention number is the one that
 says so.
+
+**The churn, now that something measures it.** The paragraph above used to stop
+at the word churn, which made it an attribution with nothing under it.
+Retention says what a decode keeps and peak RSS says what the process
+committed; neither is a measurement of what was allocated and collected in
+between, and churn is the only thing either sentence was really about.
+`alloc_decode_bytes` is that measurement, bracketing the decode loop with the
+same `GC.GetAllocatedBytesForCurrentThread` instrument the open has had since
+this file was written. The hostile fixture allocates 122,722,280 bytes to
+produce 2,481,264, which is 49.46 bytes of churn for every byte it hands back.
+The three streaming fixtures sit between 15.11 and 16.04, and the gap is block
+expansion: an expanded INSERT costs allocation for entities that emit no record
+of their own, so the fixture with ten thousand of them pays three times over.
+Both ratios have written-out ceilings in `test_adapter_benchmarks.py`, so the
+collector's workload is a budget that can go red rather than a phrase that
+explains a graph.
 
 **Path versus memory.** On the largest committed fixture the difference in peak
 RSS between `open_path_utf8` and `open_memory` is a few hundred kilobytes
 either way, because the fixture is 175 KB and the run-to-run spread of peak RSS
 on a managed runtime is a couple of megabytes. The same pair on the same
 drawing with 32 MiB appended, which the decode does not read (it produces the
-same 2,481,264 bytes of records), separates cleanly: 32,908 KB of peak RSS on a
-32,942 KB input, and an allocation difference of 33,716,648 bytes against a
-33,733,582 byte file. The shortfall of about 250 KB is the path route's stream
-buffering, which the memory route does not need because it wraps the caller's
-array. The claim that a path-based open does not duplicate the input to cross
+same 2,481,264 bytes of records), separates cleanly: 33,216 KB of peak RSS on a
+32,942 KB input, and an allocation difference of 33,723,512 bytes against a
+33,733,582 byte file. Whatever the two differ by either way is the path route's
+stream buffering, which the memory route does not need because it wraps the
+caller's array. The claim that a path-based open does not duplicate the input to cross
 FFI is that measurement.
 
 ## What both Criticals had in common, which is worth more than either fix
