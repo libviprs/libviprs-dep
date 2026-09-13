@@ -1176,14 +1176,14 @@ class TestTheDriverSpeaksTheSameContract:
                 )
 
     def test_the_build_step_passes_flags_the_driver_accepts(self):
-        # The workflow selects a cell with --platform/--cpu, mirroring
-        # what build_zstd.py takes. Until #48 lands, that is an agreement
-        # rather than something the driver can confirm; the moment it can,
-        # this stops being a guess and a flag the driver never grew fails
-        # here instead of in five build jobs.
+        # The workflow selects a cell with --platform/--arch, which is
+        # what build_zstd.py and build_pdfium.py take. This is the cheap
+        # form of the check above: it compares flag names rather than
+        # running anything, so it names the offending flag directly when
+        # both fail together.
         help_text = driver_help()
         if "--platform" not in help_text:
-            pytest.skip("build_acadsharp.py grows --platform/--cpu with issue #48")
+            pytest.skip("build_acadsharp.py grows --platform/--arch with issue #48")
         wf = load_workflow()
         for name in BUILD_JOBS:
             job = wf["jobs"][name]

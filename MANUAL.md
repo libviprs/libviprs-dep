@@ -503,7 +503,14 @@ dependency's flake should not colour another's release run red.
   stating the old one.
 - Four container cells cover `{linux, musl} × {x64, arm64}`, and one
   `macos-15` job builds the mac slice with the pinned SDK installed on
-  the runner. Nothing is emulated: ADR 0001 measured a cross-architecture
+  the runner. Each cell carries both words for its architecture, because
+  there are two: the driver's CLI takes `--arch amd64|arm64` like
+  `build_zstd.py` and `build_pdfium.py`, while the archive name and
+  `verify_archive.sh`'s third argument take `x64|arm64`. The cell spells
+  out both rather than leaning on the driver's `ARCH_ALIASES` to convert,
+  so a cell that would build one target and upload another under a name
+  the build never produced is something a test can see.
+  Nothing is emulated: ADR 0001 measured a cross-architecture
   publish producing the object file and then failing at the native link,
   and the .NET runtime documents `qemu-user-static` as unsupported, so
   arm64 cells take `ubuntu-24.04-arm` instead. `fail-fast` is off.
