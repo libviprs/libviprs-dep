@@ -28,6 +28,15 @@ name: acadsharp conformance
 # test configuration, which is the only build carrying the exports that make
 # the exception and handle-leak cases runnable at all, and which had stopped
 # compiling on main without anything saying so.
+#
+# The third is the same argument one libc over. #73 gave musl a link test and
+# a runtime probe and no consumer run at all, so the musl archive shipped a
+# shared library nothing had ever asked to answer the ABI handshake. It gets
+# one run per consumer, against the archive, in an Alpine container of this
+# same architecture, and deliberately not a second AbiTest publish: the
+# question musl can answer differently is whether the .so loads and answers,
+# and the exception and handle-leak cases are managed logic that cannot
+# differ by libc.
 
 on:
   push:
@@ -166,7 +175,10 @@ jobs:
           if-no-files-found: warn
 
   musl-static-link:
-    # The musl half of the same premise, and the one nothing covered.
+    # The musl half of the same premise, and the one nothing covered. It
+    # links, and since #74 it also runs: the consumers at the end of this job
+    # are the first thing that ever asked a musl build of the shim to answer
+    # for itself rather than merely to resolve at a link.
     #
     # verify_archive.sh holds `static_certified: true` to an archive that
     # links and runs, but only when the host can build for the target.
@@ -194,6 +206,13 @@ jobs:
     # by the same wrapper in release-acadsharp.yml, on an x64 runner.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
+    env:
+      # The same image one libc over, and that is the point of pinning it
+      # here rather than picking whatever Alpine has rust on it. If the two
+      # jobs also differed by compiler version, a check that passes on glibc
+      # and fails on musl would no longer say which of the two it was.
+      VIPRS_CONFORMANCE_IMAGE: rust:1.98.1-alpine
+      VIPRS_CONFORMANCE_PLATFORM: linux/arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -214,6 +233,58 @@ jobs:
         run: |
           bash acadsharp/scripts/verify_archive_matched_host.sh \
             bin/acadsharp-musl-arm64.tgz musl arm64
+
+      - name: Unpack it the way a consumer would
+        run: |
+          set -eu
+          mkdir -p bin/unpacked-musl
+          tar -xzf bin/acadsharp-musl-arm64.tgz -C bin/unpacked-musl
+          find bin/unpacked-musl -maxdepth 2
+
+      - name: Name the libc the library asks for
+        # The positive control for the two runs below, and they need one. A
+        # musl .so and a glibc .so are both ELF, both get found by the same
+        # find_shim.sh, and a consumer linked against either reports the same
+        # passes, so a green run underneath this does not on its own say which
+        # library it ran against. This does: NEEDED is the library's own
+        # statement about its libc, written by the linker that built it, and a
+        # glibc build of the same shim says libc.so.6 here.
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked-musl/acadsharp-musl-arm64
+        run: |
+          set -eu
+          library=$(acadsharp/tests/conformance/find_shim.sh "$VIPRS_LIB_DIR")
+          needed=$(docker run --rm --platform "$VIPRS_CONFORMANCE_PLATFORM" \
+            -v "$PWD":"$PWD" "$VIPRS_CONFORMANCE_IMAGE" \
+            readelf -d "$library" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')
+          echo "$library needs:"
+          echo "$needed" | sed 's/^/  /'
+          if ! echo "$needed" | grep -q '^libc\.musl-'; then
+            echo "the library about to be run does not ask for a musl libc," >&2
+            echo "so the runs below would prove nothing about musl" >&2
+            exit 1
+          fi
+          if echo "$needed" | grep -q '^libc\.so\.6$'; then
+            echo "the library about to be run asks for glibc" >&2
+            exit 1
+          fi
+
+      - name: Run the C consumer against the unpacked musl archive
+        # One run per consumer on this side, against the archive, and no
+        # second AbiTest publish. The musl-specific question is whether the
+        # .so loads and answers the ABI handshake at all; viprs_acad__test_throw
+        # and viprs_acad__test_live_handles exercise managed logic that cannot
+        # differ by libc, so a musl AbiTest publish would cost a second
+        # NativeAOT build for no musl-specific answer. The runners see the
+        # exports are absent and skip those sections rather than failing.
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked-musl/acadsharp-musl-arm64
+        run: acadsharp/tests/conformance/c/run.sh
+
+      - name: Run the generated Rust consumer against the unpacked musl archive
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked-musl/acadsharp-musl-arm64
+        run: acadsharp/tests/conformance/rust/run.sh
 
       - name: Keep the build logs
         if: always()
