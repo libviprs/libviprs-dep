@@ -279,3 +279,68 @@ class TestRuffActuallySeesEveryDependency:
         assert result.returncode == 0
         for dep in dependency_dirs():
             assert f"/{dep}/" in result.stdout, f"ruff would not lint anything in {dep}/"
+
+
+class TestTheFrontDoorKnowsEveryDependency:
+    """A dependency nobody can find from the README does not exist.
+
+    `acadsharp/` landed with a build driver, a test suite, a verifier, a
+    release workflow and five archives, and `README.md` did not contain the
+    word once. Every coverage guard in this file passed throughout, because
+    they all check that CI *runs* things and none checks that a reader can
+    *find* them.
+
+    That is the same hole as #34 one layer up. There, a dependency directory
+    was invisible to CI because the workflow named `pdfium/` by hand, and the
+    fix was to discover directories from the tree. Here the tree is discovered
+    correctly and the documentation is still written by hand, so the fourth
+    dependency will repeat it unless something refuses.
+    """
+
+    def test_every_dependency_is_in_the_readme(self):
+        readme = without_comments(README)
+        missing = [d for d in dependency_dirs() if d not in readme]
+        assert not missing, (
+            f"{missing} have build drivers but the README never mentions them. Somebody "
+            "has to be able to find a dependency without reading the directory listing."
+        )
+
+    def test_every_dependency_is_in_the_readme_table(self):
+        # Stronger than a bare mention: a passing remark in a paragraph about
+        # something else would satisfy the test above, and the table is what a
+        # reader actually scans.
+        with open(README) as f:
+            rows = [ln for ln in f if ln.startswith("| [`") and ln.count("|") >= 4]
+        listed = {ln.split("`")[1].rstrip("/") for ln in rows}
+        missing = [d for d in dependency_dirs() if d not in listed]
+        assert not missing, (
+            f"{missing} are not rows in the README's dependency table. Found rows for "
+            f"{sorted(listed)}."
+        )
+
+    def test_every_dependency_readme_is_linked_from_further_reading(self):
+        readme = without_comments(README)
+        missing = [d for d in dependency_dirs() if f"{d}/README.md" not in readme]
+        assert not missing, (
+            f"the README's Further reading section does not link {missing}'s own README. "
+            "That file is where the download URLs and the consumption examples live."
+        )
+
+    def test_every_dependency_ships_the_readme_it_is_linked_as_having(self):
+        # The inverse, so the three tests above cannot be satisfied by linking
+        # a file that is not there.
+        missing = [
+            d
+            for d in dependency_dirs()
+            if not os.path.isfile(os.path.join(REPO_ROOT, d, "README.md"))
+        ]
+        assert not missing, f"{missing} are linked from the README but ship no README.md"
+
+    def test_the_manual_files_tree_lists_every_dependency(self):
+        # MANUAL.md is the man page. A dependency missing from its FILES tree
+        # is one a reader is told does not exist.
+        manual = os.path.join(REPO_ROOT, "MANUAL.md")
+        with open(manual) as f:
+            text = f.read()
+        missing = [d for d in dependency_dirs() if f"{d}/" not in text]
+        assert not missing, f"MANUAL.md never mentions {missing}"
