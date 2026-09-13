@@ -218,6 +218,12 @@ jobs:
           cat release-notes.md
 
       - name: Create or confirm release
+        # No --prerelease. build_acadsharp.upload_release() creates a plain
+        # release for this same tag, so marking it here would make the kind
+        # of release depend on whether a laptop or this workflow cut it.
+        # Neither release.yml nor release-zstd.yml marks one either, and a
+        # pre-release is never "latest", which a consumer resolving the tag
+        # by hand would trip over.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-version.outputs.tag }}
@@ -230,8 +236,7 @@ jobs:
           fi
           gh release create "$TAG" \
             --title "acadsharp $VERSION" \
-            --notes-file release-notes.md \
-            --prerelease
+            --notes-file release-notes.md
 
       - name: Keep the preamble for the notes job
         # release-notes rewrites the body with the per-target table
@@ -286,6 +291,7 @@ jobs:
           VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
           python3 acadsharp/build_acadsharp.py \
+            --version "$VERSION" \
             --platform ${{ matrix.platform }} \
             --arch ${{ matrix.arch }}
 
@@ -346,6 +352,7 @@ jobs:
           VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
           python3 acadsharp/build_acadsharp.py \
+            --version "$VERSION" \
             --platform ${{ matrix.platform }} \
             --arch ${{ matrix.arch }}
 
