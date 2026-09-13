@@ -17,21 +17,25 @@ documents for what a consumer is actually written against.
 
 ## Downloads
 
-**No archives are published yet.** There is no `acadsharp-3.7.1-viprs.1` release
-on this repo, so there is no URL to hand you. Build them yourself with
-[Building](#building), or cut the release with [Publishing](#publishing). This
-table gets the five URLs and their sha256s the day that runs, and
-`tests/test_release_workflow.py` holds the two halves together: a download link
-with no digest beside it fails, and so does a digest with nothing saying what it
-hashed.
+Five archives, published as [`acadsharp-3.7.1-viprs.1`](https://github.com/libviprs/libviprs-dep/releases/tag/acadsharp-3.7.1-viprs.1).
+Check the digest before you unpack one: `shasum -a 256 <file>`, or `sha256sum`
+on Linux. `tests/test_release_workflow.py` holds the two halves together, so a
+download link with no digest beside it fails, and so does a digest with nothing
+saying what it hashed.
 
-| archive | target | sha256 |
-| --- | --- | --- |
-| `acadsharp-linux-x64.tgz` | `x86_64-unknown-linux-gnu` | not published |
-| `acadsharp-linux-arm64.tgz` | `aarch64-unknown-linux-gnu` | not published |
-| `acadsharp-musl-x64.tgz` | `x86_64-unknown-linux-musl` | not published |
-| `acadsharp-musl-arm64.tgz` | `aarch64-unknown-linux-musl` | not published |
-| `acadsharp-mac-arm64.tgz` | `aarch64-apple-darwin` | not published |
+`static_certified` says whether the static half of that archive was measured to
+link **and run**. It is false for mac, where NativeAOT emits Mach-O and the
+driver has never attempted a static build. On the two musl targets it records
+the C recipe, which was measured; the cargo recipe is not usable there yet, and
+`docs/LINKINFO.md` in the archive says why.
+
+| archive | target | static_certified | sha256 |
+| --- | --- | --- | --- |
+| [`acadsharp-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-x64.tgz) | `x86_64-unknown-linux-gnu` | true | `b8a674b989b6dfdd64ca26d917ad67b7bdf12c38adf557914c6d7b03e71bd180` |
+| [`acadsharp-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-arm64.tgz) | `aarch64-unknown-linux-gnu` | true | `4b41113b4a9c5b001d20740be09989a2d1850e78990936a897b74583e95e7cb3` |
+| [`acadsharp-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-x64.tgz) | `x86_64-unknown-linux-musl` | true | `9674c971d83bf977729bbba5c7e15ab4d86c7ffe6df95dcefc47d336d4b9b4a3` |
+| [`acadsharp-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-arm64.tgz) | `aarch64-unknown-linux-musl` | true | `2412c178df33214336504c62156763862b5628f44261bd4e37b66c95068240e1` |
+| [`acadsharp-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-mac-arm64.tgz) | `aarch64-apple-darwin` | false | `bced75cdea2451215a1f78524233c206c35637736630389bace2a3d5ca371471` |
 
 Five archives, not six: there is no Microsoft-platform artifact here, and the
 mac slice is Apple Silicon only. The Rust triple lives in each archive's
