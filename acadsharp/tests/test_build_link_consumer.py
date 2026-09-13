@@ -27,6 +27,7 @@ import pytest
 # stand-in library laid out exactly like a release. Importing them keeps
 # one builder rather than two that can drift.
 import test_verify_archive as fixtures
+import toolchain
 
 ACAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 REPO_ROOT = os.path.dirname(ACAD_DIR)
@@ -38,7 +39,7 @@ MANUAL = os.path.join(REPO_ROOT, "MANUAL.md")
 
 def _require_cargo():
     if not shutil.which("cargo"):
-        pytest.skip("cargo is not installed on this host")
+        toolchain.missing_tool("cargo", "the consumer link this suite is about never runs")
 
 
 def read(path):

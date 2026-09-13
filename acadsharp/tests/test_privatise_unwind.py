@@ -43,6 +43,7 @@ import sys
 import build_acadsharp as ba
 import pytest
 import test_verify_archive as fixtures
+import toolchain
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 ACAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -58,7 +59,10 @@ OTHER_CPU = "x64" if HOST_CPU == "arm64" else "arm64"
 def _require_binutils():
     for tool in ("cc", "ar", "nm", "objcopy"):
         if not shutil.which(tool):
-            pytest.skip(f"{tool} is not on this host")
+            toolchain.missing_tool(tool, "the fixtures here are real ELF objects")
+    # A platform skip rather than a toolchain one, so it stays a skip under
+    # VIPRS_REQUIRE_COMPILED_FIXTURES. A mac cell cannot produce an ELF and
+    # no flag changes that.
     if sys.platform != "linux":
         pytest.skip("the fixtures here are ELF ones; run this suite on Linux")
 
@@ -423,7 +427,7 @@ class TestASkippedLinkTestCanBeMadeAFailure:
         tgz = fixtures._pack(fixtures._clone(good_tree, tmp_path))
         bare = _path_without("cargo", tmp_path)
         if not os.path.lexists(os.path.join(bare, "cc")):
-            pytest.skip("no cc on PATH, so the static link this rides on never runs")
+            toolchain.missing_tool("cc", "the static link this rides on never runs")
         result = subprocess.run(
             ["bash", VERIFY, tgz],
             capture_output=True,

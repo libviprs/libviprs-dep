@@ -75,6 +75,17 @@
 #      consumer cannot work around from their side. This one reads the
 #      symbol index, so it holds on any host for any target, which is
 #      how it covers the cells the consumer link above skips.
+#  10. The library agrees with the header it ships about the ABI. 4 holds
+#      the *manifest* to the header; this holds the *library* to it, and
+#      until now nothing did: the probe in 7 printed the version the
+#      library answered and threw it away, so an archive whose
+#      `viprs_acad_abi_version()` said 1 next to a header declaring 2
+#      passed everything here. The capabilities call is asked the same
+#      question, because that is where a consumer reads the pair from,
+#      and a library that agrees through one and disagrees through the
+#      other is one half its callers refuse. Like 7 and 8 this needs the
+#      library linked and running, so it holds where the host can build
+#      for the target.
 #
 # Why the binary readers are hand-rolled rather than `nm`: this script has
 # to verify a foreign-architecture archive on whatever runner is to hand.
@@ -1133,6 +1144,21 @@ int main(int argc, char **argv)
 		return 5;
 	}
 
+	/* The header in this archive declares a version and the library in the
+	   same archive answers one, and until now nothing compared the two. The
+	   number was printed on the line above and thrown away, so a library
+	   answering abi_version 1 next to a header declaring 2 passed every
+	   check here. That is not hypothetical: the fixture in
+	   tests/test_verify_archive.py did exactly that for three rounds, and
+	   a consumer refuses a library whose version it does not know. */
+	if (viprs_acad_abi_version() != VIPRS_ACAD_ABI_VERSION) {
+		fprintf(stderr, "probe: the library answers abi_version %u and the header it "
+			"ships declares VIPRS_ACAD_ABI_VERSION %u\n",
+			(unsigned)viprs_acad_abi_version(),
+			(unsigned)VIPRS_ACAD_ABI_VERSION);
+		return 7;
+	}
+
 	/* And the AC10xx range. Nothing in the bytes can check this one: the
 	   header does not state it, so a manifest claiming a range the library
 	   does not read is well-formed, and the number a consumer refuses a
@@ -1155,6 +1181,23 @@ int main(int argc, char **argv)
 		}
 		printf("DWG_VERSION_MIN=%u DWG_VERSION_MAX=%u\n",
 			(unsigned)caps.dwg_version_min, (unsigned)caps.dwg_version_max);
+		/* The same pair again, through the call a consumer actually reads
+		   them from. A library that agrees with its header through the
+		   entry point and disagrees through the struct is a library half
+		   its callers refuse. */
+		if (caps.abi_version != VIPRS_ACAD_ABI_VERSION ||
+		    caps.wire_version != VIPRS_ACAD_WIRE_VERSION) {
+			fprintf(stderr, "probe: the capabilities call answers abi_version %u "
+				"and wire_version %u, and the header it ships declares "
+				"VIPRS_ACAD_ABI_VERSION %u and VIPRS_ACAD_WIRE_VERSION %u\n",
+				(unsigned)caps.abi_version, (unsigned)caps.wire_version,
+				(unsigned)VIPRS_ACAD_ABI_VERSION,
+				(unsigned)VIPRS_ACAD_WIRE_VERSION);
+			return 7;
+		}
+		printf("agreed: abi_version %u and wire_version %u are what the shipped "
+			"header declares\n",
+			(unsigned)caps.abi_version, (unsigned)caps.wire_version);
 		want_min = strtoul(argv[2], NULL, 10);
 		want_max = strtoul(argv[3], NULL, 10);
 		if (caps.dwg_version_min != want_min || caps.dwg_version_max != want_max) {
@@ -1207,6 +1250,11 @@ PROBE
         echo "  the library reads AC$(mfact dwg_version_min) to AC$(mfact dwg_version_max), \
 which is what LINKINFO.json says"
         sed 's/^/    /' "$WORK/probe.out"
+      elif [ "$PROBE_STATUS" -eq 7 ]; then
+        fail "the library does not agree with the header it ships about the ABI. A consumer
+    compiles against that header and refuses a library whose version it does not know, so
+    the number in the header and the number the library answers have to be one number:
+$(sed 's/^/    /' "$WORK/probe.out")"
       elif [ "$PROBE_STATUS" -eq 6 ]; then
         fail "the library does not read the AC10xx range LINKINFO.json states. The manifest
     is what a consumer branches on, and the header never states the range, so nothing
