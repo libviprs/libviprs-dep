@@ -216,10 +216,18 @@ arbitrary axis algorithm gives for this record's own normal, which is the rule
 DXF states and which is written out here so this document stays sufficient on
 its own:
 
+    n = normalize(nx, ny, nz)
     if |nx| < 1/64 and |ny| < 1/64:   ax = (0, 1, 0) × n
     otherwise:                        ax = (0, 0, 1) × n
     ax = normalize(ax)
     ay = n × ax
+
+The first line is load-bearing and is the reason a producer emits every normal
+on this wire as a unit vector. `1/64` is a bound on a direction cosine, so it
+only means anything on a unit vector: a normal of `(1/64 + 1e-9, 0, 1)` is
+outside the band as written and inside it once normalized, and the two answers
+are ninety degrees apart. Normalize first, and do it even though the producer
+promises a unit normal, because the bytes may not have come from this producer.
 
 A point on the arc at angle `t` is then
 `centre + radius · (cos t · ax + sin t · ay)`. For a normal of `(0, 0, 1)`,

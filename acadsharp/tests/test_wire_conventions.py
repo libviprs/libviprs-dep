@@ -19,10 +19,12 @@ written out here, so editing one and not the other fails rather than passing
 quietly, and the threshold gets a control that shows what happens without it.
 """
 
+import math
 import os
 import re
 
 import pytest
+from g13_support import arbitrary_axis, curve_record, records, vertex_record
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WIRE_MD = os.path.join(os.path.dirname(HERE), "docs", "WIRE.md")
@@ -30,6 +32,7 @@ WIRE_MD = os.path.join(os.path.dirname(HERE), "docs", "WIRE.md")
 # The algorithm block, as the document lays it out. Both candidate axes and the
 # threshold come out of it; nothing about the rule is written here.
 ALGORITHM = re.compile(
+    r"n = normalize\(nx, ny, nz\)\s+"
     r"if \|nx\| < (\S+) and \|ny\| < \1:\s+ax = \(([-\d, ]+)\) × n\s+"
     r"otherwise:\s+ax = \(([-\d, ]+)\) × n",
 )
@@ -73,7 +76,7 @@ def unit(v):
 
 
 @pytest.fixture(scope="module")
-def arbitrary_axis(wire):
+def documented_algorithm(wire):
     """The document's own algorithm, as a callable, with its threshold."""
     m = ALGORITHM.search(wire)
     assert m, (
@@ -86,6 +89,9 @@ def arbitrary_axis(wire):
     near, away = vector(m.group(2)), vector(m.group(3))
 
     def axis(n, band=None):
+        # The normalize step is the document's first line, and it is the
+        # difference between the two branches for any normal near the band.
+        n = unit(n)
         band = threshold if band is None else band
         pick = near if abs(n[0]) < band and abs(n[1]) < band else away
         return cross(pick, n)
@@ -93,11 +99,17 @@ def arbitrary_axis(wire):
     return threshold, axis
 
 
+@pytest.fixture(scope="module")
+def arbitrary_axis_from_doc(documented_algorithm):
+    """Just the axis half, for the checks that never touch the threshold."""
+    return documented_algorithm[1]
+
+
 class TestTheDocumentIsReadable:
     """The positive controls, because every check below parses the document."""
 
-    def test_the_algorithm_parses(self, arbitrary_axis):
-        threshold, _ = arbitrary_axis
+    def test_the_algorithm_parses(self, documented_algorithm):
+        threshold, _ = documented_algorithm
         assert 0 < threshold < 1, f"the parsed threshold is {threshold}"
 
     def test_the_warning_table_still_parses(self, wire):
@@ -106,20 +118,20 @@ class TestTheDocumentIsReadable:
 
 
 class TestRecordFiveSaysWhereZeroIs:
-    def test_the_world_xy_case_is_world_x(self, flat, arbitrary_axis):
+    def test_the_world_xy_case_is_world_x(self, flat, documented_algorithm):
         # The case almost every drawing is, stated in prose and computed from
         # the block above it.
         assert re.search(r"For a normal of `\(0, 0, 1\)`.*?zero is world `\+X`", flat), (
             "WIRE.md no longer works the common normal through the algorithm, which is "
             "the example that tells a reader they have understood it"
         )
-        _, axis = arbitrary_axis
+        _, axis = documented_algorithm
         assert unit(axis((0.0, 0.0, 1.0))) == pytest.approx((1.0, 0.0, 0.0)), (
             "the algorithm WIRE.md states does not put zero along world +X for a normal "
             "of (0, 0, 1), which is what the paragraph beside it claims"
         )
 
-    def test_the_case_nobody_guesses(self, flat, arbitrary_axis):
+    def test_the_case_nobody_guesses(self, flat, documented_algorithm):
         m = re.search(r"For a normal of `\(0, 1, 0\)` it is `\((-?\d+), (-?\d+), (-?\d+)\)`", flat)
         assert m, (
             "WIRE.md dropped the worked example for a normal of (0, 1, 0). It is the "
@@ -127,7 +139,7 @@ class TestRecordFiveSaysWhereZeroIs:
             "identity."
         )
         stated = tuple(float(g) for g in m.groups())
-        _, axis = arbitrary_axis
+        _, axis = documented_algorithm
         assert unit(axis((0.0, 1.0, 0.0))) == pytest.approx(stated), (
             f"WIRE.md says a normal of (0, 1, 0) gives {stated}, and the algorithm it "
             "states two paragraphs earlier does not agree"
@@ -139,8 +151,8 @@ class TestRecordFiveSaysWhereZeroIs:
             "reconstructs a point on the arc or the angles are decoration."
         )
 
-    def test_the_threshold_is_a_real_number(self, flat, arbitrary_axis):
-        threshold, _ = arbitrary_axis
+    def test_the_threshold_is_a_real_number(self, flat, documented_algorithm):
+        threshold, _ = documented_algorithm
         assert threshold == pytest.approx(1 / 64)
         assert re.search(r"`1/64` is a real number", flat), (
             "WIRE.md states the threshold and not that it is a real number. An "
@@ -148,21 +160,21 @@ class TestRecordFiveSaysWhereZeroIs:
             "the failure the next check demonstrates."
         )
 
-    def test_the_band_is_what_makes_the_common_case_work_at_all(self, arbitrary_axis):
+    def test_the_band_is_what_makes_the_common_case_work_at_all(self, documented_algorithm):
         # The control for the sentence above. With the threshold rounded to
         # zero the first branch never fires, and the world z normal crosses
         # with itself: there is no axis at all, not merely a different one.
-        _, axis = arbitrary_axis
+        _, axis = documented_algorithm
         assert norm(axis((0.0, 0.0, 1.0), band=0.0)) == pytest.approx(0.0), (
             "an integer-division threshold no longer breaks the world z normal, so the "
             "warning WIRE.md carries about it is describing nothing"
         )
 
-    def test_just_off_the_axis_is_ninety_degrees_out(self, arbitrary_axis):
+    def test_just_off_the_axis_is_ninety_degrees_out(self, documented_algorithm):
         # The other half of why the band exists, and the reason it is a band
         # rather than an equality test: the two branches disagree by a right
         # angle on a normal that is nearly, but not exactly, world z.
-        _, axis = arbitrary_axis
+        _, axis = documented_algorithm
         n = unit((1e-3, 0.0, 1.0))
         inside = unit(axis(n))
         outside = unit(axis(n, band=0.0))
@@ -228,4 +240,147 @@ class TestWarningOneOhSixDescribesWhatRaisesIt:
         assert "reflection" in row and "mirror" in row, (
             "row 106 leaves a reader to work out whether a mirror counts. It is the case "
             "the wording used to get wrong, so it is the case worth naming."
+        )
+
+
+# --------------------------------------------------- a normal that is not +Z
+#
+# Until #71 landed there was nothing in the corpus to point this at. For a
+# normal of (0, 0, 1) the arbitrary axis algorithm is the identity, so a
+# document that stated it wrongly and a document that stated it correctly
+# produced the same stream on every fixture there was, and the two worked
+# examples above were checked against each other and against nothing else.
+#
+# `g13_ocs_rotated.dwg` is an insertion whose extrusion is +Y, so every record
+# in it carries a normal of (0, 1, 0): the second branch, and the example the
+# document says nobody guesses.
+
+ROTATED = "g13_ocs_rotated.dwg"
+OFF_AXIS_NORMAL = (0.0, 1.0, 0.0)
+
+
+@pytest.fixture(scope="module")
+def arc():
+    return curve_record(only(ROTATED, "Arc")["rest"])
+
+
+@pytest.fixture(scope="module")
+def polyline():
+    return vertex_record(only(ROTATED, "Polyline")["rest"])
+
+
+def only(fixture, kind):
+    found = [r for r in records(fixture) if r["kind"] == kind]
+    assert len(found) == 1, f"{fixture} carries {len(found)} {kind} records, expected one"
+    return found[0]
+
+
+def scale(v, k):
+    return tuple(c * k for c in v)
+
+
+def minus(a, b):
+    return tuple(x - y for x, y in zip(a, b))
+
+
+class TestTheAlgorithmAgreesWithTheOneTheTestsUse:
+    """Two implementations written from the same specification and not from
+    each other. `g13_support.arbitrary_axis` came from the lane that made the
+    flattener run it; this one is parsed out of the document a consumer reads.
+    Agreeing across the branch boundary is the check."""
+
+    @pytest.mark.parametrize(
+        "normal",
+        (
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (1.0, 2.0, 2.0),
+            # Either side of the 1/64 band, which is the only place the two
+            # branches can disagree and the only place a threshold matters.
+            (1.0 / 64.0 - 1e-9, 0.0, 1.0),
+            (1.0 / 64.0 + 1e-9, 0.0, 1.0),
+        ),
+    )
+    def test_the_document_and_the_support_module_pick_the_same_axis(
+        self, arbitrary_axis_from_doc, normal
+    ):
+        mine = unit(arbitrary_axis_from_doc(normal))
+        theirs = arbitrary_axis(normal)
+        assert mine == pytest.approx(theirs), (
+            f"for a normal of {normal} the algorithm WIRE.md states picks {mine} and "
+            f"the one the tests run picks {theirs}. One of them is what the shim does "
+            "and the other is what a consumer would build, so a consumer drawing this "
+            "arc puts it somewhere the drawing does not."
+        )
+
+
+class TestAFixtureActuallyExercisesTheSecondBranch:
+    """The document's convention, run against a recorded stream whose normal is
+    not `+Z`, with the polyline in the same view as the witness.
+
+    The arc's angles and the polyline's vertices are independent: one is read
+    through the plane frame and the other is three points the flattener lifted,
+    with no angle anywhere in it. So the polyline fixes the two axes the record
+    is measured in without using the document at all, and the arc has to land
+    on them.
+    """
+
+    def test_the_normal_is_not_the_identity_case(self, arc):
+        # The positive control, and the whole reason this fixture is the one.
+        assert arc["normal"] == pytest.approx(OFF_AXIS_NORMAL), (
+            f"the Arc in {ROTATED} carries a normal of {arc['normal']}, so it no longer "
+            "exercises the branch the algorithm exists for. For (0, 0, 1) the algorithm "
+            "is the identity and this whole class passes over nothing."
+        )
+
+    def test_the_fixture_still_has_the_shape_this_reads(self, arc, polyline):
+        # Everything below is arithmetic between these two records, so a
+        # fixture that changed shape has to fail here rather than quietly
+        # start asserting something else.
+        points, _, normal = polyline
+        assert normal == pytest.approx(OFF_AXIS_NORMAL)
+        assert len(points) == 3
+        assert arc["c"] == pytest.approx(points[0]), (
+            "the arc's centre and the polyline's first vertex are both the block's "
+            "origin, which is what lets one measure the other"
+        )
+        assert arc["a0"] == pytest.approx(0.0)
+        assert arc["a1"] == pytest.approx(math.pi / 2.0)
+        for span in (minus(points[1], points[0]), minus(points[2], points[1])):
+            assert norm(span) == pytest.approx(2.0 * arc["r"]), (
+                "each span of the polyline is twice the arc's radius, which is what "
+                "makes the comparison below a whole number rather than a tolerance"
+            )
+
+    def test_the_angle_origin_is_where_the_polyline_says_it_is(
+        self, arc, polyline, arbitrary_axis_from_doc
+    ):
+        # Angle zero, reconstructed with WIRE.md's own formula, against the
+        # direction the polyline's first span runs. The polyline knows nothing
+        # about angles: its vertices are the block's own x axis and y axis
+        # lifted, so if the document named the wrong axis this is where it
+        # shows.
+        points, _, _ = polyline
+        ax = unit(arbitrary_axis_from_doc(arc["normal"]))
+        start = tuple(c + arc["r"] * a for c, a in zip(arc["c"], ax))
+        assert start == pytest.approx(scale(minus(points[1], points[0]), 0.5)), (
+            f"the document puts angle zero at {start} and the polyline's first span "
+            "runs the other way. An arc drawn from this document would be reflected "
+            "or rotated out of the plane the drawing put it in."
+        )
+
+    def test_a_quarter_turn_lands_on_the_second_span(self, arc, polyline, arbitrary_axis_from_doc):
+        # And the other axis, which is the one the sense of the angles fixes.
+        # Getting ay backwards is a mirrored arc, which is the failure that
+        # survives every check that only looks at where zero is.
+        points, _, _ = polyline
+        ax = unit(arbitrary_axis_from_doc(arc["normal"]))
+        ay = cross(unit(arc["normal"]), ax)
+        end = tuple(c + arc["r"] * a for c, a in zip(arc["c"], ay))
+        assert end == pytest.approx(scale(minus(points[2], points[1]), 0.5)), (
+            f"a quarter turn counter-clockwise lands at {end}, and the polyline turns "
+            "the other way. The angles would run backwards for every record whose "
+            "normal is not +Z."
         )
