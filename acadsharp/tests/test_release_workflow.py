@@ -789,6 +789,37 @@ class TestEveryContainerCellIsRunAndNotOnlyLinked:
         )
 
 
+class TestADispatchCannotBuildSomethingTheConsumersDoNotExpect:
+    """The one way the runs above could be asked an unanswerable question.
+
+    Both conformance runners read the expected upstream version out of
+    `acadsharp/VERSION` and hold the library's capability string to it, which
+    is right for a push: the archive in front of them was built from that
+    file. This job can be dispatched with a version input instead, and the
+    Build step honours it, so a dispatch whose upstream half differs from the
+    file would build one ACadSharp and then run a consumer expecting another.
+
+    It cannot happen today, and that is a fact about the pin table rather
+    than about this workflow: the preflight refuses any version whose
+    upstream has no SOURCE_SHA256 entry, and there is exactly one entry. So
+    the coupling is pinned here instead of papered over, and it fails on the
+    day a second pin lands, which is the day it would start to matter.
+    """
+
+    def test_only_the_upstream_the_consumers_expect_can_be_built(self):
+        with open(os.path.join(ACADSHARP_DIR, "VERSION")) as f:
+            upstream, _shim = ba.split_version(f.read().strip())
+        pinned = set(ba.SOURCE_SHA256)
+        assert pinned == {upstream}, (
+            f"acadsharp/VERSION is {upstream} and the driver pins {sorted(pinned)}. A "
+            "dispatch can now name an upstream the conformance consumers in this same "
+            "job do not expect: they read acadsharp/VERSION and the Build step takes "
+            "--version. Hand the runners the resolved version before adding the pin, "
+            "or a release cut with the input set fails at a consumer for a reason "
+            "that has nothing to do with the archive."
+        )
+
+
 class TestTheLibcOfTheLibraryUnderTestIsProved:
     """A green consumer run does not say which library it ran against.
 
