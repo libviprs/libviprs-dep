@@ -407,8 +407,10 @@ class TestASkewIsNotAUniformScale:
     def test_the_squashed_circle_is_warned_about(self):
         squashed = [w for w in warnings(SKEW) if w["code"] == "NON_UNIFORM_BLOCK_SCALE"]
         assert squashed, (
-            f"{SKEW} produced no NON_UNIFORM_BLOCK_SCALE. Its transform turns a "
-            "circle into an ellipse with axes 3 and 1/3 of the radius"
+            f"{SKEW} produced no NON_UNIFORM_BLOCK_SCALE. The transform's two "
+            "singular values are 3 and 1, so the fixture's circle of radius 4 is "
+            "an ellipse with semi-axes 12 and 4, and the record calls it a circle "
+            "of radius 8.944272, which is neither"
         )
         assert any("CIRCLE" in w["message"] for w in squashed)
 
