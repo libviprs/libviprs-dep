@@ -142,6 +142,63 @@ class TestVersionPreflight:
                 "still gets as far as a build"
             )
 
+    def test_the_refusal_cannot_be_switched_off(self):
+        # `test_an_unpinned_version_is_refused` only asserts that the step
+        # *calls* source_sha256. Adding `continue-on-error: true` to the step,
+        # or `|| true` after the heredoc, leaves that assertion green while the
+        # refusal stops refusing, and the README and MANUAL both promise it
+        # "fails red rather than being skipped". This org removed exactly that
+        # skip arm from libviprs-org's sync gate three weeks ago, so it is a
+        # documented way for a gate here to go quiet.
+        for step in self.job["steps"]:
+            if "source_sha256" not in (step.get("run") or ""):
+                continue
+            assert not step.get("continue-on-error"), (
+                "the source-hash refusal carries continue-on-error, so an "
+                "unpinned version would warn and the run would go green"
+            )
+            assert "|| true" not in step["run"], (
+                "the source-hash refusal swallows its own exit status with "
+                "`|| true`, so an unpinned version would not stop the run"
+            )
+            break
+        else:
+            raise AssertionError(
+                "no step in resolve-version calls source_sha256, so there is "
+                "no refusal to switch off and this guard is reading nothing"
+            )
+
+    def test_the_whole_job_cannot_be_switched_off(self):
+        # Same hole one level up: `continue-on-error` on the job means every
+        # dependent still runs even though the refusal failed.
+        assert not self.job.get("continue-on-error"), (
+            "resolve-version carries continue-on-error, so the build jobs "
+            "that need it would run anyway after an unpinned version"
+        )
+
+
+class TestThirdPartyActionsArePinned:
+    """The one action here that is not `actions/*` runs privileged, in a job
+    that can write releases, so it is pinned to a commit rather than a tag."""
+
+    def setup_method(self):
+        self.wf = load_workflow()
+
+    def test_every_non_github_action_is_pinned_to_a_sha(self):
+        unpinned = []
+        for job_name, job in self.wf["jobs"].items():
+            for step in job.get("steps", []):
+                uses = step.get("uses")
+                if not uses or uses.startswith("actions/"):
+                    continue
+                ref = uses.split("@", 1)[1] if "@" in uses else ""
+                if len(ref) != 40 or not all(c in "0123456789abcdef" for c in ref):
+                    unpinned.append(f"{job_name}: {uses}")
+        assert not unpinned, (
+            "these third-party actions are not pinned to a commit sha, so a "
+            "moved tag changes what runs:\n  " + "\n  ".join(unpinned)
+        )
+
 
 class TestBuildJobsVerifyBeforeTheyUpload:
     def setup_method(self):
