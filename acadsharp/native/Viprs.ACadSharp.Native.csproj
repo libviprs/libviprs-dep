@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>viprs_acadsharp</AssemblyName>
+    <RootNamespace>Viprs.ACadSharp.Native</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SignAssembly>false</SignAssembly>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Upstream's own warnings, which this project does not own and cannot fix
+         without a patch. AOT and trim warnings are deliberately not in here. -->
+    <NoWarn>$(NoWarn);CS0618;CS0162</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <!-- One warning per site. The default collapses an assembly's trim
+         warnings into a single line, which is how a count of 2 hid 16. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Load-bearing at run time, not a size tweak. CadHeader's constructor
+         reaches DateTime.Now -> TimeZoneInfo -> CultureInfo, and a NativeAOT
+         binary on a host with no libicu calls FailFast there. That aborts with
+         SIGABRT through any try/catch, so the export cannot turn it into a
+         return code. ADR 0001 records what it costs DWG code-page text. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Also load-bearing. ACadSharp reaches its table entry types through
+         Activator.CreateInstance (Tables/Collections/Table.cs), so without the
+         root the publish succeeds and the first CadDocument throws
+         MissingMethodException on AppId. CSMath and CSUtilities need no root
+         of their own: upstream imports them as shared projects (.projitems),
+         so their types are compiled into ACadSharp.dll. -->
+    <TrimmerRootAssembly Include="ACadSharp" />
+  </ItemGroup>
+
+  <!-- The vendored ACadSharp checkout. build_acadsharp.py resolves the path
+       from acadsharp/VERSION and passes it in, so the upstream version lives
+       in one file rather than in this one as well. -->
+  <ItemGroup Condition="'$(AcadSharpProject)' != ''">
+    <ProjectReference Include="$(AcadSharpProject)" />
+  </ItemGroup>
+
+  <Target Name="RequireAcadSharpProject" BeforeTargets="BeforeBuild">
+    <Error
+      Condition="'$(AcadSharpProject)' == ''"
+      Text="AcadSharpProject is not set. Build through acadsharp/build_acadsharp.py, which reads acadsharp/VERSION, fetches the pinned source and passes -p:AcadSharpProject." />
+  </Target>
+
+</Project>
