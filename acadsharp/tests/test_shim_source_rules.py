@@ -232,7 +232,7 @@ def without_comments(code):
 class TestTheDwgRangeHasOneCopyInTheShim:
     """`VersionGate` carried its own `MinVersion`/`MaxVersion` beside
     `AbiConstants.DwgVersionMin`/`Max`, both spelled as literals. Two copies of
-    one fact drift in the direction nothing can see: `viprs_acad_capabilities_v1`
+    one fact drift in the direction nothing can see: `viprs_acad_get_capabilities_v1`
     answers out of `AbiConstants`, the gate that decides whether a file is
     opened at all reads the other pair, and a bump applied to one of them gives
     a library that advertises a range it does not enforce. Neither side fails to

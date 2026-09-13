@@ -932,7 +932,7 @@ def dwg_range():
     """The AC10xx read range, out of the shim's own constants.
 
     Not out of the header, which never states it: the range is a fact
-    about the backing reader, `viprs_acad_capabilities_v1` answers with it
+    about the backing reader, `viprs_acad_get_capabilities_v1` answers with it
     at run time, and the build records what the library answered in each
     archive's LINKINFO.json. This reads `AbiConstants` only so the test
     below has a number to look for in the workflow, which is the one

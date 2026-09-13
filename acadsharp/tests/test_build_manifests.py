@@ -881,7 +881,7 @@ class TestEveryFileTheBuildReadsIsStaged:
     """The container only has what the build context puts in it.
 
     `acadsharp/VERSION` was not one of those things. The csproj reads it
-    during the build to generate the string `viprs_acad_capabilities_v1`
+    during the build to generate the string `viprs_acad_get_capabilities_v1`
     reports, msbuild's `ReadLinesFromFile` returns nothing for a file that is
     not there rather than failing, and so every archive published shipped a
     library that answers the version question with an empty string. The C
