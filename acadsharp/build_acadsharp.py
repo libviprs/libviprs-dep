@@ -1271,7 +1271,7 @@ RUN rmdir {src_root}/src/CSUtilities 2>/dev/null || true; \\
 COPY native /work/native
 COPY include /work/include
 COPY VERSION /work/VERSION
-COPY archive_smoke.c static_archive_smoke.c stage.sh retain_sections.py /work/
+COPY archive_smoke.c static_archive_smoke.c stage.sh retain_sections.py privatise_unwind.sh /work/
 
 # Step 5: publish the shared library. The log is kept because the AOT
 # warning count in BUILDINFO.json is read out of it.
@@ -1524,12 +1524,13 @@ def _write_build_context(ctx):
     # constant comes out as "", and every archive published so far shipped a
     # library that answers the version question with an empty string.
     shutil.copy2(VERSION_FILE, os.path.join(ctx, "VERSION"))
-    # Copied rather than generated: both are real scripts with their own
-    # tests, and a second copy inside a Python string is a second thing to
-    # keep right. `stage.sh` was that second copy until #59.
-    for name in ("retain_sections.py", "stage.sh"):
+    # Copied rather than generated: all three are real scripts with their
+    # own tests, and a second copy inside a Python string is a second thing
+    # to keep right. `stage.sh` was that second copy until #59.
+    for name in ("retain_sections.py", "stage.sh", "privatise_unwind.sh"):
         shutil.copy2(os.path.join(SCRIPTS_DIR, name), os.path.join(ctx, name))
-    os.chmod(os.path.join(ctx, "stage.sh"), 0o755)
+    for name in ("stage.sh", "privatise_unwind.sh"):
+        os.chmod(os.path.join(ctx, name), 0o755)
     # The two smokes stay generated: each one's body is the entry-point
     # list the shipped header declares, so a hand-maintained copy would
     # be a list that disagrees with the header it is compiled against.

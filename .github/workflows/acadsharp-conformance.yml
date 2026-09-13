@@ -164,3 +164,61 @@ jobs:
           name: logs-conformance
           path: bin/logs/
           if-no-files-found: warn
+
+  musl-static-link:
+    # The musl half of the same premise, and the one nothing covered.
+    #
+    # verify_archive.sh holds `static_certified: true` to an archive that
+    # links and runs, but only when the host can build for the target.
+    # Every musl cell in release-acadsharp.yml runs on a glibc runner, so
+    # what those cells got was
+    #
+    #   static_certified: not link-tested (this host cannot build for musl/x64)
+    #
+    # written into a log, and a green job. Both musl archives shipped a
+    # documented cargo recipe that had never once been run, and when it
+    # was finally run it failed: the runtime bundles its own
+    # llvm-libunwind and rustc links a self-contained one for every musl
+    # target, so about sixty symbols collide at the link. The build now
+    # renames ours, and this is the job that finds out on a pull request
+    # rather than at release time.
+    #
+    # A job of its own rather than more steps in `consumers`, because it
+    # is a second NativeAOT build and serialising them puts two of those
+    # inside one 90 minute budget.
+    #
+    # arm64, on a native arm64 runner, for the reason ADR 0001 gives:
+    # .NET documents qemu-user-static as unsupported and a
+    # cross-architecture publish was measured producing the object file
+    # and then failing at the native link. The x64 musl cell is covered
+    # by the same wrapper in release-acadsharp.yml, on an x64 runner.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the musl/arm64 archive
+        run: python3 acadsharp/build_acadsharp.py --platform musl --arch arm64
+
+      - name: Verify it on a musl host
+        # The wrapper, not the verifier. This runner is glibc, so calling
+        # verify_archive.sh here reproduces exactly the skip that let the
+        # broken recipe ship. The wrapper puts the archive in front of an
+        # Alpine container of this same architecture, where the script's
+        # own musl detection fires and cc, cargo and rustc are all
+        # musl-native, and it sets VIPRS_REQUIRE_LINK_TEST so a skip is a
+        # failure rather than a line in a log.
+        run: |
+          bash acadsharp/scripts/verify_archive_matched_host.sh \
+            bin/acadsharp-musl-arm64.tgz musl arm64
+
+      - name: Keep the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-conformance-musl
+          path: bin/logs/
+          if-no-files-found: warn

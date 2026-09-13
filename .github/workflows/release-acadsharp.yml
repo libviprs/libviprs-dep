@@ -299,8 +299,19 @@ jobs:
         # reported for a check that never ran. The platform and cpu go in
         # too, so a cell that built the wrong target is caught instead of
         # the verifier believing whatever filename it was handed.
+        #
+        # Through verify_archive_matched_host.sh rather than straight at
+        # verify_archive.sh. Both musl cells run on glibc runners, and
+        # verify_archive.sh holds `static_certified` to a real link only
+        # when the host can build for the target, so what those two cells
+        # got instead was a "not link-tested" line in a log and a green
+        # job. Two musl archives shipped a cargo recipe nothing had run.
+        # The wrapper puts a musl archive in front of a musl host, in an
+        # Alpine container on this same runner, and sets
+        # VIPRS_REQUIRE_LINK_TEST so a cell that somehow still ends up
+        # unable to link says so.
         run: |
-          bash acadsharp/scripts/verify_archive.sh \
+          bash acadsharp/scripts/verify_archive_matched_host.sh \
             "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
             ${{ matrix.platform }} ${{ matrix.cpu }}
 
