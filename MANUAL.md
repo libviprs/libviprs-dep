@@ -518,6 +518,10 @@ dependency's flake should not colour another's release run red.
   archive, with the cell's platform and cpu passed in, between the build
   and the upload. `--upload` is deliberately not passed to the driver:
   it would publish before the verifier ran.
+- Each cell passes `--version` as well, so a dispatched `version` input
+  reaches the build and not just the tag. Without it an override would
+  publish archives built from the committed `acadsharp/VERSION` under a
+  different tag, with `LINKINFO.json` and the release page disagreeing.
 - `release-notes` runs whatever happened above. It downloads whatever
   actually reached the release, hashes each asset, reads
   `static_certified` and the Rust triple out of each archive's
@@ -525,6 +529,11 @@ dependency's flake should not colour another's release run red.
   archive. Every target that did not publish gets a line naming the job
   that should have produced it, because a release that quietly ships four
   of five is worse than one that ships four and says so.
+- It also reads each archive's `artifact_version` and refuses any that is
+  not the version being published, or that records none at all. The notes
+  go up first, then the offending assets come off the release, then the
+  run fails. An archive that disagrees with its own tag is worse than a
+  missing one because it looks right.
 
 No acadsharp release has been cut yet, and `acadsharp/README.md` says so
 rather than linking archives that do not exist. Cut the first one by

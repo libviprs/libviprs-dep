@@ -88,6 +88,23 @@ then failing at the native link, and the .NET runtime documents
 `qemu-user-static` as unsupported, so every cell runs on a runner of its own
 architecture.
 
+A dispatched `version` input overrides `VERSION` everywhere, not just in
+the tag: it reaches `resolve-version`, the tag, the notes and the `--version`
+each build passes to the driver. That matters because the first release has to
+be cut by dispatch, and an override that only the tag believed would publish
+archives built from the committed version under a different tag.
+
+`release-notes` then reads `artifact_version` out of every archive that
+reached the release and refuses any that is not the version being published,
+or that records none at all. A refused archive is named in the notes, taken
+off the release, and fails the run. A release whose assets disagree with its
+own tag is worse than one that fails, because it looks right.
+
+The release is not marked a pre-release. `build_acadsharp.upload_release()`
+creates a plain release for the same tag, so marking it here would make the
+kind of release depend on whether a laptop or CI cut it, and a pre-release is
+never "latest".
+
 The release notes are generated rather than typed. The preamble comes from
 `VERSION`, `native/global.json`, `include/viprs_acadsharp.h` and
 `build_acadsharp.py`; the per-archive rows are hashed from the published assets
