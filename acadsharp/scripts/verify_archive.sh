@@ -913,10 +913,14 @@ if [ "$STATIC_CERTIFIED" = "1" ] && [ -f "$STATIC_LIB" ] && [ -f "$STATIC_INIT_L
     x86_64|amd64) HOST_CPU=x64 ;;
     arm64|aarch64) HOST_CPU=arm64 ;;
   esac
+  # musl's ldd exits 1 for --version, and under `pipefail` that made the
+  # test below false on every Alpine host, so a musl archive was never
+  # link-tested even on the one machine that could do it.
+  LIBC_LINE=$(ldd --version 2>&1 | sed -n 1p || true)
   HOST_PLATFORM=linux
   if [ "$(uname -s)" = "Darwin" ]; then
     HOST_PLATFORM=mac
-  elif ldd --version 2>&1 | sed -n 1p | grep -qi musl; then
+  elif printf '%s' "$LIBC_LINE" | grep -qi musl; then
     HOST_PLATFORM=musl
   fi
 

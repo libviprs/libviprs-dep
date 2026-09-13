@@ -401,6 +401,19 @@ class TestScriptShape:
         )
         assert result.returncode == 0, _output(result)
 
+    def test_the_libc_probe_survives_a_non_zero_exit(self):
+        # musl's ldd exits 1 for --version. Piping it straight into a
+        # condition under `pipefail` made "is this host musl" false on
+        # every Alpine host, so a musl archive was never link-tested even
+        # on the one machine that could do it, and the script said so in
+        # a line that reads like a deliberate skip.
+        with open(SCRIPT_PATH) as f:
+            code = "\n".join(
+                line for line in f.read().splitlines() if not line.lstrip().startswith("#")
+            )
+        assert "ldd --version 2>&1 | sed -n 1p | grep" not in code
+        assert "|| true)" in code
+
     def test_takes_the_same_arguments_as_the_sibling_verifiers(self):
         # release.yml and release-zstd.yml both call
         # `verify_archive.sh <tgz> [platform] [cpu]`; the acadsharp
