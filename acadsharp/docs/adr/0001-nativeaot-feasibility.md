@@ -72,6 +72,11 @@ and the AOT process still finishes inside it.
 | `real_AC1032.dwg` | 0.05 s | 29.0 MB | 0.12 s | 38.0 MB |
 | `real_AC1018.dwg` | 0.04 s | 30.3 MB | 0.17 s | 38.6 MB |
 
+Startup on its own, measured separately because the numbers above bury it: opening
+the library and calling the cheapest export takes 4.8 ms on arm64, averaged over 100
+runs, with a peak RSS of 6.1 MB. That is the whole runtime coming up. The JIT's
+`dotnet` host takes roughly ten times that before it runs a line of ACadSharp.
+
 ### The controls
 
 A pass in a container that quietly had a runtime in it would prove nothing, so both
@@ -83,9 +88,11 @@ failing states were run in the same container as the passes:
   arm64, 127 on x64. `dotnet` is not on `PATH` and `/usr/share/dotnet` does not
   exist.
 
-Both smokes are there too: a C program that `dlopen`s the library and resolves the
-exports by bare name, and a Rust program that links it with `#[link]`. Rust reported
-ABI 1 and 163 entities for `real_AC1032.dwg`, matching.
+Both smokes are there too, and both ran on both architectures: a C program that
+`dlopen`s the library and resolves the exports by bare name, and a Rust program that
+links it with `#[link]`. The Rust build ran in `rust:1.98.1` on arm64 and x64, neither
+of which has ever seen .NET, and its output matches the JIT oracle the same way the C
+one does. Both are committed under `tests/smoke/`.
 
 ## Source or NuGet
 
@@ -272,9 +279,14 @@ documents it as unsupported. zstd's driver emulates, and that pattern must not b
 inherited here. Note that this Mac runs amd64 containers under Rosetta rather than
 QEMU, so the amd64 results above say nothing either way about QEMU.
 
-So: `ubuntu-latest` for linux-x64, `ubuntu-24.04-arm` for linux-arm64, `macos-15`
-for osx-arm64 (already what `release.yml` uses), and an Alpine container on the
-matching architecture if musl targets are ever wanted.
+So: `ubuntu-latest` for linux-x64, `ubuntu-24.04-arm` for linux-arm64 and `macos-15`
+for osx-arm64, which is already what `release.yml` uses.
+
+On musl: it is not in this issue's target list and I did not build it. zstd ships
+musl archives, so the question will come back at packaging time, and the shape of the
+answer is an Alpine container on the matching architecture (`10.0-alpine` exists for
+both arches) rather than anything cross-libc. The .NET docs are explicit that
+glibc-to-musl needs the matching toolchain and is not a flag you pass.
 
 `osx-arm64` is the one target this spike did not build. Publishing it needs a macOS
 host with the SDK on it, and this lane runs everything in Linux containers by
