@@ -373,23 +373,23 @@
       "view_count": 4
     }
   },
-  "recorded": "2026-09-12",
+  "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "dbd61743e4d9f70a0e6094985f9998e8c6447cd2039e5975c99d85440b02075b",
+    "sha256": "3aa1e4d9242d2ae6eb724a898fba7d497c2e7ed062d91d7b5a5615347599dfab",
     "sources": {
       "native/Abi.cs": "161f27cd0ecbc6148810727a365075868661ef4358e3fc01323e857996259163",
       "native/Adapter/CanonicalDump.cs": "9737d009cca585254f09d037ee9a5bd045385c2a31e44b810c77b3856272547a",
       "native/Adapter/Flattener.cs": "95d38f8aaba14ce9232b50f638cf6a9087fc42e1a5112b608b871ae81cbcef9a",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
-      "native/Adapter/WarningCodes.cs": "8594434b8c57c44f65630720fe54879410f212264f6560d9f7f289e292139568",
+      "native/Adapter/WarningCodes.cs": "6644f9b752305e1a43dd7299e88a870ae950a3d74c35d3f4452af03c8db4e2e3",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
-      "native/Sources/AcadSharpSource.cs": "10804cb9f6de73e3ec5600045d1a18ef562e8c70093b87ab078a7a5be53e54cd",
+      "native/Sources/AcadSharpSource.cs": "3df1067c4624f07bc1a14bbba06debdb182d47ba7366715e1b96d07f93d2811b",
       "native/Sources/IDocumentSource.cs": "3c27ce53933a313bb729e90c451d81e9e3f4ad1524aaf137ec6bfd9d22ea78db",
-      "native/Sources/SourceFactory.cs": "f804f5ced3c9f9617110a0ddc3cd41c240f2a2302126d8aa26a0077d2d67dfcb",
+      "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
       "native/Sources/SyntheticSource.cs": "7d1371cec151149cb5c01abe41a54836acf2da161d4394b3f93600ec78271324",
       "native/Wire/BatchWriter.cs": "4f0173612869a5ba4b86a6dd42b832defa4761b998cc5453ce726623cdd2cbf6",
-      "native/Wire/DecodeSession.cs": "cdc91674037b66292fbd30d2d3d42cf499b2423f2467dd0f497ed54920cd43ac",
+      "native/Wire/DecodeSession.cs": "450109551fe954f749d7cd89a71640cdf49f592a8ed9e2d65650a7183ad901b0",
       "native/Wire/Primitive.cs": "1445831454fb6ec52ef50af4f85866ae9ec86300957e5f3ced208f73692e50ee",
       "native/Wire/RecordEncoder.cs": "16efc39e91ec2d7712c3471192b3b3eff45326b46dcc7bd2b5a5c7bef2e1f6d6",
       "native/Wire/WireFormat.cs": "459a391e27be3cbc9f136a8a2de6f899ef9783997add47366696ddcb9734f4b4"
