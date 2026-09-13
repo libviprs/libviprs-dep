@@ -115,6 +115,12 @@ namespace Viprs.Abi
 	// The bounds a decode runs under, already resolved: a null limits pointer
 	// and a zero field both mean the default, so nothing downstream has to ask
 	// whether a number came from the caller.
+	//
+	// Every field is readonly and there is one way in. Defaults used to be a
+	// shared static whose fields anything holding it could assign, so one line
+	// in one caller could lower max_entities for every decode in the process,
+	// including decodes already running on other threads, and nothing would
+	// have reported it. A decode's bounds are settled when it is created.
 	internal sealed class ResolvedLimits
 	{
 		public const ulong DefaultMaxInputBytes = 536870912ul;
@@ -124,12 +130,31 @@ namespace Viprs.Abi
 		public const uint DefaultMaxBlockDepth = 64u;
 		public const ulong DefaultMaxOutputBytes = 4294967296ul;
 
-		public ulong MaxInputBytes = DefaultMaxInputBytes;
-		public ulong MaxEntities = DefaultMaxEntities;
-		public ulong MaxStringBytes = DefaultMaxStringBytes;
-		public ulong MaxPolylinePoints = DefaultMaxPolylinePoints;
-		public uint MaxBlockDepth = DefaultMaxBlockDepth;
-		public ulong MaxOutputBytes = DefaultMaxOutputBytes;
+		public readonly ulong MaxInputBytes;
+		public readonly ulong MaxEntities;
+		public readonly ulong MaxStringBytes;
+		public readonly ulong MaxPolylinePoints;
+		public readonly uint MaxBlockDepth;
+		public readonly ulong MaxOutputBytes;
+
+		// Zero is the default in every field, which is the header's rule, so
+		// the resolution happens here rather than in each caller.
+		public ResolvedLimits(
+			ulong maxInputBytes = 0ul,
+			ulong maxEntities = 0ul,
+			ulong maxStringBytes = 0ul,
+			ulong maxPolylinePoints = 0ul,
+			uint maxBlockDepth = 0u,
+			ulong maxOutputBytes = 0ul
+		)
+		{
+			MaxInputBytes = Pick(maxInputBytes, DefaultMaxInputBytes);
+			MaxEntities = Pick(maxEntities, DefaultMaxEntities);
+			MaxStringBytes = Pick(maxStringBytes, DefaultMaxStringBytes);
+			MaxPolylinePoints = Pick(maxPolylinePoints, DefaultMaxPolylinePoints);
+			MaxBlockDepth = maxBlockDepth == 0u ? DefaultMaxBlockDepth : maxBlockDepth;
+			MaxOutputBytes = Pick(maxOutputBytes, DefaultMaxOutputBytes);
+		}
 
 		public static readonly ResolvedLimits Defaults = new ResolvedLimits();
 
@@ -153,14 +178,14 @@ namespace Viprs.Abi
 				return null;
 			}
 
-			ResolvedLimits r = new ResolvedLimits();
-			r.MaxInputBytes = Pick(p->max_input_bytes, DefaultMaxInputBytes);
-			r.MaxEntities = Pick(p->max_entities, DefaultMaxEntities);
-			r.MaxStringBytes = Pick(p->max_string_bytes, DefaultMaxStringBytes);
-			r.MaxPolylinePoints = Pick(p->max_polyline_points, DefaultMaxPolylinePoints);
-			r.MaxBlockDepth = p->max_block_depth == 0u ? DefaultMaxBlockDepth : p->max_block_depth;
-			r.MaxOutputBytes = Pick(p->max_output_bytes, DefaultMaxOutputBytes);
-			return r;
+			return new ResolvedLimits(
+				p->max_input_bytes,
+				p->max_entities,
+				p->max_string_bytes,
+				p->max_polyline_points,
+				p->max_block_depth,
+				p->max_output_bytes
+			);
 		}
 
 		private static ulong Pick(ulong given, ulong fallback)

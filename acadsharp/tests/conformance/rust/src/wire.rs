@@ -54,6 +54,34 @@ pub struct Record<'a> {
     pub payload: &'a [u8],
 }
 
+/// Typed reads of a record's payload, each of them bounds checked.
+///
+/// A consumer written from this file gets these rather than a raw slice and an
+/// offset it has to police itself, which is the difference between a malformed
+/// batch being a `None` it has to handle and a panic in the middle of somebody
+/// else's process.
+impl<'a> Record<'a> {
+    pub fn u16(&self, at: usize) -> Option<u16> {
+        u16_at(self.payload, at)
+    }
+
+    pub fn u32(&self, at: usize) -> Option<u32> {
+        u32_at(self.payload, at)
+    }
+
+    pub fn u64(&self, at: usize) -> Option<u64> {
+        u64_at(self.payload, at)
+    }
+
+    pub fn f64(&self, at: usize) -> Option<f64> {
+        f64_at(self.payload, at)
+    }
+
+    pub fn bytes(&self, at: usize, len: usize) -> Option<&'a [u8]> {
+        self.payload.get(at..at.checked_add(len)?)
+    }
+}
+
 #[derive(Debug)]
 pub struct Reader<'a> {
     payload: &'a [u8],
@@ -69,22 +97,31 @@ pub struct Reader<'a> {
 /// Nothing inside a record is naturally aligned, because the batch header is
 /// twelve bytes. Every scalar is assembled from bytes rather than loaded
 /// through a cast, which is also the only way to read one safely here.
-pub fn u16_at(b: &[u8], at: usize) -> u16 {
-    u16::from_le_bytes([b[at], b[at + 1]])
+///
+/// `None` rather than a panic when the read would run off the end. These are
+/// `pub`, they take a caller's slice and a caller's offset, and this file is
+/// what the next consumer of this wire gets written from: a reference parser
+/// whose scalar readers index unchecked teaches every consumer derived from it
+/// to abort on a malformed batch, which is the one thing a parser of untrusted
+/// bytes must not do.
+fn window(b: &[u8], at: usize, len: usize) -> Option<&[u8]> {
+    b.get(at..at.checked_add(len)?)
 }
 
-pub fn u32_at(b: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
+pub fn u16_at(b: &[u8], at: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(window(b, at, 2)?.try_into().ok()?))
 }
 
-pub fn u64_at(b: &[u8], at: usize) -> u64 {
-    let mut out = [0u8; 8];
-    out.copy_from_slice(&b[at..at + 8]);
-    u64::from_le_bytes(out)
+pub fn u32_at(b: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(window(b, at, 4)?.try_into().ok()?))
 }
 
-pub fn f64_at(b: &[u8], at: usize) -> f64 {
-    f64::from_bits(u64_at(b, at))
+pub fn u64_at(b: &[u8], at: usize) -> Option<u64> {
+    Some(u64::from_le_bytes(window(b, at, 8)?.try_into().ok()?))
+}
+
+pub fn f64_at(b: &[u8], at: usize) -> Option<f64> {
+    Some(f64::from_bits(u64_at(b, at)?))
 }
 
 impl<'a> Reader<'a> {
@@ -95,7 +132,7 @@ impl<'a> Reader<'a> {
         if buf[..4] != MAGIC {
             return Err(VIPRS_ACAD_CORRUPT_INPUT);
         }
-        if u16_at(buf, 4) != WIRE_VERSION {
+        if u16_at(buf, 4) != Some(WIRE_VERSION) {
             // Refused rather than guessed. A consumer that parses a version it
             // does not know is reading a layout it is only assuming, and it
             // produces numbers instead of an error.
@@ -107,17 +144,20 @@ impl<'a> Reader<'a> {
             return Err(VIPRS_ACAD_ABI_MISMATCH);
         }
 
-        let flags = u16_at(buf, 6);
-        let payload_length = u32_at(buf, 8) as usize;
+        let flags = u16_at(buf, 6).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
+        let payload_length = u32_at(buf, 8).ok_or(VIPRS_ACAD_CORRUPT_INPUT)? as usize;
 
         // A payload_length past the end of the buffer reads whatever the
         // caller allocated next, so it is refused before anything is indexed.
-        if BATCH_HEADER_BYTES + payload_length > buf.len() {
-            return Err(VIPRS_ACAD_CORRUPT_INPUT);
-        }
+        // Added rather than subtracted, and checked, because a payload_length
+        // near usize::MAX would otherwise wrap and pass.
+        let end = match BATCH_HEADER_BYTES.checked_add(payload_length) {
+            Some(end) if end <= buf.len() => end,
+            _ => return Err(VIPRS_ACAD_CORRUPT_INPUT),
+        };
 
         Ok(Reader {
-            payload: &buf[BATCH_HEADER_BYTES..BATCH_HEADER_BYTES + payload_length],
+            payload: &buf[BATCH_HEADER_BYTES..end],
             offset: 0,
             budget: (payload_length / RECORD_HEADER_BYTES) as i64 + 2,
             flags,
@@ -145,9 +185,10 @@ impl<'a> Reader<'a> {
             return Err(VIPRS_ACAD_CORRUPT_INPUT);
         }
 
-        let kind = u16_at(self.payload, self.offset);
-        let reserved = u16_at(self.payload, self.offset + 2);
-        let length = u32_at(self.payload, self.offset + 4) as usize;
+        let kind = u16_at(self.payload, self.offset).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
+        let reserved = u16_at(self.payload, self.offset + 2).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
+        let length =
+            u32_at(self.payload, self.offset + 4).ok_or(VIPRS_ACAD_CORRUPT_INPUT)? as usize;
 
         if reserved != 0 {
             return Err(VIPRS_ACAD_CORRUPT_INPUT);
@@ -193,10 +234,10 @@ pub fn polyline_shape(payload: &[u8], length: usize) -> Result<(usize, usize), u
         return Err(VIPRS_ACAD_CORRUPT_INPUT);
     }
 
-    let n = u32_at(payload, 16) as usize;
-    let closed = u32_at(payload, 20);
-    let bulges = u32_at(payload, 24) as usize;
-    let reserved1 = u32_at(payload, 28);
+    let n = u32_at(payload, 16).ok_or(VIPRS_ACAD_CORRUPT_INPUT)? as usize;
+    let closed = u32_at(payload, 20).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
+    let bulges = u32_at(payload, 24).ok_or(VIPRS_ACAD_CORRUPT_INPUT)? as usize;
+    let reserved1 = u32_at(payload, 28).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
 
     if closed > 1 || reserved1 != 0 {
         return Err(VIPRS_ACAD_CORRUPT_INPUT);
@@ -212,8 +253,13 @@ pub fn polyline_shape(payload: &[u8], length: usize) -> Result<(usize, usize), u
     // consumer checks anyway: the bytes may not have come from that producer,
     // and one NaN coordinate becomes a bounding box that is NaN in every
     // direction and a renderer that draws nothing at all.
+    // Every read here was in bounds only by the arithmetic two lines above:
+    // the length equation makes the last probe land exactly on the end of the
+    // payload. That is true and it is not a bounds check, so the read does its
+    // own and a payload that disagrees is refused rather than indexed.
     for k in 0..(3 + (3 * n) + bulges) {
-        if !f64_at(payload, 32 + (k * 8)).is_finite() {
+        let v = f64_at(payload, 32 + (k * 8)).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
+        if !v.is_finite() {
             return Err(VIPRS_ACAD_CORRUPT_INPUT);
         }
     }
@@ -273,4 +319,58 @@ pub fn build_record(kind: u16, length: u32, payload_bytes: usize) -> Vec<u8> {
     out.extend_from_slice(&length.to_le_bytes());
     out.extend(std::iter::repeat(0u8).take(payload_bytes));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The readers above are `pub`, they take a caller's slice and a caller's
+    /// offset, and this file is what a second consumer of this wire gets
+    /// written from. Every one of these cases used to be an index panic.
+    #[test]
+    fn a_read_past_the_end_is_none_and_not_a_panic() {
+        let short = [1u8, 2, 3];
+        assert_eq!(u16_at(&short, 0), Some(0x0201));
+        assert_eq!(u16_at(&short, 2), None);
+        assert_eq!(u32_at(&short, 0), None);
+        assert_eq!(u64_at(&short, 0), None);
+        assert_eq!(f64_at(&short, 0), None);
+        assert_eq!(u16_at(&[], 0), None);
+    }
+
+    /// An offset near the top of the address space wraps when the length is
+    /// added to it, so the check has to be an addition that can fail rather
+    /// than a comparison that quietly succeeds.
+    #[test]
+    fn an_offset_that_would_overflow_is_none() {
+        let some = [0u8; 16];
+        assert_eq!(u64_at(&some, usize::MAX), None);
+        assert_eq!(u32_at(&some, usize::MAX - 1), None);
+    }
+
+    #[test]
+    fn a_record_reads_its_own_payload_and_refuses_to_read_past_it() {
+        let payload = [0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
+        let r = Record {
+            kind: TYPE_LINE,
+            payload: &payload,
+        };
+        assert_eq!(r.u32(0), Some(0x4433_2211));
+        assert_eq!(r.u64(0), Some(0x8877_6655_4433_2211));
+        assert_eq!(r.u64(1), None);
+        assert_eq!(r.bytes(4, 4), Some(&payload[4..]));
+        assert_eq!(r.bytes(4, 5), None);
+    }
+
+    /// A batch whose header claims a payload longer than the buffer, and one
+    /// whose claim is large enough to wrap when the header size is added.
+    #[test]
+    fn a_claimed_payload_past_the_buffer_is_refused() {
+        let over = build_batch(WIRE_VERSION, 64, &[0u8; 8]);
+        assert_eq!(Reader::open(&over).err(), Some(VIPRS_ACAD_CORRUPT_INPUT));
+
+        let wrap = build_batch(WIRE_VERSION, u32::MAX, &[0u8; 8]);
+        assert_eq!(Reader::open(&wrap).err(), Some(VIPRS_ACAD_CORRUPT_INPUT));
+    }
 }

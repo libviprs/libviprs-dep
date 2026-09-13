@@ -1624,8 +1624,14 @@ def _write_build_context(ctx, plat):
     return ctx
 
 
-def build_for_job(version, plat, arch, output_dir, keep_going=False):
-    """Build one cell and return the path to its archive."""
+def build_for_job(version, plat, arch, output_dir):
+    """Build one cell and return the path to its archive.
+
+    It raises on failure and never returns None. It used to take a keep_going
+    flag that no caller ever passed, so the branch behind it was a documented
+    behaviour the driver did not have: a reader of this signature would think a
+    failed cell could come back as None and write a caller that handled it.
+    """
     job = f"{plat}/{arch}"
     log_dir = os.path.join(output_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
@@ -1667,9 +1673,7 @@ def build_for_job(version, plat, arch, output_dir, keep_going=False):
                 f"(FAILED: {type(exc).__name__}: {exc})\n"
             )
             print(f"\n[{job}] build failed, full log: {log_path}", file=sys.stderr, flush=True)
-            if not keep_going:
-                raise
-            return None
+            raise
 
 
 def _build_docker(version, plat, arch, output_dir, log_file, job):

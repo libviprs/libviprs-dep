@@ -837,6 +837,18 @@ def scenarios(scratch):
         f.write("\n")
 
 
+def ratio(numerator, denominator):
+    """Recorded to three decimals so the file diffs readably.
+
+    Both halves are recorded beside it, and the test recomputes the division
+    rather than trusting this: a ratio that stopped matching its own numerator
+    would otherwise be the one number nothing checks.
+    """
+    if not numerator or not denominator:
+        return None
+    return round(numerator / denominator, 3)
+
+
 def benchmarks(scratch):
     out = {
         "recorded": time.strftime("%Y-%m-%d"),
@@ -847,6 +859,12 @@ def benchmarks(scratch):
 
     amp = decode(scratch, fixture_arg("g13_many_inserts.dwg"), "--batch", BATCH_BYTES)
     one = decode(scratch, fixture_arg("g13_insert.dwg"), "--batch", BATCH_BYTES)
+    # alloc_decode_bytes is the churn number, and the ratio beside it is what
+    # test_adapter_benchmarks.py puts a ceiling on. The open has been measured
+    # this way since the corpus was first recorded and the decode never was,
+    # which left "the decoder allocates three bytes for every byte it emits" as
+    # a claim with retention and peak RSS beside it, neither of which is about
+    # allocation at all.
     out["amplification"] = {
         "fixture": "g13_many_inserts.dwg",
         "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_many_inserts.dwg")),
@@ -857,6 +875,11 @@ def benchmarks(scratch):
         "rss_after_begin_kb": amp.get("rss_after_begin_kb"),
         "rss_peak_during_decode_kb": amp.get("rss_peak_during_decode_kb"),
         "managed_retained_kb": amp.get("managed_retained_kb"),
+        "alloc_decode_bytes": amp.get("alloc_decode_bytes"),
+        "alloc_decode_per_output_byte": ratio(
+            amp.get("alloc_decode_bytes"), amp.get("output_bytes")
+        ),
+        "decode_micros": amp.get("decode_micros"),
         "single_instance": {
             "fixture": "g13_insert.dwg",
             "output_bytes": one.get("output_bytes"),
@@ -971,6 +994,11 @@ def benchmarks(scratch):
                 "managed_after_begin_kb": r.get("managed_after_begin_kb"),
                 "managed_after_decode_kb": r.get("managed_after_decode_kb"),
                 "managed_retained_kb": r.get("managed_retained_kb"),
+                "alloc_decode_bytes": r.get("alloc_decode_bytes"),
+                "alloc_decode_per_output_byte": ratio(
+                    r.get("alloc_decode_bytes"), r.get("output_bytes")
+                ),
+                "decode_micros": r.get("decode_micros"),
             }
         )
     out["streaming"] = streaming

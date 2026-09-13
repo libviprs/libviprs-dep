@@ -1,14 +1,17 @@
 {
   "amplification": {
+    "alloc_decode_bytes": 122722280,
+    "alloc_decode_per_output_byte": 49.46,
     "batches": 38,
+    "decode_micros": 268956,
     "file_bytes": 179150,
     "fixture": "g13_many_inserts.dwg",
     "fixture_sha256": "72bb475c6071a567d7c672005518bc7e7323b0450cdbca00ebe9404e38047387",
     "managed_retained_kb": 1,
     "output_bytes": 2481264,
-    "peak_rss_kb": 94536,
-    "rss_after_begin_kb": 93900,
-    "rss_peak_during_decode_kb": 94536,
+    "peak_rss_kb": 94112,
+    "rss_after_begin_kb": 93692,
+    "rss_peak_during_decode_kb": 94112,
     "single_instance": {
       "fixture": "g13_insert.dwg",
       "output_bytes": 972
@@ -20,139 +23,148 @@
     "file_bytes": 179150,
     "fixture": "g13_many_inserts.dwg",
     "fixture_sha256": "72bb475c6071a567d7c672005518bc7e7323b0450cdbca00ebe9404e38047387",
-    "median_alloc_delta_bytes": 161088,
-    "median_peak_delta_kb": 136,
-    "min_alloc_delta_bytes": 160056,
-    "min_peak_delta_kb": 32,
+    "median_alloc_delta_bytes": 161440,
+    "median_peak_delta_kb": 448,
+    "min_alloc_delta_bytes": 161384,
+    "min_peak_delta_kb": -32,
     "padded": {
       "file_bytes": 33733582,
       "file_kb": 32942,
       "input": "g13_many_inserts.dwg with 32 MiB of pseudorandom bytes appended, built at measurement time and not committed",
-      "median_alloc_delta_bytes": 33716648,
-      "median_peak_delta_kb": 32908,
-      "min_peak_delta_kb": 32628,
+      "median_alloc_delta_bytes": 33723512,
+      "median_peak_delta_kb": 33216,
+      "min_peak_delta_kb": 32488,
       "runs": [
         {
-          "alloc_delta_bytes": 33723496,
-          "memory_alloc_open_bytes": 103019248,
+          "alloc_delta_bytes": 33723456,
+          "memory_alloc_open_bytes": 103019280,
           "memory_output_bytes": 2481264,
-          "memory_peak_rss_kb": 126980,
-          "path_alloc_open_bytes": 69295752,
+          "memory_peak_rss_kb": 127560,
+          "path_alloc_open_bytes": 69295824,
           "path_output_bytes": 2481264,
-          "path_peak_rss_kb": 94072,
-          "peak_delta_kb": 32908
+          "path_peak_rss_kb": 95072,
+          "peak_delta_kb": 32488
         },
         {
-          "alloc_delta_bytes": 33716648,
-          "memory_alloc_open_bytes": 103013112,
+          "alloc_delta_bytes": 33723768,
+          "memory_alloc_open_bytes": 103019384,
           "memory_output_bytes": 2481264,
-          "memory_peak_rss_kb": 126936,
-          "path_alloc_open_bytes": 69296464,
+          "memory_peak_rss_kb": 127552,
+          "path_alloc_open_bytes": 69295616,
           "path_output_bytes": 2481264,
-          "path_peak_rss_kb": 94308,
-          "peak_delta_kb": 32628
+          "path_peak_rss_kb": 94336,
+          "peak_delta_kb": 33216
         },
         {
-          "alloc_delta_bytes": 33715688,
-          "memory_alloc_open_bytes": 103011856,
+          "alloc_delta_bytes": 33723512,
+          "memory_alloc_open_bytes": 103019200,
           "memory_output_bytes": 2481264,
-          "memory_peak_rss_kb": 127740,
-          "path_alloc_open_bytes": 69296168,
+          "memory_peak_rss_kb": 127692,
+          "path_alloc_open_bytes": 69295688,
           "path_output_bytes": 2481264,
-          "path_peak_rss_kb": 93992,
-          "peak_delta_kb": 33748
+          "path_peak_rss_kb": 94340,
+          "peak_delta_kb": 33352
         }
       ],
       "unpadded_output_bytes": 2481264
     },
     "runs": [
       {
-        "alloc_delta_bytes": 160552,
-        "memory_alloc_open_bytes": 69456496,
-        "memory_caller_copy_bytes": 179150,
-        "memory_peak_rss_kb": 94144,
-        "path_alloc_open_bytes": 69295944,
-        "path_caller_copy_bytes": 0,
-        "path_peak_rss_kb": 94104,
-        "peak_delta_kb": 40
-      },
-      {
-        "alloc_delta_bytes": 160056,
-        "memory_alloc_open_bytes": 69456552,
-        "memory_caller_copy_bytes": 179150,
-        "memory_peak_rss_kb": 94248,
-        "path_alloc_open_bytes": 69296496,
-        "path_caller_copy_bytes": 0,
-        "path_peak_rss_kb": 94216,
-        "peak_delta_kb": 32
-      },
-      {
-        "alloc_delta_bytes": 161136,
-        "memory_alloc_open_bytes": 69457616,
-        "memory_caller_copy_bytes": 179150,
-        "memory_peak_rss_kb": 94392,
-        "path_alloc_open_bytes": 69296480,
-        "path_caller_copy_bytes": 0,
-        "path_peak_rss_kb": 94256,
-        "peak_delta_kb": 136
-      },
-      {
-        "alloc_delta_bytes": 161088,
-        "memory_alloc_open_bytes": 69457224,
-        "memory_caller_copy_bytes": 179150,
-        "memory_peak_rss_kb": 94456,
-        "path_alloc_open_bytes": 69296136,
-        "path_caller_copy_bytes": 0,
-        "path_peak_rss_kb": 93924,
-        "peak_delta_kb": 532
-      },
-      {
-        "alloc_delta_bytes": 161832,
+        "alloc_delta_bytes": 161424,
         "memory_alloc_open_bytes": 69457528,
         "memory_caller_copy_bytes": 179150,
-        "memory_peak_rss_kb": 94360,
-        "path_alloc_open_bytes": 69295696,
+        "memory_peak_rss_kb": 95056,
+        "path_alloc_open_bytes": 69296104,
         "path_caller_copy_bytes": 0,
-        "path_peak_rss_kb": 94080,
-        "peak_delta_kb": 280
+        "path_peak_rss_kb": 94332,
+        "peak_delta_kb": 724
+      },
+      {
+        "alloc_delta_bytes": 161440,
+        "memory_alloc_open_bytes": 69457296,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94108,
+        "path_alloc_open_bytes": 69295856,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94140,
+        "peak_delta_kb": -32
+      },
+      {
+        "alloc_delta_bytes": 162496,
+        "memory_alloc_open_bytes": 69457800,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94876,
+        "path_alloc_open_bytes": 69295304,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94428,
+        "peak_delta_kb": 448
+      },
+      {
+        "alloc_delta_bytes": 162200,
+        "memory_alloc_open_bytes": 69458056,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94952,
+        "path_alloc_open_bytes": 69295856,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94904,
+        "peak_delta_kb": 48
+      },
+      {
+        "alloc_delta_bytes": 161384,
+        "memory_alloc_open_bytes": 69457360,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94852,
+        "path_alloc_open_bytes": 69295976,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94136,
+        "peak_delta_kb": 716
       }
     ]
   },
-  "recorded": "2026-09-12",
+  "recorded": "2026-09-13",
   "runner": "fixturegen decode, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "streaming": [
     {
+      "alloc_decode_bytes": 159328,
+      "alloc_decode_per_output_byte": 15.105,
       "batches": 1,
+      "decode_micros": 5149,
       "fixture": "g13_scale_1x.dwg",
       "managed_after_begin_kb": 1175,
-      "managed_after_decode_kb": 1176,
-      "managed_retained_kb": 1,
-      "output_bytes": 10548,
-      "rss_after_begin_kb": 53416,
-      "rss_decode_growth_kb": 712,
-      "rss_peak_during_decode_kb": 54128
-    },
-    {
-      "batches": 1,
-      "fixture": "g13_scale_4x.dwg",
-      "managed_after_begin_kb": 1437,
-      "managed_after_decode_kb": 1437,
+      "managed_after_decode_kb": 1175,
       "managed_retained_kb": 0,
-      "output_bytes": 39732,
-      "rss_after_begin_kb": 53472,
-      "rss_decode_growth_kb": 1656,
-      "rss_peak_during_decode_kb": 55128
+      "output_bytes": 10548,
+      "rss_after_begin_kb": 53468,
+      "rss_decode_growth_kb": 992,
+      "rss_peak_during_decode_kb": 54460
     },
     {
+      "alloc_decode_bytes": 629344,
+      "alloc_decode_per_output_byte": 15.84,
+      "batches": 1,
+      "decode_micros": 5530,
+      "fixture": "g13_scale_4x.dwg",
+      "managed_after_begin_kb": 1436,
+      "managed_after_decode_kb": 1437,
+      "managed_retained_kb": 1,
+      "output_bytes": 39732,
+      "rss_after_begin_kb": 53496,
+      "rss_decode_growth_kb": 1448,
+      "rss_peak_during_decode_kb": 54944
+    },
+    {
+      "alloc_decode_bytes": 2509408,
+      "alloc_decode_per_output_byte": 16.035,
       "batches": 3,
+      "decode_micros": 7487,
       "fixture": "g13_scale_16x.dwg",
       "managed_after_begin_kb": 2519,
       "managed_after_decode_kb": 2520,
       "managed_retained_kb": 1,
       "output_bytes": 156492,
-      "rss_after_begin_kb": 58608,
-      "rss_decode_growth_kb": 2664,
-      "rss_peak_during_decode_kb": 61272
+      "rss_after_begin_kb": 58660,
+      "rss_decode_growth_kb": 1252,
+      "rss_peak_during_decode_kb": 59912
     }
   ]
 }

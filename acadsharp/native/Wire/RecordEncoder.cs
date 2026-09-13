@@ -1,142 +1,198 @@
 using System;
+using System.Buffers.Binary;
 using System.Text;
 using Viprs.Abi;
 
 // Turns one primitive into one record, exactly as docs/WIRE.md lays it out.
 //
-// Everything is written little-endian by hand rather than through BitConverter,
-// so the bytes do not depend on the host the shim was built on. That is not
-// theoretical: the shim ships for two architectures and the consumer may be on
-// a third.
+// The bytes are written little-endian whatever the host is, because the shim
+// ships for two architectures and the consumer may be on a third. That used to
+// be a hand-rolled shift-and-store loop per scalar; it is
+// BinaryPrimitives.Write*LittleEndian now, which is explicitly little-endian on
+// every host and which RyuJIT turns into a store rather than eight.
+//
+// There is no intermediate buffer any more either. A record is written straight
+// into the caller's batch, so a coordinate's bytes are touched once instead of
+// twice, and the record that does not fit in the batch under construction
+// reports the size it needs without a single byte being written anywhere.
 namespace Viprs.Wire
 {
 	internal sealed class RecordEncoder
 	{
 		private readonly ResolvedLimits _limits;
-		private byte[] _buf = new byte[256];
-		private int _pos;
 
 		public RecordEncoder(ResolvedLimits limits)
 		{
 			_limits = limits ?? ResolvedLimits.Defaults;
 		}
 
-		// Encodes into an internal buffer and returns the record's length.
-		// The bytes are valid until the next call, which is all the batch
-		// writer needs and saves an allocation per record.
-		public int Encode(Primitive p, out byte[] bytes)
+		// Writes one record into `dest` and reports its length.
+		//
+		// False means `dest` was too short, nothing was written, and `written`
+		// is the length the record needs: that is the size-it-needs path, and
+		// it costs a walk of the record rather than an encode of it.
+		//
+		// A bound the record breaches, and the finiteness guarantee, are a
+		// throw either way and are checked whether or not the bytes land, so
+		// a caller sizing a buffer for a record max_string_bytes forbids is
+		// refused rather than told a size.
+		public bool TryEncode(Primitive p, Span<byte> dest, out int written)
 		{
-			_pos = 0;
-			Reserve(WireFormat.RecordHeaderBytes);
-			_pos = WireFormat.RecordHeaderBytes;
+			Cursor c = new Cursor(dest, false);
+			Write(p, ref c);
+			written = c.Length;
+
+			if (c.Overflowed)
+			{
+				Agree(p, written);
+				return false;
+			}
+
+			WriteHeader(dest, p.Type, written);
+			Agree(p, written);
+			return true;
+		}
+
+		// The length TryEncode would report, without a buffer.
+		//
+		// It is the same walk with the writes turned off rather than a second
+		// piece of size arithmetic, because two copies of the size of a record
+		// is exactly the kind of duplication that disagrees quietly. The test
+		// build asserts the two agree on every record anyway.
+		public int Measure(Primitive p)
+		{
+			Cursor c = new Cursor(default, true);
+			Write(p, ref c);
+			return c.Length;
+		}
+
+		[System.Diagnostics.Conditional("DEBUG")]
+		[System.Diagnostics.Conditional("VIPRS_ACAD_TEST_EXPORTS")]
+		private void Agree(Primitive p, int written)
+		{
+			int measured = Measure(p);
+			if (measured != written)
+			{
+				throw new AbiException(
+					Result.InternalError,
+					"the encoder measured a record at "
+						+ measured
+						+ " bytes and wrote "
+						+ written
+				);
+			}
+		}
+
+		// One walk of one record. Every scalar goes through the cursor, so the
+		// counting pass and the writing pass cannot drift apart.
+		private void Write(Primitive p, ref Cursor c)
+		{
+			c.Skip(WireFormat.RecordHeaderBytes);
 
 			switch (p.Type)
 			{
 				case WireFormat.TypeDocumentBegin:
-					U32(p.Counts[0]);
-					U32(p.Counts[1]);
-					U64(0ul);
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					c.U64(0ul);
 					break;
 
 				case WireFormat.TypeViewBegin:
-					U32(p.Counts[0]);
-					U32(p.Counts[1]);
-					Doubles(p.Values, 0, 4);
-					U64(p.Count64);
-					Utf8WithLength(p.Text);
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					c.Doubles(p.Values, 0, 4);
+					c.U64(p.Count64);
+					Utf8WithLength(p.Text, ref c);
 					break;
 
 				case WireFormat.TypeLine:
-					Prologue(p);
-					GeometryDoubles(p, 0, 6);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 6);
 					break;
 
 				case WireFormat.TypePolyline:
 					GuardPoints(p.Counts[0]);
-					Prologue(p);
-					U32(p.Counts[0]);
-					U32(p.Counts[1]);
-					U32(p.Counts[2]);
-					U32(p.Counts[3]);
-					GeometryDoubles(p, 0, p.Values.Length);
+					Prologue(p, ref c);
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					c.U32(p.Counts[2]);
+					c.U32(p.Counts[3]);
+					c.GeometryDoubles(p.Values, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypeArc:
-					Prologue(p);
-					GeometryDoubles(p, 0, 9);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 9);
 					break;
 
 				case WireFormat.TypeCircle:
-					Prologue(p);
-					GeometryDoubles(p, 0, 7);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 7);
 					break;
 
 				case WireFormat.TypeEllipse:
-					Prologue(p);
-					GeometryDoubles(p, 0, 12);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 12);
 					break;
 
 				case WireFormat.TypeSpline:
-					Prologue(p);
+					Prologue(p, ref c);
 					for (int i = 0; i < 6; i++)
 					{
-						U32(p.Counts[i]);
+						c.U32(p.Counts[i]);
 					}
 
-					GeometryDoubles(p, 0, p.Values.Length);
+					c.GeometryDoubles(p.Values, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypePolygon:
 					GuardPoints(p.Counts[0]);
-					Prologue(p);
-					U32(p.Counts[0]);
-					U32(p.Counts[1]);
-					U32(p.Counts[2]);
-					U32(p.Counts[3]);
-					GeometryDoubles(p, 0, p.Values.Length);
+					Prologue(p, ref c);
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					c.U32(p.Counts[2]);
+					c.U32(p.Counts[3]);
+					c.GeometryDoubles(p.Values, 0, p.Values.Length);
 					break;
 
 				case WireFormat.TypeText:
-					Prologue(p);
-					GeometryDoubles(p, 0, 5);
-					Utf8WithLength(p.Text);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 5);
+					Utf8WithLength(p.Text, ref c);
 					break;
 
 				case WireFormat.TypeWarning:
-					U32(p.Counts[0]);
-					U32(0u);
-					U64(p.ItemHandle);
-					Utf8WithLength(p.Text);
+					c.U32(p.Counts[0]);
+					c.U32(0u);
+					c.U64(p.ItemHandle);
+					Utf8WithLength(p.Text, ref c);
 					break;
 
 				case WireFormat.TypeViewEnd:
-					U32(p.Counts[0]);
-					U32(0u);
-					U64(p.Count64);
+					c.U32(p.Counts[0]);
+					c.U32(0u);
+					c.U64(p.Count64);
 					break;
 
 				case WireFormat.TypeDocumentEnd:
-					U64(p.Count64);
-					U64(p.ItemHandle);
+					c.U64(p.Count64);
+					c.U64(p.ItemHandle);
 					break;
 
 				default:
 					// The forward probe, and anything a later version adds.
-					Raw(p.Raw ?? Array.Empty<byte>());
+					c.Raw(p.Raw ?? Array.Empty<byte>());
 					break;
 			}
 
-			Pad();
-			WriteHeader(p.Type, _pos);
-			bytes = _buf;
-			return _pos;
+			c.Zero(WireFormat.PadTo4(c.Length));
 		}
 
-		private void Prologue(Primitive p)
+		private static void Prologue(Primitive p, ref Cursor c)
 		{
-			U64(p.ItemHandle);
-			U32(p.Flags);
-			U32(0u);
+			c.U64(p.ItemHandle);
+			c.U32(p.Flags);
+			c.U32(0u);
 		}
 
 		private void GuardPoints(uint count)
@@ -150,10 +206,18 @@ namespace Viprs.Wire
 			}
 		}
 
-		private void Utf8WithLength(string text)
+		// The length is counted before the bytes exist, and the bound is
+		// checked against that count.
+		//
+		// It used to encode the string into a fresh byte[] and then compare the
+		// array's length to max_string_bytes, so the one allocation the bound is
+		// there to prevent happened first every time. GetByteCount answers the
+		// same question without asking the allocator for anything.
+		private void Utf8WithLength(string text, ref Cursor c)
 		{
-			byte[] utf8 = Encoding.UTF8.GetBytes(text ?? string.Empty);
-			if ((ulong)utf8.Length > _limits.MaxStringBytes)
+			string value = text ?? string.Empty;
+			int bytes = Encoding.UTF8.GetByteCount(value);
+			if ((ulong)bytes > _limits.MaxStringBytes)
 			{
 				throw new AbiException(
 					Result.LimitExceeded,
@@ -161,124 +225,192 @@ namespace Viprs.Wire
 				);
 			}
 
-			U32((uint)utf8.Length);
-			U32(0u);
-			Raw(utf8);
+			c.U32((uint)bytes);
+			c.U32(0u);
+			c.Utf8(value, bytes);
 		}
 
-		private void WriteHeader(ushort type, int length)
+		private static void WriteHeader(Span<byte> dest, ushort type, int length)
 		{
-			_buf[0] = (byte)(type & 0xFF);
-			_buf[1] = (byte)((type >> 8) & 0xFF);
-			_buf[2] = 0;
-			_buf[3] = 0;
-			_buf[4] = (byte)(length & 0xFF);
-			_buf[5] = (byte)((length >> 8) & 0xFF);
-			_buf[6] = (byte)((length >> 16) & 0xFF);
-			_buf[7] = (byte)((length >> 24) & 0xFF);
+			BinaryPrimitives.WriteUInt16LittleEndian(dest, type);
+			BinaryPrimitives.WriteUInt16LittleEndian(dest.Slice(2), 0);
+			BinaryPrimitives.WriteInt32LittleEndian(dest.Slice(4), length);
 		}
 
-		private void Pad()
-		{
-			int pad = WireFormat.PadTo4(_pos);
-			Reserve(pad);
-			for (int i = 0; i < pad; i++)
-			{
-				_buf[_pos + i] = 0;
-			}
-
-			_pos += pad;
-		}
-
-		private void Reserve(int extra)
-		{
-			int needed = _pos + extra;
-			if (needed <= _buf.Length)
-			{
-				return;
-			}
-
-			int size = _buf.Length;
-			while (size < needed)
-			{
-				size = size * 2;
-			}
-
-			byte[] grown = new byte[size];
-			Buffer.BlockCopy(_buf, 0, grown, 0, _pos);
-			_buf = grown;
-		}
-
-		private void U32(uint v)
-		{
-			Reserve(4);
-			_buf[_pos] = (byte)(v & 0xFF);
-			_buf[_pos + 1] = (byte)((v >> 8) & 0xFF);
-			_buf[_pos + 2] = (byte)((v >> 16) & 0xFF);
-			_buf[_pos + 3] = (byte)((v >> 24) & 0xFF);
-			_pos += 4;
-		}
-
-		private void U64(ulong v)
-		{
-			Reserve(8);
-			for (int i = 0; i < 8; i++)
-			{
-				_buf[_pos + i] = (byte)((v >> (8 * i)) & 0xFF);
-			}
-
-			_pos += 8;
-		}
-
-		private void Doubles(double[] values, int start, int count)
-		{
-			for (int i = 0; i < count; i++)
-			{
-				U64((ulong)BitConverter.DoubleToInt64Bits(values[start + i]));
-			}
-		}
-
-		// The same, for a geometry record, plus docs/WIRE.md's producer
-		// guarantee: no record of type 3 to 10 carries an f64 that is NaN or
-		// infinite.
+		// A position in the destination that keeps counting after it runs out
+		// of room.
 		//
-		// A backstop, not the check. The walk replaces a primitive carrying
-		// one with a NON_FINITE_GEOMETRY warning long before the encoder sees
-		// it, and that is where the failure belongs: there the handle is
-		// known, the record is nameable, and the decode carries on and
-		// produces the rest of the drawing. Reaching here means that guard did
-		// not run, which is a bug in this library rather than a fact about the
-		// drawing, and INTERNAL_ERROR is exactly what docs/ABI.md says that
-		// is. Unreachable by construction, which is why the plan for this
-		// change removes the first guard and watches this one fire.
-		//
-		// ViewBegin goes through Doubles instead. Its extents are a bounding
-		// box the source reports rather than a shape anybody draws, and a view
-		// holding nothing has no finite one.
-		private void GeometryDoubles(Primitive p, int start, int count)
+		// That is the whole trick: a cursor that stops writing but does not stop
+		// measuring turns "this does not fit" and "this is how big it is" into
+		// one pass over the record instead of two.
+		private ref struct Cursor
 		{
-			for (int i = 0; i < count; i++)
+			private readonly Span<byte> _dest;
+			private readonly bool _measureOnly;
+			private int _pos;
+			private bool _overflow;
+
+			public Cursor(Span<byte> dest, bool measureOnly)
 			{
-				double v = p.Values[start + i];
-				if (double.IsNaN(v) || double.IsInfinity(v))
+				_dest = dest;
+				_measureOnly = measureOnly;
+				_pos = 0;
+				_overflow = false;
+			}
+
+			public int Length
+			{
+				get { return _pos; }
+			}
+
+			public bool Overflowed
+			{
+				get { return _overflow; }
+			}
+
+			// The span to write `n` bytes into, or an empty one when this pass
+			// is only counting or has already run past the end.
+			private Span<byte> Take(int n)
+			{
+				int at = _pos;
+				_pos = _pos + n;
+				if (_measureOnly || _overflow || n == 0)
 				{
-					throw new AbiException(
-						Result.InternalError,
-						"a geometry record reached the encoder carrying a value that is "
-							+ "not finite, which docs/WIRE.md promises never crosses. The "
-							+ "walk's own guard should have replaced it with a warning."
-					);
+					return default;
 				}
 
-				U64((ulong)BitConverter.DoubleToInt64Bits(v));
-			}
-		}
+				if (at + n > _dest.Length)
+				{
+					_overflow = true;
+					return default;
+				}
 
-		private void Raw(byte[] data)
-		{
-			Reserve(data.Length);
-			Buffer.BlockCopy(data, 0, _buf, _pos, data.Length);
-			_pos += data.Length;
+				return _dest.Slice(at, n);
+			}
+
+			public void Skip(int n)
+			{
+				Span<byte> at = Take(n);
+				if (!at.IsEmpty)
+				{
+					at.Clear();
+				}
+			}
+
+			public void Zero(int n)
+			{
+				Skip(n);
+			}
+
+			public void U32(uint v)
+			{
+				Span<byte> at = Take(4);
+				if (!at.IsEmpty)
+				{
+					BinaryPrimitives.WriteUInt32LittleEndian(at, v);
+				}
+			}
+
+			public void U64(ulong v)
+			{
+				Span<byte> at = Take(8);
+				if (!at.IsEmpty)
+				{
+					BinaryPrimitives.WriteUInt64LittleEndian(at, v);
+				}
+			}
+
+			public void Doubles(double[] values, int start, int count)
+			{
+				Span<byte> at = Take(count * 8);
+				if (at.IsEmpty)
+				{
+					return;
+				}
+
+				for (int i = 0; i < count; i++)
+				{
+					BinaryPrimitives.WriteDoubleLittleEndian(
+						at.Slice(i * 8, 8),
+						values[start + i]
+					);
+				}
+			}
+
+			// The same, for a geometry record, plus docs/WIRE.md's producer
+			// guarantee: no record of type 3 to 10 carries an f64 that is NaN
+			// or infinite.
+			//
+			// A backstop, not the check. The walk replaces a primitive carrying
+			// one with a NON_FINITE_GEOMETRY warning long before the encoder
+			// sees it, and that is where the failure belongs: there the handle
+			// is known, the record is nameable, and the decode carries on and
+			// produces the rest of the drawing. Reaching here means that guard
+			// did not run, which is a bug in this library rather than a fact
+			// about the drawing, and INTERNAL_ERROR is exactly what docs/ABI.md
+			// says that is.
+			//
+			// Checked on the counting pass as well as the writing one. The
+			// guarantee is about the record, not about the buffer it lands in,
+			// and a record that only ever overflowed a caller's batch would
+			// otherwise cross it unchecked.
+			//
+			// ViewBegin goes through Doubles instead. Its extents are a
+			// bounding box the source reports rather than a shape anybody
+			// draws, and a view holding nothing has no finite one.
+			public void GeometryDoubles(double[] values, int start, int count)
+			{
+				Span<byte> at = Take(count * 8);
+				if (at.IsEmpty)
+				{
+					for (int i = 0; i < count; i++)
+					{
+						RequireFinite(values[start + i]);
+					}
+
+					return;
+				}
+
+				for (int i = 0; i < count; i++)
+				{
+					double v = values[start + i];
+					RequireFinite(v);
+					BinaryPrimitives.WriteDoubleLittleEndian(at.Slice(i * 8, 8), v);
+				}
+			}
+
+			private static void RequireFinite(double v)
+			{
+				if (double.IsFinite(v))
+				{
+					return;
+				}
+
+				throw new AbiException(
+					Result.InternalError,
+					"a geometry record reached the encoder carrying a value that is "
+						+ "not finite, which docs/WIRE.md promises never crosses. The "
+						+ "walk's own guard should have replaced it with a warning."
+				);
+			}
+
+			public void Utf8(string value, int bytes)
+			{
+				Span<byte> at = Take(bytes);
+				if (!at.IsEmpty)
+				{
+					Encoding.UTF8.GetBytes(value, at);
+				}
+			}
+
+			public void Raw(byte[] data)
+			{
+				Span<byte> at = Take(data.Length);
+				if (!at.IsEmpty)
+				{
+					data.CopyTo(at);
+				}
+			}
 		}
 	}
 }
