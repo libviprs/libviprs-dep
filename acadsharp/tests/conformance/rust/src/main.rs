@@ -522,7 +522,11 @@ fn short_buffer_is_never_written_past(t: &mut Tally) {
     let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
     let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut arena = [0xEEu8; 64];
-    let mut written: u64 = 0;
+    // `written` is poisoned before every call below, because a check reads it
+    // afterwards and has to be reading what the callee wrote. `done` is not:
+    // nothing here asserts on it, so a sentinel would be a value nobody looks
+    // at, which is the warning the compiler was giving.
+    let mut written: u64 = 999;
     let mut done: u8 = 0;
 
     unsafe {
@@ -537,7 +541,6 @@ fn short_buffer_is_never_written_past(t: &mut Tally) {
         for cap in TINY {
             arena.fill(0xEE);
             written = 999;
-            done = 9;
             let rc =
                 viprs_acad_decode_next_batch(dec, arena.as_mut_ptr(), cap, &mut written, &mut done);
             t.check(
@@ -840,7 +843,10 @@ fn cancellation(t: &mut Tally) {
 
         // And it stays cancelled. A caller that clears its own flag and asks
         // again must not get the rest of a drawing it already abandoned.
-        cancel_flag = 0;
+        //
+        // Written through a pointer because the library holds one: assigning
+        // the local looks like a dead store to the compiler, and is not.
+        std::ptr::write_volatile(&mut cancel_flag as *mut u32, 0);
         written = 123;
         done = 9;
         let again = viprs_acad_decode_next_batch(
@@ -879,8 +885,8 @@ fn a_refused_decode_stays_refused(t: &mut Tally) {
     let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
     let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut buf = vec![0u8; wire::TARGET_BATCH_BYTES];
-    let mut written: u64 = 0;
-    let mut done: u8 = 0;
+    let mut written: u64 = 999;
+    let mut done: u8 = 9;
 
     let limits = viprs_acad_limits_v1 {
         struct_size: std::mem::size_of::<viprs_acad_limits_v1>() as u32,
@@ -906,8 +912,6 @@ fn a_refused_decode_stays_refused(t: &mut Tally) {
         // call: DocumentBegin and ViewBegin come out ahead of any item.
         let mut first = VIPRS_ACAD_OK;
         for _ in 0..64 {
-            written = 0;
-            done = 0;
             first = viprs_acad_decode_next_batch(
                 dec,
                 buf.as_mut_ptr(),
