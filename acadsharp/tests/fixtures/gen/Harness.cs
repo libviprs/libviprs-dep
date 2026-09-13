@@ -596,6 +596,15 @@ namespace Viprs.Cad.Fixtures
 
 			// The dump is a second walk over the same document on purpose, so
 			// the measured decode never carries a list of strings beside it.
+			//
+			// Through a fresh DecodeSession rather than straight off the
+			// source, because the source is no longer the whole stream: the
+			// empty-view warning is composed a layer above it, and a dump taken
+			// below would be the one place that cannot see it. The framing
+			// records are dropped so the expectations are the files they have
+			// always been. A second session on the same document is what the
+			// handle discipline already allows, and this one is never added to
+			// the handle table, so live_handles below still counts what it did.
 			if (o.DumpPath != null || o.CheckPath != null)
 			{
 				List<string> dump = new List<string>();
@@ -603,8 +612,14 @@ namespace Viprs.Cad.Fixtures
 				try
 				{
 					int index = 0;
-					foreach (Primitive p in source.EnumerateView(o.View, null))
+					DecodeSession walk = new DecodeSession(document, (uint)o.View, IntPtr.Zero);
+					foreach (Primitive p in walk.Compose())
 					{
+						if (CanonicalDump.IsFraming(p.Type))
+						{
+							continue;
+						}
+
 						dump.Add(CanonicalDump.Line(index, p));
 						index++;
 					}

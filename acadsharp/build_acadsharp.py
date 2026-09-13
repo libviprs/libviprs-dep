@@ -40,6 +40,7 @@ import argparse
 import concurrent.futures
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -60,6 +61,7 @@ INCLUDE_DIR = os.path.join(HERE, "include")
 HEADER_PATH = os.path.join(INCLUDE_DIR, "viprs_acadsharp.h")
 DOCS_DIR = os.path.join(HERE, "docs")
 SCRIPTS_DIR = os.path.join(HERE, "scripts")
+PATCHES_DIR = os.path.join(HERE, "patches")
 VERIFY_ARCHIVE_SCRIPT = os.path.join(SCRIPTS_DIR, "verify_archive.sh")
 PROJECT = os.path.join(NATIVE_DIR, "Viprs.ACadSharp.Native.csproj")
 FIXTURE_DWG = os.path.join(HERE, "tests", "fixtures", "real_AC1032.dwg")
@@ -82,6 +84,21 @@ SOURCE_SHA256 = {
 SOURCE_COMMIT = {
     "3.7.1": "d7dc111023477d8a9fffc2153139459c95b4f345",
 }
+
+# What this build changes about the pinned source before compiling it.
+#
+# SOURCE_SHA256 and SOURCE_COMMIT say what was downloaded, and until there was
+# a patch step that was the whole story. It is not any more: the reader
+# allocates from sizes a DWG declares and the only place a bound can go is
+# upstream's own source, so what an archive was built from is the tarball plus
+# whatever is in `patches/`. Every script there is applied, in sorted order,
+# and BUILDINFO.json records the name and sha256 of each one.
+#
+# Deliberately a directory listing rather than a list written here. A patch
+# added to the directory and forgotten here would be applied by neither the
+# build nor the fixture generator, which is the state `patches/` was already
+# in when it held a .gitkeep and nothing else.
+
 
 # The submodule the tarball leaves empty.
 CSUTILITIES_URL = "https://github.com/DomCR/CSUtilities.git"
@@ -238,6 +255,11 @@ BUILDINFO_FIELDS = (
     "trimmer_roots",
     "trimmer_single_warn",
     "aot_warning_count",
+    # What was applied to the pinned source before it was compiled. Appended
+    # rather than slotted in beside builder_image: nothing downstream parses
+    # this file by position, and the two fields that have always ended it
+    # read better where they are.
+    "source_patches",
     "built_utc",
 )
 
@@ -314,6 +336,46 @@ def split_version(version):
 
 def source_url(version):
     return SOURCE_URL.format(version=version)
+
+
+def patch_scripts(patches_dir=None):
+    """Every patch this build applies, by file name, in the order applied."""
+    patches_dir = patches_dir or PATCHES_DIR
+    if not os.path.isdir(patches_dir):
+        return ()
+    return tuple(sorted(n for n in os.listdir(patches_dir) if n.endswith(".py")))
+
+
+def patch_targets(name, patches_dir=None):
+    """The upstream files one patch edits, as it declares them.
+
+    Read off the script rather than restated here, so a patch that grows a
+    target does not need this file changed to stay honestly described.
+    """
+    patches_dir = patches_dir or PATCHES_DIR
+    spec = importlib.util.spec_from_file_location(
+        "viprs_patch_" + name[:-3], os.path.join(patches_dir, name)
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    targets = getattr(module, "TARGETS", None)
+    if not targets:
+        raise ValueError(
+            f"{name} declares no TARGETS, so nothing can say which upstream files it "
+            "edits. A patch that does not name what it touches cannot be checked "
+            "against an upstream bump."
+        )
+    return tuple(targets)
+
+
+def patch_manifest(patches_dir=None):
+    """``[{name, sha256}]`` for BUILDINFO.json, in the order applied."""
+    patches_dir = patches_dir or PATCHES_DIR
+    out = []
+    for name in patch_scripts(patches_dir):
+        with open(os.path.join(patches_dir, name), "rb") as f:
+            out.append({"name": name, "sha256": hashlib.sha256(f.read()).hexdigest()})
+    return out
 
 
 def source_sha256(version):
@@ -540,8 +602,16 @@ def abi_fingerprint(path=HEADER_PATH):
     return header_sha256(path)[:16]
 
 
-def header_versions(path=HEADER_PATH):
-    """``(abi_version, wire_version)`` as the header defines them."""
+def header_versions(path=None):
+    """``(abi_version, wire_version)`` as the header defines them.
+
+    The default is resolved on the call rather than bound to the def, so a
+    caller that points HEADER_PATH somewhere else gets an answer from the
+    header it pointed at. It was bound at import, which made the generated
+    static smoke's ABI version look like it tracked the header while being
+    impossible to prove that it did.
+    """
+    path = path or HEADER_PATH
     with open(path) as f:
         text = f.read()
     out = []
@@ -825,6 +895,11 @@ def make_buildinfo(
         "trimmer_roots": ["ACadSharp"],
         "trimmer_single_warn": False,
         "aot_warning_count": aot_warning_count,
+        # Read off the directory rather than passed in, the same way the
+        # Dockerfile step is generated from it. A build and its record of
+        # itself disagreeing about which patches ran is the one failure this
+        # field exists to prevent.
+        "source_patches": patch_manifest(),
         "built_utc": stamp,
     }
     return {k: info[k] for k in BUILDINFO_FIELDS}
@@ -997,6 +1072,17 @@ int main(int argc, char **argv)
 \tsnprintf(got, sizeof(got), "%016llx", (unsigned long long)fingerprint());
 \tprintf("ABI_VERSION=%u\\n", abi_version());
 \tprintf("ABI_FINGERPRINT=%s\\n", got);
+\t/* Printed and then compared. The fingerprint below has always been
+\t * checked and this number never was, so a library that disagreed with
+\t * the header it ships beside about its own ABI version went out with
+\t * the disagreement in the log and nothing failing. The macro comes
+\t * from the header this file includes, so there is no second copy. */
+\tif (abi_version() != VIPRS_ACAD_ABI_VERSION) {{
+\t\tfprintf(stderr, "smoke: library reports abi_version %u, the header it is "
+\t\t\t"packed with declares %u\\n", (unsigned)abi_version(),
+\t\t\t(unsigned)VIPRS_ACAD_ABI_VERSION);
+\t\treturn 8;
+\t}}
 \tif (strcmp(got, argv[2]) != 0) {{
 \t\tfprintf(stderr, "smoke: library reports fingerprint %s, header hashes to %s\\n",
 \t\t\tgot, argv[2]);
@@ -1048,6 +1134,20 @@ int main(int argc, char **argv)
 \t/* And what does it read? The same call answers with the AC10xx range,
 \t * so the archive is packed knowing what the library it holds says it
 \t * reads rather than what the shim was compiled from. */
+\t/* And the same number a second time, through the struct. #69 fixed one
+\t * of these two paths and not the other, so they are both asked. */
+\tif (caps.abi_version != VIPRS_ACAD_ABI_VERSION) {{
+\t\tfprintf(stderr, "smoke: the capabilities call reports abi_version %u and the "
+\t\t\t"header declares %u\\n", (unsigned)caps.abi_version,
+\t\t\t(unsigned)VIPRS_ACAD_ABI_VERSION);
+\t\treturn 8;
+\t}}
+\tif (caps.wire_version != VIPRS_ACAD_WIRE_VERSION) {{
+\t\tfprintf(stderr, "smoke: the capabilities call reports wire_version %u and the "
+\t\t\t"header declares %u\\n", (unsigned)caps.wire_version,
+\t\t\t(unsigned)VIPRS_ACAD_WIRE_VERSION);
+\t\treturn 8;
+\t}}
 \tprintf("DWG_VERSION_MIN=%u\\n", (unsigned)caps.dwg_version_min);
 \tprintf("DWG_VERSION_MAX=%u\\n", (unsigned)caps.dwg_version_max);
 \tif (caps.dwg_version_min == 0 || caps.dwg_version_max < caps.dwg_version_min) {{
@@ -1064,6 +1164,7 @@ int main(int argc, char **argv)
 def static_smoke_source(entry_points=None):
     """The same check, linked statically rather than opened at run time."""
     names = list(entry_points or header_entry_points())
+    abi = header_versions()[0]
     externs = "\n".join(
         f"extern uint32_t {n}(void);" for n in names if n != "viprs_acad_abi_fingerprint"
     )
@@ -1102,6 +1203,16 @@ int main(int argc, char **argv)
 \tprintf("ABI_VERSION=%u\\n", viprs_acad_abi_version());
 \tprintf("ABI_FINGERPRINT=%s\\n", got);
 \tprintf("SINK=%d\\n", sink != 0);
+\t/* This file does not include the header, because a statically linked
+\t * consumer resolves these by symbol and the struct is not in play, so
+\t * the number is substituted from the header at generation time. It is
+\t * still not a second copy: nobody types it. */
+\tif (viprs_acad_abi_version() != {abi}u) {{
+\t\tfprintf(stderr, "static smoke: library reports abi_version %u, the header it "
+\t\t\t"is packed with declares %u\\n", (unsigned)viprs_acad_abi_version(),
+\t\t\t(unsigned){abi}u);
+\t\treturn 8;
+\t}}
 \tif (strcmp(got, argv[1]) != 0) {{
 \t\tfprintf(stderr, "static smoke: library reports %s, header hashes to %s\\n",
 \t\t\tgot, argv[1]);
@@ -1215,6 +1326,17 @@ def make_dockerfile(version, plat, arch):
     src_root = f"/build/ACadSharp-{upstream}"
     want_static = "1" if rid in STATIC_TARGETS else "0"
     env = stage_env(plat)
+    names = patch_scripts()
+    if not names:
+        raise ValueError(
+            "patches/ holds no patch script. The reader's allocations are bounded by "
+            "a patch to upstream and nothing else, so a build with an empty patch "
+            "directory would publish a library without that bound and say nothing."
+        )
+    patch_steps = "".join(
+        f"COPY patches/{name} /tmp/patches/{name}\nRUN python3 /tmp/patches/{name} {src_root}\n"
+        for name in names
+    )
 
     if plat == "musl":
         install_deps = (
@@ -1267,13 +1389,21 @@ RUN rmdir {src_root}/src/CSUtilities 2>/dev/null || true; \\
     git clone --quiet {CSUTILITIES_URL} {src_root}/src/CSUtilities \\
     && git -C {src_root}/src/CSUtilities checkout --quiet {CSUTILITIES_COMMIT}
 
-# Step 4: the shim and the frozen header
+# Step 4: the patches this build applies to the pinned upstream tree.
+#
+# Here rather than earlier because the clone above removes and recreates
+# src/CSUtilities, and here rather than later because everything after this
+# compiles. Each script refuses rather than warns when an anchor has moved,
+# so an upstream bump that invalidates one fails this layer instead of
+# publishing an archive that quietly does not carry it.
+{patch_steps}
+# Step 5: the shim and the frozen header
 COPY native /work/native
 COPY include /work/include
 COPY VERSION /work/VERSION
 COPY archive_smoke.c static_archive_smoke.c stage.sh retain_sections.py privatise_unwind.sh /work/
 
-# Step 5: publish the shared library. The log is kept because the AOT
+# Step 6: publish the shared library. The log is kept because the AOT
 # warning count in BUILDINFO.json is read out of it.
 RUN cd /work/native \\
     && dotnet publish Viprs.ACadSharp.Native.csproj -r {rid} -c Release \\
@@ -1281,7 +1411,7 @@ RUN cd /work/native \\
         > /work/publish-shared.log 2>&1 \\
     || (tail -60 /work/publish-shared.log; exit 1)
 
-# Step 6: stage the archive contents, run the smokes and record the facts
+# Step 7: stage the archive contents, run the smokes and record the facts
 # the manifests are written from.
 #
 # The two lists used to be substituted into stage.sh before it was
@@ -1531,6 +1661,14 @@ def _write_build_context(ctx):
         shutil.copy2(os.path.join(SCRIPTS_DIR, name), os.path.join(ctx, name))
     for name in ("stage.sh", "privatise_unwind.sh"):
         os.chmod(os.path.join(ctx, name), 0o755)
+    # The patches, under the name the Dockerfile COPYs them by. Copied for
+    # the same reason the scripts above are: the file that runs in the
+    # container is the file in the tree, and its sha256 is what BUILDINFO
+    # records.
+    patches = os.path.join(ctx, "patches")
+    os.makedirs(patches, exist_ok=True)
+    for name in patch_scripts():
+        shutil.copy2(os.path.join(PATCHES_DIR, name), os.path.join(patches, name))
     # The two smokes stay generated: each one's body is the entry-point
     # list the shipped header declares, so a hand-maintained copy would
     # be a list that disagrees with the header it is compiled against.

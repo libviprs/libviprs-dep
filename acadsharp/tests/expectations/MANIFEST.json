@@ -189,6 +189,25 @@
       ],
       "views_without_extents": 0
     },
+    "g13_empty_view.dwg": {
+      "batches": 1,
+      "bytes": 10507,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 5
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 880,
+      "records": 5,
+      "sha256": "4183049d5a6272f15ca020437094fc6645c31e68a9b55f3fc025044379add414",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_hatch.dwg": {
       "batches": 1,
       "bytes": 10827,
@@ -296,12 +315,12 @@
       "bytes": 10604,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 6
+        "Warning": 7
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1160,
-      "records": 6,
+      "output_bytes": 1220,
+      "records": 7,
       "sha256": "85e3873b3ba01f03e1451e4dc2e941c432b69b39b03c8ce5e3e502d9e50c39ae",
       "view_count": 2,
       "view_extents": [
@@ -563,12 +582,12 @@
       "bytes": 10571,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 6
+        "Warning": 7
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 980,
-      "records": 6,
+      "output_bytes": 1040,
+      "records": 7,
       "sha256": "1a0387b575f894ac8315a1075b0e2399bd3473d24d3eb5b72a2a08f7f62df365",
       "view_count": 2,
       "view_extents": [
@@ -602,12 +621,12 @@
       "bytes": 10667,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 5
+        "Warning": 6
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 952,
-      "records": 5,
+      "output_bytes": 1012,
+      "records": 6,
       "sha256": "4e78ce6186919f14ccfe47a442a787c918391070760d5de27962c76887f363ae",
       "view_count": 2,
       "view_extents": [
@@ -678,20 +697,20 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "bd4099120e9027b744fe9213028583956823ec4b16823d79d5879c9c03eddcd5",
+    "sha256": "831562da909628198c4589e5bdaa64f1890acae2747e598190ac64b517a06e32",
     "sources": {
       "native/Abi.cs": "a7645220a3a451a7361def3c8f8675e5f84b13d653d16a1467265880ef48ca0c",
       "native/Adapter/Flattener.cs": "436a7237c8367ba6f0c19305192f910c4247e6bf8699014924c0a6efcba3a322",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
-      "native/Adapter/WarningCodes.cs": "76a514c986c792786e596f2e01e0800bbd52ae9ab9c2c8a3faa9d7368d7a4ae4",
+      "native/Adapter/WarningCodes.cs": "cb545c2f8a3b7f6352a1b7f83a6b1f1357ae95b870289d8040a841cbd1735c92",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
-      "native/Sources/AcadSharpSource.cs": "c84ddf4c3445465208e3b43316f63681ceffe27de730b57e2d6a207e9915508f",
+      "native/Sources/AcadSharpSource.cs": "88cf9187a712cf558e840b0947178e0df158fa97ef20442f9858ec9973d9d3c6",
       "native/Sources/IDocumentSource.cs": "ef09d143be8d02dc498336f770ae1c939862107ba044fc5692b0e0ec2f10f871",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
       "native/Sources/SyntheticSource.cs": "568c9e6aea293c18fe89238b16dd4c1bb3eeb393f504b2c0fac12790c50e0b67",
       "native/Wire/BatchWriter.cs": "fe450480b5bb98b593fc78cd77b183dc158ea0798b3328663997a75ad16129bd",
-      "native/Wire/DecodeSession.cs": "c6eab690354c7dff7a838e0c428cdcb489d1e402f6844997273dd370ac7e1cf0",
+      "native/Wire/DecodeSession.cs": "8e70e7820c9a7c9701298472f14776f831bfc6daa837463d98457c64e4d13c12",
       "native/Wire/Primitive.cs": "47c94f73d6f9b150ff7e3a5ec6ea2709e8d9e68ebfe68baba6ab2a9e790e006a",
       "native/Wire/RecordEncoder.cs": "255a425bb8b25c45c1659a351944ef3352c36ca4a4b0daf812ce8707aa851a61",
       "native/Wire/WireFormat.cs": "867087a19b63bc9609995c7cc08eadda4855986514e3dcecf558945a7f868bfa"

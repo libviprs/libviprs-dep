@@ -468,7 +468,7 @@ SYMBOL_FORCING_FLAGS = ("-u", "--undefined", "--require-defined")
 BUILDINFO_FIELDS = (
     "driver_commit", "builder_image", "dotnet_version", "clang_version",
     "linker_version", "publish_aot", "invariant_globalization", "trimmer_roots",
-    "trimmer_single_warn", "aot_warning_count", "built_utc",
+    "trimmer_single_warn", "aot_warning_count", "source_patches", "built_utc",
 )
 # The whole matrix. A triple that does not belong to the cell the
 # filename names means the archive and the manifest disagree about what

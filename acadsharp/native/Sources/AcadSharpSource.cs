@@ -318,9 +318,12 @@ namespace Viprs.Sources
 		// the other. `min_x > max_x` is then a comparison that works and means
 		// "this view has no usable extents".
 		//
-		// What it does not do is separate a view that is empty from a drawing
-		// that is damaged: both come out as this. Telling those apart wants a
-		// warning code of its own, and a code wants a row in docs/WIRE.md.
+		// What it does not do on its own is separate a view that is empty from
+		// a drawing that is damaged: both come out as this. EMPTY_VIEW, which
+		// DecodeSession yields when a view produced no geometry record, is the
+		// half that can, and the two are read together: this box and that
+		// warning and nothing else is an empty drawing, and the same pair with
+		// other warnings beside it is a drawing that could not be read.
 		private const double AbsentMin = 1e20;
 		private const double AbsentMax = -1e20;
 

@@ -327,9 +327,12 @@ reports the inverted box instead, `min_x` and `min_y` at `1e20` and `max_x` and
 "this view has no usable extents", which is a comparison it can actually make,
 and `1e20` is not to be read as an extent.
 
-The box does not say why. A view that is empty and a view whose extents the
-drawing has damaged report the same box, and nothing else on this wire tells
-them apart.
+The box does not say why, on its own. A view that is empty and a view whose
+extents the drawing has damaged report the same box, so the code below that
+goes with it is `EMPTY_VIEW`, which a view emits when it produced no geometry
+record at all. The two are read together: this box, that warning, and no other
+warning in the view is a drawing with nothing in it, and the same pair with
+other warnings beside it is a drawing something went wrong reading.
 
 A consumer should still refuse a non-finite `f64` in a geometry record rather
 than trust the guarantee, because the bytes may not have come from this
@@ -358,6 +361,7 @@ and 105 with these meanings, whatever it is built on.
 | 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
 | 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
+| 108 | `EMPTY_VIEW` | This view emitted no geometry record at all. It is the other half of the inverted extents above: those say the view has no usable bounding box, and this says there was nothing to have one of. A consumer tells an empty drawing from a damaged one by what sits beside this in the same view, because every warning about something that could not be read is in that stream too, so this alone is empty and this with company is damaged. `item_handle` is 0: it is about the view. |
 
 ### Reserved ranges
 
