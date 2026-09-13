@@ -18,6 +18,12 @@
 
   <ItemGroup>
     <Compile Include="../../../native/Probe.cs" />
+    <!-- The same adapter sources the native shim compiles, for the same
+         reason Probe.cs is shared: a difference between what the corpus
+         records and what the shared library does must come from the runtime,
+         never from two copies of the flattener. -->
+    <Compile Include="../../../native/Adapter/**/*.cs" />
+    <Compile Include="../../../native/Sources/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(AcadSharpProject)' != ''">

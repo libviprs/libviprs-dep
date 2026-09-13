@@ -8,7 +8,7 @@ public static class Program
 	{
 		if (args.Length < 2)
 		{
-			Console.Error.WriteLine("usage: fixturegen write|write-codepage|read <path>");
+			Console.Error.WriteLine("usage: fixturegen write|write-codepage|read|corpus|decode <path> [options]");
 			return 2;
 		}
 
@@ -24,6 +24,37 @@ public static class Program
 			Probe.WriteCodePageFixture(args[1]);
 			Console.Error.WriteLine("wrote " + args[1]);
 			return 0;
+		}
+
+		// G1.3 adds the corpus and the scenario runner. Same program on
+		// purpose: one build, one set of ACadSharp bindings, and the fixture
+		// writer sitting next to the thing that reads what it wrote.
+		if (args[0] == "corpus")
+		{
+			foreach (string name in Viprs.Cad.Fixtures.Corpus.WriteAll(args[1]))
+			{
+				Console.Out.Write(name);
+				Console.Out.Write("\n");
+			}
+
+			return 0;
+		}
+
+		if (args[0] == "corpus-large")
+		{
+			int points = args.Length > 2
+				? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture)
+				: 600000;
+			Viprs.Cad.Fixtures.Corpus.WriteLarge(args[1], points);
+			Console.Error.WriteLine("wrote " + args[1] + " with " + points + " points");
+			return 0;
+		}
+
+		if (args[0] == "decode")
+		{
+			string[] rest = new string[args.Length - 1];
+			Array.Copy(args, 1, rest, 0, rest.Length);
+			return Viprs.Cad.Fixtures.Harness.Decode(rest);
 		}
 
 		if (args[0] == "read")
