@@ -248,3 +248,55 @@ class TestTheSyntheticBackingIsDocumented:
         assert "docs/ABI.md" in header and "docs/WIRE.md" in header
         assert "viprs_acadsharp.h" in abi
         assert "WIRE.md" in abi
+
+
+class TestNoDocumentPrintsALiveDigest:
+    """A real fingerprint in prose goes stale the first time the header moves.
+
+    It already did. An earlier draft of ABI.md printed `d855aa37...` as a
+    worked example, the header gained six `typedef` keywords, and the document
+    kept confidently stating a value that no build would ever return. The
+    paragraph carrying it is the one warning that a hand-typed constant "drifts
+    in the one direction that does damage, by continuing to report agreement".
+
+    So the rule is not "keep the number correct", which is what failed. It is
+    that no document prints a live digest at all: the worked example is
+    obviously synthetic, and anyone who wants the real value reads
+    `LINKINFO.json`, calls the export, or hashes the header.
+    """
+
+    def _digest(self):
+        import hashlib
+
+        with open(HEADER, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+
+    @pytest.mark.parametrize("doc", ["ABI.md", "WIRE.md"])
+    def test_no_prefix_of_the_header_digest_appears(self, doc):
+        digest = self._digest()
+        path = os.path.join(DOCS, doc)
+        with open(path, encoding="utf-8") as f:
+            text = f.read().lower()
+
+        # Eight hex characters is four bytes, already far past coincidence in
+        # prose, and short enough to catch a truncated copy of the real thing.
+        for length in (64, 32, 16, 8):
+            probe = digest[:length]
+            assert probe not in text, (
+                f"{doc} contains {probe!r}, which is the first {length} characters of the "
+                f"live header digest. Whatever it is illustrating will be wrong the next "
+                f"time viprs_acadsharp.h changes, and it will be wrong silently. Use an "
+                f"obviously fake digest and point the reader at LINKINFO.json or "
+                f"viprs_acad_abi_fingerprint()."
+            )
+
+    def test_the_check_can_actually_see_the_digest(self):
+        # The positive control. Without it, a bug that read the wrong file or
+        # lower-cased only one side would pass every assertion above by
+        # comparing two things that never match.
+        digest = self._digest()
+        assert len(digest) == 64
+        pretend = f"the digest {digest[:16]} becomes 0x{digest[:16].upper()}"
+        assert digest[:16] in pretend.lower(), (
+            "the containment test itself is broken, so the assertions above prove nothing"
+        )

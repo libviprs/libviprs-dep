@@ -32,12 +32,20 @@ coarse check: a consumer built for version 1 must refuse a library that
 reports 2.
 
 `viprs_acad_abi_fingerprint()` is the fine one. It returns the first eight
-bytes of the sha256 of the published header, read big-endian, so the digest
-`d855aa37...` becomes `0xD855AA37BEEE7ACB`. The value is generated from
-`viprs_acadsharp.h` at build time and compiled in. It is never assigned by
-hand, and that is the whole point: a constant somebody typed drifts from the
-file it describes the first time the file changes, and it drifts in the one
-direction that does damage, by continuing to report agreement.
+bytes of the sha256 of the published header, read big-endian, so a digest
+beginning `aabbccddeeff0011...` becomes `0xAABBCCDDEEFF0011`. The value is
+generated from `viprs_acadsharp.h` at build time and compiled in. It is never
+assigned by hand, and that is the whole point: a constant somebody typed
+drifts from the file it describes the first time the file changes, and it
+drifts in the one direction that does damage, by continuing to report
+agreement.
+
+That digest is deliberately made up. An earlier draft of this paragraph
+printed a real one, and it went stale the first time the header changed, which
+is the exact failure the paragraph is warning about. For the live value read
+`abi_fingerprint` in the archive's `metadata/LINKINFO.json`, or call
+`viprs_acad_abi_fingerprint()`, or hash the header yourself. Never copy one out
+of prose.
 
 A consumer computes the same number the same way from the header it was
 built against, and compares. They differ exactly when the header and the
