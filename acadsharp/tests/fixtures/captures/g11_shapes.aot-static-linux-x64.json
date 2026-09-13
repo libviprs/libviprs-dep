@@ -1,0 +1,27 @@
+{
+  "header_map_count": 249,
+  "version": "AC1032",
+  "last_saved_by": "ACadSharp",
+  "text_height_default": 7.25,
+  "elevation": 3.5,
+  "angular_unit_precision": 6,
+  "dimension_scale_factor": 12.5,
+  "layer_count": 2,
+  "layers": ["0", "VIPRS_G11_LAYER"],
+  "block_record_count": 3,
+  "block_records": ["*Model_Space", "*Paper_Space", "VIPRS_G11_BLOCK"],
+  "text_style_count": 1,
+  "line_type_count": 3,
+  "layout_count": 2,
+  "layouts": ["Layout1", "Model"],
+  "model_layout": {"min_extents": [-11.5,-22.25,-3.75], "max_extents": [101.5,202.25,33.75], "min_limits": [-50.5,-60.25], "max_limits": [-50.5,-60.25]},
+  "entity_count": 5,
+  "entities_by_type": {"Arc": 1, "Circle": 1, "Insert": 1, "Line": 1, "TextEntity": 1},
+  "entity_details": [
+    "Arc layer=0 center=[30.25,40.5,0] r=8.125 start=0.25 end=2.75",
+    "Circle layer=0 center=[10.25,20.5,0] r=5.75",
+    "Insert layer=0 at=[60.5,70.5,0] block=VIPRS_G11_BLOCK",
+    "Line layer=VIPRS_G11_LAYER start=[1.5,2.5,0] end=[41.5,62.5,0]",
+    "TextEntity layer=0 at=[2.5,3.5,0] h=4.5 value=VIPRS-G11-TEXT"
+  ]
+}
