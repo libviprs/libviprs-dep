@@ -1255,6 +1255,65 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                 rmdir "$d" 2>/dev/null || true
             done < /tmp/merge-sources.txt
 
+            # The module table has to survive --gc-sections, and by
+            # default under lld it does not.
+            #
+            # ILC puts the runtime's module headers in a section called
+            # __modules and the bootstrapper walks it through
+            # __start___modules and __stop___modules, the symbols a linker
+            # synthesises around any section whose name is a C identifier.
+            # Nothing relocates against the section, so those two symbols
+            # are the only references to it, and lld has defaulted to
+            # -z start-stop-gc since version 13, which says a reference
+            # through an encapsulation symbol is not a reason to keep a
+            # section. rustc asks for --gc-sections, so on every target
+            # whose linker is lld the section goes and the link fails with
+            # an undefined __start___modules. GNU ld keeps it, which is
+            # why the C smoke below passes, why every arm64 job passed,
+            # and why this only ever showed up on linux/x64 (#67).
+            #
+            # Three sections, not one. The bootstrapper references six
+            # encapsulation symbols, around __modules, __managedcode and
+            # __unbox. Only __modules dies today, because ILC emits each
+            # of the other two as one monolithic section and any live
+            # symbol in it keeps the whole thing: measured, 59471
+            # relocations reach __managedcode and 1259 reach __unbox
+            # against zero for __modules. That is an accident of how ILC
+            # lays out sections, not a guarantee, so all three get the
+            # flag. It is free: retaining all three produces a binary of
+            # identical size with a byte-identical .init_array.
+            #
+            # Setting SHF_GNU_RETAIN on the section makes the archive
+            # carry its own requirement. The alternative is asking every
+            # consumer to pass -z nostart-stop-gc, and a consumer cannot:
+            # cargo:rustc-link-arg does not travel from a dependency's
+            # build script to the binary that links it, which is the same
+            # limitation that put the initialiser in its own archive.
+            RETAINED=0
+            for OBJ in "$MERGE_DIR"/*.o; do
+                [ -f "$OBJ" ] || continue
+                readelf -S -W "$OBJ" 2>/dev/null \
+                    | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\) .*/\1/p' \
+                    | grep -qx __modules || continue
+                if python3 "$WORK/retain_sections.py" "$OBJ" \
+                        __modules __managedcode __unbox; then
+                    RETAINED=$((RETAINED + 1))
+                else
+                    MERGE_OK=0
+                fi
+            done
+            fact retained_module_sections "$RETAINED"
+            # At least one object has to carry it. There is no upper
+            # bound on purpose: `__modules` is an encapsulation array and
+            # N contributors is its designed shape, so an exact count
+            # would redden a release for an archive that links perfectly
+            # the day ILC splits its output or a second NativeAOT library
+            # joins the merge.
+            if [ "$RETAINED" -lt 1 ]; then
+                echo "no object carries __modules, so the runtime renamed a section"
+                MERGE_OK=0
+            fi
+
             if [ "$MERGE_OK" != "1" ]; then
                 echo "the merge would have dropped an object; shipping shared-only"
                 rm -f "$INIT_A" "$MERGED"
@@ -1346,13 +1405,13 @@ def make_dockerfile(version, plat, arch):
         install_deps = (
             "RUN apk add --no-cache bash curl ca-certificates git clang build-base \\\n"
             "    zlib-dev zlib-static openssl-dev openssl-libs-static binutils file \\\n"
-            "    libstdc++ libgcc icu-libs krb5-libs lld"
+            "    libstdc++ libgcc icu-libs krb5-libs lld python3"
         )
     else:
         install_deps = (
             "RUN apt-get update && apt-get install -y --no-install-recommends \\\n"
             "    curl ca-certificates git clang zlib1g-dev libssl-dev binutils \\\n"
-            "    build-essential file libicu72 \\\n"
+            "    build-essential file libicu72 python3-minimal \\\n"
             "    && rm -rf /var/lib/apt/lists/*"
         )
 
@@ -1397,7 +1456,7 @@ RUN rmdir {src_root}/src/CSUtilities 2>/dev/null || true; \\
 COPY native /work/native
 COPY include /work/include
 COPY VERSION /work/VERSION
-COPY archive_smoke.c static_archive_smoke.c stage.sh /work/
+COPY archive_smoke.c static_archive_smoke.c stage.sh retain_sections.py /work/
 
 # Step 5: publish the shared library. The log is kept because the AOT
 # warning count in BUILDINFO.json is read out of it.
@@ -1612,6 +1671,13 @@ def _write_build_context(ctx, plat):
     # constant comes out as "", and every archive published so far shipped a
     # library that answers the version question with an empty string.
     shutil.copy2(VERSION_FILE, os.path.join(ctx, "VERSION"))
+    # Copied rather than generated: it is a real script with its own
+    # tests, and a second copy inside a Python string is a second thing to
+    # keep right.
+    shutil.copy2(
+        os.path.join(SCRIPTS_DIR, "retain_sections.py"),
+        os.path.join(ctx, "retain_sections.py"),
+    )
     for name, text in (
         ("archive_smoke.c", archive_smoke_source()),
         ("static_archive_smoke.c", static_smoke_source()),
@@ -1664,6 +1730,31 @@ def build_for_job(version, plat, arch, output_dir):
                     f"the ABI smoke failed against the staged library: {detail}. "
                     f"The archive is at {path} for inspection; it is not shippable."
                 )
+
+            # A target that is supposed to carry a static half and does not.
+            #
+            # Every step in the static branch of the staging script
+            # degrades the same way: it drops the two archives and lets
+            # the cell finish, so `static_certified` comes out false, the
+            # manifest legally omits the static fields, the verifier is
+            # happy because shipping shared-only is a recorded outcome,
+            # and the release page shows `false` in a column nobody reads.
+            # That is the right behaviour for a target that was never
+            # meant to have one and the wrong behaviour for these four,
+            # and there was nothing holding them to it.
+            #
+            # It matters more now than it did. Retaining `__modules` is a
+            # new way for the static branch to give up, and it can give up
+            # on every ELF target at once (no python3 in the image, a
+            # section ILC renamed, an object that will not rewrite).
+            # Before, a failure there reddened the cell.
+            if rid_for(plat, arch) in STATIC_TARGETS and facts.get("static_ok") != "1":
+                raise RuntimeError(
+                    f"{job} is a static target and the static half did not certify, so this "
+                    f"archive would have published shared-only and green. The build log says "
+                    f"why; the archive is at {path} for inspection."
+                )
+
             verify_archive(path, log_file, job)
             log_file.write(f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} (success)\n")
             return path

@@ -1409,3 +1409,26 @@ class TestTheDriverSpeaksTheSameContract:
                 assert flag in help_text, (
                     f"{name}'s Build step passes {flag}, which {DRIVER} does not accept"
                 )
+
+
+class TestTheTagPointsAtTheCommitThatBuiltIt:
+    """`gh release create` with no `--target` tags the default branch.
+
+    A dispatch runs the workflow from whatever ref it was launched on, so
+    without this the archives come from that ref and the tag points at
+    `main`'s head. Everything looks right and the tag is a lie, which is
+    the worst shape a release can have: nothing fails, and the commit a
+    consumer bisects to never produced those bytes.
+    """
+
+    def test_create_release_pins_the_target(self):
+        with open(WORKFLOW_PATH) as f:
+            text = f.read()
+
+        # The header comment names the command too, so anchor on the
+        # invocation rather than the first mention of it.
+        at = text.index('gh release create "$TAG"')
+        step = text[at : at + 300]
+
+        assert "--target" in step, "the tag would default to the repository's default branch"
+        assert "GITHUB_SHA" in step, "it has to be the commit this run built, not a branch name"

@@ -926,6 +926,13 @@ it produces before calling one done. It enforces:
    recipe above when the host has cargo. Linking alone cannot tell a
    working archive from a broken one: without its initialiser the link
    is clean and the binary aborts at the first call, which is exit 134.
+9. The `__modules` section of the static archive carries
+   `SHF_GNU_RETAIN`, so a linker that defaults to `-z start-stop-gc`
+   cannot collect the runtime's module table. This one reads the
+   archive rather than linking it, so unlike 8 it runs for every target
+   on every host, which is the point: the targets a host cannot link for
+   are exactly the ones nothing else checks. `LINKINFO.md` has the
+   mechanism.
 
 It needs `python3`, which parses the manifests and the checksums; a
 missing interpreter is a refusal rather than a skipped check.
@@ -953,6 +960,13 @@ cc main.c -I acadsharp-linux-x64/include \
    -Wl,--no-whole-archive acadsharp-linux-x64/lib/libacadsharp_native.a \
    -lm -o main
 ```
+
+That link uses whatever `cc` defaults to, which on every platform this
+publishes for is GNU ld. Add `-fuse-ld=lld` and you are on a linker that
+defaults to `-z start-stop-gc`, and if the archive predates the
+`SHF_GNU_RETAIN` fix you will get `undefined symbol: __start___modules`.
+A current archive needs nothing; `LINKINFO.md` explains why, under "The
+module table, `--gc-sections`, and why you need no flag for it".
 
 `libacadsharp_native_init.a` holds one object: the runtime's static
 initialiser, which lives in `.init_array` and **defines no symbol anyone

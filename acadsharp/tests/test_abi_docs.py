@@ -408,6 +408,40 @@ class TestTheManifestSpecIsEnoughToLinkFrom:
             "only in the general section"
         )
 
+    def test_it_explains_why_no_gc_flag_is_needed_and_what_to_do_if_it_is(self, linkinfo):
+        """The failure a reader arrives at this page holding.
+
+        Four archives are downloadable whose `__modules` has no retain
+        flag, so someone will hit `undefined symbol: __start___modules`
+        and come looking. Saying only "we set a flag for you" leaves that
+        reader with nothing, so the paragraph has to name the error text
+        and the escape hatch as well as the mechanism.
+        """
+        para = self._paragraph(linkinfo, "start-stop-gc")
+        assert "__start___modules" in para, (
+            "the symbol in the error message is the only string the reader has to "
+            "search for, so it has to appear here"
+        )
+        assert "SHF_GNU_RETAIN" in para or "SHF_GNU_RETAIN" in linkinfo, (
+            "the mechanism has to be named, or nobody can check the claim against "
+            "an archive they are holding"
+        )
+        escape = self._paragraph(linkinfo, "If you do see that error")
+        assert re.search(r"older|before this|newer", escape, re.I), (
+            "a reader with an old archive needs to be told that is what they have, "
+            "and that the flag is the workaround rather than the recipe"
+        )
+
+    def test_it_does_not_tell_a_consumer_to_pass_a_gc_flag_as_the_recipe(self, linkinfo_flat):
+        """The whole point of the fix is that the recipe did not change.
+
+        A document that lists `-z nostart-stop-gc` beside the two
+        `rustc-link-lib` lines would be telling consumers to carry a
+        requirement the archive already carries, and one that cannot
+        travel from a dependency's build script anyway.
+        """
+        assert "cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc" not in linkinfo_flat
+
     def test_it_says_the_initialiser_archive_comes_first_and_what_happens_otherwise(
         self, linkinfo, linkinfo_flat
     ):
@@ -502,4 +536,32 @@ class TestNoDocumentPrintsALiveDigest:
         pretend = f"the digest {digest[:16]} becomes 0x{digest[:16].upper()}"
         assert digest[:16] in pretend.lower(), (
             "the containment test itself is broken, so the assertions above prove nothing"
+        )
+
+
+class TestTheMuslLimitationIsStated:
+    """`static_certified` on a musl archive means less than it looks.
+
+    The C recipe was measured there and the cargo recipe was never run,
+    because `verify_archive.sh` only runs it when the host can build for
+    the target. It fails, measured on both musl architectures, so the
+    document that ships inside the archive has to say which recipe the
+    field is talking about.
+    """
+
+    def test_it_names_the_collision_and_which_recipe_still_works(self, linkinfo):
+        para = "\n\n".join(
+            block for block in linkinfo.split("\n\n") if "musl" in block and "recipe" in block
+        )
+        assert para, "nothing in LINKINFO.md mentions the musl limitation"
+        assert "__unw_get_reg" in linkinfo, (
+            "the duplicate symbol is what a reader sees in their own link output"
+        )
+        assert re.search(r"C recipe .*works|works on musl", linkinfo), (
+            "a reader needs to be told what does work, not only what does not"
+        )
+
+    def test_it_does_not_claim_the_cargo_recipe_works_everywhere(self, linkinfo_flat):
+        assert "every target" not in linkinfo_flat.lower().split("on musl")[0][-400:], (
+            "a blanket claim above the limitation would contradict it"
         )

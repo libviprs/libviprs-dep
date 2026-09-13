@@ -234,7 +234,14 @@ jobs:
             echo "Release $TAG already exists."
             exit 0
           fi
+          # --target pins the tag to the commit that is actually being
+          # built. Without it `gh release create` lets the API default
+          # target_commitish to the default branch, so a dispatch from any
+          # other ref builds that ref's code and tags main's head: every
+          # archive right, the tag pointing at something that never
+          # produced them.
           gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
             --title "acadsharp $VERSION" \
             --notes-file release-notes.md
 
