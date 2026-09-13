@@ -177,3 +177,61 @@ class TestVerifyScriptShellReference:
         assert re.search(r"bin[/\\].*\.tgz", run) or "pdfium-" in run, (
             f"Verify step should reference bin/*.tgz or pdfium-<plat>-<arch>.tgz; got:\n{run}"
         )
+
+
+LATEST_SCRIPT = "tools/publish_latest_tag.sh"
+
+
+def _run_text(job):
+    return "\n".join(step.get("run", "") for step in job.get("steps", []))
+
+
+def _step_named(job, name_substr):
+    i = step_index(job, name_substr)
+    assert i >= 0, f"no step whose name contains {name_substr!r}"
+    return job["steps"][i]
+
+
+class TestTheLatestTagFollowsEveryFullyPublishedRelease:
+    """A floating pointer for edge consumers, distinct from the pinned tag.
+
+    Same job as release-acadsharp.yml's ``publish-latest``, calling the
+    same shared script with pdfium's own dependency name and asset glob.
+    ``tools/tests/test_publish_latest_tag.py`` covers the script itself;
+    this only has to prove pdfium's copy of the job calls it right.
+    """
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        assert "publish-latest" in self.wf["jobs"], "release.yml has no publish-latest job"
+        self.job = self.wf["jobs"]["publish-latest"]
+
+    def test_it_waits_on_every_build_job_and_the_summary(self):
+        needs = self.job["needs"]
+        for name in ("build-linux", "build-mac", "build-mac-universal", "summary"):
+            assert name in needs, f"publish-latest must wait on {name}"
+
+    def test_it_only_moves_the_tag_when_every_target_published(self):
+        cond = self.job.get("if", "")
+        for name in ("build-linux", "build-mac", "build-mac-universal"):
+            assert f"needs.{name}.result" in cond, (
+                f"publish-latest's if: does not gate on {name} succeeding, so a "
+                "partial release could still become latest"
+            )
+        assert "'success'" in cond
+
+    def test_it_calls_the_shared_script_with_this_dependencys_name_and_glob(self):
+        run = _run_text(self.job)
+        assert LATEST_SCRIPT in run, (
+            f"publish-latest does not call {LATEST_SCRIPT}, so pdfium has its own "
+            "copy of the latest-moving logic rather than the shared one"
+        )
+        assert f"{LATEST_SCRIPT} pdfium " in run
+        assert "pdfium-*.tgz" in run
+
+    def test_it_passes_the_tag_resolve_version_computed(self):
+        step = _step_named(self.job, "pdfium-latest")
+        assert step.get("env", {}).get("TAG") == "${{ needs.resolve-version.outputs.tag }}"
+
+    def test_it_has_contents_write(self):
+        assert self.job.get("permissions", {}).get("contents") == "write"

@@ -781,3 +781,26 @@ jobs:
             echo "| build-linux     | ${{ needs.build-linux.result }} |"
             echo "| build-mac       | ${{ needs.build-mac.result }} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-latest:
+    # Moves acadsharp-latest onto whatever this run just published, so a
+    # consumer tracking the edge of this dependency has one URL that
+    # never needs to resolve a version. Only when every target
+    # published: a "latest" that can point at a partial release is worse
+    # than none, because a consumer tracking edge would silently start
+    # missing whichever target happened to fail. Every dependency's
+    # release workflow in this repo carries an identical job, calling
+    # the same shared script with its own dependency name and asset glob.
+    needs: [resolve-version, build-linux, build-mac, release-notes]
+    if: needs.build-linux.result == 'success' && needs.build-mac.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Move acadsharp-latest to this release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: tools/publish_latest_tag.sh acadsharp "$TAG" 'acadsharp-*.tgz'
