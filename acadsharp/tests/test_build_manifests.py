@@ -935,8 +935,12 @@ class TestTheShippedLibraryHasToSayWhatItIs:
     """
 
     def test_the_smoke_asks_for_the_backing_version(self):
+        # The symbol it resolves, not the struct it fills in. Both are
+        # named in this source and only one of them is the export, which
+        # is how a rename of the call reached CI through an assertion
+        # that looked like it was checking the call.
         source = ba.archive_smoke_source()
-        assert "viprs_acad_capabilities_v1" in source
+        assert f'dlsym(h, "{ba.capabilities_entry_point()}")' in source
         assert "BACKING_VERSION=" in source
 
     def test_the_smoke_refuses_an_empty_one(self):
@@ -962,6 +966,88 @@ class TestTheShippedLibraryHasToSayWhatItIs:
 
     def test_the_backing_version_is_recorded_as_a_fact(self):
         assert "fact backing_version" in ba.stage_script()
+
+
+class TestTheSmokeResolvesOnlyWhatTheHeaderDeclares:
+    """The generated smoke was half generated.
+
+    It took the entry-point list from the header and then hardcoded the
+    capabilities symbol, and its full C signature, as a string. Rename
+    that call in the header and every other name follows while this one
+    does not: the library resolves ten exports, the eleventh comes back
+    NULL, the smoke exits 7, `shared_smoke_ok` is recorded as 0 and the
+    driver refuses the archive. The whole conformance workflow dies at its
+    first step, and the failure reads as a library that cannot say what it
+    is rather than as a generator that asked for the wrong name.
+
+    The check that closes it is not "the name is right", it is "every
+    symbol this smoke hands to dlsym is one the header declares". The old
+    assertion here matched `viprs_acad_capabilities_v1`, which is also the
+    struct's name and appears in the same source, so a rename of the call
+    went through it untouched.
+    """
+
+    def _resolved(self, source):
+        """Every symbol the generated smoke resolves, by either route."""
+        direct = set(re.findall(r'dlsym\(h, "([a-z0-9_]+)"\)', source))
+        listed = set(re.findall(r'^\t"([a-z0-9_]+)",$', source, re.M))
+        return direct | listed
+
+    def test_every_symbol_it_resolves_is_declared_by_the_header(self):
+        resolved = self._resolved(ba.archive_smoke_source())
+        declared = set(ba.header_entry_points())
+        undeclared = sorted(resolved - declared)
+        assert not undeclared, (
+            f"the smoke resolves {undeclared}, which the shipped header does not "
+            "declare. dlsym returns NULL, the smoke exits non-zero, and the driver "
+            "refuses every archive with a message about the library rather than "
+            "about this generator."
+        )
+
+    def test_it_resolves_something_at_all(self):
+        # The control. An empty set is a subset of anything, so the check
+        # above passes over a smoke that resolves nothing.
+        assert len(self._resolved(ba.archive_smoke_source())) >= 3
+
+    def test_a_renamed_capabilities_call_carries(self):
+        # The rename in libviprs-dep#59, done to a header this test writes
+        # so it can be checked before the header moves. `get_` in front of
+        # the call, and the struct keeps its name.
+        renamed = [
+            n.replace("viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1")
+            for n in ba.header_entry_points()
+        ]
+        source = ba.archive_smoke_source(entry_points=renamed)
+        assert 'dlsym(h, "viprs_acad_get_capabilities_v1")' in source
+        assert 'dlsym(h, "viprs_acad_capabilities_v1")' not in source, (
+            "the smoke still asks for the old name, so it resolves NULL and exits 7 "
+            "against a library that is perfectly fine"
+        )
+        assert self._resolved(source) <= set(renamed)
+
+    def test_the_struct_is_not_renamed_with_it(self):
+        # Only the call was renamed. The struct is still
+        # `struct viprs_acad_capabilities_v1`, and a generator that
+        # rewrote both would produce a smoke that does not compile.
+        renamed = [
+            n.replace("viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1")
+            for n in ba.header_entry_points()
+        ]
+        source = ba.archive_smoke_source(entry_points=renamed)
+        assert "struct viprs_acad_capabilities_v1 caps;" in source
+
+    def test_a_header_with_no_capabilities_call_is_refused(self):
+        with pytest.raises(ValueError, match="capabilities"):
+            ba.capabilities_entry_point(["viprs_acad_abi_version"])
+
+    def test_a_header_with_two_is_refused(self):
+        # Ambiguous rather than wrong: during a rename both spellings can
+        # be declared at once, and the smoke calls exactly one through a
+        # typed pointer.
+        with pytest.raises(ValueError, match="capabilities"):
+            ba.capabilities_entry_point(
+                ["viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1"]
+            )
 
 
 class TestAnUncertifiedStaticLibraryIsNotShipped:

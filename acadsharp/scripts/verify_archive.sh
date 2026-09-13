@@ -1083,7 +1083,7 @@ int main(int argc, char **argv)
 		memset(&caps, 0, sizeof caps);
 		caps.struct_size = (uint32_t)sizeof caps;
 		caps.struct_version = 1;
-		rc = viprs_acad_capabilities_v1(&caps, NULL, 0, &needed);
+		rc = VIPRS_CAPS_CALL(&caps, NULL, 0, &needed);
 		if (rc != 0) {
 			fprintf(stderr, "probe: the capabilities sizing call returned %u\n",
 				(unsigned)rc);
@@ -1104,6 +1104,19 @@ int main(int argc, char **argv)
 	return 0;
 }
 PROBE
+    # The capabilities call by whatever name the shipped header declares
+    # it, handed to the compiler rather than typed into the probe. This is
+    # a static link, so the name is resolved when the probe compiles: a
+    # literal here would stop compiling the day the call is renamed, and
+    # the verifier would refuse every archive with "the static smoke
+    # cannot link the archive", which says nothing about what is wrong.
+    CAPS_CALL=$(grep -E 'capabilities' "$ENTRY_POINTS" | head -1)
+    if [ -z "$CAPS_CALL" ]; then
+      fail "the shipped header declares no capabilities call, so the probe cannot ask
+    the library what it reads"
+      CAPS_CALL=viprs_acad_capabilities_v1
+    fi
+
     SYSLIB_FLAGS=""
     for lib in $(mfact static_system_libraries); do
       SYSLIB_FLAGS="$SYSLIB_FLAGS -l$lib"
@@ -1112,7 +1125,7 @@ PROBE
     # The documented order: the initialiser archive whole, ahead of the
     # main one. Reversed, the link fails on RhRegisterOSModule.
     # shellcheck disable=SC2086  # both lists are deliberate word-split arg lists
-    if cc "$WORK/probe.c" -I"$ROOT/include" \
+    if cc "$WORK/probe.c" -I"$ROOT/include" "-DVIPRS_CAPS_CALL=$CAPS_CALL" \
           -Wl,--whole-archive "$STATIC_INIT_LIB" -Wl,--no-whole-archive \
           "$STATIC_LIB" $LINK_ARGS $SYSLIB_FLAGS \
           -o "$WORK/probe" > "$WORK/probe.log" 2>&1; then
