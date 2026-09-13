@@ -368,6 +368,10 @@ import sys
 
 root, want_platform, want_cpu, facts_path = sys.argv[1:5]
 
+SHARED_EXT = "dylib" if want_platform == "mac" else "so"
+EXPECTED_SHARED = f"lib/libacadsharp_native.{SHARED_EXT}"
+EXPECTED_STATIC = "lib/libacadsharp_native.a"
+
 LINKINFO_FIELDS = (
     "schema_version", "artifact_version", "acadsharp_version", "acadsharp_commit",
     "dotnet_sdk", "target", "platform", "cpu", "abi_version", "wire_version",
@@ -438,6 +442,27 @@ if link is not None:
             f"LINKINFO.json says target {link.get('target')!r}, but "
             f"{want_platform}/{want_cpu} is {expected_triple!r}"
         )
+    # A manifest pointing at a library that is not the one in the archive
+    # is a link the consumer cannot make, and nothing else here would
+    # notice: the layout check looks for the conventional name and the
+    # manifest is what build.rs actually reads.
+    if link.get("shared_library") != EXPECTED_SHARED:
+        problems.append(
+            f"LINKINFO.json shared_library is {link.get('shared_library')!r}, "
+            f"but a {want_platform} archive ships {EXPECTED_SHARED}"
+        )
+    elif not os.path.isfile(os.path.join(root, EXPECTED_SHARED)):
+        problems.append(f"LINKINFO.json shared_library {EXPECTED_SHARED} is not in the archive")
+    if static_library is not None:
+        if static_library != EXPECTED_STATIC:
+            problems.append(
+                f"LINKINFO.json static_library is {static_library!r}, "
+                f"but the archive ships {EXPECTED_STATIC}"
+            )
+        elif not os.path.isfile(os.path.join(root, EXPECTED_STATIC)):
+            problems.append(
+                f"LINKINFO.json static_library {EXPECTED_STATIC} is not in the archive"
+            )
     for field in ("system_libraries", "link_args"):
         value = link.get(field)
         if value is not None and not isinstance(value, list):

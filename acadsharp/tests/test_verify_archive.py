@@ -750,3 +750,40 @@ class TestStaticCertification:
         _edit_json(root, "LINKINFO.json", lambda doc: doc.update(static_certified=False))
         result = _verify(_repack(root))
         assert result.returncode == 0, _output(result)
+
+
+class TestTheManifestPointsAtTheLibrariesThatAreThere:
+    """A manifest naming a library the archive does not carry is a link the
+    consumer cannot make, and the layout check would not notice: it looks
+    for the conventional name, while `build.rs` reads the manifest."""
+
+    def test_a_shared_library_path_that_is_not_the_shipped_one_is_rejected(
+        self, tmp_path, good_tree
+    ):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(
+            root, "LINKINFO.json", lambda doc: doc.update(shared_library="lib/libsomething.so")
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "shared_library" in _output(result)
+
+    def test_a_static_library_path_that_is_not_the_shipped_one_is_rejected(
+        self, tmp_path, good_tree
+    ):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.update(static_library="lib/other.a"))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "static_library" in _output(result)
+
+    def test_a_mac_manifest_claiming_a_dot_so_is_rejected(self, tmp_path, mac_tree):
+        root = _clone(mac_tree, tmp_path)
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(shared_library="lib/libacadsharp_native.so"),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "dylib" in _output(result)
