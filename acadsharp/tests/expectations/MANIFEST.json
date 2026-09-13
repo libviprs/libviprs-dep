@@ -432,12 +432,12 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "4d00f97ca7d7e7fdeedece16e5875b30be4b30d0ae6ceaa9f5cf248245b4aa6c",
+    "sha256": "26029bfa04596992dcbd6cae46f5029390e9dead8dd2e5f33117f955746952b9",
     "sources": {
       "native/Abi.cs": "d718bb652005e9e874eaceebd62b802d2fa26adf360ddfc8d37d1925c82cd377",
       "native/Adapter/Flattener.cs": "bb592e06c6692f470e81fbc2b33b0ca700ffef01cb1d2fddd8b90bb32322db48",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
-      "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
+      "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
       "native/Adapter/WarningCodes.cs": "4353d888362af137a1219bfb96144e6c22c01f974d33250213c41d3be941df53",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "bc580b340df172da5ddd905e26559de28e64b4acd69116d4035a2636927eada3",
