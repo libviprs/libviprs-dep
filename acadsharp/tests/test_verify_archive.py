@@ -201,6 +201,28 @@ static const void *const viprs_test_modules[1] = { &viprs_test_module_header };
 """
 
 
+# The runtime's bundled llvm-libunwind, in miniature.
+#
+# NativeAOT statically links its own copy into the runtime archives, and
+# rustc links a `self-contained/libunwind.a` of its own for every musl
+# target and for no glibc one, so the two define the same `__unw_*` names
+# and a musl cargo link against an archive carrying the originals dies on
+# all of them. stage.sh renames ours, and verify_archive.sh reads the
+# shipped symbol index to check that it did: the original names are a
+# refusal, and an archive with neither name is a refusal too, because
+# that is what the rename silently not running looks like from here.
+#
+# So the good fixture carries the renamed name. It is one symbol rather
+# than the real fifty-nine because the check is about which names are
+# there, not how many.
+UNWIND_SOURCE = """\
+void %(sym)s(void);
+void %(sym)s(void) { }
+"""
+
+UNWIND_SYMBOLS = {"private": "__viprs_unw_step", "bundled": "__unw_step", "none": None}
+
+
 def _build_init_archive(work, lib, *, effective=True, name=None):
     src = os.path.join(work, f"init{'' if effective else '-inert'}.c")
     with open(src, "w") as f:
@@ -248,10 +270,25 @@ def _finish(root, plat, arch, *, static_certified):
 
 
 def _build_linux_tree(
-    work, symbols=ENTRY_POINTS, *, static_symbols=None, undefined=None, init_effective=True
+    work,
+    symbols=ENTRY_POINTS,
+    *,
+    static_symbols=None,
+    undefined=None,
+    init_effective=True,
+    unwind="private",
+    plat="linux",
 ):
-    """Compile a stand-in library and lay it out exactly like a release."""
-    root = os.path.join(work, f"acadsharp-linux-{HOST_CPU}")
+    """Compile a stand-in library and lay it out exactly like a release.
+
+    `plat` is a label, not a toolchain: the compiler here is whatever the
+    container has, and a musl fixture is the same ELF under a musl
+    manifest and a musl filename. That is enough for every check that
+    reads the archive, and it is the only way to put a musl archive in
+    front of a glibc host, which is the situation both musl cells were
+    verified in for every release.
+    """
+    root = os.path.join(work, f"acadsharp-{plat}-{HOST_CPU}")
     lib = os.path.join(root, "lib")
     os.makedirs(lib)
 
@@ -281,7 +318,7 @@ def _build_linux_tree(
             "-I",
             include,
             "-o",
-            os.path.join(lib, ba.shared_library_name("linux")),
+            os.path.join(lib, ba.shared_library_name(plat)),
         ]
         + with_caps(symbols, shared_src),
         check=True,
@@ -317,13 +354,23 @@ def _build_linux_tree(
     # on an arm64 one, which is exactly how the release behaved.
     subprocess.run([sys.executable, RETAIN_SECTIONS, register_obj, "__modules"], check=True)
 
+    members = [obj, register_obj]
+    unwind_symbol = UNWIND_SYMBOLS[unwind]
+    if unwind_symbol:
+        unwind_src = os.path.join(work, "unwind.c")
+        with open(unwind_src, "w") as f:
+            f.write(UNWIND_SOURCE % {"sym": unwind_symbol})
+        unwind_obj = os.path.join(work, "unwind.o")
+        subprocess.run(["cc", "-fPIC", "-c", unwind_src, "-o", unwind_obj], check=True)
+        members.append(unwind_obj)
+
     subprocess.run(
-        ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj, register_obj] + caps_objs,
+        ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), *members] + caps_objs,
         check=True,
     )
     _build_init_archive(work, lib, effective=init_effective)
 
-    return _finish(root, "linux", HOST_ARCH, static_certified=True)
+    return _finish(root, plat, HOST_ARCH, static_certified=True)
 
 
 # ---------------------------------------------------------------------------
