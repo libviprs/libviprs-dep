@@ -292,9 +292,12 @@ zstd/
 ├── ci.yml                     # lint + tests on every push; discovers its own
                                # paths, so a new dependency directory is covered
                                # without editing it
-└── release.yml                # fires on push to `release`, fans out to
-                               # 4 ubuntu-latest + 1 macos-15 jobs, each
-                               # uploading to pdfium-<VERSION> via --upload
+├── release.yml                # fires on push to `release`, fans out to
+│                              # 4 ubuntu-latest + 1 macos-15 jobs, each
+│                              # uploading to pdfium-<VERSION> via --upload
+└── release-zstd.yml           # same trigger, zstd's own matrix: 4
+                               # ubuntu-latest + 2 macos-15 jobs, each
+                               # verifying before it uploads
 ```
 
 `ci.yml` deliberately names no dependency directory: `ruff check .`,
@@ -445,6 +448,35 @@ To publish a new version: open a PR that bumps `pdfium/VERSION` against
 `release`, merge it, and the workflow takes over. A final `summary`
 job posts the release URL and per-job statuses to the workflow run's
 summary page.
+
+### Cutting a zstd release
+
+zstd has its own workflow, `.github/workflows/release-zstd.yml`, on
+the same `release`-branch trigger plus `workflow_dispatch`. It is a
+separate file because `release.yml` is pdfium-shaped throughout, and
+because a zstd flake should not colour a pdfium release run red.
+
+- `resolve-version` reads `zstd/VERSION` and then asks
+  `build_zstd.source_sha256` for the pinned digest. A version with no
+  `SOURCE_SHA256` entry fails here, before any build job starts, and
+  fails red rather than being skipped.
+- `create-release` creates `zstd-<VERSION>`, with notes from
+  `build_zstd.release_notes` so a release cut by CI reads the same as
+  one cut by a local `--upload`.
+- Four `ubuntu-latest` jobs cover `{linux, musl} × {amd64, arm64}`.
+  Each cell builds inside a container of the *target* architecture, so
+  the arm64 pair registers QEMU first and builds under emulation.
+- Two `macos-15` jobs build the mac slices natively. The runners are
+  Apple Silicon; the x86_64 slice is selected with
+  `CMAKE_OSX_ARCHITECTURES` and its smoke test links without running,
+  which `build_zstd.py` already handles.
+- Every job runs `zstd/scripts/verify_archive.sh` over its own archive
+  between the build and the upload. `--upload` is deliberately not
+  passed to the driver in CI: it would publish before the verifier ran.
+
+No zstd release has been cut yet. Because the first publish of an
+already-committed version changes no file, dispatch the workflow by
+hand rather than pushing something to `release` to trigger it.
 
 ## ARTIFACT LAYOUT
 

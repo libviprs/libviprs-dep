@@ -1,7 +1,7 @@
 """zstd/VERSION is the single source of truth — these keep it honest.
 
 The version drives the source URL, the pinned checksum, the release tag
-and the download URLs in the docs. Each of those is a separate place the
+and what the docs claim about it. Each of those is a separate place the
 number can rot, so each gets a check that fails when it does.
 """
 
@@ -9,10 +9,16 @@ import os
 import re
 
 import build_zstd as bz
+import pytest
 
 ZSTD_DIR = os.path.join(os.path.dirname(__file__), "..")
 VERSION_PATH = os.path.join(ZSTD_DIR, "VERSION")
 README_PATH = os.path.join(ZSTD_DIR, "README.md")
+
+# What the README says while no release has been cut. The download
+# section has to carry either this or real URLs, never both and never
+# neither — see TestDocsTrackTheVersion below.
+UNPUBLISHED_MARKER = "No archives are published yet"
 
 
 def read_readme():
@@ -72,12 +78,60 @@ class TestPinnedSource:
         )
 
 
-class TestDocsTrackTheVersion:
-    def test_readme_download_urls_use_the_pinned_version(self):
+class TestReleaseNotes:
+    """The notes on the release page are the only place a consumer can
+    check what the archives were built from, so they carry the upstream
+    URL and the digest we pinned it to."""
+
+    def test_notes_name_the_pinned_source(self):
         version = bz.read_version()
+        notes = bz.release_notes(version)
+        assert bz.source_url(version) in notes
+        assert bz.source_sha256(version) in notes
+
+    def test_an_unpinned_version_has_no_notes(self):
+        # release-zstd.yml writes these notes in create-release, which
+        # runs before any build. A version we have no hash for must not
+        # get as far as a describable release.
+        with pytest.raises(ValueError):
+            bz.release_notes("0.0.0")
+
+
+class TestDocsTrackTheVersion:
+    def test_readme_names_the_release_tag_for_the_pinned_version(self):
+        # The docs have to move when VERSION does. While nothing is
+        # published the tag is the only version-bearing string they
+        # carry, so this is what keeps the two in step.
+        version = bz.read_version()
+        assert bz.release_tag(version) in read_readme(), (
+            f"zstd/README.md never mentions the {bz.release_tag(version)} release tag"
+        )
+
+    def test_readme_either_links_archives_or_says_there_are_none(self):
+        # The README used to list six download URLs for a release that
+        # was never cut, so every link on the consumer's entry point
+        # 404ed. Linking archives and admitting there are none are both
+        # honest; doing neither, or both, is not.
         readme = read_readme()
-        assert f"/releases/download/zstd-{version}/" in readme, (
-            f"zstd/README.md's download URLs don't mention zstd-{version}"
+        links_archives = "/releases/download/zstd-" in readme
+        says_unpublished = UNPUBLISHED_MARKER in readme
+        assert links_archives != says_unpublished, (
+            "zstd/README.md must either link published archives or say "
+            f"{UNPUBLISHED_MARKER!r} — it currently does "
+            + ("both" if links_archives else "neither")
+        )
+
+    def test_published_urls_carry_their_digests(self):
+        # A download URL without a checksum next to it asks the consumer
+        # to trust the transport. Whoever adds the URLs back adds the
+        # sha256s in the same breath. This is vacuously true while there
+        # are no URLs, which is what the test above exists to stop being
+        # a silent state.
+        readme = read_readme()
+        urls = re.findall(r"/releases/download/zstd-[0-9.]+/\S+\.tgz", readme)
+        digests = re.findall(r"\b[0-9a-f]{64}\b", readme)
+        assert len(digests) >= len(urls), (
+            f"zstd/README.md lists {len(urls)} archive URLs but only {len(digests)} sha256 digests"
         )
 
     def test_readme_explains_why_this_version(self):
