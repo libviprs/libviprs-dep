@@ -25,6 +25,27 @@ public static class Corpus
 	public const string XrefBlockName = "VIPRS_G13_XREF";
 	public const string XrefPath = "../not-resolved/other.dwg";
 
+	// The same external reference with a path long enough to push the warning
+	// this library writes about it past a max_string_bytes a caller can set.
+	//
+	// The filler is a two-byte character on purpose. The byte budget a 4096-byte
+	// bound leaves for it is odd, so a truncation that counted bytes rather than
+	// characters would cut one of these in half and leave a lone lead byte at the
+	// end of a message that is supposed to be UTF-8.
+	public const int LongXrefPathBytes = 8192;
+	public const string LongXrefPathPrefix = "../not-resolved/";
+	public const string LongXrefPathSuffix = ".dwg";
+	public const char LongXrefPathFiller = '\u00e9';
+
+	public static string LongXrefPath()
+	{
+		int fixedBytes = LongXrefPathPrefix.Length + LongXrefPathSuffix.Length;
+		int fillers = (LongXrefPathBytes - fixedBytes) / 2;
+		return LongXrefPathPrefix
+			+ new string(LongXrefPathFiller, fillers)
+			+ LongXrefPathSuffix;
+	}
+
 	// How many times the hostile file inserts the same block. The number is
 	// the issue's, and the amplification benchmark is what it produces.
 	public const int HostileInsertCount = 10000;
@@ -92,6 +113,7 @@ public static class Corpus
 		yield return Pair("g13_hatch.dwg", WriteHatch);
 		yield return Pair("g13_unsupported.dwg", WriteUnsupported);
 		yield return Pair("g13_xref.dwg", WriteXref);
+		yield return Pair("g13_xref_long.dwg", WriteXrefLong);
 		yield return Pair("g13_nonuniform.dwg", WriteNonUniform);
 		yield return Pair("g13_two_entities.dwg", WriteTwoEntities);
 		yield return Pair("g13_deep_blocks.dwg", WriteDeepBlocks);
@@ -373,6 +395,19 @@ public static class Corpus
 	{
 		CadDocument doc = NewDoc();
 		BlockRecord xref = new BlockRecord(XrefBlockName, XrefPath);
+		doc.BlockRecords.Add(xref);
+		doc.Entities.Add(new Insert(xref) { InsertPoint = new XYZ(5, 5, 0), Layer = L(doc) });
+		Write(doc, path);
+	}
+
+	// The same drawing with an 8192-byte reference path. Nothing here is
+	// unusual except the length: the warning the decoder writes about it
+	// carries the file's own string, and a bound below that length used to end
+	// the whole decode rather than shorten one message.
+	public static void WriteXrefLong(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord xref = new BlockRecord(XrefBlockName, LongXrefPath());
 		doc.BlockRecords.Add(xref);
 		doc.Entities.Add(new Insert(xref) { InsertPoint = new XYZ(5, 5, 0), Layer = L(doc) });
 		Write(doc, path);

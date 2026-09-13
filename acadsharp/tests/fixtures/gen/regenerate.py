@@ -427,6 +427,82 @@ def non_finite_exponents(data):
     return hits
 
 
+# The two bytes of the character g13_xref_long.dwg's reference path is padded
+# with, U+00E9 in UTF-8, and what the encoder appends to a message it cut.
+FILLER_UTF8 = b"\xc3\xa9"
+TRUNCATION_MARKER = b" [truncated]"
+
+
+def longest_filler_run(data):
+    """The longest run of the filler character in a raw batch stream.
+
+    Deliberately crude, and deliberately not a parser, for the same reason
+    non_finite_exponents above is not one: a scanner that walked the stream by
+    record and field would be a fourth implementation of docs/WIRE.md and a bug
+    in it would look exactly like the thing it is checking for. This counts a
+    two-byte pattern and cannot miss.
+    """
+    best = 0
+    run = 0
+    i = 0
+    while i + 1 < len(data):
+        if data[i] == FILLER_UTF8[0] and data[i + 1] == FILLER_UTF8[1]:
+            run += 1
+            best = max(best, run)
+            i += 2
+        else:
+            run = 0
+            i += 1
+    return best
+
+
+def after_longest_filler_run(data, count=16):
+    """The bytes that follow the longest run, hex-encoded.
+
+    Where the marker sits is the whole claim: at the end of the message, after
+    the last character that survived the cut. A count of markers somewhere in
+    the stream would not say that.
+    """
+    best = 0
+    end = 0
+    run = 0
+    i = 0
+    while i + 1 < len(data):
+        if data[i] == FILLER_UTF8[0] and data[i + 1] == FILLER_UTF8[1]:
+            run += 1
+            i += 2
+            if run > best:
+                best = run
+                end = i
+        else:
+            run = 0
+            i += 1
+    return data[end : end + count].hex()
+
+
+def dangling_lead_bytes(data):
+    """Lead bytes of the filler character with no continuation byte after them.
+
+    A cut that counted bytes rather than characters leaves one of these where
+    the message ends, and the record then declares a message_len over bytes
+    that are not UTF-8. Crude the same way: it reads every offset.
+    """
+    return sum(
+        1
+        for i in range(len(data))
+        if data[i] == FILLER_UTF8[0] and (i + 1 >= len(data) or data[i + 1] != FILLER_UTF8[1])
+    )
+
+
+def occurrences(data, needle):
+    count = 0
+    at = data.find(needle)
+    while at >= 0:
+        count += 1
+        at = data.find(needle, at + 1)
+    return count
+
+
 def fixture_arg(name):
     return f"/work/acadsharp/tests/fixtures/{name}"
 
@@ -770,6 +846,44 @@ def scenarios(scratch):
         [],
         "an INSERT of an external reference",
     )
+    # A warning this library writes itself, carrying a string the drawing chose
+    # the length of. Under a bound below that length the message is cut and the
+    # decode finishes; limits/max_string_4096 beside it is the control that a
+    # Text record is still refused, because that string is the drawing's own.
+    #
+    # Measured on the bytes the caller would have received rather than on the
+    # canonical dump, for the same reason the finiteness scan is: the cut
+    # happens inside the encoder and the dump is the layer above it.
+    for label, bound in (("long_warning_truncated", 4096), ("long_warning_fits", 16384)):
+        raw_name = f"{label}.bin"
+        entry = record(
+            f"warnings/{label}",
+            fixture_arg("g13_xref_long.dwg"),
+            ["--max-string", bound, "--raw", f"/scratch/derived/{raw_name}"],
+            f"an 8192-byte reference path in a warning, {bound} bytes of string allowed",
+        )
+        with open(os.path.join(derived, raw_name), "rb") as f:
+            stream = f.read()
+        # A control per scan, so a number that is zero because nothing was
+        # found is told apart from a number that is zero because the scan
+        # stopped working.
+        control = ("x" + "\u00e9" * 4).encode()
+        entry["result"]["scanned_bytes"] = len(stream)
+        entry["result"]["longest_filler_run"] = longest_filler_run(stream)
+        entry["result"]["longest_filler_run_in_control"] = longest_filler_run(control)
+        entry["result"]["after_longest_filler_run"] = after_longest_filler_run(stream)
+        entry["result"]["dangling_lead_bytes"] = dangling_lead_bytes(stream)
+        entry["result"]["dangling_lead_bytes_in_control"] = dangling_lead_bytes(control[:-1])
+        entry["result"]["truncation_markers"] = occurrences(stream, TRUNCATION_MARKER)
+        entry["result"]["truncation_markers_in_control"] = occurrences(
+            b"a" + TRUNCATION_MARKER + b"b" + TRUNCATION_MARKER, TRUNCATION_MARKER
+        )
+        print(
+            f"warnings/{label}: run={entry['result']['longest_filler_run']} "
+            f"markers={entry['result']['truncation_markers']} "
+            f"dangling={entry['result']['dangling_lead_bytes']}"
+        )
+
     record(
         "warnings/nonuniform_block_scale",
         fixture_arg("g13_nonuniform.dwg"),

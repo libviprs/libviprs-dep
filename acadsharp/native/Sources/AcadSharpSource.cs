@@ -217,7 +217,21 @@ namespace Viprs.Sources
 				message = message + " (" + e.Exception.GetType().Name + ": " + e.Exception.Message + ")";
 			}
 
-			_notifications.Add(message);
+			// Cut here rather than only at encode time, because this list is
+			// built during the open and lives until the document is closed.
+			// The reader's "Unlisted object with DXF name ..." message carries
+			// the file's own class name, so a drawing that declares a 100 KB
+			// one gets 100 KB of list for every copy of it before a single
+			// record has been asked for, and no bound in
+			// viprs_acad_limits_v1 has been consulted yet.
+			//
+			// The full sentence is still built above, because the reader hands
+			// it over as a string and there is nothing to cut before it exists.
+			// What this bounds is what stays.
+			//
+			// The encoder's own helper, so a message that survives being stored
+			// is a message that fits on the wire.
+			_notifications.Add(RecordEncoder.TruncateMessage(message, _limits.MaxStringBytes));
 		}
 
 		// ----------------------------------------------------------- views
