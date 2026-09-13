@@ -150,8 +150,12 @@ read_ascii() {
 
 # slice <file> <offset> <count> -> raw bytes on stdout, without dd's
 # byte-at-a-time cost, which matters for a multi-megabyte symbol table.
+# `head` closes the pipe as soon as it has its bytes, which kills `tail`
+# with SIGPIPE, which `pipefail` then reports as a failed verification. The
+# subshell turns pipefail off for exactly this pipeline rather than for the
+# whole script.
 slice() {
-  tail -c "+$(( $2 + 1 ))" "$1" | head -c "$3"
+  ( set +o pipefail; tail -c "+$(( $2 + 1 ))" "$1" 2>/dev/null | head -c "$3" )
 }
 
 le16() { local h="$1"; echo $(( 0x${h:2:2}${h:0:2} )); }
@@ -718,7 +722,7 @@ if [ -f "$STATIC_LIB" ]; then
     HOST_PLATFORM=linux
     if [ "$(uname -s)" = "Darwin" ]; then
       HOST_PLATFORM=mac
-    elif ldd --version 2>&1 | head -1 | grep -qi musl; then
+    elif ldd --version 2>&1 | sed -n 1p | grep -qi musl; then
       HOST_PLATFORM=musl
     fi
     if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \

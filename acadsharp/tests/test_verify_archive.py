@@ -689,7 +689,13 @@ class TestManifestIntegrity:
         _edit_json(root, "LINKINFO.json", lambda doc: doc.pop(field, None))
         result = _verify(_repack(root))
         if field == "static_library":
-            # Absent is legal, and then static_certified must be false.
+            # Absent is legal. It then has to be absent from the archive
+            # too, and static_certified has to be false: an unmentioned
+            # `.a` sitting in lib/ is a defect of its own, which is what
+            # the first refusal below is.
+            assert result.returncode == 1
+            assert "does not mention it" in _output(result)
+            os.remove(_static(root))
             _edit_json(root, "LINKINFO.json", lambda doc: doc.update(static_certified=False))
             assert _verify(_repack(root)).returncode == 0
             return
