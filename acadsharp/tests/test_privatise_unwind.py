@@ -138,9 +138,7 @@ def bundled_archive(tmp_path):
 
 
 def _privatise(*archives):
-    return subprocess.run(
-        ["sh", PRIVATISE, *archives], capture_output=True, text=True, check=False
-    )
+    return subprocess.run(["sh", PRIVATISE, *archives], capture_output=True, text=True, check=False)
 
 
 def _path_without(tool, tmp_path):
@@ -309,9 +307,7 @@ class TestTheRenameMovesTheWholeArchive:
 @pytest.fixture(scope="session")
 def tree_with_a_bundled_unwinder(tmp_path_factory):
     fixtures._require_toolchain()
-    return fixtures._build_linux_tree(
-        str(tmp_path_factory.mktemp("bundled")), unwind="bundled"
-    )
+    return fixtures._build_linux_tree(str(tmp_path_factory.mktemp("bundled")), unwind="bundled")
 
 
 @pytest.fixture(scope="session")
@@ -621,8 +617,7 @@ class TestTheBuildRunsTheRename:
     def test_the_count_is_recorded(self):
         stage = ba.stage_script()
         assert "fact privatised_unwind_symbols" in stage, (
-            "the build records what it renamed nowhere, so a log is the only "
-            "evidence the step ran"
+            "the build records what it renamed nowhere, so a log is the only evidence the step ran"
         )
 
 
