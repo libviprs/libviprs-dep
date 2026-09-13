@@ -1711,6 +1711,34 @@ class TestTheFixtureAgreesWithTheHeaderItShips:
         missing = [name for name in ENTRY_POINTS if not hasattr(lib, name)]
         assert missing == [], f"the fixture's shared library does not define {missing}"
 
+    def test_abi_constants_declares_the_headers_abi_version(self):
+        # Found while checking whether anything else here is allowed to
+        # disagree with the header, and something is.
+        # `TestEveryWireVersionDeclarationAgrees` pins the *wire* version
+        # across seven declarations including this file, and nothing pins
+        # the *ABI* version at all: bumping VIPRS_ACAD_ABI_VERSION and
+        # leaving AbiConstants.AbiVersion behind is a change no test in
+        # this repository could see. The fingerprint does not cover it
+        # either, because that hashes the header and a stale AbiConstants
+        # is built from the same header. So the library would answer 1 to
+        # a header declaring 2, which is the fixture's own bug reappearing
+        # in the real shim.
+        #
+        # Invariant 10 catches it at the archive, which is where it counts
+        # and where this pair actually shipped. This catches it at the
+        # source, where it is a one-line diff instead of a build.
+        with open(ABI_CS) as f:
+            found = re.findall(r"^\s*public const uint AbiVersion = (\d+)u;\s*$", f.read(), re.M)
+        assert len(found) == 1, (
+            f"native/Abi.cs declares AbiVersion {len(found)} times, and this check only "
+            "means something when it is exactly once"
+        )
+        assert int(found[0]) == STUB_ABI_VERSION, (
+            f"AbiConstants.AbiVersion is {found[0]} and the header declares "
+            f"VIPRS_ACAD_ABI_VERSION {STUB_ABI_VERSION}. The library answers the first "
+            "and every consumer compiles against the second."
+        )
+
     def test_the_read_range_is_the_librarys_own_rather_than_a_pair_of_digits(self):
         # The range is not in the header, so this is the one number here
         # that has to be read out of AbiConstants. A test that only checked
