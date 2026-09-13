@@ -253,8 +253,9 @@ namespace Viprs.Cad
 		// WithOcs returning `this` for an extrusion of +Z is what keeps that
 		// sharing: an entity in the world's own plane measures the placement it
 		// was handed rather than a copy of it. An entity in some other plane gets
-		// a placement of its own and measures once for itself, which is the right
-		// price, because its plane is its own.
+		// a placement composed for that plane, and the one beside it in the same
+		// plane gets the same object back, so a run of entities that share an
+		// extrusion measures once between them the way a run of +Z ones does.
 		//
 		// A class rather than a struct on purpose: the Pending items that share a
 		// placement have to share the memo as well, and a struct would give each

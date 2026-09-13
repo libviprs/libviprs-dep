@@ -678,10 +678,10 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "aa96c75f570ea2305982cca5075b378aaee82a128b3aa9a4c62440aa39366460",
+    "sha256": "76caf37482af5b4f6d29b69b91512671cdf4c41fe01bd6f51e6e04630f238d90",
     "sources": {
       "native/Abi.cs": "d718bb652005e9e874eaceebd62b802d2fa26adf360ddfc8d37d1925c82cd377",
-      "native/Adapter/Flattener.cs": "c55bc321537ba9156acc0981d8e6068ebcebe4c537d61259b488cf8657dc614c",
+      "native/Adapter/Flattener.cs": "3a6c0a256bffba9ef27e41fcb1c2715b103d8ac4ef20b6804b42b3307d239d7d",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
       "native/Adapter/WarningCodes.cs": "76a514c986c792786e596f2e01e0800bbd52ae9ab9c2c8a3faa9d7368d7a4ae4",
