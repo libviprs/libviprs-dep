@@ -168,6 +168,14 @@ fn capabilities(t: &mut Tally) {
         caps.wire_version == VIPRS_ACAD_WIRE_VERSION,
         "capabilities reports the wire version",
     );
+    // Written out rather than read from the manifest or the header, and
+    // deliberately so. This is an oracle of the pinned build: if it took the
+    // numbers from the same place the library gets them, a bump would move
+    // both and this check would agree with whatever it was told, the same
+    // argument layout_table.h makes for its own hand-written sizes. The range
+    // is not in the header, so there is nothing here to share with it; when
+    // the backing reader moves, these two numbers move with it, by hand, as
+    // part of noticing.
     t.check(
         caps.dwg_version_min == 1014 && caps.dwg_version_max == 1032,
         "capabilities reports the documented AC10xx range",

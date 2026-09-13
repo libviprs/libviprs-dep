@@ -211,6 +211,72 @@ class TestMaxInputBytesIsEnforcedInOnePlace:
 
 
 # ---------------------------------------------------------------------------
+# The AC10xx range the build reads
+# ---------------------------------------------------------------------------
+
+ABI = os.path.join(NATIVE, "Abi.cs")
+VERSION_GATE = os.path.join(NATIVE, "Adapter", "VersionGate.cs")
+
+# A four-digit AC10xx code assigned to a constant. Deliberately the
+# assignment and not the bare number: `SyntheticSource.DrawingVersion`
+# returns 1032u, and that is the version the fake document claims to be
+# rather than a copy of the boundary, so it is not an offender and must
+# not be rewritten into one.
+_DWG_CONSTANT = re.compile(r"=\s*10\d\du?\s*;")
+
+
+def without_comments(code):
+    return "\n".join(line for line in code.splitlines() if not line.lstrip().startswith("//"))
+
+
+class TestTheDwgRangeHasOneCopyInTheShim:
+    """`VersionGate` carried its own `MinVersion`/`MaxVersion` beside
+    `AbiConstants.DwgVersionMin`/`Max`, both spelled as literals. Two copies of
+    one fact drift in the direction nothing can see: `viprs_acad_capabilities_v1`
+    answers out of `AbiConstants`, the gate that decides whether a file is
+    opened at all reads the other pair, and a bump applied to one of them gives
+    a library that advertises a range it does not enforce. Neither side fails to
+    compile and no test of either half notices."""
+
+    def test_only_abi_cs_assigns_the_range(self):
+        offenders = sorted(
+            name
+            for name, code in shim_sources().items()
+            if _DWG_CONSTANT.search(without_comments(code))
+        )
+        assert offenders == ["Abi.cs"], (
+            f"the AC10xx range is assigned in {offenders}. It is one fact about the "
+            "backing reader, and capabilities reports it from AbiConstants, so a "
+            "second copy is a gate that can disagree with what the library says it "
+            "reads."
+        )
+
+    def test_abi_cs_still_declares_both_ends(self):
+        # The positive control. A shim that declared the range nowhere at
+        # all would pass the check above.
+        code = read(ABI)
+        assert re.search(r"DwgVersionMin\s*=\s*10\d\du", code), "AbiConstants has no DwgVersionMin"
+        assert re.search(r"DwgVersionMax\s*=\s*10\d\du", code), "AbiConstants has no DwgVersionMax"
+
+    def test_the_gate_takes_its_bounds_from_there(self):
+        code = read(VERSION_GATE)
+        assert "AbiConstants.DwgVersionMin" in code and "AbiConstants.DwgVersionMax" in code, (
+            "VersionGate no longer names AbiConstants, so whatever it compares against "
+            "is a second copy again"
+        )
+
+    def test_the_gate_still_applies_them(self):
+        # The other positive control: a gate that stopped comparing would
+        # open an AC1009 file and let the reader fail somewhere obscure,
+        # which is the case this class exists around.
+        body = body_of(read(VERSION_GATE), r"public static bool IsSupported\(")
+        assert body, "VersionGate has no IsSupported"
+        assert "MinVersion" in body and "MaxVersion" in body, (
+            "IsSupported no longer compares against both ends of the range"
+        )
+
+
+# ---------------------------------------------------------------------------
 # The synthetic backing on the path route
 # ---------------------------------------------------------------------------
 

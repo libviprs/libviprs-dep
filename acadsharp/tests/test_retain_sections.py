@@ -300,7 +300,7 @@ class TestTheBuildActuallyRunsIt:
     def test_the_script_is_in_the_build_context(self, tmp_path):
         import build_acadsharp as ba
 
-        ba._write_build_context(str(tmp_path), "linux")
+        ba._write_build_context(str(tmp_path))
 
         assert (tmp_path / "retain_sections.py").is_file()
 
@@ -317,7 +317,7 @@ class TestTheBuildActuallyRunsIt:
     def test_staging_retains_the_module_section(self, plat):
         import build_acadsharp as ba
 
-        stage = ba.stage_script(plat)
+        stage = ba.stage_script()
 
         assert "retain_sections.py" in stage
         assert "__modules" in stage
@@ -326,7 +326,7 @@ class TestTheBuildActuallyRunsIt:
         """Flags set after `ar` would go into a file nothing reads again."""
         import build_acadsharp as ba
 
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
 
         assert stage.index("retain_sections.py") < stage.index("ar qc")
 
@@ -341,7 +341,7 @@ class TestTheBuildActuallyRunsIt:
         """
         import build_acadsharp as ba
 
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
         at = stage.index("retain_sections.py")
         call = stage[at : stage.index("fact retained_module_sections", at)]
 
@@ -364,7 +364,7 @@ class TestTheBuildActuallyRunsIt:
         """
         import build_acadsharp as ba
 
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
         at = stage.index("RETAINED=0")
         loop = stage[at : stage.index("fact retained_module_sections", at)]
 
@@ -606,7 +606,7 @@ class TestAllThreeEncapsulationSectionsAreRetained:
     def test_staging_names_all_three(self):
         import build_acadsharp as ba
 
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
         at = stage.index("retain_sections.py")
         call = stage[at : at + 200]
 
@@ -633,7 +633,7 @@ class TestAllThreeEncapsulationSectionsAreRetained:
         """
         import build_acadsharp as ba
 
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
 
         assert '"$RETAINED" -lt 1' in stage
         assert '"$RETAINED" -ne 1' not in stage

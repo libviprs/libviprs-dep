@@ -191,7 +191,7 @@ acadsharp/
                             # contracts; every one ships inside the archive
   docs/adr/                 # 0001 is the spike's verdict, and stays in the repo
   native/                   # the shim: exports, ABI structs, sources, adapter, wire
-  scripts/                  # verify_archive.sh and the link-consumer smoke
+  scripts/                  # stage.sh, verify_archive.sh and the link-consumer smoke
   patches/                  # empty; upstream patches go here if a site needs one
   tests/                    # pytest guards over the pins, the shim and the captures
   tests/conformance/c/      # the C consumer, built against the published header

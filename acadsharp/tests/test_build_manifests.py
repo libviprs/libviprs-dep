@@ -16,9 +16,12 @@ to each other so a field cannot be added here without a row over there.
 """
 
 import hashlib
+import inspect
 import json
 import os
 import re
+import shutil
+import subprocess
 
 import build_acadsharp as ba
 import pytest
@@ -46,6 +49,8 @@ FROZEN_LINKINFO_FIELDS = (
     "static_certified",
     "static_system_libraries",
     "static_link_args",
+    "dwg_version_min",
+    "dwg_version_max",
 )
 
 # The four that describe the static link. They are present together when
@@ -77,14 +82,28 @@ ENTRY_POINTS = (
 )
 
 
+# The range the pinned build answers with, written here rather than read
+# out of the shim. These tests are an oracle of the manifest writer the
+# same way the conformance consumers are an oracle of the library: a
+# number this file computed from the same place the driver does could
+# only ever agree with itself.
+MEASURED_RANGE = {"dwg_version_min": 1014, "dwg_version_max": 1032}
+
+# The same pair as the staging script writes them: facts.txt is text, and
+# finish_archive is what turns them into integers.
+MEASURED_FACTS = {"dwg_version_min": "1014", "dwg_version_max": "1032"}
+
+
 def _shared_only(**kwargs):
     base = {"shared_system_libraries": ["m", "dl", "pthread"]}
+    base.update(MEASURED_RANGE)
     base.update(kwargs)
     return base
 
 
 def _certified(**kwargs):
     base = dict(
+        **MEASURED_RANGE,
         shared_system_libraries=["m"],
         static_library=ba.STATIC_LIBRARY_NAME,
         static_init_library=ba.STATIC_INIT_LIBRARY_NAME,
@@ -160,6 +179,110 @@ class TestTheAbiFieldsComeFromTheHeader:
         fake.write_text("/* nothing useful */\n")
         with pytest.raises(ValueError, match="VIPRS_ACAD_ABI_VERSION"):
             ba.header_versions(str(fake))
+
+
+class TestTheReadRangeIsAMeasuredFact:
+    """The AC10xx codes this build reads are a fact about the backing
+    reader, not a clause in the ABI. The header's own preamble says it
+    describes a VIPRS boundary and never ACadSharp, so the range is not a
+    macro in it: the library answers with it at run time, the archive smoke
+    asks the library that question in the container, and what the library
+    said is what the manifest records. Nothing here reads a number out of
+    the shim, which is the point: a manifest built from the same constant
+    the library is built from agrees with itself whatever either of them
+    says.
+    """
+
+    def test_the_shared_smoke_asks_the_library(self):
+        source = ba.archive_smoke_source()
+        assert "caps.dwg_version_min" in source and "caps.dwg_version_max" in source, (
+            "the smoke does not read the range off the capabilities struct, so the "
+            "fact recorded downstream of it is not a measurement"
+        )
+        assert "DWG_VERSION_MIN=" in source and "DWG_VERSION_MAX=" in source, (
+            "the smoke never prints the range, so the staging script has nothing to "
+            "record and the manifest has nothing to write"
+        )
+
+    @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
+    def test_the_staging_script_records_both(self, plat):
+        script = ba.stage_script()
+        assert "fact dwg_version_min" in script and "fact dwg_version_max" in script, (
+            f"the {plat} staging script records no read range, so finish_archive has "
+            "no measurement to put in LINKINFO.json"
+        )
+        assert "DWG_VERSION_MIN=" in script and "DWG_VERSION_MAX=" in script, (
+            "the script records the fact without reading it out of the smoke output"
+        )
+
+    def test_the_manifest_carries_them_as_integers(self):
+        info = ba.make_linkinfo("linux", "amd64", **_shared_only())
+        assert info["dwg_version_min"] == 1014
+        assert info["dwg_version_max"] == 1032
+        for field in ("dwg_version_min", "dwg_version_max"):
+            assert isinstance(info[field], int) and not isinstance(info[field], bool), (
+                f"{field} is {info[field]!r}. build.rs compares it against a number, and "
+                '"1014" is not 1014'
+            )
+
+    @pytest.mark.parametrize("field", ["dwg_version_min", "dwg_version_max"])
+    def test_a_range_nobody_measured_is_refused(self, field):
+        # Same rule aot_warning_count has: a measurement is taken or the
+        # build was not watched. A default here would be a number that
+        # describes the build the default was written for.
+        with pytest.raises(ValueError, match=field):
+            ba.make_linkinfo("linux", "amd64", **_shared_only(**{field: None}))
+
+    @pytest.mark.parametrize("value", ["1014", 1014.0, True, 0, 99, 20000])
+    def test_a_range_that_is_not_an_ac10xx_code_is_refused(self, value):
+        with pytest.raises(ValueError, match="dwg_version_min"):
+            ba.make_linkinfo("linux", "amd64", **_shared_only(dwg_version_min=value))
+
+    def test_an_inverted_range_is_refused(self):
+        # A library reading AC1032 up to AC1014 reads nothing, and a
+        # consumer branching on the pair would decide that quietly.
+        with pytest.raises(ValueError, match="dwg_version"):
+            ba.make_linkinfo(
+                "linux", "amd64", **_shared_only(dwg_version_min=1032, dwg_version_max=1014)
+            )
+
+    def test_finish_archive_takes_them_from_the_recorded_facts(self, tmp_path):
+        root = tmp_path / "acadsharp-linux-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "lib" / ba.shared_library_name("linux")).write_bytes(b"binary")
+        info = ba.finish_archive(
+            str(root),
+            "linux",
+            "amd64",
+            {
+                "aot_warning_count": "0",
+                "shared_needed": "",
+                "static_ok": "0",
+                "dwg_version_min": "1009",
+                "dwg_version_max": "1099",
+            },
+            builder_image="debian:bookworm-slim",
+        )
+        assert (info["dwg_version_min"], info["dwg_version_max"]) == (1009, 1099), (
+            "finish_archive is not reading the range off the facts the container "
+            "recorded, so the manifest states something the library was never asked"
+        )
+
+    def test_facts_with_no_range_stop_the_packaging(self, tmp_path):
+        # The smoke prints it on every target, so a facts file without it
+        # is a smoke that did not run or a staging script that stopped
+        # recording. Both are archives whose manifest would be guessing.
+        root = tmp_path / "acadsharp-linux-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "lib" / ba.shared_library_name("linux")).write_bytes(b"binary")
+        with pytest.raises(ValueError, match="dwg_version_min"):
+            ba.finish_archive(
+                str(root),
+                "linux",
+                "amd64",
+                {"aot_warning_count": "0", "shared_needed": "", "static_ok": "0"},
+                builder_image="debian:bookworm-slim",
+            )
 
 
 class TestTheEntryPointList:
@@ -431,7 +554,13 @@ class TestTheContractDocumentsShip:
             str(root),
             plat,
             arch,
-            {"aot_warning_count": "0", "shared_needed": "", "static_ok": "0"},
+            {
+                "aot_warning_count": "0",
+                "shared_needed": "",
+                "static_ok": "0",
+                "dwg_version_min": "1014",
+                "dwg_version_max": "1032",
+            },
             builder_image="debian:bookworm-slim",
         )
         return root
@@ -536,16 +665,119 @@ class TestTheContractDocumentsShip:
         )
 
 
-class TestTheGeneratedStagingScript:
-    """The script that measures the link facts is generated, so its holes
-    have to be filled. A placeholder left in place would be a shell script
-    that runs and silently records nothing."""
+class TestTheStagingScript:
+    """The script that measures the link facts is a tracked file.
+
+    It was 185 lines of shell inside a Python string with two placeholder
+    words substituted before it was written out, which meant
+    `tools/shellcheck-all.sh` never saw a line of it: that script
+    discovers its work with `git ls-files '*.sh'`, so the most intricate
+    shell in the repository was the one part of it no linter had ever
+    looked at, and the `# shellcheck disable` comment in it was addressed
+    to nobody.
+
+    The two lists arrive in the environment now, so the file that runs in
+    the container is byte for byte the file in the tree, and the tests
+    below are about that rather than about substitution.
+    """
+
+    def test_it_is_a_shell_script_the_linter_will_find(self):
+        assert os.path.isfile(ba.STAGE_SCRIPT), "there is no scripts/stage.sh"
+        assert ba.STAGE_SCRIPT.endswith(".sh"), (
+            "tools/shellcheck-all.sh discovers its work with `git ls-files '*.sh'`, so a "
+            "staging script under any other name is one shellcheck never opens"
+        )
+        assert os.access(ba.STAGE_SCRIPT, os.X_OK), "scripts/stage.sh is not executable"
+
+    def test_git_actually_tracks_it(self):
+        # The point of the move is that the repo-wide glob finds it, and
+        # an untracked file passes every check above and is still invisible
+        # to `git ls-files`.
+        listed = subprocess.run(
+            ["git", "ls-files", "*.sh"],
+            cwd=os.path.dirname(ACAD_DIR),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if listed.returncode != 0:
+            pytest.skip("not a git checkout")
+        assert "acadsharp/scripts/stage.sh" in listed.stdout.split(), (
+            "stage.sh is not tracked, so tools/shellcheck-all.sh does not lint it and "
+            "the move accomplished nothing"
+        )
+
+    def test_it_passes_shellcheck(self):
+        if not shutil.which("shellcheck"):
+            pytest.skip("shellcheck not installed")
+        done = subprocess.run(
+            ["shellcheck", ba.STAGE_SCRIPT], capture_output=True, text=True, check=False
+        )
+        assert done.returncode == 0, done.stdout + done.stderr
+
+    def test_the_driver_carries_no_shell_script_of_its_own(self):
+        with open(ba.__file__) as f:
+            driver = f.read()
+        assert "#!/bin/sh" not in driver, (
+            "build_acadsharp.py holds a shell script in a string again. Whatever it is, "
+            "shellcheck cannot see it: tools/shellcheck-all.sh only opens tracked *.sh"
+        )
+
+    def test_what_runs_is_what_is_in_the_tree(self):
+        with open(ba.STAGE_SCRIPT) as f:
+            assert ba.stage_script() == f.read()
 
     @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
-    def test_no_placeholder_survives_substitution(self, plat):
-        script = ba.stage_script(plat)
-        assert "RUNTIME_ARCHIVE_LIST" not in script
-        assert "STATIC_SYSTEM_LIBRARY_LADDER" not in script
+    def test_the_two_lists_arrive_in_the_environment(self, plat):
+        env = ba.stage_env(plat)
+        assert env["RUNTIME_ARCHIVES"].split() == list(ba.RUNTIME_ARCHIVES)
+        assert env["STATIC_SYSTEM_LIBRARY_LADDER"] == ";".join(
+            ba.STATIC_SYSTEM_LIBRARY_LADDER.get(plat, [""])
+        )
+
+    def test_a_list_that_never_arrives_is_a_refusal(self):
+        # Unset, `for name in $RUNTIME_ARCHIVES` is an empty loop: the
+        # merge produces an archive of one object, the static smoke fails
+        # to link it, and the cell ships shared-only, which is a recorded
+        # outcome nobody reads. `:?` makes it a failure instead.
+        script = ba.stage_script()
+        assert "${RUNTIME_ARCHIVES:?}" in script
+        assert "${STATIC_SYSTEM_LIBRARY_LADDER:?}" in script
+
+    @pytest.mark.parametrize("plat,arch", [("linux", "amd64"), ("musl", "arm64")])
+    def test_the_dockerfile_hands_them_over(self, plat, arch):
+        dockerfile = ba.make_dockerfile(ba.read_version(), plat, arch)
+        env = ba.stage_env(plat)
+        for name, value in env.items():
+            assert f'{name}="{value}"' in dockerfile, (
+                f"the {plat} Dockerfile does not set {name}, so stage.sh refuses at "
+                "the line that needs it"
+            )
+
+    def test_the_notices_carry_no_restore_timing(self):
+        # `dotnet list package` restores first and prints how long that
+        # took, so the notices file carried `Restored ... (in 198 ms).`
+        # and two builds of one commit produced a different
+        # THIRD_PARTY_NOTICES, a different CHECKSUMS.txt and a different
+        # archive digest. Measured while proving this move changed
+        # nothing: that line was the only thing in the archive besides
+        # BUILDINFO's timestamp that moved between two builds of the same
+        # tree, and the release notes publish those digests.
+        script = ba.stage_script()
+        assert "/^ *Restored /d" in script, (
+            "the package list goes into THIRD_PARTY_NOTICES with its restore timing, "
+            "so the archive's digest depends on how fast the runner was"
+        )
+
+    def test_the_mac_path_hands_them_over_too(self):
+        # No Dockerfile there, so the same two have to reach the process
+        # environment. The mac cell never attempts a static link, and the
+        # ladder is empty for it, which the script only ever reads inside
+        # the half that does.
+        source = inspect.getsource(ba._build_mac_native)
+        assert 'stage_env("mac")' in source, (
+            "the mac build runs stage.sh without the lists the container gets"
+        )
 
     def test_it_ships_the_initialiser_as_its_own_archive(self):
         # libbootstrapperdll.o defines no global symbol at all, so nothing
@@ -553,7 +785,7 @@ class TestTheGeneratedStagingScript:
         # Forcing it with -Wl,-u works for a hand-written cc line and not
         # for the consumer, because a build script's link arguments do not
         # reach a dependent. So it ships as a library instead.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert "--globalize-symbol" in script
         assert "_GLOBAL__sub_I" in script
         assert ba.STATIC_INIT_LIBRARY_NAME in script
@@ -561,7 +793,7 @@ class TestTheGeneratedStagingScript:
     def test_the_static_smoke_links_it_whole_and_first(self):
         # Reversed, the link fails on RhRegisterOSModule; without the
         # whole-archive it links clean and aborts at the first call.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         whole = script.index('-Wl,--whole-archive "$INIT_A"')
         main = script.index('"$MERGED" $SYSLIBS')
         assert whole < main
@@ -570,7 +802,7 @@ class TestTheGeneratedStagingScript:
     @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
     def test_it_never_forces_a_symbol_on_the_link_line(self, plat):
         code = "\n".join(
-            line for line in ba.stage_script(plat).splitlines() if not line.lstrip().startswith("#")
+            line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
         )
         for flag in ba.SYMBOL_FORCING_FLAGS:
             assert f"-Wl,{flag}" not in code
@@ -581,7 +813,7 @@ class TestTheGeneratedStagingScript:
         # forecloses --whole-archive on the result.
         # Comments out first: the script explains at length why addlib
         # is not used, and a whole-file grep fires on the explanation.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         code = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
         assert "addlib" not in code
         assert "${stem}__" in code
@@ -593,9 +825,7 @@ class TestTheGeneratedStagingScript:
         # `without_comments()` for exactly this.
         for plat in ("linux", "musl", "mac"):
             code = "\n".join(
-                line
-                for line in ba.stage_script(plat).splitlines()
-                if not line.lstrip().startswith("#")
+                line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
             )
             assert ba.DEAD_STATIC_INIT_SYMBOL not in code
 
@@ -666,7 +896,7 @@ class TestEveryFileTheBuildReadsIsStaged:
     def test_the_build_context_carries_every_one_of_them(self, tmp_path):
         ctx = str(tmp_path / "ctx")
         os.makedirs(ctx)
-        ba._write_build_context(ctx, "linux")
+        ba._write_build_context(ctx)
         for name in self.project_inputs():
             assert os.path.isfile(os.path.join(ctx, name)), (
                 f"the csproj reads {name} during the build and the build context does "
@@ -676,7 +906,7 @@ class TestEveryFileTheBuildReadsIsStaged:
     def test_the_staged_version_is_the_repository_version(self, tmp_path):
         ctx = str(tmp_path / "ctx")
         os.makedirs(ctx)
-        ba._write_build_context(ctx, "linux")
+        ba._write_build_context(ctx)
         with open(os.path.join(ctx, "VERSION")) as f:
             staged = f.read().strip()
         assert staged == ba.read_version(), (
@@ -705,8 +935,12 @@ class TestTheShippedLibraryHasToSayWhatItIs:
     """
 
     def test_the_smoke_asks_for_the_backing_version(self):
+        # The symbol it resolves, not the struct it fills in. Both are
+        # named in this source and only one of them is the export, which
+        # is how a rename of the call reached CI through an assertion
+        # that looked like it was checking the call.
         source = ba.archive_smoke_source()
-        assert "viprs_acad_capabilities_v1" in source
+        assert f'dlsym(h, "{ba.capabilities_entry_point()}")' in source
         assert "BACKING_VERSION=" in source
 
     def test_the_smoke_refuses_an_empty_one(self):
@@ -725,13 +959,95 @@ class TestTheShippedLibraryHasToSayWhatItIs:
         )
 
     def test_the_staging_script_compiles_it_against_the_staged_header(self):
-        stage = ba.stage_script("linux")
+        stage = ba.stage_script()
         assert '-I"$WORK/include"' in stage, (
             "the smoke includes the header, so the compile line has to say where it is"
         )
 
     def test_the_backing_version_is_recorded_as_a_fact(self):
-        assert "fact backing_version" in ba.stage_script("linux")
+        assert "fact backing_version" in ba.stage_script()
+
+
+class TestTheSmokeResolvesOnlyWhatTheHeaderDeclares:
+    """The generated smoke was half generated.
+
+    It took the entry-point list from the header and then hardcoded the
+    capabilities symbol, and its full C signature, as a string. Rename
+    that call in the header and every other name follows while this one
+    does not: the library resolves ten exports, the eleventh comes back
+    NULL, the smoke exits 7, `shared_smoke_ok` is recorded as 0 and the
+    driver refuses the archive. The whole conformance workflow dies at its
+    first step, and the failure reads as a library that cannot say what it
+    is rather than as a generator that asked for the wrong name.
+
+    The check that closes it is not "the name is right", it is "every
+    symbol this smoke hands to dlsym is one the header declares". The old
+    assertion here matched `viprs_acad_capabilities_v1`, which is also the
+    struct's name and appears in the same source, so a rename of the call
+    went through it untouched.
+    """
+
+    def _resolved(self, source):
+        """Every symbol the generated smoke resolves, by either route."""
+        direct = set(re.findall(r'dlsym\(h, "([a-z0-9_]+)"\)', source))
+        listed = set(re.findall(r'^\t"([a-z0-9_]+)",$', source, re.M))
+        return direct | listed
+
+    def test_every_symbol_it_resolves_is_declared_by_the_header(self):
+        resolved = self._resolved(ba.archive_smoke_source())
+        declared = set(ba.header_entry_points())
+        undeclared = sorted(resolved - declared)
+        assert not undeclared, (
+            f"the smoke resolves {undeclared}, which the shipped header does not "
+            "declare. dlsym returns NULL, the smoke exits non-zero, and the driver "
+            "refuses every archive with a message about the library rather than "
+            "about this generator."
+        )
+
+    def test_it_resolves_something_at_all(self):
+        # The control. An empty set is a subset of anything, so the check
+        # above passes over a smoke that resolves nothing.
+        assert len(self._resolved(ba.archive_smoke_source())) >= 3
+
+    def test_a_renamed_capabilities_call_carries(self):
+        # The rename in libviprs-dep#59, done to a header this test writes
+        # so it can be checked before the header moves. `get_` in front of
+        # the call, and the struct keeps its name.
+        renamed = [
+            n.replace("viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1")
+            for n in ba.header_entry_points()
+        ]
+        source = ba.archive_smoke_source(entry_points=renamed)
+        assert 'dlsym(h, "viprs_acad_get_capabilities_v1")' in source
+        assert 'dlsym(h, "viprs_acad_capabilities_v1")' not in source, (
+            "the smoke still asks for the old name, so it resolves NULL and exits 7 "
+            "against a library that is perfectly fine"
+        )
+        assert self._resolved(source) <= set(renamed)
+
+    def test_the_struct_is_not_renamed_with_it(self):
+        # Only the call was renamed. The struct is still
+        # `struct viprs_acad_capabilities_v1`, and a generator that
+        # rewrote both would produce a smoke that does not compile.
+        renamed = [
+            n.replace("viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1")
+            for n in ba.header_entry_points()
+        ]
+        source = ba.archive_smoke_source(entry_points=renamed)
+        assert "struct viprs_acad_capabilities_v1 caps;" in source
+
+    def test_a_header_with_no_capabilities_call_is_refused(self):
+        with pytest.raises(ValueError, match="capabilities"):
+            ba.capabilities_entry_point(["viprs_acad_abi_version"])
+
+    def test_a_header_with_two_is_refused(self):
+        # Ambiguous rather than wrong: during a rename both spellings can
+        # be declared at once, and the smoke calls exactly one through a
+        # typed pointer.
+        with pytest.raises(ValueError, match="capabilities"):
+            ba.capabilities_entry_point(
+                ["viprs_acad_capabilities_v1", "viprs_acad_get_capabilities_v1"]
+            )
 
 
 class TestAnUncertifiedStaticLibraryIsNotShipped:
@@ -743,7 +1059,15 @@ class TestAnUncertifiedStaticLibraryIsNotShipped:
         if init:
             (root / "lib" / ba.STATIC_INIT_LIBRARY_NAME).write_bytes(b"!<arch>\n")
         (root / "lib" / "libacadsharp_native.so").write_bytes(b"x")
-        ba.finish_archive(str(root), "linux", "amd64", facts, builder_image="debian:bookworm-slim")
+        # The smoke records the read range on every target, so these
+        # cases are about the static half rather than about that.
+        ba.finish_archive(
+            str(root),
+            "linux",
+            "amd64",
+            dict(MEASURED_FACTS, **facts),
+            builder_image="debian:bookworm-slim",
+        )
         return root
 
     def _linkinfo(self, root):
@@ -852,26 +1176,24 @@ class TestTheMergeKeepsSourceOrder:
     """
 
     def test_the_managed_archive_goes_first(self):
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         managed = script.index('echo "$MANAGED" > /tmp/merge-sources.txt')
         runtime = script.index("for name in")
         assert managed < runtime
 
     def test_members_are_listed_in_each_archives_own_order(self):
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert 'ar t "$src" | while read -r member' in script
 
     def test_they_are_appended_rather_than_replaced(self):
         # `ar r` reorders on replace and xargs may split the list, so the
         # order only survives with `q`.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert 'xargs -0 ar qc "$MERGED"' in script
 
     def test_nothing_sorts_the_member_list(self):
         code = "\n".join(
-            line
-            for line in ba.stage_script("linux").splitlines()
-            if not line.lstrip().startswith("#")
+            line for line in ba.stage_script().splitlines() if not line.lstrip().startswith("#")
         )
         assert "merge-members.txt | sort" not in code
         assert "sort" not in code.split("merge-members.txt")[1].split("ranlib")[0]
@@ -880,6 +1202,6 @@ class TestTheMergeKeepsSourceOrder:
         # Extracting fewer files than the archive lists means two members
         # shared a name inside one source archive and one overwrote the
         # other, which would drop a definition silently.
-        script = ba.stage_script("linux")
+        script = ba.stage_script()
         assert "so a member was lost" in script
         assert "MERGE_OK=0" in script

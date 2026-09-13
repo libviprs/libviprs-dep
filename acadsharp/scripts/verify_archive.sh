@@ -52,6 +52,16 @@
 #      that is the path a consumer actually takes and the one where a
 #      requirement expressed as a link argument silently does not
 #      arrive.
+#   8. The AC10xx read range in LINKINFO.json is the range the library
+#      answers with. This is the one manifest field nothing in the bytes
+#      can settle: the header does not state the range, because it is a
+#      fact about the backing reader rather than part of the ABI, so a
+#      manifest claiming a range the library does not read is well-formed
+#      and a consumer would refuse or accept a drawing on the wrong
+#      number. The probe in 7 is already linked to the library, so it
+#      asks. Shape is checked from the bytes either way: both ends are
+#      integers, both are DWG version signatures, and the low end is not
+#      above the high one.
 #
 # Why the binary readers are hand-rolled rather than `nm`: this script has
 # to verify a foreign-architecture archive on whatever runner is to hand.
@@ -411,7 +421,13 @@ LINKINFO_FIELDS = (
     "abi_header_sha256", "abi_fingerprint", "shared_library", "shared_system_libraries",
     "static_library", "static_init_library", "static_certified",
     "static_system_libraries", "static_link_args",
+    "dwg_version_min", "dwg_version_max",
 )
+# The four digits behind the AC in a drawing's first six bytes. A shape
+# check and not a list of the codes this build reads: the range is
+# measured off the library rather than known here, and a check that knew
+# the answer would be checking itself.
+DWG_CODE_MIN, DWG_CODE_MAX = 1000, 1099
 # Present together when the static smoke ran and passed, absent together
 # otherwise. A field that describes the static link while static_certified
 # is false is a field a build.rs author will read as the shared link's.
@@ -548,6 +564,32 @@ if link is not None:
                 "requirement would silently not arrive. Ship it as static_init_library."
             )
 
+    # The read range, as far as the bytes can tell. Whether the library
+    # agrees is asked below, where it is already being linked and run.
+    codes = {}
+    for field in ("dwg_version_min", "dwg_version_max"):
+        value = link.get(field)
+        if isinstance(value, bool) or not isinstance(value, int):
+            problems.append(
+                f"LINKINFO.json {field} is {value!r}. It is an AC10xx code as an "
+                "integer, because a consumer compares it against one, and a string "
+                "there is a field build.rs reads wrong rather than refuses."
+            )
+        elif not DWG_CODE_MIN <= value <= DWG_CODE_MAX:
+            problems.append(
+                f"LINKINFO.json {field} is {value}, which is not a DWG version "
+                f"signature: those are the four digits behind the AC in a drawing's "
+                f"first six bytes, so {DWG_CODE_MIN} to {DWG_CODE_MAX}."
+            )
+        else:
+            codes[field] = value
+    if len(codes) == 2 and codes["dwg_version_min"] > codes["dwg_version_max"]:
+        problems.append(
+            f"LINKINFO.json dwg_version_min is {codes['dwg_version_min']} and "
+            f"dwg_version_max is {codes['dwg_version_max']}, which is a range holding "
+            "no drawing at all"
+        )
+
     header = os.path.join(root, "include", "viprs_acadsharp.h")
     if os.path.isfile(header):
         with open(header, "rb") as f:
@@ -595,6 +637,8 @@ if link is not None:
     facts["static_init_library"] = str(static_init_library or "")
     facts["static_certified"] = "1" if certified else "0"
     facts["abi_fingerprint"] = str(link.get("abi_fingerprint", ""))
+    facts["dwg_version_min"] = str(codes.get("dwg_version_min", ""))
+    facts["dwg_version_max"] = str(codes.get("dwg_version_max", ""))
     facts["static_system_libraries"] = " ".join(
         str(x) for x in (link.get("static_system_libraries") or [])
     )
@@ -991,14 +1035,16 @@ if [ "$STATIC_CERTIFIED" = "1" ] && [ -f "$STATIC_LIB" ] && [ -f "$STATIC_INIT_L
 
   if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \
      && command -v cc >/dev/null 2>&1; then
+    # The header the archive ships, not one from this checkout: the
+    # capabilities struct below has to be laid out the way the consumer
+    # reading this archive would lay it out.
     cat > "$WORK/probe.c" <<'PROBE'
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern uint32_t viprs_acad_abi_version(void);
-extern uint64_t viprs_acad_abi_fingerprint(void);
+#include "viprs_acadsharp.h"
 
 int main(int argc, char **argv)
 {
@@ -1022,9 +1068,59 @@ int main(int argc, char **argv)
 		fprintf(stderr, "probe: library reports %s, manifest says %s\n", got, argv[1]);
 		return 5;
 	}
+
+	/* And the AC10xx range. Nothing in the bytes can check this one: the
+	   header does not state it, so a manifest claiming a range the library
+	   does not read is well-formed, and the number a consumer refuses a
+	   drawing on is the wrong one. The library is already linked and
+	   running here, so ask it. */
+	if (argc > 3) {
+		struct viprs_acad_capabilities_v1 caps;
+		uint64_t needed = 0;
+		uint32_t rc;
+		unsigned long want_min, want_max;
+
+		memset(&caps, 0, sizeof caps);
+		caps.struct_size = (uint32_t)sizeof caps;
+		caps.struct_version = 1;
+		rc = VIPRS_CAPS_CALL(&caps, NULL, 0, &needed);
+		if (rc != 0) {
+			fprintf(stderr, "probe: the capabilities sizing call returned %u\n",
+				(unsigned)rc);
+			return 6;
+		}
+		printf("DWG_VERSION_MIN=%u DWG_VERSION_MAX=%u\n",
+			(unsigned)caps.dwg_version_min, (unsigned)caps.dwg_version_max);
+		want_min = strtoul(argv[2], NULL, 10);
+		want_max = strtoul(argv[3], NULL, 10);
+		if (caps.dwg_version_min != want_min || caps.dwg_version_max != want_max) {
+			fprintf(stderr, "probe: LINKINFO.json dwg_version_min %lu and "
+				"dwg_version_max %lu, library answers %u and %u\n",
+				want_min, want_max, (unsigned)caps.dwg_version_min,
+				(unsigned)caps.dwg_version_max);
+			return 6;
+		}
+	}
 	return 0;
 }
 PROBE
+    # The capabilities call by whatever name the shipped header declares
+    # it, handed to the compiler rather than typed into the probe. This is
+    # a static link, so the name is resolved when the probe compiles: a
+    # literal here would stop compiling the day the call is renamed, and
+    # the verifier would refuse every archive with "the static smoke
+    # cannot link the archive", which says nothing about what is wrong.
+    # `|| true` because the script runs under `set -e` with pipefail: a
+    # header declaring no capabilities call makes grep exit 1, which
+    # would abort the whole verification here, before the refusal below
+    # ever ran.
+    CAPS_CALL=$(grep -E 'capabilities' "$ENTRY_POINTS" | head -1 || true)
+    if [ -z "$CAPS_CALL" ]; then
+      fail "the shipped header declares no capabilities call, so the probe cannot ask
+    the library what it reads"
+      CAPS_CALL=viprs_acad_capabilities_v1
+    fi
+
     SYSLIB_FLAGS=""
     for lib in $(mfact static_system_libraries); do
       SYSLIB_FLAGS="$SYSLIB_FLAGS -l$lib"
@@ -1033,17 +1129,25 @@ PROBE
     # The documented order: the initialiser archive whole, ahead of the
     # main one. Reversed, the link fails on RhRegisterOSModule.
     # shellcheck disable=SC2086  # both lists are deliberate word-split arg lists
-    if cc "$WORK/probe.c" \
+    if cc "$WORK/probe.c" -I"$ROOT/include" "-DVIPRS_CAPS_CALL=$CAPS_CALL" \
           -Wl,--whole-archive "$STATIC_INIT_LIB" -Wl,--no-whole-archive \
           "$STATIC_LIB" $LINK_ARGS $SYSLIB_FLAGS \
           -o "$WORK/probe" > "$WORK/probe.log" 2>&1; then
       set +e
-      "$WORK/probe" "$(mfact abi_fingerprint)" > "$WORK/probe.out" 2>&1
+      "$WORK/probe" "$(mfact abi_fingerprint)" \
+        "$(mfact dwg_version_min)" "$(mfact dwg_version_max)" > "$WORK/probe.out" 2>&1
       PROBE_STATUS=$?
       set -e
       if [ "$PROBE_STATUS" -eq 0 ]; then
         echo "  static_certified holds: the archive links and runs here"
+        echo "  the library reads AC$(mfact dwg_version_min) to AC$(mfact dwg_version_max), \
+which is what LINKINFO.json says"
         sed 's/^/    /' "$WORK/probe.out"
+      elif [ "$PROBE_STATUS" -eq 6 ]; then
+        fail "the library does not read the AC10xx range LINKINFO.json states. The manifest
+    is what a consumer branches on, and the header never states the range, so nothing
+    in the bytes can catch this:
+$(sed 's/^/    /' "$WORK/probe.out")"
       else
         fail "static_certified is true but the linked probe exits $PROBE_STATUS (134 is the
     runtime aborting, which is what an unforced initialiser looks like):
