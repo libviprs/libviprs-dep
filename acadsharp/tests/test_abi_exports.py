@@ -49,9 +49,18 @@ TEST_EXPORTS = (TEST_EXPORT, "viprs_acad__test_live_handles")
 # count and not a result code. The catch-all still applies.
 COUNTING_EXPORTS = ("viprs_acad__test_live_handles",)
 
-# G1.1's spike exports. They are not on the frozen ABI, the smoke programs
-# under tests/smoke/ still resolve them, and they go when the adapter lands.
-SPIKE_EXPORTS = ("viprs_acad_describe", "viprs_acad_entity_count")
+# G1.1's spike exports, now behind VIPRS_ACAD_TEST_EXPORTS with the double
+# underscore every other test-only export carries.
+#
+# They are not on the frozen ABI and they break four rules the header states,
+# most seriously by parsing untrusted DWG with no version gate, no limits and
+# no cancel flag. Until they were gated they shipped in every archive, which
+# gave the library a second door onto untrusted input with none of the locks
+# the first one has.
+#
+# They still exist because `test_acadsharp_recorded_parity.py` expects the AOT
+# side of its captures to be re-recordable, and `describe` is what records it.
+SPIKE_EXPORTS = ("viprs_acad__spike_describe", "viprs_acad__spike_entity_count")
 
 # Exports that cannot fail and so return void or a plain value.
 INFALLIBLE = ("viprs_acad_abi_version", "viprs_acad_abi_fingerprint")
@@ -61,6 +70,39 @@ VOID_EXPORTS = ("viprs_acad_decode_close", "viprs_acad_close")
 # codes of their own. They are held to the catch-all and to nothing else,
 # because the result-code contract is not theirs.
 OWN_ERROR_PROTOCOL = SPIKE_EXPORTS
+
+
+def _all_export_names(code):
+    """Every EntryPoint in the file, guarded or not."""
+    return re.findall(r'\[UnmanagedCallersOnly\(EntryPoint = "(\w+)"\)\]', code)
+
+
+def _exports_inside_the_test_block(code):
+    """The exports a release build does not compile.
+
+    Scans for `#if VIPRS_ACAD_TEST_EXPORTS` and its matching `#endif` rather
+    than assuming one block or a fixed position, because the point is to catch
+    an export that drifted out of it.
+    """
+    guarded = set()
+    depth = 0
+    in_test_block = False
+    for line in code.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#if"):
+            depth += 1
+            if "VIPRS_ACAD_TEST_EXPORTS" in stripped:
+                in_test_block = True
+                block_depth = depth
+        elif stripped.startswith("#endif"):
+            if in_test_block and depth == block_depth:
+                in_test_block = False
+            depth -= 1
+        elif in_test_block:
+            m = re.match(r'\[UnmanagedCallersOnly\(EntryPoint = "(\w+)"\)\]', stripped)
+            if m:
+                guarded.add(m.group(1))
+    return guarded
 
 
 def _bodies(code):
@@ -155,10 +197,46 @@ class TestTheHeaderAndTheShimAgree:
         )
 
     def test_the_spike_exports_are_still_the_only_two(self, bodies):
-        # They are kept because tests/smoke/ resolves them by bare name. If
-        # one grows a third friend, the ABI has two surfaces instead of one.
+        # If one grows a third friend, the ABI has two surfaces instead of one.
         present = [e for e in SPIKE_EXPORTS if e in bodies]
         assert present == list(SPIKE_EXPORTS), f"the spike exports changed: {present}"
+
+    def test_a_release_build_exports_nothing_but_the_header(self, code, header_entry_points):
+        """The whole point of gating them, so it is checked rather than assumed.
+
+        A release build is compiled without VIPRS_ACAD_TEST_EXPORTS, so every
+        export inside that block is absent from the shipped library. Before
+        this was enforced, the spike pair sat outside the block and went into
+        every archive: `viprs_acad_entity_count` read an untrusted DWG with no
+        version gate, no limits struct and no cancel flag, which is the one
+        thing this library's threat model is built to prevent.
+
+        Reading the guard out of the source rather than out of a build, so it
+        runs in the pytest job that has no .NET and never will.
+        """
+        guarded = _exports_inside_the_test_block(code)
+        shipped = set(_all_export_names(code)) - guarded
+
+        extra = sorted(shipped - set(header_entry_points))
+        assert not extra, (
+            f"a release build would export {extra}, which the header does not declare. "
+            "Anything in the viprs_acad_ namespace in a shipped .so is API whether or "
+            "not it was meant to be: somebody will nm the library and call it. Move it "
+            "inside #if VIPRS_ACAD_TEST_EXPORTS or put it in the header."
+        )
+
+    def test_every_test_only_export_is_actually_inside_the_block(self, code):
+        # The inverse, so the check above cannot be satisfied by a name that
+        # merely looks test-only. The double underscore is a convention; the
+        # preprocessor is the mechanism.
+        guarded = _exports_inside_the_test_block(code)
+        marked = {e for e in _all_export_names(code) if e.startswith("viprs_acad__")}
+        outside = sorted(marked - guarded)
+        assert not outside, (
+            f"{outside} carry the test-only double underscore and are compiled into "
+            "every build. The marking is not what keeps them out of a release, the "
+            "#if is."
+        )
 
 
 class TestNothingEscapes:

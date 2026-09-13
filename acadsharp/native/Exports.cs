@@ -482,19 +482,37 @@ public static class Exports
 			return ulong.MaxValue;
 		}
 	}
-#endif
 
 	// ---------------------------------------------------------------------
-	// G1.1's spike exports. They are not on the frozen ABI and nothing is
-	// generated from them; tests/smoke/ resolves them by bare name, so they
-	// stay until the adapter issue retires the smoke programs with them.
+	// G1.1's spike exports, now inside the test configuration.
+	//
+	// They are not on the frozen ABI and nothing is generated from them, and
+	// until this change they shipped in every archive. That was the problem:
+	// `viprs_acad__spike_entity_count` calls `DwgReader.Read(path)` with no
+	// version gate, no limits struct and no cancel flag, so the library
+	// offered a second door onto untrusted DWG with none of the locks the
+	// first one has. They also break four rules the header states, reporting
+	// through negative `int` codes, taking null-terminated paths, and writing
+	// an exception message into the caller's buffer, which ABI.md forbids
+	// outright.
+	//
+	// They are not deleted, because `test_acadsharp_recorded_parity.py` says
+	// in its own docstring that a later change which recompiles the shim "has
+	// to face this diff rather than describe it", and re-recording the AOT
+	// side of those captures is what `describe` exists for. Deleting them
+	// would strand that evidence with no way to reproduce it.
+	//
+	// So they keep their behaviour, gain the double underscore that marks
+	// every other test-only export, and move behind the same configuration.
+	// A release build no longer has them at all, which is the half that
+	// mattered.
 	// ---------------------------------------------------------------------
 
 	// Returns the number of bytes written into out_buf, or a negative code.
 	//   -1 buffer too small (out_len holds the required size on entry failure)
 	//   -2 managed exception while reading
 	//   -3 bad arguments
-	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_describe")]
+	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__spike_describe")]
 	public static int Describe(IntPtr pathUtf8, IntPtr outBuf, int outLen)
 	{
 		try
@@ -537,7 +555,7 @@ public static class Exports
 
 	// The entity count on its own, so the smoke program can check a number
 	// without parsing anything.
-	[UnmanagedCallersOnly(EntryPoint = "viprs_acad_entity_count")]
+	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__spike_entity_count")]
 	public static int EntityCount(IntPtr pathUtf8)
 	{
 		try
@@ -555,4 +573,5 @@ public static class Exports
 			return -2;
 		}
 	}
+#endif
 }
