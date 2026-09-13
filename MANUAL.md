@@ -884,14 +884,23 @@ crate's build script:
 
 ```
 cargo:rustc-link-search=native=<archive>/lib
-cargo:rustc-link-lib=static:+whole-archive=acadsharp_native_init
-cargo:rustc-link-lib=static=acadsharp_native
+cargo:rustc-link-lib=static:-bundle,+whole-archive=acadsharp_native_init
+cargo:rustc-link-lib=static:-bundle=acadsharp_native
 cargo:rustc-link-lib=<each static_system_libraries entry>
 ```
 
 in that order, or, for the shared library, `cargo:rustc-link-lib=
 acadsharp_native` plus one `cargo:rustc-link-lib` per
 `shared_system_libraries` entry.
+
+All three modifiers are load-bearing. `+whole-archive` on the init
+archive because nothing references what is in it. `-bundle` on **both**,
+because with the default `+bundle` rustc packs a static native library
+into the `-sys` crate's rlib, and that rlib lands on the link line before
+the whole-archived init archive: the linker reads left to right, has no
+reason to pull the runtime object defining `RhRegisterOSModule` while it
+is at the rlib, and cannot go back for it afterwards. And the init
+archive first, because it is the one with the dangling references.
 
 **Do not express any of this as `cargo:rustc-link-arg`.** Cargo does not
 treat the directives alike. `rustc-link-search` and `rustc-link-lib`

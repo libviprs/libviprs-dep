@@ -74,9 +74,18 @@ class TestTheWorkspaceIsTheShapeThatCatchesThis:
 class TestTheBuildScriptImplementsTheDocumentedRecipe:
     def test_it_whole_archives_the_initialiser_before_the_main_archive(self):
         source = read(BUILD_RS)
-        init = source.index("static:+whole-archive=")
-        main = source.index("cargo:rustc-link-lib=static={}")
+        init = source.index("static:-bundle,+whole-archive=")
+        main = source.index("cargo:rustc-link-lib=static:-bundle={}")
         assert init < main, "the initialiser archive has to come first"
+
+    def test_both_libraries_are_unbundled(self):
+        # With the default +bundle, rustc packs a static native library
+        # into the rlib, the rlib precedes the whole-archived init
+        # archive on the link line, and the link fails on
+        # RhRegisterOSModule. Measured: it is the difference between the
+        # recipe working and not.
+        source = read(BUILD_RS)
+        assert source.count("static:-bundle") == 2
 
     def test_it_refuses_a_non_empty_static_link_args(self):
         source = read(BUILD_RS)
@@ -89,11 +98,11 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         # Two places to write it down is one place to get it wrong, so
         # the doc and the script are held to each other.
         manual = read(MANUAL)
-        assert "static:+whole-archive=acadsharp_native_init" in manual
-        assert "cargo:rustc-link-lib=static=acadsharp_native" in manual
-        assert manual.index("static:+whole-archive=acadsharp_native_init") < manual.index(
-            "cargo:rustc-link-lib=static=acadsharp_native"
-        )
+        init = "static:-bundle,+whole-archive=acadsharp_native_init"
+        main = "cargo:rustc-link-lib=static:-bundle=acadsharp_native"
+        assert init in manual
+        assert main in manual
+        assert manual.index(init) < manual.index(main)
 
 
 @pytest.fixture(scope="session")
@@ -177,16 +186,29 @@ class TestTheBrokenRecipeStillFails:
         broken = str(tmp_path / "ws")
         shutil.copytree(WORKSPACE, broken)
         path = os.path.join(broken, "acadsharp-sys", "build.rs")
-        source = read(path)
-        source = source.replace(
-            """    println!(
-        "cargo:rustc-link-lib=static:+whole-archive={}",
-        link_name(&init_lib)
-    );""",
-            """    println!("cargo:rustc-link-lib=static={}", link_name(&init_lib));
-    println!("cargo:rustc-link-arg=-Wl,-u,_GLOBAL__sub_I_fixture");""",
+        original = read(path)
+
+        # Drop the whole-archive modifier and force the initialiser with a
+        # link argument instead, which is the recipe that was frozen into
+        # a manifest and the one that reads as obviously correct.
+        source = original.replace(
+            '"cargo:rustc-link-lib=static:-bundle,+whole-archive={}",',
+            '"cargo:rustc-link-lib=static:-bundle={}",',
         )
-        assert "rustc-link-arg" in source, "the broken recipe was not substituted in"
+        assert source != original, "the whole-archive modifier moved; fix this substitution"
+
+        anchor = '    for lib in json_string_array(&text, "static_system_libraries") {'
+        assert anchor in source, "the system-library loop moved; fix this substitution"
+        source = source.replace(
+            anchor,
+            '    println!("cargo:rustc-link-arg=-Wl,-u,_GLOBAL__sub_I_fixture");\n' + anchor,
+        )
+        # The guard is the substitution having happened, not the words
+        # being present: build.rs says `cargo:rustc-link-arg` in the
+        # comment explaining why it never emits one, so a containment
+        # check passes over a replace that matched nothing and the test
+        # then measures the working recipe. It did, once.
+        assert 'println!("cargo:rustc-link-arg' in source
         with open(path, "w") as f:
             f.write(source)
 

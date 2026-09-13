@@ -90,10 +90,29 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
 # reachable by name, referencing the main archive rather than the other
 # way round, so nothing ever pulls it in by symbol resolution and only
 # `--whole-archive` can.
+#
+# `viprs_test_register` is the load-bearing half. The real
+# libbootstrapperdll.o calls `RhRegisterOSModule`, which lives in a
+# runtime object nothing else in the archive references, so that object
+# is only pulled once the bootstrapper is on the link line. An
+# initialiser that only touched symbols the entry points already drag in
+# would link under any ordering and the fixture would prove nothing.
 INIT_SOURCE = """\
 extern int viprs_test_initialised;
+extern void viprs_test_register(void);
 void _GLOBAL__sub_I_fixture(void) __attribute__((constructor));
-void _GLOBAL__sub_I_fixture(void) { viprs_test_initialised = %d; }
+void _GLOBAL__sub_I_fixture(void)
+{
+	viprs_test_register();
+	viprs_test_initialised = %d;
+}
+"""
+
+# Nothing but the initialiser wants this, which is the point of it being
+# its own object in the main archive.
+REGISTER_SOURCE = """\
+void viprs_test_register(void);
+void viprs_test_register(void) { }
 """
 
 
@@ -170,7 +189,16 @@ def _build_linux_tree(
         )
     obj = os.path.join(work, "static.o")
     subprocess.run(["cc", "-fPIC", "-c", static_src, "-o", obj], check=True)
-    subprocess.run(["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj], check=True)
+
+    register_src = os.path.join(work, "register.c")
+    with open(register_src, "w") as f:
+        f.write(REGISTER_SOURCE)
+    register_obj = os.path.join(work, "register.o")
+    subprocess.run(["cc", "-fPIC", "-c", register_src, "-o", register_obj], check=True)
+
+    subprocess.run(
+        ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj, register_obj], check=True
+    )
     _build_init_archive(work, lib, effective=init_effective)
 
     return _finish(root, "linux", HOST_ARCH, static_certified=True)

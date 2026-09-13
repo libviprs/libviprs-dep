@@ -928,7 +928,7 @@ RUNTIME_ARCHIVES = (
 
 # What a statically-linked consumer might still need from the system,
 # narrowest first. The staging script walks this ladder and records the
-# first rung the smoke both links and runs with, so `system_libraries`
+# first rung the smoke both links and runs with, so `static_system_libraries`
 # is the measured answer rather than a guess; most of the runtime's own
 # dependencies (zlib, brotli, the libstdc++ shim) are merged into the
 # archive and are not here. Bare names only: build.rs turns each into a

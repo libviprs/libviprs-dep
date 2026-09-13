@@ -51,15 +51,30 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", root.join("lib").display());
 
-    // Order matters. The init archive carries the runtime's static
-    // initialiser in .init_array and nothing references it, so it is
-    // whole-archived; and it goes first, because after the main archive
-    // the link fails on RhRegisterOSModule.
+    // Three modifiers, and all three are load-bearing.
+    //
+    // `+whole-archive` on the init archive, because the initialiser lives
+    // in `.init_array` and nothing references it, so ordinary archive
+    // semantics leave it out.
+    //
+    // `-bundle` on both, because with the default `+bundle` rustc packs a
+    // static native library into this crate's rlib, and the rlib lands on
+    // the link line *before* the whole-archived init archive. The linker
+    // reads left to right: at the rlib it has no reason to pull the
+    // runtime object defining `RhRegisterOSModule`, and by the time the
+    // bootstrapper asks for it that archive is behind it. `-bundle` hands
+    // both to the linker as `-l` flags instead, in the order below.
+    //
+    // And the init archive first, because it is the one with the
+    // dangling references; reversed, the same link fails the same way.
     println!(
-        "cargo:rustc-link-lib=static:+whole-archive={}",
+        "cargo:rustc-link-lib=static:-bundle,+whole-archive={}",
         link_name(&init_lib)
     );
-    println!("cargo:rustc-link-lib=static={}", link_name(&static_lib));
+    println!(
+        "cargo:rustc-link-lib=static:-bundle={}",
+        link_name(&static_lib)
+    );
     for lib in json_string_array(&text, "static_system_libraries") {
         println!("cargo:rustc-link-lib={lib}");
     }
