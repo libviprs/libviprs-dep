@@ -18,7 +18,11 @@ namespace Viprs.Sources
 				return SyntheticSource.Open(data);
 			}
 
-			// The real adapter lands here (libviprs/libviprs-dep#47).
+			if (AcadSharpSource.Matches(data))
+			{
+				return AcadSharpSource.OpenMemory(data, limits);
+			}
+
 			throw new AbiException(
 				Result.UnsupportedFormat,
 				"no source in this build recognises these bytes"
@@ -33,8 +37,13 @@ namespace Viprs.Sources
 				return SyntheticSource.Open(File.ReadAllBytes(path));
 			}
 
-			// The real adapter lands here (libviprs/libviprs-dep#47), reading
-			// from the path rather than from a copy of the file.
+			// By path rather than from a copy of the file, which is the whole
+			// difference between this call and OpenMemory.
+			if (AcadSharpSource.Matches(ReadHead(path, AcadSharpSource.MagicLength)))
+			{
+				return AcadSharpSource.OpenPath(path, limits);
+			}
+
 			throw new AbiException(
 				Result.UnsupportedFormat,
 				"no source in this build recognises this file"

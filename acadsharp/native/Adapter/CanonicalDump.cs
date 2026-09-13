@@ -1,189 +1,243 @@
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using Viprs.Wire;
 
-namespace Viprs.Cad;
-
-// The canonical text form of one record, and the diff that names the first
+// The canonical text form of one primitive, and the diff that names the first
 // record two streams disagree about.
 //
-// Fixed precision on purpose. A round-trip through "R" or "0.############"
+// Fixed precision on purpose. A round trip through "R" or "0.############"
 // makes the expectation a record of the last machine that wrote it, and the
-// first cross-architecture rerun turns a committed file into a diff nobody
-// can read. Six decimals is well inside what a DWG carries and well outside
-// what the last bit of a double wobbles by.
-public static class CanonicalDump
+// first cross-architecture rerun turns a committed file into a diff nobody can
+// read. Six decimals is well inside what a DWG carries and well outside what
+// the last bit of a double wobbles by.
+namespace Viprs.Cad
 {
-	private const string Fmt = "0.000000";
-
-	public static string N(double d)
+	internal static class CanonicalDump
 	{
-		string s = d.ToString(Fmt, CultureInfo.InvariantCulture);
-		// Negative zero prints as "-0.000000" and compares unequal to the
-		// same number reached from the other side. It is the same point.
-		if (s == "-0.000000")
+		private const string Fmt = "0.000000";
+
+		public static string N(double d)
 		{
-			s = "0.000000";
-		}
-		return s;
-	}
+			string s = d.ToString(Fmt, CultureInfo.InvariantCulture);
 
-	private static string V(Vec3 v)
-	{
-		return "(" + N(v.X) + "," + N(v.Y) + "," + N(v.Z) + ")";
-	}
-
-	private static string Q(string s)
-	{
-		if (s is null)
-		{
-			return "\"\"";
+			// Negative zero prints as "-0.000000" and compares unequal to the
+			// same point reached from the other side. It is the same point.
+			return s == "-0.000000" ? "0.000000" : s;
 		}
 
-		StringBuilder sb = new StringBuilder();
-		sb.Append('"');
-		foreach (char ch in s)
+		private static string Q(string s)
 		{
-			switch (ch)
+			if (s == null)
 			{
-				case '"': sb.Append("\\\""); break;
-				case '\\': sb.Append("\\\\"); break;
-				case '\n': sb.Append("\\n"); break;
-				case '\r': sb.Append("\\r"); break;
-				case '\t': sb.Append("\\t"); break;
-				default:
-					if (ch < 0x20)
-					{
-						sb.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
-					}
-					else
-					{
-						sb.Append(ch);
-					}
+				return "\"\"";
+			}
+
+			StringBuilder sb = new StringBuilder();
+			sb.Append('"');
+			foreach (char ch in s)
+			{
+				switch (ch)
+				{
+					case '"':
+						sb.Append("\\\"");
+						break;
+					case '\\':
+						sb.Append("\\\\");
+						break;
+					case '\n':
+						sb.Append("\\n");
+						break;
+					case '\r':
+						sb.Append("\\r");
+						break;
+					case '\t':
+						sb.Append("\\t");
+						break;
+					default:
+						if (ch < 0x20)
+						{
+							sb.Append("\\u")
+								.Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+						}
+						else
+						{
+							sb.Append(ch);
+						}
+
+						break;
+				}
+			}
+
+			sb.Append('"');
+			return sb.ToString();
+		}
+
+		public static string TypeName(ushort type)
+		{
+			switch (type)
+			{
+				case WireFormat.TypeDocumentBegin: return "DocumentBegin";
+				case WireFormat.TypeViewBegin: return "ViewBegin";
+				case WireFormat.TypeLine: return "Line";
+				case WireFormat.TypePolyline: return "Polyline";
+				case WireFormat.TypeArc: return "Arc";
+				case WireFormat.TypeCircle: return "Circle";
+				case WireFormat.TypeEllipse: return "Ellipse";
+				case WireFormat.TypeSpline: return "Spline";
+				case WireFormat.TypePolygon: return "Polygon";
+				case WireFormat.TypeText: return "Text";
+				case WireFormat.TypeWarning: return "Warning";
+				case WireFormat.TypeViewEnd: return "ViewEnd";
+				case WireFormat.TypeDocumentEnd: return "DocumentEnd";
+				default: return "Type" + type.ToString(CultureInfo.InvariantCulture);
+			}
+		}
+
+		private static void Values(StringBuilder sb, string name, double[] v, int from, int count)
+		{
+			sb.Append(' ').Append(name).Append("=[");
+			for (int i = 0; i < count; i++)
+			{
+				if (i > 0)
+				{
+					sb.Append(',');
+				}
+
+				sb.Append(N(v[from + i]));
+			}
+
+			sb.Append(']');
+		}
+
+		private static void Triples(StringBuilder sb, string name, double[] v, int from, int count)
+		{
+			sb.Append(' ').Append(name).Append("=[");
+			for (int i = 0; i < count; i++)
+			{
+				if (i > 0)
+				{
+					sb.Append(';');
+				}
+
+				sb.Append('(')
+					.Append(N(v[from + (i * 3)])).Append(',')
+					.Append(N(v[from + (i * 3) + 1])).Append(',')
+					.Append(N(v[from + (i * 3) + 2]))
+					.Append(')');
+			}
+
+			sb.Append(']');
+		}
+
+		public static string Line(int index, Primitive p)
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.Append(index.ToString("00000", CultureInfo.InvariantCulture));
+			sb.Append(' ').Append(TypeName(p.Type));
+			sb.Append(" handle=").Append(p.ItemHandle.ToString("X", CultureInfo.InvariantCulture));
+			sb.Append(" flags=").Append(p.Flags.ToString(CultureInfo.InvariantCulture));
+
+			switch (p.Type)
+			{
+				case WireFormat.TypeLine:
+					Triples(sb, "pts", p.Values, 0, 2);
+					break;
+
+				case WireFormat.TypeArc:
+					Triples(sb, "c", p.Values, 0, 1);
+					sb.Append(" r=").Append(N(p.Values[3]));
+					sb.Append(" a0=").Append(N(p.Values[4]));
+					sb.Append(" a1=").Append(N(p.Values[5]));
+					Triples(sb, "normal", p.Values, 6, 1);
+					break;
+
+				case WireFormat.TypeCircle:
+					Triples(sb, "c", p.Values, 0, 1);
+					sb.Append(" r=").Append(N(p.Values[3]));
+					Triples(sb, "normal", p.Values, 4, 1);
+					break;
+
+				case WireFormat.TypeEllipse:
+					Triples(sb, "c", p.Values, 0, 1);
+					Triples(sb, "major", p.Values, 3, 1);
+					sb.Append(" ratio=").Append(N(p.Values[6]));
+					sb.Append(" p0=").Append(N(p.Values[7]));
+					sb.Append(" p1=").Append(N(p.Values[8]));
+					Triples(sb, "normal", p.Values, 9, 1);
+					break;
+
+				case WireFormat.TypePolyline:
+					sb.Append(" n=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" closed=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
+					Triples(sb, "pts", p.Values, 0, (int)p.Counts[0]);
+					break;
+
+				case WireFormat.TypePolygon:
+					sb.Append(" n=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					Triples(sb, "pts", p.Values, 0, (int)p.Counts[0]);
+					break;
+
+				case WireFormat.TypeSpline:
+				{
+					sb.Append(" degree=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" splineflags=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
+					int knots = (int)p.Counts[2];
+					int control = (int)p.Counts[3];
+					int weights = (int)p.Counts[4];
+					Values(sb, "knots", p.Values, 0, knots);
+					Triples(sb, "ctrl", p.Values, knots, control);
+					Values(sb, "weights", p.Values, knots + (control * 3), weights);
+					break;
+				}
+
+				case WireFormat.TypeText:
+					Triples(sb, "p", p.Values, 0, 1);
+					sb.Append(" h=").Append(N(p.Values[3]));
+					sb.Append(" rot=").Append(N(p.Values[4]));
+					sb.Append(" value=").Append(Q(p.Text));
+					break;
+
+				case WireFormat.TypeWarning:
+					sb.Append(" code=").Append(WarningCodes.Name(p.Counts[0]));
+					sb.Append(" message=").Append(Q(p.Text));
 					break;
 			}
-		}
-		sb.Append('"');
-		return sb.ToString();
-	}
 
-	private static void Points(StringBuilder sb, Record r, bool bulges)
-	{
-		int n = r.Points is null ? 0 : r.Points.Length;
-		sb.Append(" n=").Append(n.ToString(CultureInfo.InvariantCulture));
-		sb.Append(" pts=[");
-		for (int i = 0; i < n; i++)
+			return sb.ToString();
+		}
+
+		// The first line the two streams disagree about, or null when they
+		// agree. A count mismatch is reported at the first index one side
+		// does not have, because "the file is shorter" is still a differing
+		// record and saying so by index is what makes the failure readable.
+		public static string FirstDifference(IList<string> expected, IList<string> actual)
 		{
-			if (i > 0)
+			int n = expected.Count < actual.Count ? expected.Count : actual.Count;
+			for (int i = 0; i < n; i++)
 			{
-				sb.Append(';');
+				if (expected[i] != actual[i])
+				{
+					return "record " + i.ToString(CultureInfo.InvariantCulture)
+						+ " differs\n  expected: " + expected[i]
+						+ "\n  actual:   " + actual[i];
+				}
 			}
-			sb.Append(V(r.Points[i]));
-			if (bulges)
+
+			if (expected.Count != actual.Count)
 			{
-				sb.Append('@').Append(N(r.Bulges is null ? 0.0 : r.Bulges[i]));
-			}
-		}
-		sb.Append(']');
-	}
-
-	private static void Doubles(StringBuilder sb, string name, double[] a)
-	{
-		int n = a is null ? 0 : a.Length;
-		sb.Append(' ').Append(name).Append('=').Append(n.ToString(CultureInfo.InvariantCulture));
-		sb.Append(" [");
-		for (int i = 0; i < n; i++)
-		{
-			if (i > 0)
-			{
-				sb.Append(';');
-			}
-			sb.Append(N(a[i]));
-		}
-		sb.Append(']');
-	}
-
-	public static string Line(int index, Record r)
-	{
-		StringBuilder sb = new StringBuilder();
-		sb.Append(index.ToString("00000", CultureInfo.InvariantCulture));
-		sb.Append(' ').Append(r.Kind.ToString());
-		sb.Append(" handle=").Append(r.Handle.ToString("X", CultureInfo.InvariantCulture));
-		sb.Append(" layer=").Append(Q(r.Layer));
-
-		switch (r.Kind)
-		{
-			case RecordKind.Line:
-				sb.Append(" a=").Append(V(r.A)).Append(" b=").Append(V(r.B));
-				break;
-			case RecordKind.Circle:
-				sb.Append(" c=").Append(V(r.A)).Append(" r=").Append(N(r.R))
-					.Append(" normal=").Append(V(r.N));
-				break;
-			case RecordKind.Arc:
-				sb.Append(" c=").Append(V(r.A)).Append(" r=").Append(N(r.R))
-					.Append(" a0=").Append(N(r.A0)).Append(" a1=").Append(N(r.A1))
-					.Append(" normal=").Append(V(r.N));
-				break;
-			case RecordKind.Ellipse:
-				sb.Append(" c=").Append(V(r.A)).Append(" major=").Append(V(r.B))
-					.Append(" ratio=").Append(N(r.R))
-					.Append(" p0=").Append(N(r.A0)).Append(" p1=").Append(N(r.A1))
-					.Append(" normal=").Append(V(r.N));
-				break;
-			case RecordKind.Polyline:
-			case RecordKind.Polygon:
-				sb.Append(" closed=").Append(r.Closed != 0 ? "1" : "0");
-				Points(sb, r, true);
-				break;
-			case RecordKind.Spline:
-				sb.Append(" degree=").Append(r.Degree.ToString(CultureInfo.InvariantCulture));
-				sb.Append(" closed=").Append(r.Closed != 0 ? "1" : "0");
-				Points(sb, r, false);
-				Doubles(sb, "knots", r.Knots);
-				Doubles(sb, "weights", r.Weights);
-				break;
-			case RecordKind.Text:
-				sb.Append(" p=").Append(V(r.A)).Append(" h=").Append(N(r.R))
-					.Append(" rot=").Append(N(r.A0))
-					.Append(" value=").Append(Q(r.Text));
-				break;
-			case RecordKind.Warning:
-				sb.Append(" code=").Append(r.Code)
-					.Append(" message=").Append(Q(r.Text));
-				break;
-		}
-
-		return sb.ToString();
-	}
-
-	// The first line the two streams disagree about, or null when they agree.
-	// A count mismatch is reported at the first index one side does not have,
-	// because "the file is shorter" is still a differing record and saying so
-	// by index is what makes the failure readable.
-	public static string FirstDifference(string[] expected, string[] actual)
-	{
-		int n = expected.Length < actual.Length ? expected.Length : actual.Length;
-		for (int i = 0; i < n; i++)
-		{
-			if (expected[i] != actual[i])
-			{
+				int i = n;
+				string missing = expected.Count > actual.Count
+					? "expected: " + expected[i] + "\n  actual:   <end of stream>"
+					: "expected: <end of stream>\n  actual:   " + actual[i];
 				return "record " + i.ToString(CultureInfo.InvariantCulture)
-					+ " differs\n  expected: " + expected[i]
-					+ "\n  actual:   " + actual[i];
+					+ " differs, the streams are "
+					+ expected.Count.ToString(CultureInfo.InvariantCulture) + " and "
+					+ actual.Count.ToString(CultureInfo.InvariantCulture)
+					+ " records long\n  " + missing;
 			}
-		}
 
-		if (expected.Length != actual.Length)
-		{
-			int i = n;
-			string missing = expected.Length > actual.Length
-				? "expected: " + expected[i] + "\n  actual:   <end of stream>"
-				: "expected: <end of stream>\n  actual:   " + actual[i];
-			return "record " + i.ToString(CultureInfo.InvariantCulture)
-				+ " differs, the streams are " + expected.Length + " and " + actual.Length
-				+ " records long\n  " + missing;
+			return null;
 		}
-
-		return null;
 	}
 }

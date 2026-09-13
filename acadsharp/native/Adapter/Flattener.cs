@@ -1,16 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using ACadSharp.Blocks;
 using ACadSharp.Entities;
 using ACadSharp.Tables;
 using CSMath;
+using Viprs.Abi;
+using Viprs.Wire;
 
-namespace Viprs.Cad;
-
-// The walk that turns a resident document into the flattened record stream,
-// and the only place any of the ABI's limits are applied.
+// The walk that turns a resident ACadSharp document into the flattened
+// primitive stream docs/WIRE.md describes.
 //
 // Two properties this file exists to hold:
 //
@@ -23,841 +22,891 @@ namespace Viprs.Cad;
 //     number the caller sets through max_block_depth, a caller may set it to
 //     four billion, and a bounded refusal that arrives as a stack overflow is
 //     not a bounded refusal. The walk is an explicit stack of enumerators.
-public sealed class Flattener
+//
+// The other bounds are not enforced here on purpose: RecordEncoder applies
+// max_polyline_points and max_string_bytes as it encodes, DecodeSession
+// counts against max_entities, and BatchWriter counts max_output_bytes.
+// Applying a bound twice means two messages for one refusal and two places to
+// get it wrong. max_block_depth is the one nothing above this file can see,
+// because above this file a nested insertion is just more records.
+namespace Viprs.Cad
 {
-	private const double Eps = 1e-12;
-
-	private readonly AdapterLimits _limits;
-	private ulong _entities;
-	private ulong _outputBytes;
-
-	public Flattener(AdapterLimits limits)
+	internal sealed class Flattener
 	{
-		this._limits = limits ?? AdapterLimits.Defaults();
-	}
+		private const double Eps = 1e-12;
 
-	public ulong EntitiesVisited
-	{
-		get { return this._entities; }
-	}
+		// Bit 0 of a record's flags, from docs/WIRE.md's geometry prologue:
+		// this record came out of expanding a nested insertion.
+		private const uint FlagFromBlock = 1u;
 
-	public ulong OutputBytes
-	{
-		get { return this._outputBytes; }
-	}
+		private readonly ResolvedLimits _limits;
+		private ulong _entities;
 
-	private struct Pending
-	{
-		public Entity Entity;
-		public Transform Transform;
-		public int Depth;
-	}
-
-	private struct Frame
-	{
-		public IEnumerator<Pending> Items;
-	}
-
-	// -------------------------------------------------------------- limits
-
-	private void CountEntity()
-	{
-		this._entities++;
-		if (this._entities > this._limits.MaxEntities)
+		public Flattener(ResolvedLimits limits)
 		{
-			throw new AdapterLimitException(
-				"max_entities",
-				"the decode reached entity " + this._entities.ToString(CultureInfo.InvariantCulture)
-				+ " and max_entities is " + this._limits.MaxEntities.ToString(CultureInfo.InvariantCulture)
-				+ ", counted across the whole decode with block expansion included");
-		}
-	}
-
-	private void CheckString(string s, string what)
-	{
-		if (s is null)
-		{
-			return;
+			_limits = limits ?? ResolvedLimits.Defaults;
 		}
 
-		int n = Encoding.UTF8.GetByteCount(s);
-		if ((ulong)n > this._limits.MaxStringBytes)
+		public ulong EntitiesVisited
 		{
-			throw new AdapterLimitException(
-				"max_string_bytes",
-				what + " is " + n.ToString(CultureInfo.InvariantCulture)
-				+ " UTF-8 bytes and max_string_bytes is "
-				+ this._limits.MaxStringBytes.ToString(CultureInfo.InvariantCulture));
-		}
-	}
-
-	private void CheckPoints(Record r)
-	{
-		int n = r.Points is null ? 0 : r.Points.Length;
-		if ((ulong)n > this._limits.MaxPolylinePoints)
-		{
-			throw new AdapterLimitException(
-				"max_polyline_points",
-				"a " + r.Kind + " record carries " + n.ToString(CultureInfo.InvariantCulture)
-				+ " vertices and max_polyline_points is "
-				+ this._limits.MaxPolylinePoints.ToString(CultureInfo.InvariantCulture));
-		}
-	}
-
-	// Every record leaves through here, so every bound that is about a record
-	// rather than about an entity is applied exactly once.
-	private Record Admit(Record r)
-	{
-		if (r.Kind == RecordKind.Polyline || r.Kind == RecordKind.Polygon || r.Kind == RecordKind.Spline)
-		{
-			this.CheckPoints(r);
+			get { return _entities; }
 		}
 
-		if (r.Kind == RecordKind.Text)
+		private struct Pending
 		{
-			this.CheckString(r.Text, "a Text record's value");
+			public Entity Entity;
+			public Transform Transform;
+			public int Depth;
 		}
 
-		if (r.Kind == RecordKind.Warning)
+		private struct Frame
 		{
-			this.CheckString(r.Text, "a Warning record's message");
+			public IEnumerator<Pending> Items;
 		}
 
-		this._outputBytes += (ulong)RecordEncoder.Size(r);
-		if (this._outputBytes > this._limits.MaxOutputBytes)
+		// ------------------------------------------------------- geometry
+
+		private static double[] Xyz(Transform t, XYZ p)
 		{
-			throw new AdapterLimitException(
-				"max_output_bytes",
-				"the decode has emitted " + this._outputBytes.ToString(CultureInfo.InvariantCulture)
-				+ " bytes and max_output_bytes is "
-				+ this._limits.MaxOutputBytes.ToString(CultureInfo.InvariantCulture));
+			XYZ v = t.ApplyTransform(p);
+			return new double[] { v.X, v.Y, v.Z };
 		}
 
-		return r;
-	}
-
-	// ------------------------------------------------------------ geometry
-
-	private static Vec3 P(Transform t, XYZ p)
-	{
-		XYZ v = t.ApplyTransform(p);
-		return new Vec3(v.X, v.Y, v.Z);
-	}
-
-	private static Vec3 V(XYZ p)
-	{
-		return new Vec3(p.X, p.Y, p.Z);
-	}
-
-	// The in-plane scale factors and rotation a transform applies, measured
-	// rather than decomposed, because a composed chain of inserts is not
-	// guaranteed to decompose into the translate/rotate/scale it was built
-	// from and a measurement of the basis always is.
-	private struct Basis
-	{
-		public double ScaleX;
-		public double ScaleY;
-		public double Rotation;
-		public bool Mirrored;
-
-		public bool IsSimilarity
+		private static void Append(List<double> into, Transform t, XYZ p)
 		{
-			get
+			XYZ v = t.ApplyTransform(p);
+			into.Add(v.X);
+			into.Add(v.Y);
+			into.Add(v.Z);
+		}
+
+		// The in-plane scale factors and rotation a transform applies,
+		// measured rather than decomposed. A composed chain of insertions is
+		// not guaranteed to decompose into the translate, rotate and scale it
+		// was built from, and a measurement of the basis always is.
+		private struct Basis
+		{
+			public double ScaleX;
+			public double ScaleY;
+			public double Rotation;
+			public bool Mirrored;
+
+			public bool IsSimilarity
 			{
-				double m = Math.Max(Math.Max(this.ScaleX, this.ScaleY), 1.0);
-				return !this.Mirrored && Math.Abs(this.ScaleX - this.ScaleY) <= 1e-9 * m;
+				get
+				{
+					double m = Math.Max(Math.Max(ScaleX, ScaleY), 1.0);
+					return !Mirrored && Math.Abs(ScaleX - ScaleY) <= 1e-9 * m;
+				}
 			}
 		}
-	}
 
-	private static Basis MeasureBasis(Transform t)
-	{
-		XYZ o = t.ApplyTransform(XYZ.Zero);
-		XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
-		XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
-		Basis b = new Basis();
-		b.ScaleX = x.GetLength();
-		b.ScaleY = y.GetLength();
-		b.Rotation = Math.Atan2(x.Y, x.X);
-		b.Mirrored = (x.X * y.Y) - (x.Y * y.X) < 0.0;
-		return b;
-	}
-
-	private static bool IsIdentityish(Transform t)
-	{
-		XYZ o = t.ApplyTransform(XYZ.Zero);
-		XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
-		XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
-		return o.GetLength() < Eps
-			&& Math.Abs(x.X - 1.0) < Eps && Math.Abs(x.Y) < Eps
-			&& Math.Abs(y.Y - 1.0) < Eps && Math.Abs(y.X) < Eps;
-	}
-
-	private static Transform Identity()
-	{
-		return new Transform(Matrix4.Identity);
-	}
-
-	private static Transform Compose(Transform outer, Transform inner)
-	{
-		return new Transform(outer.Matrix * inner.Matrix);
-	}
-
-	// ------------------------------------------------------------ the walk
-
-	public IEnumerable<Record> Walk(IEnumerable<Entity> roots)
-	{
-		Stack<Frame> stack = new Stack<Frame>();
-		stack.Push(new Frame { Items = Root(roots).GetEnumerator() });
-
-		try
+		private static Basis MeasureBasis(Transform t)
 		{
-			while (stack.Count > 0)
+			XYZ o = t.ApplyTransform(XYZ.Zero);
+			XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
+			XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
+			Basis b = new Basis();
+			b.ScaleX = x.GetLength();
+			b.ScaleY = y.GetLength();
+			b.Rotation = Math.Atan2(x.Y, x.X);
+			b.Mirrored = (x.X * y.Y) - (x.Y * y.X) < 0.0;
+			return b;
+		}
+
+		private static bool IsIdentityish(Transform t)
+		{
+			XYZ o = t.ApplyTransform(XYZ.Zero);
+			XYZ x = t.ApplyTransform(XYZ.AxisX) - o;
+			XYZ y = t.ApplyTransform(XYZ.AxisY) - o;
+			return o.GetLength() < Eps
+				&& Math.Abs(x.X - 1.0) < Eps && Math.Abs(x.Y) < Eps
+				&& Math.Abs(y.Y - 1.0) < Eps && Math.Abs(y.X) < Eps;
+		}
+
+		private static Transform Identity()
+		{
+			return new Transform(Matrix4.Identity);
+		}
+
+		private static Transform Compose(Transform outer, Transform inner)
+		{
+			return new Transform(outer.Matrix * inner.Matrix);
+		}
+
+		// -------------------------------------------------------- the walk
+
+		public IEnumerable<Primitive> Walk(IEnumerable<Entity> roots)
+		{
+			Stack<Frame> stack = new Stack<Frame>();
+			stack.Push(new Frame { Items = Root(roots).GetEnumerator() });
+
+			try
 			{
-				Frame frame = stack.Peek();
-				if (!frame.Items.MoveNext())
+				while (stack.Count > 0)
 				{
-					stack.Pop();
-					frame.Items.Dispose();
-					continue;
-				}
-
-				Pending item = frame.Items.Current;
-				this.CountEntity();
-
-				if (item.Entity is Insert insert)
-				{
-					IEnumerator<Pending> expanded = this.ExpandInsert(insert, item, out Record refusal);
-					if (refusal != null)
+					Frame frame = stack.Peek();
+					if (!frame.Items.MoveNext())
 					{
-						yield return this.Admit(refusal);
+						stack.Pop();
+						frame.Items.Dispose();
 						continue;
 					}
 
-					stack.Push(new Frame { Items = expanded });
-					continue;
-				}
+					Pending item = frame.Items.Current;
+					_entities = _entities + 1ul;
 
-				foreach (Record r in this.Map(item.Entity, item.Transform))
-				{
-					yield return this.Admit(r);
-				}
-			}
-		}
-		finally
-		{
-			while (stack.Count > 0)
-			{
-				stack.Pop().Items.Dispose();
-			}
-		}
-	}
-
-	private static IEnumerable<Pending> Root(IEnumerable<Entity> roots)
-	{
-		Transform identity = Identity();
-		foreach (Entity e in roots)
-		{
-			yield return new Pending { Entity = e, Transform = identity, Depth = 0 };
-		}
-	}
-
-	// --------------------------------------------------------------- INSERT
-
-	private IEnumerator<Pending> ExpandInsert(Insert insert, Pending item, out Record refusal)
-	{
-		refusal = null;
-
-		BlockRecord block = insert.Block;
-		if (block is null)
-		{
-			refusal = Warning(
-				WarningCode.UnresolvedBlock,
-				insert.Handle,
-				LayerOf(insert),
-				"INSERT names no block record");
-			return Empty();
-		}
-
-		Block header = block.BlockEntity;
-		bool isXref = header != null
-			&& (header.Flags.HasFlag(BlockTypeFlags.XRef) || header.Flags.HasFlag(BlockTypeFlags.XRefOverlay));
-		if (isXref || (header != null && header.IsUnloaded))
-		{
-			// An external reference is another file. This shim never opens
-			// one: no network, no second read, no subprocess. The reference
-			// crosses as a warning naming the path the drawing recorded, and
-			// whoever wants it resolved resolves it themselves.
-			string path = header is null || string.IsNullOrEmpty(header.XRefPath)
-				? block.Name
-				: header.XRefPath;
-			refusal = Warning(
-				WarningCode.UnresolvedBlock,
-				insert.Handle,
-				LayerOf(insert),
-				"external reference " + path + " is not resolved, and this decoder never resolves one");
-			return Empty();
-		}
-
-		if ((uint)(item.Depth + 1) > this._limits.MaxBlockDepth)
-		{
-			throw new AdapterLimitException(
-				"max_block_depth",
-				"INSERT " + insert.Handle.ToString("X", CultureInfo.InvariantCulture)
-				+ " of block " + block.Name + " is at nesting depth "
-				+ (item.Depth + 1).ToString(CultureInfo.InvariantCulture)
-				+ " and max_block_depth is "
-				+ this._limits.MaxBlockDepth.ToString(CultureInfo.InvariantCulture));
-		}
-
-		return this.InsertBody(insert, block, item).GetEnumerator();
-	}
-
-	private static IEnumerator<Pending> Empty()
-	{
-		return EmptySeq().GetEnumerator();
-	}
-
-	private static IEnumerable<Pending> EmptySeq()
-	{
-		yield break;
-	}
-
-	private IEnumerable<Pending> InsertBody(Insert insert, BlockRecord block, Pending item)
-	{
-		Transform local = insert.GetTransform();
-		int rows = insert.RowCount < 1 ? 1 : insert.RowCount;
-		int cols = insert.ColumnCount < 1 ? 1 : insert.ColumnCount;
-
-		// The attributes belong to the INSERT and are already placed in the
-		// frame the INSERT sits in, so they are emitted under the parent
-		// transform rather than under the block's.
-		foreach (AttributeEntity att in insert.Attributes)
-		{
-			yield return new Pending { Entity = att, Transform = item.Transform, Depth = item.Depth };
-		}
-
-		for (int r = 0; r < rows; r++)
-		{
-			for (int c = 0; c < cols; c++)
-			{
-				Transform cell = local;
-				if (r != 0 || c != 0)
-				{
-					double dx = c * insert.ColumnSpacing;
-					double dy = r * insert.RowSpacing;
-					double cosr = Math.Cos(insert.Rotation);
-					double sinr = Math.Sin(insert.Rotation);
-					Transform offset = Transform.CreateTranslation(
-						new XYZ((dx * cosr) - (dy * sinr), (dx * sinr) + (dy * cosr), 0.0));
-					cell = Compose(offset, local);
-				}
-
-				Transform composed = Compose(item.Transform, cell);
-				foreach (Entity e in block.Entities)
-				{
-					yield return new Pending
+					if (item.Entity is Insert insert)
 					{
-						Entity = e,
-						Transform = composed,
-						Depth = item.Depth + 1,
-					};
+						Primitive refusal;
+						IEnumerator<Pending> expanded = ExpandInsert(insert, item, out refusal);
+						if (refusal != null)
+						{
+							yield return refusal;
+							continue;
+						}
+
+						stack.Push(new Frame { Items = expanded });
+						continue;
+					}
+
+					foreach (Primitive p in Map(item.Entity, item.Transform, item.Depth))
+					{
+						yield return p;
+					}
 				}
 			}
-		}
-	}
-
-	// ------------------------------------------------------------- mapping
-
-	private static string LayerOf(Entity e)
-	{
-		Layer l = e is null ? null : e.Layer;
-		return l is null || l.Name is null ? string.Empty : l.Name;
-	}
-
-	private static Record Warning(string code, ulong handle, string layer, string message)
-	{
-		return new Record
-		{
-			Kind = RecordKind.Warning,
-			Handle = handle,
-			Layer = layer ?? string.Empty,
-			Code = code,
-			Text = message ?? string.Empty,
-		};
-	}
-
-	public static Record ReaderNotification(string message)
-	{
-		return new Record
-		{
-			Kind = RecordKind.Warning,
-			Handle = 0UL,
-			Layer = string.Empty,
-			Code = WarningCode.ReaderNotification,
-			Text = message ?? string.Empty,
-		};
-	}
-
-	private IEnumerable<Record> Map(Entity e, Transform t, ulong handleOverride = 0UL)
-	{
-		ulong h = handleOverride != 0UL ? handleOverride : e.Handle;
-		string layer = LayerOf(e);
-		Basis basis = MeasureBasis(t);
-		bool identity = IsIdentityish(t);
-
-		switch (e)
-		{
-			case Line line:
-				yield return new Record
-				{
-					Kind = RecordKind.Line,
-					Handle = h,
-					Layer = layer,
-					A = P(t, line.StartPoint),
-					B = P(t, line.EndPoint),
-					N = P(t, line.Normal),
-				};
-				yield break;
-
-			// Arc before Circle: ACadSharp's Arc derives from Circle, so the
-			// other order silently turns every arc into a full circle.
-			case Arc arc:
+			finally
 			{
-				if (!identity && !basis.IsSimilarity)
+				while (stack.Count > 0)
 				{
-					yield return NonUniform(h, layer, "ARC");
-				}
-				yield return new Record
-				{
-					Kind = RecordKind.Arc,
-					Handle = h,
-					Layer = layer,
-					A = P(t, arc.Center),
-					R = arc.Radius * basis.ScaleX,
-					A0 = arc.StartAngle + (identity ? 0.0 : basis.Rotation),
-					A1 = arc.EndAngle + (identity ? 0.0 : basis.Rotation),
-					N = V(arc.Normal),
-				};
-				yield break;
-			}
-
-			case Circle circle:
-			{
-				if (!identity && !basis.IsSimilarity)
-				{
-					yield return NonUniform(h, layer, "CIRCLE");
-				}
-				yield return new Record
-				{
-					Kind = RecordKind.Circle,
-					Handle = h,
-					Layer = layer,
-					A = P(t, circle.Center),
-					R = circle.Radius * basis.ScaleX,
-					N = V(circle.Normal),
-				};
-				yield break;
-			}
-
-			case Ellipse ellipse:
-			{
-				if (!identity && !basis.IsSimilarity)
-				{
-					yield return NonUniform(h, layer, "ELLIPSE");
-				}
-				XYZ centre = ellipse.Center;
-				XYZ major = ellipse.MajorAxisEndPoint;
-				XYZ tc = t.ApplyTransform(centre);
-				XYZ tm = t.ApplyTransform(centre + major) - tc;
-				yield return new Record
-				{
-					Kind = RecordKind.Ellipse,
-					Handle = h,
-					Layer = layer,
-					A = new Vec3(tc.X, tc.Y, tc.Z),
-					B = new Vec3(tm.X, tm.Y, tm.Z),
-					R = ellipse.RadiusRatio,
-					A0 = ellipse.StartParameter,
-					A1 = ellipse.EndParameter,
-					N = V(ellipse.Normal),
-				};
-				yield break;
-			}
-
-			case Spline spline:
-			{
-				// A spline's control points are affine, so any transform this
-				// walk can apply lands exactly on the transformed control
-				// points. Knots and weights are untouched by construction.
-				List<XYZ> ctrl = spline.ControlPoints;
-				Vec3[] pts = new Vec3[ctrl.Count];
-				for (int i = 0; i < ctrl.Count; i++)
-				{
-					pts[i] = P(t, ctrl[i]);
-				}
-
-				yield return new Record
-				{
-					Kind = RecordKind.Spline,
-					Handle = h,
-					Layer = layer,
-					Degree = spline.Degree,
-					Points = pts,
-					Knots = spline.Knots.ToArray(),
-					Weights = spline.Weights.ToArray(),
-					Closed = (byte)(spline.Flags.HasFlag(SplineFlags.Closed) ? 1 : 0),
-					N = V(spline.Normal),
-				};
-				yield break;
-			}
-
-			case LwPolyline lw:
-			{
-				if (!identity && !basis.IsSimilarity && HasBulge(lw))
-				{
-					yield return NonUniform(h, layer, "LWPOLYLINE");
-				}
-
-				int n = lw.Vertices.Count;
-				Vec3[] pts = new Vec3[n];
-				double[] bulges = new double[n];
-				for (int i = 0; i < n; i++)
-				{
-					LwPolyline.Vertex v = lw.Vertices[i];
-					pts[i] = P(t, new XYZ(v.Location.X, v.Location.Y, lw.Elevation));
-					bulges[i] = v.Bulge;
-				}
-
-				yield return new Record
-				{
-					Kind = RecordKind.Polyline,
-					Handle = h,
-					Layer = layer,
-					Points = pts,
-					Bulges = bulges,
-					Closed = (byte)(lw.IsClosed ? 1 : 0),
-					N = V(lw.Normal),
-				};
-				yield break;
-			}
-
-			case IPolyline poly:
-			{
-				List<Vec3> pts = new List<Vec3>();
-				List<double> bulges = new List<double>();
-				bool anyBulge = false;
-				foreach (IVertex v in poly.Vertices)
-				{
-					IVector loc = v.Location;
-					double x = loc.Dimension > 0 ? loc[0] : 0.0;
-					double y = loc.Dimension > 1 ? loc[1] : 0.0;
-					double z = loc.Dimension > 2 ? loc[2] : poly.Elevation;
-					pts.Add(P(t, new XYZ(x, y, z)));
-					bulges.Add(v.Bulge);
-					anyBulge |= v.Bulge != 0.0;
-				}
-
-				if (!identity && !basis.IsSimilarity && anyBulge)
-				{
-					yield return NonUniform(h, layer, "POLYLINE");
-				}
-
-				yield return new Record
-				{
-					Kind = RecordKind.Polyline,
-					Handle = h,
-					Layer = layer,
-					Points = pts.ToArray(),
-					Bulges = bulges.ToArray(),
-					Closed = (byte)(poly.IsClosed ? 1 : 0),
-					N = V(poly.Normal),
-				};
-				yield break;
-			}
-
-			case MText mtext:
-				yield return new Record
-				{
-					Kind = RecordKind.Text,
-					Handle = h,
-					Layer = layer,
-					A = P(t, mtext.InsertPoint),
-					R = mtext.Height * basis.ScaleY,
-					A0 = mtext.Rotation + (identity ? 0.0 : basis.Rotation),
-					Text = mtext.Value ?? string.Empty,
-					N = V(mtext.Normal),
-				};
-				yield break;
-
-			// AttributeEntity and AttributeDefinition derive from TextEntity,
-			// so this arm carries the text a block instance actually shows.
-			case TextEntity text:
-				yield return new Record
-				{
-					Kind = RecordKind.Text,
-					Handle = h,
-					Layer = layer,
-					A = P(t, text.InsertPoint),
-					R = text.Height * basis.ScaleY,
-					A0 = text.Rotation + (identity ? 0.0 : basis.Rotation),
-					Text = text.Value ?? string.Empty,
-					N = V(text.Normal),
-				};
-				yield break;
-
-			case Dimension dim:
-			{
-				foreach (Record r in this.MapDimension(dim, t))
-				{
-					yield return r;
-				}
-				yield break;
-			}
-
-			case Hatch hatch:
-			{
-				foreach (Record r in this.MapHatch(hatch, t))
-				{
-					yield return r;
-				}
-				yield break;
-			}
-
-			default:
-				yield return Warning(
-					WarningCode.UnsupportedEntity,
-					h,
-					layer,
-					e.ObjectName + " is not a primitive this version flattens");
-				yield break;
-		}
-	}
-
-	private static bool HasBulge(LwPolyline lw)
-	{
-		foreach (LwPolyline.Vertex v in lw.Vertices)
-		{
-			if (v.Bulge != 0.0)
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private static Record NonUniform(ulong handle, string layer, string what)
-	{
-		return Warning(
-			WarningCode.NonUniformBlockScale,
-			handle,
-			layer,
-			what + " crossed under a block transform that is not a similarity, so its "
-			+ "parameters describe a shape the transform does not preserve");
-	}
-
-	// ------------------------------------------------------------ DIMENSION
-
-	private IEnumerable<Record> MapDimension(Dimension dim, Transform t)
-	{
-		BlockRecord block = dim.Block;
-		int emitted = 0;
-		if (block != null)
-		{
-			foreach (Entity e in block.Entities)
-			{
-				// One level only, and never through an INSERT: a dimension
-				// block is generated geometry, not a user block, and walking
-				// it as a block would give it a second depth budget.
-				if (e is Insert)
-				{
-					continue;
-				}
-
-				foreach (Record r in this.Map(e, t))
-				{
-					emitted++;
-					yield return r;
+					stack.Pop().Items.Dispose();
 				}
 			}
 		}
 
-		if (emitted == 0)
+		private static IEnumerable<Pending> Root(IEnumerable<Entity> roots)
 		{
-			yield return Warning(
-				WarningCode.DimensionWithoutBlock,
-				dim.Handle,
-				LayerOf(dim),
-				dim.ObjectName + " carries no block geometry, so there is nothing to draw");
-		}
-	}
-
-	// ---------------------------------------------------------------- HATCH
-
-	private IEnumerable<Record> MapHatch(Hatch hatch, Transform t)
-	{
-		ulong h = hatch.Handle;
-		string layer = LayerOf(hatch);
-		int loops = 0;
-
-		foreach (Hatch.BoundaryPath path in hatch.Paths)
-		{
-			if (path.Edges.Count == 0)
+			Transform identity = Identity();
+			foreach (Entity e in roots)
 			{
-				continue;
-			}
-
-			loops++;
-			if (TryPolygon(path, hatch.Elevation, t, out Vec3[] pts, out double[] bulges))
-			{
-				yield return new Record
-				{
-					Kind = RecordKind.Polygon,
-					Handle = h,
-					Layer = layer,
-					Points = pts,
-					Bulges = bulges,
-					Closed = 1,
-					N = V(hatch.Normal),
-				};
-				continue;
-			}
-
-			// An ellipse or spline edge cannot be a bulge, and turning it
-			// into one would be tessellation by another name. The loop goes
-			// out as its own edges instead, which is strictly more than a
-			// polygon carries.
-			yield return Warning(
-				WarningCode.HatchLoopNotPolygon,
-				h,
-				layer,
-				"boundary loop " + loops.ToString(CultureInfo.InvariantCulture)
-				+ " carries a curve a closed polygon cannot express, so its edges follow as records");
-
-			foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
-			{
-				// CadObject.Handle has an internal setter, so a synthesised
-				// edge cannot be relabelled. The handle travels beside it.
-				Entity entity = edge.ToEntity();
-				foreach (Record r in this.Map(entity, t, h))
-				{
-					yield return r;
-				}
+				yield return new Pending { Entity = e, Transform = identity, Depth = 0 };
 			}
 		}
 
-		if (loops != 0)
+		// ---------------------------------------------------------- INSERT
+
+		private IEnumerator<Pending> ExpandInsert(Insert insert, Pending item, out Primitive refusal)
+		{
+			refusal = null;
+			uint flags = item.Depth > 0 ? FlagFromBlock : 0u;
+
+			BlockRecord block = insert.Block;
+			if (block == null)
+			{
+				refusal = Primitive.Warning(
+					WarningCodes.UnresolvedBlock,
+					insert.Handle,
+					"INSERT names no block record"
+				);
+				refusal.Flags = flags;
+				return Empty();
+			}
+
+			Block header = block.BlockEntity;
+			bool isXref = header != null
+				&& (header.Flags.HasFlag(BlockTypeFlags.XRef)
+					|| header.Flags.HasFlag(BlockTypeFlags.XRefOverlay));
+			if (isXref || (header != null && header.IsUnloaded))
+			{
+				// An external reference is another file. This shim never
+				// opens one: no network, no second read, no subprocess. The
+				// reference crosses as a warning naming the path the drawing
+				// recorded, and whoever wants it resolved resolves it.
+				string path = header == null || string.IsNullOrEmpty(header.XRefPath)
+					? block.Name
+					: header.XRefPath;
+				refusal = Primitive.Warning(
+					WarningCodes.UnresolvedBlock,
+					insert.Handle,
+					"external reference " + path
+						+ " is not resolved, and this decoder never resolves one"
+				);
+				refusal.Flags = flags;
+				return Empty();
+			}
+
+			if ((uint)(item.Depth + 1) > _limits.MaxBlockDepth)
+			{
+				throw new AbiException(
+					Result.LimitExceeded,
+					"INSERT " + insert.Handle.ToString("X", CultureInfo.InvariantCulture)
+						+ " of block " + block.Name + " is at nesting depth "
+						+ (item.Depth + 1).ToString(CultureInfo.InvariantCulture)
+						+ " and max_block_depth is "
+						+ _limits.MaxBlockDepth.ToString(CultureInfo.InvariantCulture)
+				);
+			}
+
+			return InsertBody(insert, block, item).GetEnumerator();
+		}
+
+		private static IEnumerator<Pending> Empty()
+		{
+			return EmptySeq().GetEnumerator();
+		}
+
+		private static IEnumerable<Pending> EmptySeq()
 		{
 			yield break;
 		}
 
-		// Pattern only. ACadSharp's own ExplodePattern clips the pattern to
-		// the boundary and returns nothing when there is no boundary, so on
-		// the pinned version this always reaches the warning. The call is
-		// still here because a later upstream that can produce unbounded
-		// pattern lines should reach the Line arm, not silently change shape.
-		int lines = 0;
-		foreach (Entity e in hatch.ExplodePattern())
+		private IEnumerable<Pending> InsertBody(Insert insert, BlockRecord block, Pending item)
 		{
-			if (e is Line)
+			Transform local = insert.GetTransform();
+			int rows = insert.RowCount < 1 ? 1 : insert.RowCount;
+			int cols = insert.ColumnCount < 1 ? 1 : insert.ColumnCount;
+
+			// The attributes belong to the INSERT and are already placed in
+			// the frame the INSERT sits in, so they go out under the parent
+			// transform rather than under the block's.
+			foreach (AttributeEntity att in insert.Attributes)
 			{
-				lines++;
-				foreach (Record r in this.Map(e, t))
+				yield return new Pending
 				{
-					yield return r;
+					Entity = att,
+					Transform = item.Transform,
+					Depth = item.Depth,
+				};
+			}
+
+			for (int r = 0; r < rows; r++)
+			{
+				for (int c = 0; c < cols; c++)
+				{
+					Transform cell = local;
+					if (r != 0 || c != 0)
+					{
+						double dx = c * insert.ColumnSpacing;
+						double dy = r * insert.RowSpacing;
+						double cosr = Math.Cos(insert.Rotation);
+						double sinr = Math.Sin(insert.Rotation);
+						Transform offset = Transform.CreateTranslation(
+							new XYZ((dx * cosr) - (dy * sinr), (dx * sinr) + (dy * cosr), 0.0)
+						);
+						cell = Compose(offset, local);
+					}
+
+					Transform composed = Compose(item.Transform, cell);
+					foreach (Entity e in block.Entities)
+					{
+						yield return new Pending
+						{
+							Entity = e,
+							Transform = composed,
+							Depth = item.Depth + 1,
+						};
+					}
 				}
 			}
 		}
 
-		if (lines == 0)
+		// --------------------------------------------------------- mapping
+
+		public static Primitive ReaderNotification(string message)
 		{
-			yield return Warning(
-				WarningCode.HatchPatternOnly,
-				h,
-				layer,
-				"HATCH has no boundary loop, and its pattern produced no geometry to draw");
+			return Primitive.Warning(WarningCodes.ReaderNotification, 0ul, message);
 		}
-	}
 
-	// A boundary loop becomes one closed polygon when every edge is straight
-	// or a circular arc, because an arc is exactly a bulge. Anything else
-	// returns false and the caller emits the edges.
-	private static bool TryPolygon(
-		Hatch.BoundaryPath path,
-		double elevation,
-		Transform t,
-		out Vec3[] points,
-		out double[] bulges)
-	{
-		List<Vec3> pts = new List<Vec3>();
-		List<double> bl = new List<double>();
-		points = null;
-		bulges = null;
-
-		foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
+		private IEnumerable<Primitive> Map(Entity e, Transform t, int depth)
 		{
-			switch (edge)
+			ulong h = e.Handle;
+			uint flags = depth > 0 ? FlagFromBlock : 0u;
+			Basis basis = MeasureBasis(t);
+			bool identity = IsIdentityish(t);
+
+			switch (e)
 			{
-				case Hatch.BoundaryPath.Line line:
-					pts.Add(P(t, new XYZ(line.Start.X, line.Start.Y, elevation)));
-					bl.Add(0.0);
-					break;
-
-				case Hatch.BoundaryPath.Arc arc:
+				case Line line:
 				{
-					double sweep = arc.EndAngle - arc.StartAngle;
-					if (!arc.CounterClockWise)
-					{
-						sweep = -sweep;
-					}
-
-					while (sweep <= 0.0)
-					{
-						sweep += 2.0 * Math.PI;
-					}
-					while (sweep > 2.0 * Math.PI)
-					{
-						sweep -= 2.0 * Math.PI;
-					}
-
-					double a0 = arc.CounterClockWise ? arc.StartAngle : arc.EndAngle;
-					double bulge = Math.Tan(sweep / 4.0);
-					if (!arc.CounterClockWise)
-					{
-						bulge = -bulge;
-					}
-
-					pts.Add(P(t, new XYZ(
-						arc.Center.X + (arc.Radius * Math.Cos(a0)),
-						arc.Center.Y + (arc.Radius * Math.Sin(a0)),
-						elevation)));
-					bl.Add(bulge);
-					break;
+					double[] a = Xyz(t, line.StartPoint);
+					double[] b = Xyz(t, line.EndPoint);
+					yield return Primitive.Line(h, flags, a[0], a[1], a[2], b[0], b[1], b[2]);
+					yield break;
 				}
 
-				case Hatch.BoundaryPath.Polyline poly:
+				// Arc before Circle: ACadSharp's Arc derives from Circle, so
+				// the other order silently turns every arc into a full circle.
+				case Arc arc:
 				{
-					foreach (XYZ v in poly.Vertices)
+					if (!identity && !basis.IsSimilarity)
 					{
-						pts.Add(P(t, new XYZ(v.X, v.Y, elevation)));
-						bl.Add(v.Z);
+						yield return NonUniform(h, flags, "ARC");
 					}
-					break;
+
+					double[] c = Xyz(t, arc.Center);
+					double turn = identity ? 0.0 : basis.Rotation;
+					yield return Primitive.Arc(
+						h,
+						flags,
+						c[0],
+						c[1],
+						c[2],
+						arc.Radius * basis.ScaleX,
+						arc.StartAngle + turn,
+						arc.EndAngle + turn,
+						arc.Normal.X,
+						arc.Normal.Y,
+						arc.Normal.Z
+					);
+					yield break;
+				}
+
+				case Circle circle:
+				{
+					if (!identity && !basis.IsSimilarity)
+					{
+						yield return NonUniform(h, flags, "CIRCLE");
+					}
+
+					double[] c = Xyz(t, circle.Center);
+					yield return Primitive.Circle(
+						h,
+						flags,
+						c[0],
+						c[1],
+						c[2],
+						circle.Radius * basis.ScaleX,
+						circle.Normal.X,
+						circle.Normal.Y,
+						circle.Normal.Z
+					);
+					yield break;
+				}
+
+				case Ellipse ellipse:
+				{
+					if (!identity && !basis.IsSimilarity)
+					{
+						yield return NonUniform(h, flags, "ELLIPSE");
+					}
+
+					XYZ tc = t.ApplyTransform(ellipse.Center);
+					XYZ tm = t.ApplyTransform(ellipse.Center + ellipse.MajorAxisEndPoint) - tc;
+					yield return Primitive.Ellipse(
+						h,
+						flags,
+						tc.X,
+						tc.Y,
+						tc.Z,
+						tm.X,
+						tm.Y,
+						tm.Z,
+						ellipse.RadiusRatio,
+						ellipse.StartParameter,
+						ellipse.EndParameter,
+						ellipse.Normal.X,
+						ellipse.Normal.Y,
+						ellipse.Normal.Z
+					);
+					yield break;
+				}
+
+				case Spline spline:
+				{
+					// A spline's control points are affine, so any transform
+					// this walk can apply lands exactly on the transformed
+					// control points. Knots and weights are untouched by
+					// construction.
+					List<double> ctrl = new List<double>(spline.ControlPoints.Count * 3);
+					foreach (XYZ p in spline.ControlPoints)
+					{
+						Append(ctrl, t, p);
+					}
+
+					yield return Primitive.Spline(
+						h,
+						flags,
+						(uint)spline.Degree,
+						(uint)spline.Flags,
+						spline.Knots.ToArray(),
+						ctrl.ToArray(),
+						spline.Weights.ToArray()
+					);
+					yield break;
+				}
+
+				case LwPolyline lw:
+				{
+					if (!identity && !basis.IsSimilarity && HasBulge(lw))
+					{
+						yield return NonUniform(h, flags, "LWPOLYLINE");
+					}
+
+					List<double> pts = new List<double>(lw.Vertices.Count * 3);
+					double[] lwBulges = new double[lw.Vertices.Count];
+					for (int i = 0; i < lw.Vertices.Count; i++)
+					{
+						LwPolyline.Vertex v = lw.Vertices[i];
+						Append(pts, t, new XYZ(v.Location.X, v.Location.Y, lw.Elevation));
+						lwBulges[i] = v.Bulge;
+					}
+
+					foreach (Primitive p in EmitPolyline(
+						h, flags, lw.IsClosed, pts.ToArray(), lwBulges, lw.Normal))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case IPolyline poly:
+				{
+					List<double> pts = new List<double>();
+					List<double> bulges = new List<double>();
+					bool anyBulge = false;
+					foreach (IVertex v in poly.Vertices)
+					{
+						IVector loc = v.Location;
+						double x = loc.Dimension > 0 ? loc[0] : 0.0;
+						double y = loc.Dimension > 1 ? loc[1] : 0.0;
+						double z = loc.Dimension > 2 ? loc[2] : poly.Elevation;
+						Append(pts, t, new XYZ(x, y, z));
+						bulges.Add(v.Bulge);
+						anyBulge |= v.Bulge != 0.0;
+					}
+
+					if (!identity && !basis.IsSimilarity && anyBulge)
+					{
+						yield return NonUniform(h, flags, "POLYLINE");
+					}
+
+					foreach (Primitive p in EmitPolyline(
+						h, flags, poly.IsClosed, pts.ToArray(), bulges.ToArray(), poly.Normal))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case MText mtext:
+				{
+					double[] p = Xyz(t, mtext.InsertPoint);
+					yield return Primitive.TextAt(
+						h,
+						flags,
+						p[0],
+						p[1],
+						p[2],
+						mtext.Height * basis.ScaleY,
+						mtext.Rotation + (identity ? 0.0 : basis.Rotation),
+						mtext.Value ?? string.Empty
+					);
+					yield break;
+				}
+
+				// AttributeEntity and AttributeDefinition derive from
+				// TextEntity, so this arm carries the text a block instance
+				// actually shows.
+				case TextEntity text:
+				{
+					double[] p = Xyz(t, text.InsertPoint);
+					yield return Primitive.TextAt(
+						h,
+						flags,
+						p[0],
+						p[1],
+						p[2],
+						text.Height * basis.ScaleY,
+						text.Rotation + (identity ? 0.0 : basis.Rotation),
+						text.Value ?? string.Empty
+					);
+					yield break;
+				}
+
+				case Dimension dim:
+				{
+					foreach (Primitive p in MapDimension(dim, t, depth))
+					{
+						yield return p;
+					}
+					yield break;
+				}
+
+				case Hatch hatch:
+				{
+					foreach (Primitive p in MapHatch(hatch, t, depth))
+					{
+						yield return p;
+					}
+					yield break;
 				}
 
 				default:
-					return false;
+				{
+					Primitive w = Primitive.Warning(
+						WarningCodes.UnsupportedEntity,
+						h,
+						e.ObjectName + " is not a primitive this version flattens"
+					);
+					w.Flags = flags;
+					yield return w;
+					yield break;
+				}
 			}
 		}
 
-		if (pts.Count == 0)
+		// A polyline, as wire version 1 can carry it.
+		//
+		// docs/WIRE.md's Polyline is a point count and a run of triples: it
+		// has nowhere to put a bulge. Dropping the bulge would turn an arc
+		// into a chord, which is the tessellation this whole lane exists to
+		// avoid, and only worse because a chord is not even a good
+		// approximation of an arc. Adding a field would be a wire version
+		// bump, which belongs to the ABI issue and not to this one.
+		//
+		// So a bulged polyline goes out as what it is: the straight runs as
+		// Polyline records and every bulged span as an Arc carrying its own
+		// centre, radius and angles. Nothing is approximated, every record
+		// keeps the source entity's handle so a consumer can regroup them,
+		// and a polyline with no bulge anywhere is still exactly one record.
+		private static IEnumerable<Primitive> EmitPolyline(
+			ulong handle,
+			uint flags,
+			bool closed,
+			double[] points,
+			double[] bulges,
+			XYZ normal
+		)
 		{
+			int n = points.Length / 3;
+			bool anyBulge = false;
+			for (int i = 0; i < bulges.Length && i < n; i++)
+			{
+				if (bulges[i] != 0.0 && (closed || i + 1 < n))
+				{
+					anyBulge = true;
+					break;
+				}
+			}
+
+			if (!anyBulge || n < 2)
+			{
+				yield return Primitive.Polyline(handle, flags, closed, points);
+				yield break;
+			}
+
+			List<double> run = new List<double>();
+			int segments = closed ? n : n - 1;
+			for (int i = 0; i < segments; i++)
+			{
+				int j = (i + 1) % n;
+				double b = i < bulges.Length ? bulges[i] : 0.0;
+
+				if (b == 0.0)
+				{
+					if (run.Count == 0)
+					{
+						AddPoint(run, points, i);
+					}
+
+					AddPoint(run, points, j);
+					continue;
+				}
+
+				foreach (Primitive p in Flush(handle, flags, run))
+				{
+					yield return p;
+				}
+
+				yield return ArcFromBulge(handle, flags, points, i, j, b, normal);
+			}
+
+			foreach (Primitive p in Flush(handle, flags, run))
+			{
+				yield return p;
+			}
+		}
+
+		private static void AddPoint(List<double> into, double[] points, int index)
+		{
+			into.Add(points[(index * 3) + 0]);
+			into.Add(points[(index * 3) + 1]);
+			into.Add(points[(index * 3) + 2]);
+		}
+
+		private static IEnumerable<Primitive> Flush(ulong handle, uint flags, List<double> run)
+		{
+			if (run.Count >= 6)
+			{
+				yield return Primitive.Polyline(handle, flags, false, run.ToArray());
+			}
+
+			run.Clear();
+		}
+
+		// The arc a bulge names, exactly.
+		//
+		// A bulge is the tangent of a quarter of the included angle, negative
+		// when the arc runs clockwise from the first point to the second, so
+		// the centre and radius follow in closed form from the two endpoints
+		// and that one number. The record's angles are counter-clockwise, as
+		// docs/WIRE.md requires, which is why a negative bulge swaps them
+		// rather than being carried as a sign.
+		private static Primitive ArcFromBulge(
+			ulong handle,
+			uint flags,
+			double[] points,
+			int i,
+			int j,
+			double bulge,
+			XYZ normal
+		)
+		{
+			double x0 = points[(i * 3) + 0];
+			double y0 = points[(i * 3) + 1];
+			double z0 = points[(i * 3) + 2];
+			double x1 = points[(j * 3) + 0];
+			double y1 = points[(j * 3) + 1];
+			double z1 = points[(j * 3) + 2];
+
+			double k = (1.0 - (bulge * bulge)) / (4.0 * bulge);
+			double cx = ((x0 + x1) / 2.0) - ((y1 - y0) * k);
+			double cy = ((y0 + y1) / 2.0) + ((x1 - x0) * k);
+			double cz = (z0 + z1) / 2.0;
+
+			double dx = x1 - x0;
+			double dy = y1 - y0;
+			double chord = Math.Sqrt((dx * dx) + (dy * dy));
+			double radius = chord * (1.0 + (bulge * bulge)) / (4.0 * Math.Abs(bulge));
+
+			double a0 = Math.Atan2(y0 - cy, x0 - cx);
+			double a1 = Math.Atan2(y1 - cy, x1 - cx);
+			if (bulge < 0.0)
+			{
+				double swap = a0;
+				a0 = a1;
+				a1 = swap;
+			}
+
+			return Primitive.Arc(
+				handle,
+				flags,
+				cx,
+				cy,
+				cz,
+				radius,
+				a0,
+				a1,
+				normal.X,
+				normal.Y,
+				normal.Z
+			);
+		}
+
+		private static bool HasBulge(LwPolyline lw)
+		{
+			foreach (LwPolyline.Vertex v in lw.Vertices)
+			{
+				if (v.Bulge != 0.0)
+				{
+					return true;
+				}
+			}
+
 			return false;
 		}
 
-		points = pts.ToArray();
-		bulges = bl.ToArray();
-		return true;
+		private static Primitive NonUniform(ulong handle, uint flags, string what)
+		{
+			Primitive w = Primitive.Warning(
+				WarningCodes.NonUniformBlockScale,
+				handle,
+				what + " crossed under a block transform that is not a similarity, so its "
+					+ "parameters describe a shape the transform does not preserve"
+			);
+			w.Flags = flags;
+			return w;
+		}
+
+		// -------------------------------------------------------- DIMENSION
+
+		private IEnumerable<Primitive> MapDimension(Dimension dim, Transform t, int depth)
+		{
+			BlockRecord block = dim.Block;
+			int emitted = 0;
+			if (block != null)
+			{
+				foreach (Entity e in block.Entities)
+				{
+					// One level only, and never through an INSERT: a
+					// dimension block is generated geometry, not a user
+					// block, and walking it as a block would hand it a second
+					// depth budget.
+					if (e is Insert)
+					{
+						continue;
+					}
+
+					foreach (Primitive p in Map(e, t, depth))
+					{
+						emitted++;
+						yield return p;
+					}
+				}
+			}
+
+			if (emitted == 0)
+			{
+				Primitive w = Primitive.Warning(
+					WarningCodes.DimensionWithoutBlock,
+					dim.Handle,
+					dim.ObjectName + " carries no block geometry, so there is nothing to draw"
+				);
+				w.Flags = depth > 0 ? FlagFromBlock : 0u;
+				yield return w;
+			}
+		}
+
+		// ------------------------------------------------------------ HATCH
+
+		private IEnumerable<Primitive> MapHatch(Hatch hatch, Transform t, int depth)
+		{
+			ulong h = hatch.Handle;
+			uint flags = depth > 0 ? FlagFromBlock : 0u;
+			int loops = 0;
+
+			foreach (Hatch.BoundaryPath path in hatch.Paths)
+			{
+				if (path.Edges.Count == 0)
+				{
+					continue;
+				}
+
+				loops++;
+				double[] pts;
+				if (TryPolygon(path, hatch.Elevation, t, out pts))
+				{
+					yield return Primitive.Polygon(h, flags, pts);
+					continue;
+				}
+
+				// An ellipse or spline edge cannot be a bulge, and turning
+				// one into a bulge would be tessellation by another name. The
+				// loop goes out as its own edges instead, which is strictly
+				// more than a polygon carries.
+				Primitive w = Primitive.Warning(
+					WarningCodes.HatchLoopNotPolygon,
+					h,
+					"boundary loop " + loops.ToString(CultureInfo.InvariantCulture)
+						+ " carries a curve a closed polygon cannot express, so its edges "
+						+ "follow as records"
+				);
+				w.Flags = flags;
+				yield return w;
+
+				foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
+				{
+					// CadObject.Handle has an internal setter, so a
+					// synthesised edge cannot be relabelled. Everything it
+					// produces is relabelled with the hatch's handle instead.
+					foreach (Primitive p in Map(edge.ToEntity(), t, depth))
+					{
+						p.ItemHandle = h;
+						yield return p;
+					}
+				}
+			}
+
+			if (loops != 0)
+			{
+				yield break;
+			}
+
+			// Pattern only. ACadSharp's own ExplodePattern clips the pattern
+			// to the boundary and returns nothing when there is no boundary,
+			// so on the pinned version this always reaches the warning. The
+			// call is still here because a later upstream that can produce
+			// unbounded pattern lines should reach the Line arm rather than
+			// silently change shape.
+			int lines = 0;
+			foreach (Entity e in hatch.ExplodePattern())
+			{
+				if (!(e is Line))
+				{
+					continue;
+				}
+
+				lines++;
+				foreach (Primitive p in Map(e, t, depth))
+				{
+					p.ItemHandle = h;
+					yield return p;
+				}
+			}
+
+			if (lines == 0)
+			{
+				Primitive w = Primitive.Warning(
+					WarningCodes.HatchPatternOnly,
+					h,
+					"HATCH has no boundary loop, and its pattern produced no geometry to draw"
+				);
+				w.Flags = flags;
+				yield return w;
+			}
+		}
+
+		// A boundary loop becomes one closed polygon only when every edge is
+		// straight, because wire version 1's Polygon is a run of points and a
+		// curved edge is not one. A loop with any curve in it returns false
+		// and the caller emits the edges as their own records, which keeps
+		// every parameter rather than straightening it.
+		private static bool TryPolygon(
+			Hatch.BoundaryPath path,
+			double elevation,
+			Transform t,
+			out double[] points
+		)
+		{
+			List<double> pts = new List<double>();
+			points = null;
+
+			foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
+			{
+				switch (edge)
+				{
+					case Hatch.BoundaryPath.Line line:
+						Append(pts, t, new XYZ(line.Start.X, line.Start.Y, elevation));
+						break;
+
+					case Hatch.BoundaryPath.Polyline poly:
+						if (poly.HasBulge)
+						{
+							return false;
+						}
+
+						foreach (XYZ v in poly.Vertices)
+						{
+							Append(pts, t, new XYZ(v.X, v.Y, elevation));
+						}
+
+						break;
+
+					default:
+						return false;
+				}
+			}
+
+			if (pts.Count == 0)
+			{
+				return false;
+			}
+
+			points = pts.ToArray();
+			return true;
+		}
 	}
 }
