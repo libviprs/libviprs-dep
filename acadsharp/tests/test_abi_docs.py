@@ -84,6 +84,18 @@ def wire():
         return f.read()
 
 
+@pytest.fixture(scope="module")
+def abi_flat(abi):
+    """ABI.md with its hard wrapping collapsed.
+
+    The document is wrapped to fit a terminal, so a phrase these checks look
+    for lands across two lines as often as not. Checking the wrapped text
+    would make the tests fail on a reflow, which is a fact about the editor
+    and not about the contract.
+    """
+    return re.sub(r"\s+", " ", abi)
+
+
 class TestTheDocumentsBindNoConsumer:
     """A contract that names one consumer's language has stopped being a contract."""
 
@@ -136,13 +148,13 @@ class TestTheSurfaceIsDocumented:
         missing = [s for s in STRUCTS if s not in abi]
         assert not missing, f"ABI.md never mentions {missing}"
 
-    def test_every_limit_field_has_a_documented_default(self, abi):
+    def test_every_limit_field_has_a_documented_default(self, abi_flat):
         # A null limits pointer means "the documented defaults", and a zero
         # field means "the default for that field". Both sentences are
         # meaningless unless the numbers are written down.
         for field in LIMIT_FIELDS:
-            assert field in abi, f"ABI.md never mentions the limit {field}"
-            near = abi[abi.index(field) : abi.index(field) + 400]
+            assert field in abi_flat, f"ABI.md never mentions the limit {field}"
+            near = abi_flat[abi_flat.index(field) : abi_flat.index(field) + 400]
             assert re.search(r"\d", near), (
                 f"ABI.md mentions {field} but states no default near it. A caller that "
                 "leaves the field zero gets a bound it cannot look up."
@@ -164,10 +176,10 @@ class TestTheModelsAreStated:
             "because it is the one word on this boundary two threads touch at once."
         )
 
-    def test_the_error_model_is_stated(self, abi):
+    def test_the_error_model_is_stated(self, abi, abi_flat):
         assert re.search(r"^#+ .*error", abi, re.I | re.M)
         assert re.search(
-            r"never parse|not parse|no error string|never an error string", abi, re.I
+            r"never parse|not parse|no error string|never an error string", abi_flat, re.I
         ), (
             "the error model has to say that control flow comes from the numeric code "
             "and never from a string, which is the rule this ABI exists to enforce."
@@ -182,9 +194,9 @@ class TestTheModelsAreStated:
         for rule in ("struct_size", "struct_version", "enum", "uint8_t"):
             assert rule in abi, f"the fixed-width section never mentions {rule}"
 
-    def test_the_two_call_buffer_convention_is_stated(self, abi):
+    def test_the_two_call_buffer_convention_is_stated(self, abi, abi_flat):
         assert re.search(r"\bcap\b", abi) and "required" in abi
-        assert re.search(r"capacity of zero|cap of zero|zero capacity|cap 0", abi, re.I), (
+        assert re.search(r"capacity of zero|cap of zero|zero capacity|cap 0", abi_flat, re.I), (
             "a caller sizes a UTF-8 buffer by calling once with a capacity of zero, and "
             "that is not guessable from the signature alone."
         )
@@ -197,18 +209,18 @@ class TestTheModelsAreStated:
 
 
 class TestTheFingerprintIsDefined:
-    def test_the_algorithm_is_written_down(self, abi):
-        assert "sha256" in abi.lower()
-        assert re.search(r"first eight bytes|first 8 bytes", abi, re.I)
-        assert re.search(r"big[- ]endian", abi, re.I), (
+    def test_the_algorithm_is_written_down(self, abi_flat):
+        assert "sha256" in abi_flat.lower()
+        assert re.search(r"first eight bytes|first 8 bytes", abi_flat, re.I)
+        assert re.search(r"big[- ]endian", abi_flat, re.I), (
             "which end the eight bytes come from decides the number, so it is part of "
             "the definition, not a detail."
         )
 
-    def test_the_handshake_a_consumer_runs_is_written_down(self, abi):
+    def test_the_handshake_a_consumer_runs_is_written_down(self, abi, abi_flat):
         assert "VIPRS_ACAD_ABI_MISMATCH" in abi
         assert "viprs_acad_abi_fingerprint" in abi
-        assert re.search(r"generated .*build time|at build time", abi, re.I), (
+        assert re.search(r"generated .*build time|at build time", abi_flat, re.I), (
             "the value is generated from the header at build time rather than assigned, "
             "and a consumer author needs to know that is the guarantee being offered."
         )
