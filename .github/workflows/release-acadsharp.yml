@@ -425,6 +425,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-version.outputs.tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
           LINUX_RESULT: ${{ needs.build-linux.result }}
           MAC_RESULT: ${{ needs.build-mac.result }}
           TARGETS: |
@@ -465,7 +466,8 @@ jobs:
               except (KeyError, OSError, ValueError):
                   return None
 
-          published, missing, commits = [], [], set()
+          version = os.environ["VERSION"]
+          published, missing, refused, commits = [], [], [], set()
           for line in os.environ["TARGETS"].split("\n"):
               line = line.split()
               if not line:
@@ -477,6 +479,24 @@ jobs:
                   missing.append((platform, cpu, job))
                   continue
               info = linkinfo(path, stem) or {}
+
+              # An archive whose manifest disagrees with the tag it is
+              # being published under is worse than a missing one: it
+              # looks right. An absent artifact_version is the same
+              # refusal, because "cannot be checked" is not "checked".
+              built = info.get("artifact_version")
+              if built != version:
+                  refused.append(
+                      {
+                          "archive": f"{stem}.tgz",
+                          "platform": platform,
+                          "cpu": cpu,
+                          "job": job,
+                          "built": built or "no artifact_version in LINKINFO.json",
+                      }
+                  )
+                  continue
+
               if info.get("acadsharp_commit"):
                   commits.add(info["acadsharp_commit"])
               published.append(
@@ -487,6 +507,12 @@ jobs:
                       "sha256": digest(path),
                   }
               )
+
+          # Named for the shell below, which removes them from the release
+          # and then fails the run.
+          with open("refused-assets.txt", "w") as f:
+              for row in refused:
+                  f.write(row["archive"] + "\n")
 
           if commits:
               print()
@@ -508,12 +534,30 @@ jobs:
               print("Nothing published.")
 
           print()
-          if missing:
-              print("## Targets that did not publish")
+          if refused:
+              print("## Archives refused")
               print()
-              for platform, cpu, job in missing:
-                  print(f"- `{platform}/{cpu}` did not publish (job `{job}`, {results[job]})")
+              for row in refused:
+                  print(
+                      f"- `{row['archive']}` did not publish (job `{row['job']}`): it was "
+                      f"built as {row['built']}, and this release is {version}. "
+                      "The asset has been removed from this release."
+                  )
               print()
+              print(
+                  "An archive whose LINKINFO.json disagrees with the tag it is "
+                  "published under is worse than one that is missing, because it "
+                  "looks right. The run is failed rather than left standing."
+              )
+              print()
+
+          if missing or refused:
+              if missing:
+                  print("## Targets that did not publish")
+                  print()
+                  for platform, cpu, job in missing:
+                      print(f"- `{platform}/{cpu}` did not publish (job `{job}`, {results[job]})")
+                  print()
               print(
                   "This release is incomplete. Re-run the failed job; uploads use "
                   "`--clobber`, so a re-run replaces its own assets."
@@ -527,6 +571,19 @@ jobs:
           PY
           cat notes.md
           gh release edit "$TAG" --notes-file notes.md
+
+          # The notes go up first, so the release page says what happened
+          # even though the step is about to fail. Then the offending
+          # assets come off, and the run goes red: a release carrying an
+          # archive that disagrees with its own tag is not a release worth
+          # leaving standing.
+          if [ -s refused-assets.txt ]; then
+            while read -r asset; do
+              echo "removing $asset: its artifact_version is not $VERSION" >&2
+              gh release delete-asset "$TAG" "$asset" --yes
+            done < refused-assets.txt
+            exit 1
+          fi
 
       - name: Emit the run summary
         if: always()

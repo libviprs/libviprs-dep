@@ -37,6 +37,7 @@ found it.
 """
 
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -117,11 +118,6 @@ DRIVER = "acadsharp/build_acadsharp.py"
 
 def expected_archive(platform, cpu):
     return f"{TAG_PREFIX}{platform}-{cpu}.tgz"
-
-
-def driver_attr(name):
-    """The driver's copy of a contract value, or None while #48 is unlanded."""
-    return getattr(ba, name, None)
 
 
 def driver_help():
@@ -210,17 +206,20 @@ def matrix_cells(job):
     return job["strategy"]["matrix"]["include"]
 
 
-def build_command_for(job, cell):
+def build_command_for(job, cell, version):
     """The Build step's own command line, with one matrix cell filled in.
 
     Reconstructed from the step rather than retyped, so what gets run is
-    what the runner would run, line continuations and all.
+    what the runner would run, line continuations and all. ``$VERSION``
+    is the step's own env, which on a real run holds whatever
+    resolve-version computed, so the caller says what that was.
     """
     run = job["steps"][step_index(job, "Build")]["run"]
     line = " ".join(run.replace("\\\n", " ").split())
     for key, value in cell.items():
         line = line.replace("${{ matrix." + key + " }}", str(value))
-    return shlex.split(line)
+    argv = shlex.split(line)
+    return [version if a == "$VERSION" else a for a in argv]
 
 
 def run_text(job):
@@ -230,6 +229,34 @@ def run_text(job):
 def job_text(job):
     """Everything a job says: its run scripts, its `uses`, its `with` and `env`."""
     return yaml.safe_dump(job)
+
+
+def stage_archive(tmp_path, platform, cpu, **linkinfo):
+    """Write assets/<stem>.tgz laid out the way issue #48 freezes it."""
+    assets = tmp_path / "assets"
+    assets.mkdir(exist_ok=True)
+    stem = f"{TAG_PREFIX}{platform}-{cpu}"
+    staged = tmp_path / stem / "metadata"
+    staged.mkdir(parents=True, exist_ok=True)
+    (staged / "LINKINFO.json").write_text(json.dumps(linkinfo))
+    tgz = assets / f"{stem}.tgz"
+    with tarfile.open(tgz, "w:gz") as tf:
+        tf.add(tmp_path / stem, arcname=stem)
+    return stem, tgz
+
+
+def notes_env(step, version, **overrides):
+    env = dict(os.environ)
+    env.update(
+        {
+            "TARGETS": step["env"]["TARGETS"],
+            "VERSION": version,
+            "LINUX_RESULT": "failure",
+            "MAC_RESULT": "failure",
+        }
+    )
+    env.update(overrides)
+    return env
 
 
 class TestWorkflowShape:
@@ -277,6 +304,44 @@ class TestWorkflowShape:
         assert "acadsharp" not in pdfium_release.lower(), (
             "release.yml has grown an acadsharp step. acadsharp publishes through "
             "release-acadsharp.yml so one dependency's flake cannot redden another's run"
+        )
+
+    def test_every_environment_variable_a_step_declares_is_read_by_it(self):
+        # This is the finding in general form. Both build jobs declared
+        # `env: VERSION` and never mentioned it in the script, so the
+        # resolved version reached the tag and not the build, and the
+        # declaration made it look otherwise. An env key nothing reads is
+        # either a bug or a leftover, and neither should sit there
+        # looking like plumbing that works.
+        #
+        # GH_TOKEN is the one exception: `gh` reads it from the
+        # environment, so it is consumed without ever being named.
+        implicitly_consumed = {"GH_TOKEN"}
+        unread = []
+        for job_name, job in self.wf["jobs"].items():
+            for step in job.get("steps", []):
+                run = step.get("run", "")
+                for key in step.get("env", {}):
+                    if key in implicitly_consumed:
+                        continue
+                    if key not in run:
+                        unread.append(f"{job_name} / {step.get('name', '?')}: {key}")
+        assert not unread, (
+            "these steps declare an environment variable and never read it, which is "
+            "how the dispatched version came to reach the tag but not the build:\n  "
+            + "\n  ".join(unread)
+        )
+
+    def test_the_release_is_not_marked_a_pre_release(self):
+        # Pinned because it drifted once already. release.yml and
+        # release-zstd.yml mark nothing, build_acadsharp.upload_release()
+        # creates a plain release for this same tag, and a pre-release is
+        # never "latest". TestTheDriverSpeaksTheSameContract holds this
+        # against the driver's own publishing path as well.
+        assert "--prerelease" not in workflow_code(), (
+            "release-acadsharp.yml marks the release a pre-release and nothing "
+            "promotes it, so the kind of release depends on whether a laptop or CI "
+            "cut it"
         )
 
     def test_nothing_names_a_microsoft_platform_target_or_toolchain(self):
@@ -594,6 +659,31 @@ class TestMatrixCoversEveryArchive:
                 "build_zstd.py and build_pdfium.py all reject"
             )
 
+    def test_the_build_step_names_the_resolved_version(self):
+        # The dispatch input is honoured by resolve-version, the tag and
+        # the notes. It has to be honoured by the thing that actually
+        # produces the archive too, or an override publishes archives
+        # built from the committed VERSION under a different tag, with
+        # LINKINFO.json and the release page disagreeing.
+        wf = load_workflow()
+        for name in BUILD_JOBS:
+            job = wf["jobs"][name]
+            step = job["steps"][step_index(job, "Build")]
+            run = step.get("run", "")
+            assert "--version" in run, (
+                f"{name}'s Build step does not pass --version, so it builds whatever "
+                "acadsharp/VERSION says regardless of what was dispatched"
+            )
+            assert "$VERSION" in run, (
+                f"{name}'s Build step passes a version that is not the one resolve-version computed"
+            )
+            assert step.get("env", {}).get("VERSION", "").strip() == (
+                "${{ needs.resolve-version.outputs.version }}"
+            ), (
+                f"{name}'s VERSION must come from resolve-version, not from a second "
+                "reading of the file"
+            )
+
     def test_the_archive_name_is_built_from_the_cell(self):
         # Not five literal filenames: the name the build produces, the
         # name the verifier is handed and the name that is uploaded all
@@ -893,14 +983,7 @@ class TestTheInlineGeneratorsRun:
         # text alone would never have proved the loop reaches every cell.
         wf = load_workflow()
         step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
-        env = dict(os.environ)
-        env.update(
-            {
-                "TARGETS": step["env"]["TARGETS"],
-                "LINUX_RESULT": "failure",
-                "MAC_RESULT": "failure",
-            }
-        )
+        env = notes_env(step, ba.read_version())
         (tmp_path / "assets").mkdir()
 
         done = subprocess.run(
@@ -927,34 +1010,21 @@ class TestTheInlineGeneratorsRun:
         # rather than assumed.
         wf = load_workflow()
         step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
-        assets = tmp_path / "assets"
-        assets.mkdir()
+        version = ba.read_version()
 
         platform, cpu = ALL_CELLS[0]
-        stem = f"{TAG_PREFIX}{platform}-{cpu}"
-        staged = tmp_path / stem / "metadata"
-        staged.mkdir(parents=True)
-        (staged / "LINKINFO.json").write_text(
-            json.dumps(
-                {
-                    "target": "x86_64-unknown-linux-gnu",
-                    "static_certified": True,
-                    "acadsharp_commit": "d7dc111023477d8a9fffc2153139459c95b4f345",
-                }
-            )
+        stem, tgz = stage_archive(
+            tmp_path,
+            platform,
+            cpu,
+            artifact_version=version,
+            target="x86_64-unknown-linux-gnu",
+            static_certified=True,
+            acadsharp_commit="d7dc111023477d8a9fffc2153139459c95b4f345",
         )
-        with tarfile.open(assets / f"{stem}.tgz", "w:gz") as tf:
-            tf.add(tmp_path / stem, arcname=stem)
-        digest = hashlib.sha256((assets / f"{stem}.tgz").read_bytes()).hexdigest()
+        digest = hashlib.sha256(tgz.read_bytes()).hexdigest()
 
-        env = dict(os.environ)
-        env.update(
-            {
-                "TARGETS": step["env"]["TARGETS"],
-                "LINUX_RESULT": "failure",
-                "MAC_RESULT": "failure",
-            }
-        )
+        env = notes_env(step, version)
         done = subprocess.run(
             [sys.executable, "-c", notes_generator("did not publish")],
             capture_output=True,
@@ -971,6 +1041,97 @@ class TestTheInlineGeneratorsRun:
         assert "| true |" in notes, f"static_certified was not reported:\n{notes}"
         assert "d7dc111023477d8a9fffc2153139459c95b4f345" in notes
         assert f"`{platform}/{cpu}` did not publish" not in notes
+
+    def test_an_archive_built_as_another_version_is_refused(self, tmp_path):
+        # The dispatch bug's second half. Even with --version passed, an
+        # archive can reach the release page carrying a LINKINFO that
+        # disagrees with the tag: a re-run against a moved VERSION, a
+        # stale asset a --clobber did not replace, a cell that resolved
+        # differently. A release whose assets disagree with its own tag
+        # is worse than one that fails, because it looks right.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        version = ba.read_version()
+
+        platform, cpu = ALL_CELLS[0]
+        stem, _ = stage_archive(
+            tmp_path,
+            platform,
+            cpu,
+            artifact_version="3.7.1-viprs.0",
+            target="x86_64-unknown-linux-gnu",
+            static_certified=True,
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, version),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        notes = done.stdout
+
+        assert "3.7.1-viprs.0" in notes and version in notes, (
+            f"the notes must name both the version built and the version this release is:\n{notes}"
+        )
+        assert f"`{stem}.tgz`" in notes
+        assert "| true |" not in notes, (
+            f"a refused archive is still being reported as published:\n{notes}"
+        )
+        assert "Every target published." not in notes
+
+        refused = (tmp_path / "refused-assets.txt").read_text().split()
+        assert refused == [f"{stem}.tgz"], (
+            f"the refusal list the shell acts on says {refused}, so the asset would "
+            "stay on the release"
+        )
+
+    def test_an_archive_with_no_recorded_version_is_refused(self, tmp_path):
+        # "Cannot be checked" is not "checked and fine". An archive whose
+        # LINKINFO carries no artifact_version at all gets the same
+        # refusal as one that disagrees.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        platform, cpu = ALL_CELLS[0]
+        stem, _ = stage_archive(tmp_path, platform, cpu, target="x86_64-unknown-linux-gnu")
+
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, ba.read_version()),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        assert "no artifact_version" in done.stdout, (
+            f"an archive with no recorded version was not refused:\n{done.stdout}"
+        )
+        assert (tmp_path / "refused-assets.txt").read_text().split() == [f"{stem}.tgz"]
+
+    def test_a_refused_archive_is_taken_off_the_release_and_fails_the_run(self):
+        # The generator only classifies. The shell around it is what
+        # removes the asset and fails the run, so that is asserted too:
+        # writing "refused" into the notes and leaving the asset up would
+        # be the worst of both.
+        wf = load_workflow()
+        run = step_named(wf["jobs"]["release-notes"], "Write the release notes")["run"]
+        assert "refused-assets.txt" in run
+        assert "gh release delete-asset" in run, (
+            "a refused archive stays on the release page unless something removes it"
+        )
+        assert "exit 1" in run, (
+            "a release carrying an archive that disagrees with its own tag must fail "
+            "the run, not just mention it in the notes"
+        )
+        notes_i = run.index("gh release edit")
+        delete_i = run.index("gh release delete-asset")
+        assert notes_i < delete_i, (
+            "the notes must go up before the assets come off, or a run that dies "
+            "mid-deletion leaves a release page that never says what happened"
+        )
 
 
 class TestThirdPartyActionsArePinned:
@@ -1076,83 +1237,81 @@ class TestReadmeHoldsUrlsAndDigestsTogether:
 
 class TestTheDriverSpeaksTheSameContract:
     """Everything above asserts against the contract issue #48 freezes.
-    These re-assert the same values through ``build_acadsharp.py`` as soon
-    as it grows them, so a rename in the driver fails here rather than
-    publishing five assets nobody links to.
+    These re-assert the same values through ``build_acadsharp.py``, so a
+    rename in the driver fails here rather than publishing five assets
+    nobody links to.
 
-    They skip while #48 is unlanded. The frozen constants carry the
-    workflow assertions either way, so nothing above goes quiet.
+    These used to skip when the driver had not grown the function yet,
+    which was right while #48 was unlanded and wrong the moment it
+    merged: a skip that can never fire again is a permanent silent pass,
+    and it would have been sitting on the strongest cross-lane
+    assertions in this file. The driver is reached by plain attribute
+    access now, so a rename is an AttributeError rather than a shrug.
     """
 
     def test_release_tag_matches_the_workflow_prefix(self):
-        release_tag = driver_attr("release_tag")
-        if release_tag is None:
-            pytest.skip("build_acadsharp.release_tag() lands with issue #48")
         version = ba.read_version()
-        assert release_tag(version) == f"{TAG_PREFIX}{version}"
+        assert ba.release_tag(version) == f"{TAG_PREFIX}{version}"
 
     def test_archive_names_match_the_workflow(self):
         # archive_name takes the CLI's arch and returns the name's cpu.
         # It is the function that crosses between the two vocabularies,
         # so it is the one worth asking rather than assuming.
-        archive_name = driver_attr("archive_name")
-        if archive_name is None:
-            pytest.skip("build_acadsharp.archive_name() lands with issue #48")
         for platform, arch in ALL_JOBS_EXPECTED:
-            assert archive_name(platform, arch) == expected_archive(platform, CPU_FOR_ARCH[arch])
+            assert ba.archive_name(platform, arch) == expected_archive(platform, CPU_FOR_ARCH[arch])
 
     def test_the_default_matrix_matches_the_container_cells(self):
-        default_jobs = driver_attr("DEFAULT_JOBS")
-        if default_jobs is None:
-            pytest.skip("build_acadsharp.DEFAULT_JOBS lands with issue #48")
-        assert sorted(tuple(cell) for cell in default_jobs) == sorted(DEFAULT_JOBS_EXPECTED)
+        assert sorted(tuple(cell) for cell in ba.DEFAULT_JOBS) == sorted(DEFAULT_JOBS_EXPECTED)
 
     def test_the_workflows_cells_are_what_the_driver_resolves(self):
         # The end-to-end version of the two above: hand the driver the
         # flags each cell actually passes and check it comes back with
         # that one cell. This is the assertion that would have caught
         # --cpu directly, rather than through the flag-name check.
-        resolve_jobs = driver_attr("resolve_jobs")
-        if resolve_jobs is None:
-            pytest.skip("build_acadsharp.resolve_jobs() lands with issue #48")
         wf = load_workflow()
         cells = matrix_cells(wf["jobs"]["build-linux"]) + matrix_cells(wf["jobs"]["build-mac"])
         for cell in cells:
-            got = resolve_jobs([cell["platform"]], cell["arch"])
+            got = ba.resolve_jobs([cell["platform"]], cell["arch"])
             assert got == [(cell["platform"], cell["arch"])], (
                 f"the driver resolves --platform {cell['platform']} --arch "
                 f"{cell['arch']} to {got}, not to that one cell"
             )
 
     def test_the_container_cells_are_what_the_driver_builds_by_default(self):
-        resolve_jobs = driver_attr("resolve_jobs")
-        if resolve_jobs is None:
-            pytest.skip("build_acadsharp.resolve_jobs() lands with issue #48")
-        assert resolve_jobs(None, None) == DEFAULT_JOBS_EXPECTED
+        assert ba.resolve_jobs(None, None) == DEFAULT_JOBS_EXPECTED
 
     def test_the_verifier_the_workflow_calls_exists(self):
         script = os.path.join(REPO_ROOT, VERIFIER)
-        if not os.path.exists(script):
-            pytest.skip(f"{VERIFIER} lands with issue #48")
+        assert os.path.exists(script), f"the workflow calls {VERIFIER}, which is not there"
         assert os.access(script, os.X_OK), f"{VERIFIER} is not executable"
+
+    def test_both_paths_to_this_tag_create_the_same_kind_of_release(self):
+        # build_acadsharp.upload_release() publishes to the same tag from
+        # a laptop. If one path marks the release and the other does not,
+        # what a consumer resolving the tag sees depends on who cut it,
+        # which is not something the release page records.
+        from_laptop = "--prerelease" in inspect.getsource(ba.upload_release)
+        from_ci = "--prerelease" in workflow_code()
+        assert from_laptop == from_ci, (
+            "upload_release() and release-acadsharp.yml disagree about whether this "
+            f"release is a pre-release (driver: {from_laptop}, workflow: {from_ci}), so "
+            "the kind of release depends on which one cut it"
+        )
 
     def test_the_build_step_command_actually_plans_the_right_archive(self):
         # The strongest form of this seam, and the one that would have
         # caught --cpu on its own: take the Build step's real command
         # line, substitute the cell, and run it with --plan. That goes
         # through the driver's argparse and its own resolution, so a flag
-        # it rejects, a cell it resolves to something else, and an archive
-        # it would name differently all fail here. --plan prints the
-        # commands and stops, so nothing is built and no container starts.
-        help_text = driver_help()
-        if "--plan" not in help_text or "--platform" not in help_text:
-            pytest.skip("build_acadsharp.py grows --platform/--arch/--plan with issue #48")
-
+        # it rejects, a cell it resolves to something else, an archive it
+        # would name differently and a version it would ignore all fail
+        # here. --plan prints the commands and stops, so nothing is built
+        # and no container starts.
         wf = load_workflow()
         for name in BUILD_JOBS:
             job = wf["jobs"][name]
             for cell in matrix_cells(job):
-                argv = build_command_for(job, cell)
+                argv = build_command_for(job, cell, ba.read_version())
                 assert not any("${{" in a for a in argv), (
                     f"{name}: {argv} still carries an unsubstituted expression, so "
                     "this check is running something the workflow does not"
@@ -1175,15 +1334,73 @@ class TestTheDriverSpeaksTheSameContract:
                     f"goes on to verify and upload\n{done.stdout}"
                 )
 
+    def test_an_overridden_version_reaches_the_build(self):
+        # The dispatch input said it overrode acadsharp/VERSION and only
+        # the tag believed it: both build jobs set env VERSION and never
+        # read it, so an override published archives built from the
+        # committed version under a different tag.
+        #
+        # Two runs, because one proves nothing. A driver that ignores
+        # --version plans happily for any override, so the override that
+        # must FAIL is the real control: 9.9.9 has no SOURCE_SHA256 entry,
+        # so a driver reading the flag refuses it, and a driver ignoring
+        # the flag builds the committed version and exits 0. The pinned
+        # override then has to be accepted, or the first result could just
+        # be a driver that refuses everything.
+        #
+        # Neither run may fail with argparse's "unrecognized arguments",
+        # which names the value it rejected and so would otherwise look
+        # exactly like the flag being honoured.
+        pinned = "3.7.1-viprs.0"
+        unpinned = "9.9.9-viprs.7"
+        assert pinned != ba.read_version() and unpinned != ba.read_version()
+
+        wf = load_workflow()
+        for name in BUILD_JOBS:
+            job = wf["jobs"][name]
+            cell = matrix_cells(job)[0]
+
+            assert "$VERSION" in job["steps"][step_index(job, "Build")]["run"], (
+                f"{name}'s Build step never names the resolved version, so a "
+                "dispatched override would tag one version and build another"
+            )
+
+            def plan(version, job=job, cell=cell):
+                argv = build_command_for(job, cell, version)
+                assert version in argv, f"{version} did not reach the command line"
+                return subprocess.run(
+                    [sys.executable, *argv[1:], "--plan"],
+                    capture_output=True,
+                    text=True,
+                    cwd=REPO_ROOT,
+                    check=False,
+                )
+
+            refused = plan(unpinned)
+            assert "unrecognized arguments" not in refused.stderr, (
+                f"{name}: {DRIVER} does not take --version, so the Build step's "
+                f"command does not run at all\n{refused.stderr}"
+            )
+            assert refused.returncode != 0, (
+                f"{name}: the driver planned a build for {unpinned}, which has no "
+                "pinned source digest. It is ignoring --version and building "
+                f"whatever acadsharp/VERSION says\n{refused.stdout}"
+            )
+
+            accepted = plan(pinned)
+            assert "unrecognized arguments" not in accepted.stderr, accepted.stderr
+            assert accepted.returncode == 0, (
+                f"{name}: the driver refused {pinned}, whose upstream half is pinned. "
+                f"The refusal above was not about the version\n"
+                f"{accepted.stdout}{accepted.stderr}"
+            )
+
     def test_the_build_step_passes_flags_the_driver_accepts(self):
-        # The workflow selects a cell with --platform/--arch, which is
-        # what build_zstd.py and build_pdfium.py take. This is the cheap
-        # form of the check above: it compares flag names rather than
-        # running anything, so it names the offending flag directly when
-        # both fail together.
+        # The workflow selects a cell with --platform/--arch and names the
+        # version with --version. This is the cheap form of the checks
+        # above: it compares flag names rather than running anything, so
+        # it names the offending flag directly when they fail together.
         help_text = driver_help()
-        if "--platform" not in help_text:
-            pytest.skip("build_acadsharp.py grows --platform/--arch with issue #48")
         wf = load_workflow()
         for name in BUILD_JOBS:
             job = wf["jobs"][name]
