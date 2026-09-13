@@ -18,15 +18,25 @@ STREAM = BENCH["streaming"]
 PV = BENCH["path_versus_memory"]
 BATCH = BENCH["batch_bytes"]
 
-# The recorded numbers, and how far they may move before this is a different
-# decision. Generous enough not to flake on a rerun, tight enough that a
-# regression that doubles the output cannot pass.
-OUTPUT_BYTES_CEILING = int(AMP["output_bytes"] * 1.10)
-PEAK_RSS_CEILING_KB = int(AMP["peak_rss_kb"] * 1.25)
+# The ceilings, written out rather than derived from the measurement.
+#
+# Deriving them from the numbers they guard is the mistake that makes a budget
+# useless: multiply the recorded value by 1.1 and the ceiling moves with every
+# rerun, so an implementation that doubled its output would rerecord a doubled
+# ceiling and pass. These are the figures the decision in DECISION.md was made
+# on, plus room for the spread of a managed runtime, and a rerun that breaches
+# one is supposed to be a conversation.
+#
+# Measured 2026-09-13: 2,481,264 output bytes and 94,036 KB peak RSS on
+# g13_many_inserts.dwg, arm64 containers.
+OUTPUT_BYTES_CEILING = 2_800_000
+PEAK_RSS_CEILING_KB = 120_000
 
 # The stream is pulled record by record and never collected, so what a decode
-# retains must not scale with what it produces. Four batches is the issue's
-# budget and it is two orders of magnitude above what this actually retains.
+# retains must not scale with what it produces. Four batch sizes is the issue's
+# budget and it is two orders of magnitude above what this actually retains, so
+# it is derived from the batch size on purpose: it is a budget about the
+# protocol, not about a measurement.
 RETENTION_BUDGET_KB = (4 * BATCH) // 1024
 
 
@@ -52,8 +62,9 @@ class TestAmplification:
 
     def test_the_output_has_not_grown(self):
         assert AMP["output_bytes"] <= OUTPUT_BYTES_CEILING, (
-            f"block expansion now emits {AMP['output_bytes']} bytes against a recorded "
-            f"{OUTPUT_BYTES_CEILING} ceiling. Rerun the benchmark and revisit DECISION.md"
+            f"block expansion now emits {AMP['output_bytes']} bytes against a "
+            f"{OUTPUT_BYTES_CEILING} ceiling. That is the number DECISION.md rests on, "
+            "so this is a decision to revisit rather than a ceiling to raise"
         )
 
     def test_the_peak_memory_has_not_grown(self):
