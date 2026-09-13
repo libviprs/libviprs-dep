@@ -324,6 +324,46 @@ static void test_null_arguments_on_a_live_handle(void)
 	viprs_acad_close(doc);
 }
 
+/* open_path_utf8 has a whole code path of its own (it sniffs the file rather
+ * than a caller's buffer) and until this case existed nothing ran it except
+ * the four ways it refuses. A route exercised only by its failures is a route
+ * nobody has run. */
+static void test_open_by_path(void)
+{
+	const char *path = "/tmp/viprs-synthetic.bin";
+	uint8_t synth[16];
+	viprs_cad_handle *doc = NULL;
+	FILE *f;
+	uint32_t count = 0;
+	uint32_t rc;
+
+	synthetic_input(synth, 2, 9);
+	f = fopen(path, "wb");
+	if (!f) {
+		check(0, "could not write the synthetic document to a file");
+		return;
+	}
+	fwrite(synth, 1, sizeof synth, f);
+	fclose(f);
+
+	rc = viprs_acad_open_path_utf8((const uint8_t *)path, strlen(path), NULL, &doc);
+	check(rc == VIPRS_ACAD_OK, "open_path_utf8 opens the same document from a file");
+	if (rc != VIPRS_ACAD_OK) {
+		return;
+	}
+
+	check(viprs_acad_view_count(doc, &count) == VIPRS_ACAD_OK && count == 2,
+	      "and the handle it returns behaves like the one open_memory returns");
+	viprs_acad_close(doc);
+
+	rc = viprs_acad_open_path_utf8((const uint8_t *)"/etc/hostname", 13, NULL, &doc);
+	check(rc == VIPRS_ACAD_UNSUPPORTED_FORMAT,
+	      "a file no source in this build recognises is UNSUPPORTED_FORMAT");
+
+	rc = viprs_acad_open_path_utf8((const uint8_t *)"/nonexistent/viprs.dwg", 22, NULL, &doc);
+	check(rc == VIPRS_ACAD_INVALID_ARGUMENT, "a path that names nothing is INVALID_ARGUMENT");
+}
+
 static void test_views(void)
 {
 	uint8_t synth[16];
@@ -669,6 +709,8 @@ int main(void)
 	printf("--- arguments\n");
 	test_null_arguments();
 	test_null_arguments_on_a_live_handle();
+	printf("--- opening by path\n");
+	test_open_by_path();
 	printf("--- views\n");
 	test_views();
 	printf("--- cancellation\n");
