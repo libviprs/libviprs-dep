@@ -15,6 +15,7 @@ Regenerating all of it is ``tests/fixtures/gen/regenerate.py``.
 
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -225,6 +226,107 @@ def vertex_record(rest):
 
     assert len(fields["normal"]) == 1, "a record carries one normal"
     return fields["pts"], bulges, fields["normal"][0]
+
+
+def curve_record(rest):
+    """A dumped Arc, Circle or Ellipse as a dict of the numbers it carries.
+
+    Records 5, 6 and 7 share a shape: a centre, a normal and whatever else
+    defines the curve in that plane. Missing fields simply do not appear, so a
+    Circle comes back without `a0`, and a test asking for one gets a KeyError
+    rather than a zero it could mistake for an answer.
+    """
+    out = {}
+    for name in ("c", "major", "normal"):
+        m = re.search(rf" {name}=\[([^\]]*)\]", rest)
+        if not m:
+            continue
+        found = TRIPLE_RE.findall(m.group(1))
+        assert len(found) == 1, f"{name}= carries {len(found)} triples in {rest!r}"
+        out[name] = tuple(float(x) for x in found[0])
+
+    for name in ("r", "ratio", "a0", "a1", "p0", "p1"):
+        m = re.search(rf" {name}=(-?[0-9.]+)", rest)
+        if m:
+            out[name] = float(m.group(1))
+
+    assert "c" in out and "normal" in out, f"not a curve record: {rest!r}"
+    return out
+
+
+def normalize(v):
+    n = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) ** 0.5
+    assert n > 0.0, f"cannot normalise {v}"
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+def cross(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def arbitrary_axis(normal):
+    """The x axis DXF's arbitrary axis algorithm picks for a normal.
+
+    Written out here rather than imported, for the same reason
+    `arc_midpoint` is: a helper shared with the producer agrees with the
+    producer by construction and says nothing about the record.
+
+    The 1/64 threshold is the whole of it. Near the world z axis the cross
+    product with z shrinks towards nothing and its direction is whatever the
+    rounding of the last few bits says, so the algorithm switches to the y
+    axis instead and the frame stays stable. `TestTheHelperIsTheAlgorithm`
+    below is what pins that, because a threshold nobody probes is a constant
+    that can be anything.
+    """
+    n = normalize(normal)
+    if abs(n[0]) < 1.0 / 64.0 and abs(n[1]) < 1.0 / 64.0:
+        axis = cross((0.0, 1.0, 0.0), n)
+    else:
+        axis = cross((0.0, 0.0, 1.0), n)
+    return normalize(axis)
+
+
+def plane_frame(normal):
+    """The right-handed (x, y) a record's angles are measured in."""
+    n = normalize(normal)
+    u = arbitrary_axis(n)
+    return u, cross(n, u)
+
+
+def arc_point(record, angle):
+    """The point on a dumped Arc or Circle at `angle`."""
+    c = record["c"]
+    r = record["r"]
+    u, v = plane_frame(record["normal"])
+    return tuple(c[i] + r * (math.cos(angle) * u[i] + math.sin(angle) * v[i]) for i in range(3))
+
+
+def ellipse_point(record, param):
+    """The point on a dumped Ellipse at `param`.
+
+    The major axis is on the record, so the frame here does not go through
+    the arbitrary axis at all: the parameter is measured from the vector the
+    record carries, counter-clockwise about the normal.
+    """
+    c = record["c"]
+    major = record["major"]
+    a = (major[0] ** 2 + major[1] ** 2 + major[2] ** 2) ** 0.5
+    u = normalize(major)
+    v = cross(normalize(record["normal"]), u)
+    b = a * record["ratio"]
+    return tuple(c[i] + a * math.cos(param) * u[i] + b * math.sin(param) * v[i] for i in range(3))
+
+
+def negate_x(p):
+    return (-p[0], p[1], p[2])
 
 
 def closed_flag(rest):

@@ -32,6 +32,7 @@ namespace Viprs.Sources
 		private readonly List<SourceView> _views = new List<SourceView>();
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
 		private uint _drawingVersion;
+		private int _viewsWithoutExtents;
 		private bool _closed;
 
 		private AcadSharpSource(ResolvedLimits limits)
@@ -42,6 +43,20 @@ namespace Viprs.Sources
 		public IReadOnlyList<string> Notifications
 		{
 			get { return _notifications; }
+		}
+
+		// How many views reported the absent box because their extents were
+		// not four finite numbers.
+		//
+		// Nothing on the boundary reads this and it is not on the wire. It
+		// exists so the corpus can tell a substitution that ran from a drawing
+		// whose extents were fine all along: once it works, every capture shows
+		// four good numbers and the fixture carrying a NaN looks exactly like
+		// every fixture that does not. A guard nobody can watch fire is a guard
+		// that quietly stops firing.
+		public int ViewsWithoutExtents
+		{
+			get { return _viewsWithoutExtents; }
 		}
 
 		public uint DrawingVersion
@@ -236,20 +251,59 @@ namespace Viprs.Sources
 			foreach (Layout l in layouts)
 			{
 				BlockRecord block = l.AssociatedBlock;
+				bool usable = Finite(l.MinExtents.X)
+					&& Finite(l.MinExtents.Y)
+					&& Finite(l.MaxExtents.X)
+					&& Finite(l.MaxExtents.Y);
+				if (!usable)
+				{
+					_viewsWithoutExtents = _viewsWithoutExtents + 1;
+				}
+
 				_views.Add(
 					new SourceView
 					{
 						Kind = IsModel(l) ? AbiConstants.ViewKindModel : AbiConstants.ViewKindLayout,
-						MinX = l.MinExtents.X,
-						MinY = l.MinExtents.Y,
-						MaxX = l.MaxExtents.X,
-						MaxY = l.MaxExtents.Y,
+						MinX = usable ? l.MinExtents.X : AbsentMin,
+						MinY = usable ? l.MinExtents.Y : AbsentMin,
+						MaxX = usable ? l.MaxExtents.X : AbsentMax,
+						MaxY = usable ? l.MaxExtents.Y : AbsentMax,
 						ItemCount = block == null ? 0ul : (ulong)block.Entities.Count,
 						Name = l.Name ?? string.Empty,
 					}
 				);
 				_blocks.Add(block);
 			}
+		}
+
+		// What a view reports when its extents are not four numbers.
+		//
+		// docs/WIRE.md's finiteness guarantee covers records 3 to 10 and leaves
+		// ViewBegin out on purpose: its extents are a bounding box the source
+		// reports rather than a shape anybody draws, and a view holding nothing
+		// has no finite one, so promising a number there would mean inventing
+		// one. That reasoning is right and it left a hole underneath it. A
+		// layout's extents are four doubles a file holds, so a drawing can hand
+		// this shim a NaN, and g13_bad_extents.dwg is a drawing that does. One
+		// NaN in a bounding box makes every comparison against it false, so the
+		// box is NaN in every direction by the time anything has used it, and
+		// the consumer has nothing it could have compared against to find out.
+		//
+		// The inverted box is the answer, and it is not invented: this is the
+		// pair AutoCAD itself writes into EXTMIN and EXTMAX for a drawing with
+		// nothing in it, so a consumer that already understands one understands
+		// the other. `min_x > max_x` is then a comparison that works and means
+		// "this view has no usable extents".
+		//
+		// What it does not do is separate a view that is empty from a drawing
+		// that is damaged: both come out as this. Telling those apart wants a
+		// warning code of its own, and a code wants a row in docs/WIRE.md.
+		private const double AbsentMin = 1e20;
+		private const double AbsentMax = -1e20;
+
+		private static bool Finite(double v)
+		{
+			return !double.IsNaN(v) && !double.IsInfinity(v);
 		}
 
 		private static bool IsModel(Layout l)

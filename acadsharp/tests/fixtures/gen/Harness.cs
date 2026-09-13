@@ -335,6 +335,36 @@ namespace Viprs.Cad.Fixtures
 			}
 
 			json.Num("view_count", source.ViewCount);
+
+			// As strings, because JSON has no spelling for NaN or an infinity
+			// and this capture exists to show whether one reached the record.
+			// "R" round-trips every double, so a number that came back
+			// slightly different is visible rather than rounded away.
+			List<string> extents = new List<string>();
+			for (int viewIndex = 0; viewIndex < source.ViewCount; viewIndex++)
+			{
+				SourceView reported;
+				if (!source.TryGetView(viewIndex, out reported))
+				{
+					continue;
+				}
+
+				extents.Add(
+					reported.MinX.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MinY.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MaxX.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MaxY.ToString("R", CultureInfo.InvariantCulture)
+				);
+			}
+
+			json.Strings("view_extents", extents);
+
+			// The positive control for the line above. With the substitution
+			// working, a drawing whose extents are not numbers reports the same
+			// four numbers as one whose extents are fine, so without this the
+			// corpus cannot tell the guard running from the fixture having
+			// quietly stopped carrying a NaN.
+			json.Num("views_without_extents", acad == null ? -1 : acad.ViewsWithoutExtents);
 			json.Num("notification_count", notes.Count);
 			json.Strings("notifications", notes);
 
