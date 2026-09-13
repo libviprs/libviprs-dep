@@ -527,7 +527,12 @@ jobs:
           # the page reports what was found and the run goes red.
           range_problem = ""
           if published:
-              pairs = sorted(ranges)
+              # Sorted through a key, because a stale asset can carry no
+              # range at all, and in Python a tuple holding None does not
+              # compare with a tuple holding integers. Without this the
+              # generator raises TypeError over exactly the archive it
+              # exists to report.
+              pairs = sorted(ranges, key=lambda p: tuple(-1 if v is None else v for v in p))
               unusable = [p for p in pairs if not all(isinstance(v, int) for v in p)]
               if len(pairs) > 1:
                   range_problem = "the published archives do not agree on the DWG read range"

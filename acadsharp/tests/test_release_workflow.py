@@ -1233,6 +1233,41 @@ class TestTheInlineGeneratorsRun:
         )
         assert (tmp_path / "range-disagreement.txt").read_text().strip()
 
+    def test_one_archive_with_no_range_beside_archives_that_have_one(self, tmp_path):
+        # The mixed case, which is the one that actually happens: four
+        # cells rebuilt and one stale asset a --clobber did not replace.
+        # The two kinds of key have to be orderable together, and in
+        # Python a tuple holding None does not compare with a tuple
+        # holding integers.
+        wf = load_workflow()
+        step = step_named(wf["jobs"]["release-notes"], "Write the release notes")
+        version = ba.read_version()
+        for i, (platform, cpu) in enumerate(ALL_CELLS):
+            stage_archive(
+                tmp_path,
+                platform,
+                cpu,
+                artifact_version=version,
+                target="x86_64-unknown-linux-gnu",
+                dwg_version_min=None if i == 2 else 1014,
+                dwg_version_max=None if i == 2 else 1032,
+            )
+
+        done = subprocess.run(
+            [sys.executable, "-c", notes_generator("did not publish")],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=notes_env(step, version),
+            check=False,
+        )
+        assert done.returncode == 0, f"the notes generator failed:\n{done.stderr}"
+        notes = done.stdout
+        assert "no read range" in notes and "AC1014 to AC1032" in notes, (
+            f"the notes have to name both what was found and what was missing:\n{notes}"
+        )
+        assert (tmp_path / "range-disagreement.txt").read_text().strip()
+
     def test_a_range_disagreement_fails_the_run_after_the_notes_go_up(self):
         run = step_named(load_workflow()["jobs"]["release-notes"], "Write the release notes")["run"]
         assert "range-disagreement.txt" in run, (
