@@ -45,6 +45,9 @@ acadsharp-<platform>-<cpu>/
 ├── lib/libacadsharp_native.a        # static archive, when the target certified one
 ├── lib/libacadsharp_native_init.a   # one object: the runtime's static initialiser
 ├── include/viprs_acadsharp.h        # the VIPRS CAD C ABI
+├── docs/ABI.md                      # what the calls mean
+├── docs/WIRE.md                     # the batch stream the decode emits
+├── docs/LINKINFO.md                 # every LINKINFO.json field, and how to link
 ├── metadata/LINKINFO.json           # the consumer contract: how to link this
 ├── metadata/BUILDINFO.json          # what built it, and with what
 ├── metadata/CHECKSUMS.txt           # sha256 of every other file

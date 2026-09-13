@@ -839,6 +839,10 @@ acadsharp-<platform>-<cpu>/
 │   └── libacadsharp_native_init.a   # one object: the runtime's static initialiser
 ├── include/
 │   └── viprs_acadsharp.h         # the frozen C ABI, byte-identical to the repo's
+├── docs/
+│   ├── ABI.md                    # what the calls mean: ownership, threading, errors
+│   ├── WIRE.md                   # the batch stream, defined nowhere else
+│   └── LINKINFO.md               # every LINKINFO.json field, and the linking recipe
 ├── metadata/
 │   ├── LINKINFO.json             # the consumer contract
 │   ├── BUILDINFO.json            # what produced the binaries
@@ -849,10 +853,19 @@ acadsharp-<platform>-<cpu>/
 └── README.md
 ```
 
+The three documents under `docs/` are the point of the archive shipping
+anything but binaries. They are byte-identical to `acadsharp/docs/` in
+this repository, and between them plus the header they are meant to be
+enough to write a consumer with no access to this repository at all. If
+you find yourself opening `build_acadsharp.py` to settle what something
+means, that is a defect in `docs/` worth reporting as one.
+
 `LINKINFO.json` is the one to read. It carries the Rust triple, the ABI
 and wire versions, the header's sha256 and its first eight bytes as the
 fingerprint `viprs_acad_abi_fingerprint()` returns, and the link facts
-measured on that target.
+measured on that target. `docs/LINKINFO.md` is its specification: every
+field, its type, whether it is optional, and what a build script does
+with it.
 
 The two linking modes have separate fields, because they measure
 different things and a consumer cannot tell which it is holding
@@ -886,7 +899,11 @@ the packaged tarball, and `build_acadsharp.py` runs it on every archive
 it produces before calling one done. It enforces:
 
 1. One top-level directory named after the tarball, with the full layout
-   above present.
+   above present, `docs/ABI.md`, `docs/WIRE.md` and `docs/LINKINFO.md`
+   included. Those three are refused as hard as a missing library: the
+   wire format and the manifest schema are defined in them and nowhere
+   else, so an archive without them is one a consumer has to read this
+   repository to use.
 2. `CHECKSUMS.txt` covers every other file and every digest matches. A
    file nobody listed is as much a defect as a wrong digest.
 3. Both manifests parse and carry every frozen field.
@@ -983,10 +1000,100 @@ rather than forced with `-Wl,-u,<symbol>`, and why `static_link_args` is
 normally empty: anything in it has to be applied by the final binary's
 own package, not by a dependency.
 
+Worked, as a `-sys` crate's `build.rs`. The crate needs
+`links = "acadsharp_native"` in its `Cargo.toml`, or cargo will not pass
+this metadata to dependents at all:
+
+```rust
+use std::path::PathBuf;
+
+// The schema this build script was written against. A manifest claiming
+// a higher one is refused rather than read optimistically: a field may
+// no longer mean what it meant, and the damage lands in somebody else's
+// binary at link time.
+const KNOWN_SCHEMA: u64 = 1;
+
+fn main() {
+    println!("cargo:rerun-if-env-changed=ACADSHARP_ARCHIVE");
+    let root = PathBuf::from(
+        std::env::var("ACADSHARP_ARCHIVE")
+            .expect("set ACADSHARP_ARCHIVE to an unpacked acadsharp-<platform>-<cpu>"),
+    );
+    let manifest = root.join("metadata").join("LINKINFO.json");
+    let link: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+
+    let schema = link["schema_version"].as_u64().unwrap();
+    assert!(
+        schema <= KNOWN_SCHEMA,
+        "{} is schema_version {schema}, and this build script knows {KNOWN_SCHEMA}",
+        manifest.display()
+    );
+
+    let want = std::env::var("TARGET").unwrap();
+    assert_eq!(
+        link["target"].as_str().unwrap(),
+        want,
+        "this archive is not for the target being built"
+    );
+
+    // 16 lowercase hex digits, no 0x, big-endian: parse it, never compare
+    // the strings. The consumer checks this against
+    // viprs_acad_abi_fingerprint() at run time, before its first call.
+    let fingerprint =
+        u64::from_str_radix(link["abi_fingerprint"].as_str().unwrap(), 16).unwrap();
+    println!("cargo:rustc-env=ACADSHARP_ABI_FINGERPRINT={fingerprint}");
+    println!("cargo:rustc-env=ACADSHARP_ABI_VERSION={}", link["abi_version"]);
+    println!("cargo:rustc-env=ACADSHARP_WIRE_VERSION={}", link["wire_version"]);
+
+    println!("cargo:rustc-link-search=native={}", root.join("lib").display());
+
+    if cfg!(feature = "static") {
+        // Absent, not empty: on a target that certified nothing there is
+        // no static_library key at all, and no .a in the archive either.
+        assert!(
+            link["static_certified"].as_bool().unwrap_or(false),
+            "this archive ships shared-only; build without the static feature"
+        );
+        // A link argument cannot be carried to a dependent's link line, so
+        // there is nothing useful to do with one. Refuse rather than emit
+        // something that will be silently dropped.
+        assert!(
+            link["static_link_args"].as_array().unwrap().is_empty(),
+            "static_link_args is non-empty and a build script cannot deliver it"
+        );
+
+        // Order and both modifiers are load-bearing. See docs/LINKINFO.md.
+        println!(
+            "cargo:rustc-link-lib=static:-bundle,+whole-archive={}",
+            stem(&link["static_init_library"])
+        );
+        println!("cargo:rustc-link-lib=static:-bundle={}", stem(&link["static_library"]));
+        for lib in link["static_system_libraries"].as_array().unwrap() {
+            println!("cargo:rustc-link-lib={}", lib.as_str().unwrap());
+        }
+    } else {
+        println!("cargo:rustc-link-lib=acadsharp_native");
+        for lib in link["shared_system_libraries"].as_array().unwrap() {
+            println!("cargo:rustc-link-lib={}", lib.as_str().unwrap());
+        }
+    }
+}
+
+/// `lib/libacadsharp_native_init.a` -> `acadsharp_native_init`
+fn stem(value: &serde_json::Value) -> String {
+    let path = value.as_str().expect("path");
+    let file = path.rsplit('/').next().unwrap_or(path);
+    file.trim_start_matches("lib").trim_end_matches(".a").to_string()
+}
+```
+
 `acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs
 exactly that recipe through a two-crate workspace and executes the
 binary, and `acadsharp/scripts/verify_archive.sh` runs it too when the
-host can build for the archive's target.
+host can build for the archive's target. That copy hand-parses the
+manifest instead of pulling in `serde_json`, because it has to build
+offline inside a container; the directives it emits are the same four.
 
 ### Examples
 

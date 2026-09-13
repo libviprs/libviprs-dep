@@ -1,16 +1,24 @@
 """`LINKINFO.json` and `BUILDINFO.json`, which are the consumer contract.
 
 `acadsharp-rs`'s `build.rs` parses `LINKINFO.json` to emit
-`cargo:rustc-link-search`, `cargo:rustc-link-lib` and
-`cargo:rustc-link-arg`, and checks `abi_version`, `abi_fingerprint` and
-`wire_version` at first use. So the field names are frozen, the fingerprint
-is derived from the shipped header rather than typed, and the two fields
-that describe the real link cannot be filled in from an example.
+`cargo:rustc-link-search` and `cargo:rustc-link-lib`, and checks
+`abi_version`, `abi_fingerprint` and `wire_version` at first use. It emits
+no `cargo:rustc-link-arg` and never will: that directive binds to the
+emitting package's own targets and never reaches a dependent's link line,
+which is why the runtime's initialiser ships as a library instead. So the
+field names are frozen, the fingerprint is derived from the shipped header
+rather than typed, and the two fields that describe the real link cannot be
+filled in from an example.
+
+The field list is not the whole contract either. `docs/LINKINFO.md` is its
+specification, it ships inside the archive, and the tests below hold the two
+to each other so a field cannot be added here without a row over there.
 """
 
 import hashlib
 import json
 import os
+import re
 
 import build_acadsharp as ba
 import pytest
@@ -399,6 +407,133 @@ class TestChecksums:
             text = f.read()
         assert "include/viprs_acadsharp.h" in text
         assert str(tmp_path) not in text
+
+
+class TestTheContractDocumentsShip:
+    """The archive has to carry every contract it tells a consumer to read.
+
+    The header could always be consumed from the archive. The other two
+    contracts could not: `WIRE.md` is the only definition of the batch
+    stream anywhere, `LINKINFO.md` is the only definition of the manifest
+    a build script parses, and both stayed in the repository while the
+    binaries shipped. So whoever wrote a consumer read `build_acadsharp.py`
+    to find out what a field meant, which is exactly the coupling freezing
+    the ABI was meant to remove.
+    """
+
+    DOCS_DIR = os.path.join(ACAD_DIR, "docs")
+
+    def _staged(self, tmp_path, plat="linux", arch="amd64"):
+        root = tmp_path / f"acadsharp-{plat}-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "lib" / ba.shared_library_name(plat)).write_bytes(b"binary")
+        ba.finish_archive(
+            str(root),
+            plat,
+            arch,
+            {"aot_warning_count": "0", "shared_needed": "", "static_ok": "0"},
+            builder_image="debian:bookworm-slim",
+        )
+        return root
+
+    def test_every_markdown_file_at_the_top_of_docs_ships(self):
+        present = {
+            name
+            for name in os.listdir(self.DOCS_DIR)
+            if name.endswith(".md") and os.path.isfile(os.path.join(self.DOCS_DIR, name))
+        }
+        assert set(ba.PUBLISHED_DOCS) == present, (
+            "acadsharp/docs/ and PUBLISHED_DOCS disagree. A contract document that "
+            "lands in the repository and not in the archive is one a consumer author "
+            "cannot read without this repository, which is the whole defect."
+        )
+
+    def test_the_decision_records_stay_behind(self):
+        # The positive control for the rule above. Without something in
+        # docs/adr/, "top-level *.md only" would be a distinction over an
+        # empty set and the test would pass whatever the rule said.
+        adr = os.path.join(self.DOCS_DIR, "adr")
+        records = [n for n in os.listdir(adr) if n.endswith(".md")]
+        assert records, "docs/adr/ is empty, so the top-level-only rule is untested"
+        for name in records:
+            assert name not in ba.PUBLISHED_DOCS, (
+                f"{name} is a decision record. Those are the producer's history and "
+                "not the consumer's contract, so they stay out of the archive."
+            )
+
+    def test_finish_archive_stages_them_beside_the_header(self, tmp_path):
+        root = self._staged(tmp_path)
+        for name in ba.PUBLISHED_DOCS:
+            staged = root / "docs" / name
+            assert staged.is_file(), f"docs/{name} is not in the staged tree"
+            with open(os.path.join(self.DOCS_DIR, name), "rb") as f:
+                original = f.read()
+            assert staged.read_bytes() == original, (
+                f"docs/{name} in the archive is not byte-identical to the repository's"
+            )
+
+    def test_checksums_covers_them_like_everything_else(self, tmp_path):
+        root = self._staged(tmp_path)
+        with open(root / "metadata" / "CHECKSUMS.txt") as f:
+            listed = {line.split(None, 1)[1].strip() for line in f if line.strip()}
+        for name in ba.PUBLISHED_DOCS:
+            rel = f"docs/{name}"
+            assert rel in listed, f"{rel} shipped without a digest beside it"
+
+    def test_a_missing_document_stops_the_packaging(self, tmp_path):
+        # Shipping the binaries and quietly dropping a contract is the
+        # failure this whole change is about, so it is a refusal rather
+        # than a warning.
+        partial = tmp_path / "docs"
+        partial.mkdir()
+        (partial / ba.PUBLISHED_DOCS[0]).write_text("# a contract\n")
+        root = tmp_path / "acadsharp-linux-x64"
+        root.mkdir()
+        with pytest.raises(ValueError, match=ba.PUBLISHED_DOCS[1]):
+            ba.stage_docs(str(root), docs_dir=str(partial))
+
+    def test_the_spec_documents_every_frozen_manifest_field(self):
+        # The field list used to exist only as this tuple, which meant a
+        # consumer author learned what `static_init_library` was by
+        # reading the producer. Now it is specified, and the two are held
+        # to each other: a field added here without a row over there
+        # ships undocumented.
+        with open(os.path.join(self.DOCS_DIR, "LINKINFO.md")) as f:
+            spec = f.read()
+        rows = set(re.findall(r"^\| `([a-z0-9_]+)` \|", spec, re.M))
+        assert rows == set(ba.LINKINFO_FIELDS), (
+            f"LINKINFO.md's field table and LINKINFO_FIELDS disagree: "
+            f"{sorted(set(ba.LINKINFO_FIELDS) - rows)} have no row, "
+            f"{sorted(rows - set(ba.LINKINFO_FIELDS))} describe a field nothing writes"
+        )
+
+    def test_the_spec_marks_exactly_the_static_fields_optional(self):
+        with open(os.path.join(self.DOCS_DIR, "LINKINFO.md")) as f:
+            spec = f.read()
+        optional = set()
+        for name, presence in re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M):
+            if "always" not in presence:
+                optional.add(name)
+        assert optional == set(ba.STATIC_LINKINFO_FIELDS), (
+            "the four static link fields are the only optional ones, and which "
+            "fields a consumer may find missing is the thing it cannot discover "
+            "from one archive"
+        )
+
+    def test_the_verifier_requires_exactly_the_documents_that_ship(self):
+        # Comments come out first: the script's own header paragraph
+        # explains why the documents are load-bearing, and a whole-file
+        # grep fires on the explanation as readily as on a real entry.
+        with open(ba.VERIFY_ARCHIVE_SCRIPT) as f:
+            code = "\n".join(
+                line for line in f.read().splitlines() if not line.lstrip().startswith("#")
+            )
+        required = set(re.findall(r'"docs/([A-Za-z0-9_.-]+\.md)"', code))
+        assert required == set(ba.PUBLISHED_DOCS), (
+            "verify_archive.sh and PUBLISHED_DOCS disagree about which documents an "
+            "archive must carry, so one of them is refusing an archive the other "
+            "happily builds"
+        )
 
 
 class TestTheGeneratedStagingScript:
