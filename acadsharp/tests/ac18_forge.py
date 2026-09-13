@@ -501,6 +501,13 @@ def read_back(blob):
         at += 96
         pages = []
         for _ in range(page_count):
+            # A descriptor is allowed to claim more pages than the map carries.
+            # Upstream does not find that out until the loop, which is after
+            # CheckDescriptor, and what it does then is throw
+            # EndOfStreamException rather than allocate. Stopping here rather
+            # than raising is what lets that case be described.
+            if at + 16 > len(plain):
+                break
             page_number, page_compressed = struct.unpack_from("<ii", plain, at)
             offset = struct.unpack_from("<Q", plain, at + 8)[0]
             pages.append(
@@ -514,6 +521,7 @@ def read_back(blob):
                 "decompressed_size": decompressed_size,
                 "compressed_size": compressed_size,
                 "pages": pages,
+                "pages_declared_but_absent": page_count - len(pages),
                 "records": records,
             }
         )
@@ -560,6 +568,18 @@ DECLARED_SIZES = (
 PRODUCT_PAGES = 3
 PRODUCT_PAGE_SIZE = 8 * 1024 * 1024
 
+# The count case: a page count past MaxSectionPages with a page size so small
+# that their product is still inside the byte ceiling, so nothing but the count
+# refuses it. The file carries one page entry rather than two million, which it
+# can afford to because CheckDescriptor runs before the loop that would read
+# them. Unpatched that is also why this one is the weakest of the seven: a page
+# count a file cannot back with entries throws EndOfStreamException on the
+# second iteration rather than allocating. This branch is defence in depth and
+# a better message, and recording it is what lets the coverage check above be
+# a statement about every branch rather than about the ones that bite.
+COUNT_PAGES = 2000000
+COUNT_PAGE_SIZE = 1
+
 # The gap case: an offset inside the ceiling whose quotient is not. The gap
 # fill adds one page per DecompressedSize, so an 8-byte page size turns 16 MB
 # of offset into two million objects, and the buffer they add up to is still
@@ -595,6 +615,11 @@ def descriptor_zero_input():
     returns rather than a measurement.
     """
     return forge([descriptor(1, 0, offsets=(0x400,), compressed_size=0)])
+
+
+def descriptor_page_count_input():
+    """Trips `CheckDescriptor`'s page-count branch, and only that one."""
+    return forge([descriptor(COUNT_PAGES, COUNT_PAGE_SIZE, offsets=(0,))])
 
 
 def descriptor_product_input():
@@ -708,6 +733,18 @@ def inputs():
 
     out.append(
         _case(
+            "ac18_descriptor_page_count",
+            "CheckDescriptor",
+            f"{DESCRIPTOR_SITE} page count",
+            COUNT_PAGES,
+            str(COUNT_PAGES),
+            "descriptor PageCount",
+            descriptor_page_count_input(),
+        )
+    )
+
+    out.append(
+        _case(
             "ac18_descriptor_product",
             "CheckDescriptor",
             DESCRIPTOR_SITE,
@@ -761,6 +798,7 @@ def control_case():
 # `inputs()` has to cover every one of them between them.
 BRANCHES = (
     (f"{DESCRIPTOR_SITE} page size", "CheckDescriptor"),
+    (f"{DESCRIPTOR_SITE} page count", "CheckDescriptor"),
     (DESCRIPTOR_SITE, "CheckDescriptor"),
     (OFFSET_SITE, "CheckPageOffset"),
     (f"{OFFSET_SITE} gap", "CheckPageOffset"),

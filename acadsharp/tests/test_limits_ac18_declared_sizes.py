@@ -38,6 +38,8 @@ import pytest
 from ac18_forge import (
     BRANCHES,
     CEILING_FACTOR,
+    COUNT_PAGE_SIZE,
+    COUNT_PAGES,
     FLOOR_BYTES,
     GAP_OFFSET,
     GAP_PAGE_SIZE,
@@ -136,14 +138,17 @@ class TestTheInputsAreTheOnesTheCapturesRecord:
         assert len(descriptors) == 1
         descriptor = descriptors[0]
         assert descriptor["name"] == SECTION_NAME
-        assert len(descriptor["pages"]) == descriptor["page_count"]
         if case["guard"] == "CheckDescriptor":
             if case["site"].endswith("page size"):
                 assert descriptor["decompressed_size"] == case["declared"]
+            elif case["site"].endswith("page count"):
+                assert descriptor["page_count"] == COUNT_PAGES
+                assert descriptor["decompressed_size"] == COUNT_PAGE_SIZE
             else:
                 assert descriptor["page_count"] == PRODUCT_PAGES
                 assert descriptor["decompressed_size"] == PRODUCT_PAGE_SIZE
         else:
+            assert descriptor["pages_declared_but_absent"] == 0
             assert descriptor["pages"][0]["offset"] == case["declared"]
             expected = GAP_PAGE_SIZE if case["site"].endswith("gap") else OFFSET_PAGE_SIZE
             assert descriptor["decompressed_size"] == expected
@@ -313,6 +318,30 @@ class TestADeclaredCountIsRefusedRatherThanWalked:
         assert PRODUCT_PAGE_SIZE < FLOOR_BYTES
         assert PRODUCT_PAGES < MAX_SECTION_PAGES
         assert PRODUCT_PAGES * PRODUCT_PAGE_SIZE > FLOOR_BYTES
+
+    def test_the_page_count_case_is_only_about_the_count(self):
+        """Why that case declares a one-byte page.
+
+        The branch before it takes the page size and the branch after it takes
+        the product, and both let this file through: one byte is far under the
+        ceiling and two million of them still are. So the only thing that can
+        refuse it is the count, which is what the case is for.
+
+        It is also the weakest of the seven, and worth saying so rather than
+        letting the table imply otherwise. The file declares two million pages
+        and carries one, because CheckDescriptor runs before the loop that
+        would read them. Without the guard that loop throws
+        EndOfStreamException on its second iteration rather than allocating,
+        and a file that really carried two million entries would be thirty-two
+        megabytes, which is past the ceiling it is trying to get around. This
+        branch is defence in depth and a better message, in the same way #80
+        found the AC21 compressed-page guard to be.
+        """
+        assert COUNT_PAGE_SIZE < FLOOR_BYTES
+        assert COUNT_PAGES > MAX_SECTION_PAGES
+        assert COUNT_PAGES * COUNT_PAGE_SIZE < FLOOR_BYTES
+        case = [c for c in CASES if c["name"] == "ac18_descriptor_page_count"][0]
+        assert read_back(case["blob"])[0]["pages_declared_but_absent"] > 0
 
     def test_the_gap_case_is_a_count_the_byte_ceiling_would_have_allowed(self):
         """Why MaxSectionPages is not the byte ceiling written twice.
