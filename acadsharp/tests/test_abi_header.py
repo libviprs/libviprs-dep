@@ -27,11 +27,11 @@ HEADER = os.path.join(ACADSHARP, "include", "viprs_acadsharp.h")
 ENTRY_POINTS = (
     "viprs_acad_abi_version",
     "viprs_acad_abi_fingerprint",
-    "viprs_acad_capabilities_v1",
+    "viprs_acad_get_capabilities_v1",
     "viprs_acad_open_path_utf8",
     "viprs_acad_open_memory",
     "viprs_acad_view_count",
-    "viprs_acad_view_info_v1",
+    "viprs_acad_get_view_info_v1",
     "viprs_acad_decode_begin",
     "viprs_acad_decode_next_batch",
     "viprs_acad_decode_close",
@@ -49,13 +49,16 @@ RESULT_CODES = {
     "VIPRS_ACAD_INTERNAL_ERROR": 7,
     "VIPRS_ACAD_ABI_MISMATCH": 8,
     "VIPRS_ACAD_LIMIT_EXCEEDED": 9,
+    "VIPRS_ACAD_BUFFER_TOO_SMALL": 10,
 }
 
 STRUCTS = (
     "viprs_acad_limits_v1",
     "viprs_acad_capabilities_v1",
-    "viprs_view_info_v1",
+    "viprs_acad_view_info_v1",
 )
+
+HANDLES = ("viprs_acad_handle", "viprs_acad_decode_handle")
 
 
 @pytest.fixture(scope="module")
@@ -102,8 +105,40 @@ class TestTheSurfaceIsComplete:
             )
 
     def test_the_abi_and_wire_versions_are_declared(self, code):
-        assert re.search(r"#define\s+VIPRS_ACAD_ABI_VERSION\s+1u", code)
+        assert re.search(r"#define\s+VIPRS_ACAD_ABI_VERSION\s+2u", code)
         assert re.search(r"#define\s+VIPRS_ACAD_WIRE_VERSION\s+2u", code)
+
+    def test_a_buffer_too_small_has_a_code_of_its_own(self, code):
+        # The two outcomes used to share VIPRS_ACAD_LIMIT_EXCEEDED and were
+        # told apart by whether *written came back larger than the caller's
+        # cap, which no document stated and no consumer could be expected to
+        # infer. One of them is retryable and the other ends the decode, so
+        # they are different numbers now.
+        assert re.search(r"#define\s+VIPRS_ACAD_BUFFER_TOO_SMALL\s+10u", code)
+
+    def test_the_limit_code_no_longer_describes_a_buffer(self, header):
+        # In the prose as well as in the constant. A header that still tells a
+        # consumer author to expect LIMIT_EXCEEDED for a short buffer has
+        # documented the bug rather than the fix.
+        decode = header[header.index("uint32_t viprs_acad_decode_next_batch") - 3000 :]
+        decode = decode[: decode.index("uint32_t viprs_acad_decode_next_batch")]
+        assert "VIPRS_ACAD_BUFFER_TOO_SMALL" in decode, (
+            "the decode_next_batch comment never names the buffer code, so a consumer "
+            "author reading the header still writes the LIMIT_EXCEEDED branch"
+        )
+        assert "VIPRS_ACAD_LIMIT_EXCEEDED" not in decode, (
+            "the decode_next_batch comment still promises LIMIT_EXCEEDED for a short "
+            "buffer, which is the conflation this change removes"
+        )
+
+    def test_the_header_says_a_refusal_is_terminal(self, header):
+        flat = re.sub(r"\s+", " ", header)
+        assert re.search(r"terminal|latch", flat, re.I), (
+            "nothing in the header says what a second call after a refusal does. A C# "
+            "iterator that threw returns false forever after, so the documented "
+            "grow-and-retry produced a well-framed FLAG_LAST stream missing every "
+            "record after the breach, and reported OK."
+        )
 
 
 class TestTheLayoutRules:
@@ -129,19 +164,33 @@ class TestTheLayoutRules:
             )
 
     def test_no_struct_shares_a_name_with_a_call(self, code):
-        # This one cost a compile to find. `viprs_acad_capabilities_v1` is both
-        # a struct and an entry point, and in C a typedef name and a function
-        # name are the same kind of identifier, so a header that typedef'd the
-        # struct to its own name does not compile as C at all. It compiles as
-        # C++, where the function hides the class name, which is how a header
-        # ships broken: every reader who tried it tried it the wrong way.
+        # This one cost a compile to find, and the fix is now the rename
+        # rather than the missing keyword. `viprs_acad_capabilities_v1` named
+        # both a struct and an entry point, and in C a typedef name and a
+        # function name are the same kind of identifier, so a header that
+        # typedef'd the struct to its own name did not compile as C at all.
+        # It compiled as C++, where the function hides the class name, which
+        # is how a header ships broken: every reader who tried it tried it
+        # the wrong way. The calls carry `get_` now, so the two namespaces no
+        # longer touch, and this checks the collision has not come back.
         tags = set(re.findall(r"struct (viprs_[a-z0-9_]+) \{", code))
         calls = set(re.findall(r"\b(viprs_[a-z0-9_]+)\s*\(", code))
-        for name in sorted(tags & calls):
-            assert not re.search(rf"\}}\s*{name};", code), (
-                f"{name} is both a struct and a call, and the struct is typedef'd to "
-                "that name. A C compiler rejects the pair outright."
-            )
+        assert not (tags & calls), (
+            f"{sorted(tags & calls)} names both a struct and a call. That is legal C "
+            "only while nobody typedefs the struct, which is a rule somebody gets "
+            "wrong, so the boundary does not have the collision at all."
+        )
+
+    def test_every_type_on_the_boundary_carries_the_same_prefix(self, code):
+        # `viprs_cad_handle` and `viprs_decode_handle` were the two names that
+        # did not. One prefix for everything means a consumer generating
+        # bindings can select the surface with one pattern.
+        names = set(re.findall(r"struct (viprs_[a-z0-9_]+)", code))
+        stray = sorted(n for n in names if not n.startswith("viprs_acad_"))
+        assert not stray, (
+            f"{stray} sits on the boundary without the viprs_acad_ prefix everything "
+            "else carries."
+        )
 
     def test_no_abi_struct_is_typedefed_to_its_own_name(self, code):
         # Uniformly, rather than only the one that collides: a contract where
@@ -149,14 +198,17 @@ class TestTheLayoutRules:
         # somebody gets wrong.
         for name in STRUCTS:
             assert f"typedef struct {name}" not in code, (
-                f"{name} is typedef'd. Structs on this boundary are tags, so a future "
-                "entry point cannot collide with one the way capabilities already did."
+                f"{name} is typedef'd. The reason is no longer the collision, which the "
+                "rename removed: the conformance generator reads every "
+                "`typedef struct X X;` as an opaque handle, so a typedef of a struct "
+                "that also has a body emits the type twice and the consumer stops "
+                "compiling. Structs on this boundary are tags."
             )
 
     def test_the_opaque_handles_are_still_typedefed(self, code):
         # They have no fields and no call shares their name, so the idiomatic
         # opaque-pointer typedef costs nothing and saves every consumer a word.
-        for name in ("viprs_cad_handle", "viprs_decode_handle"):
+        for name in HANDLES:
             assert f"typedef struct {name} {name};" in code
 
     def test_no_enum_is_used_as_abi(self, code):

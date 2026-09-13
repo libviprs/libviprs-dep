@@ -70,11 +70,11 @@ FROZEN_STATIC_FIELDS = (
 ENTRY_POINTS = (
     "viprs_acad_abi_version",
     "viprs_acad_abi_fingerprint",
-    "viprs_acad_capabilities_v1",
+    "viprs_acad_get_capabilities_v1",
     "viprs_acad_open_path_utf8",
     "viprs_acad_open_memory",
     "viprs_acad_view_count",
-    "viprs_acad_view_info_v1",
+    "viprs_acad_get_view_info_v1",
     "viprs_acad_decode_begin",
     "viprs_acad_decode_next_batch",
     "viprs_acad_decode_close",
@@ -290,11 +290,23 @@ class TestTheEntryPointList:
         assert tuple(ba.header_entry_points()) == ENTRY_POINTS
 
     def test_struct_type_names_are_not_mistaken_for_functions(self):
-        # `viprs_acad_limits_v1` is a struct and is never exported, while
-        # `viprs_acad_capabilities_v1` is both a struct and a function.
+        # Every struct on the boundary is a tag and none of them is exported.
+        # `viprs_acad_capabilities_v1` used to be both a struct and a function
+        # and was the reason this check exists; the calls carry `get_` now, so
+        # the three struct names must all be absent and the two renamed calls
+        # must both be present.
         found = ba.header_entry_points()
-        assert "viprs_acad_limits_v1" not in found
-        assert "viprs_acad_capabilities_v1" in found
+        for struct in (
+            "viprs_acad_limits_v1",
+            "viprs_acad_capabilities_v1",
+            "viprs_acad_view_info_v1",
+        ):
+            assert struct not in found, (
+                f"{struct} is a struct tag and the extractor read it as an export, so "
+                "the verifier would demand a symbol no library has"
+            )
+        assert "viprs_acad_get_capabilities_v1" in found
+        assert "viprs_acad_get_view_info_v1" in found
 
     def test_a_header_with_no_entry_points_is_refused(self, tmp_path):
         fake = tmp_path / "viprs_acadsharp.h"
