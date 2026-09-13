@@ -821,11 +821,16 @@ RUNTIME_ARCHIVES = (
     "libbrotlienc.a",
 )
 
-# Bare names only: `system_libraries` is what build.rs turns into
-# cargo:rustc-link-lib, so a `-l` or a path there breaks downstream.
-STATIC_SYSTEM_LIBRARIES = {
-    "linux": ["stdc++", "m", "rt", "dl", "pthread"],
-    "musl": ["stdc++", "m"],
+# What a statically-linked consumer might still need from the system,
+# narrowest first. The staging script walks this ladder and records the
+# first rung the smoke both links and runs with, so `system_libraries`
+# is the measured answer rather than a guess; most of the runtime's own
+# dependencies (zlib, brotli, the libstdc++ shim) are merged into the
+# archive and are not here. Bare names only: build.rs turns each into a
+# cargo:rustc-link-lib, so a `-l` or a path would break downstream.
+STATIC_SYSTEM_LIBRARY_LADDER = {
+    "linux": ["m", "m rt dl pthread", "m rt dl pthread stdc++"],
+    "musl": ["m", "m stdc++"],
 }
 
 
@@ -859,7 +864,16 @@ FACTS="$WORK/facts.txt"
 
 if [ "$PLAT" = "mac" ]; then EXT=dylib; else EXT=so; fi
 
-fact() { printf '%s\t%s\n' "$1" "$2" >> "$FACTS"; }
+# One line per key: a later reading replaces an earlier one rather than
+# leaving two rows for the same fact in the file the manifests are
+# written from.
+fact() {
+    if [ -s "$FACTS" ]; then
+        grep -v "^$1	" "$FACTS" > "$FACTS.tmp" || true
+        mv "$FACTS.tmp" "$FACTS"
+    fi
+    printf '%s\t%s\n' "$1" "$2" >> "$FACTS"
+}
 
 # The bare names a consumer would pass to `-l`. libc and the loader are
 # dropped: nothing links those by name, and build.rs would emit a
@@ -927,7 +941,7 @@ fact live_fingerprint "$LIVE_FP"
 echo "---- shared smoke ----"
 cat /tmp/smoke.out
 
-# --- static, best effort ----------------------------------------------
+# --- static, best effort ---------------------------------------------
 fact static_ok 0
 if [ "${WANT_STATIC:-0}" = "1" ]; then
     echo "---- static publish ----"
@@ -936,41 +950,71 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
             -p:AcadSharpProject="$SRC/src/ACadSharp/ACadSharp.csproj" \
             > "$WORK/publish-static.log" 2>&1); then
         MANAGED=$(find "$WORK/native/bin" -name 'viprs_acadsharp.a' | head -1)
-        PACK=$(find "$HOME/.nuget/packages" -type d -path '*ilcompiler*/sdk' | head -1)
-        FRAMEWORK=$(dirname "$PACK")/framework
-        if [ -n "$MANAGED" ] && [ -d "$PACK" ]; then
-            MERGED="$STAGING/lib/libacadsharp_native.a"
-            {
-                echo "create $MERGED"
-                echo "addlib $MANAGED"
-                for name in RUNTIME_ARCHIVE_LIST; do
-                    for dir in "$PACK" "$FRAMEWORK"; do
-                        [ -f "$dir/$name" ] && echo "addlib $dir/$name"
-                    done
-                done
-                [ -f "$PACK/libbootstrapperdll.o" ] && echo "addmod $PACK/libbootstrapperdll.o"
-                echo "save"
-                echo "end"
-            } > /tmp/merge.mri
-            ar -M < /tmp/merge.mri && ranlib "$MERGED"
-            echo "---- static smoke ----"
-            SYSLIBS=""
-            for lib in STATIC_SYSTEM_LIBRARY_LIST; do SYSLIBS="$SYSLIBS -l$lib"; done
-            # shellcheck disable=SC2086
-            if cc -O1 "$WORK/static_archive_smoke.c" "$MERGED" $SYSLIBS \
-                    -o /tmp/static_smoke \
-                    > /tmp/static_link.log 2>&1 \
-                    && /tmp/static_smoke "$FINGERPRINT" > /tmp/static_smoke.out 2>&1; then
-                fact static_ok 1
-                fact static_system_libraries "STATIC_SYSTEM_LIBRARY_LIST"
-                cat /tmp/static_smoke.out
+        # The runtime archives live next to libbootstrapperdll.o in the
+        # NativeAOT runtime pack. Finding them by that file rather than by
+        # a path pattern means a pack layout change is a missing-file
+        # error here rather than a silent shared-only downgrade.
+        BOOTSTRAP=$(find "$HOME/.nuget/packages" -name 'libbootstrapperdll.o' | head -1)
+        PACK=$(dirname "$BOOTSTRAP")
+        if [ -n "$MANAGED" ] && [ -f "$BOOTSTRAP" ]; then
+            # libbootstrapperdll.o carries the runtime's static
+            # initialiser in .init_array and defines no global symbol at
+            # all, so inside an archive nothing can ever pull it in and
+            # the first managed call aborts. .NET 10 removed
+            # NativeAOT_StaticInitialization, the symbol the sample says
+            # to force, so there is nothing left to --require-defined.
+            # Globalising the initialiser gives the link something to
+            # force, and that flag is what `link_args` then records.
+            INIT_SYM=$(nm "$BOOTSTRAP" \
+                | awk '$2 == "t" && $3 ~ /^_GLOBAL__sub_I/ { print $3; exit }')
+            if [ -z "$INIT_SYM" ]; then
+                echo "no static initialiser in $BOOTSTRAP; shipping shared-only"
             else
-                echo "static smoke did not pass, shipping shared-only:"
-                tail -40 /tmp/static_link.log /tmp/static_smoke.out 2>/dev/null || true
-                rm -f "$MERGED"
+                objcopy --globalize-symbol="$INIT_SYM" "$BOOTSTRAP" /tmp/bootstrapperdll.o
+                MERGED="$STAGING/lib/libacadsharp_native.a"
+                {
+                    echo "create $MERGED"
+                    echo "addlib $MANAGED"
+                    for name in RUNTIME_ARCHIVE_LIST; do
+                        [ -f "$PACK/$name" ] && echo "addlib $PACK/$name"
+                    done
+                    echo "addmod /tmp/bootstrapperdll.o"
+                    echo "save"
+                    echo "end"
+                } > /tmp/merge.mri
+                ar -M < /tmp/merge.mri && ranlib "$MERGED"
+                echo "---- static smoke ----"
+                LINK_ARG="-Wl,-u,$INIT_SYM"
+                LADDER='STATIC_SYSTEM_LIBRARY_LADDER'
+                OLDIFS=$IFS
+                IFS=';'
+                for CAND in $LADDER; do
+                    IFS=$OLDIFS
+                    SYSLIBS=""
+                    for lib in $CAND; do SYSLIBS="$SYSLIBS -l$lib"; done
+                    # shellcheck disable=SC2086
+                    if cc -O1 "$WORK/static_archive_smoke.c" "$MERGED" "$LINK_ARG" \
+                            $SYSLIBS -o /tmp/static_smoke > /tmp/static_link.log 2>&1 \
+                            && /tmp/static_smoke "$FINGERPRINT" > /tmp/static_smoke.out 2>&1; then
+                        fact static_ok 1
+                        fact static_system_libraries "$CAND"
+                        fact static_link_args "$LINK_ARG"
+                        cat /tmp/static_smoke.out
+                        break
+                    fi
+                    IFS=';'
+                done
+                IFS=$OLDIFS
+                CERTIFIED=$(awk -F'\t' '$1 == "static_ok" { v = $2 } END { print v }' "$FACTS")
+                if [ "$CERTIFIED" != "1" ]; then
+                    echo "static smoke did not pass, shipping shared-only:"
+                    tail -30 /tmp/static_link.log 2>/dev/null || true
+                    tail -10 /tmp/static_smoke.out 2>/dev/null || true
+                    rm -f "$MERGED"
+                fi
             fi
         else
-            echo "no managed static archive or no ILCompiler pack found; shipping shared-only"
+            echo "no managed static archive or no NativeAOT runtime pack; shipping shared-only"
         fi
     else
         echo "static publish failed, shipping shared-only:"
@@ -987,7 +1031,7 @@ cat "$FACTS"
 def stage_script(plat):
     """`STAGE_SH` with the two per-platform lists substituted in."""
     return STAGE_SH.replace("RUNTIME_ARCHIVE_LIST", " ".join(RUNTIME_ARCHIVES)).replace(
-        "STATIC_SYSTEM_LIBRARY_LIST", " ".join(STATIC_SYSTEM_LIBRARIES.get(plat, []))
+        "STATIC_SYSTEM_LIBRARY_LADDER", ";".join(STATIC_SYSTEM_LIBRARY_LADDER.get(plat, [""]))
     )
 
 
