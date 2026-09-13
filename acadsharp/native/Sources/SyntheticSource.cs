@@ -160,7 +160,11 @@ namespace Viprs.Sources
 		// repeats. The variable-length records change length as they repeat,
 		// which is what exercises the padding and the length invariants at
 		// every residue rather than only at the convenient one.
-		public IEnumerable<Primitive> EnumerateView(int index)
+		// The cancel flag is ignored here on purpose: this source yields a
+		// primitive per item with nothing in between, so the batch writer
+		// comes back to the export between every one of them and the flag is
+		// read there.
+		public IEnumerable<Primitive> EnumerateView(int index, Func<bool> canceled)
 		{
 			for (uint i = 0; i < _itemsPerView; i++)
 			{

@@ -39,6 +39,10 @@ namespace Viprs.Cad
 		// this record came out of expanding a nested insertion.
 		private const uint FlagFromBlock = 1u;
 
+		// How many items the walk handles between two reads of the cancel
+		// flag.
+		private const ulong CancelPollInterval = 1024ul;
+
 		private readonly ResolvedLimits _limits;
 		private ulong _entities;
 
@@ -52,11 +56,29 @@ namespace Viprs.Cad
 			get { return _entities; }
 		}
 
+		// One item the walk has still to deal with: either an entity to
+		// flatten, or a record that is already made.
+		//
+		// The record slot is what lets a composite entity (a dimension, a
+		// hatch) hand back a mixture of finished records and further entities
+		// in one sequence, in the order a consumer should see them, without
+		// any of it going back through Map recursively. That recursion was a
+		// stack overflow reachable from a file: a DIMENSION whose block holds
+		// a DIMENSION nested as deep as the file likes, and two dimensions
+		// whose blocks hold each other nested forever. A StackOverflowException
+		// cannot be caught, so the export's catch-all was never in the
+		// picture; the runtime calls FailFast and the consumer's process dies.
 		private struct Pending
 		{
 			public Entity Entity;
+			public Primitive Record;
 			public Transform Transform;
 			public int Depth;
+			// Non-zero when the record should be labelled with the handle of
+			// the entity it was generated for rather than the synthesised one
+			// it came from. CadObject.Handle has an internal setter, so a
+			// hatch edge cannot be relabelled at the source.
+			public ulong HandleOverride;
 		}
 
 		private struct Frame
@@ -134,17 +156,120 @@ namespace Viprs.Cad
 			return new Transform(outer.Matrix * inner.Matrix);
 		}
 
+		// ----------------------------------------------------------- bounds
+
+		// max_entities, applied to what the walk visits rather than only to
+		// what it emits.
+		//
+		// The two are not the same number and the difference is a hole an
+		// untrusted file walks straight through: an INSERT yields no record,
+		// it pushes a frame, so a chain of block records each holding two
+		// INSERTs of the next expands 2^depth times, emits nothing, and trips
+		// neither the record count nor max_output_bytes. Twenty-one block
+		// records and forty-one entities, a file of a few kilobytes, ran for
+		// thirty-four seconds at depth twenty and is 2^65 expansions at the
+		// default max_block_depth. The header's own wording is "counted across
+		// the whole decode, block expansion included", which is this count.
+		private void CountEntity()
+		{
+			_entities = _entities + 1ul;
+			if (_entities > _limits.MaxEntities)
+			{
+				throw new AbiException(
+					Result.LimitExceeded,
+					"the decode reached entity "
+						+ _entities.ToString(CultureInfo.InvariantCulture)
+						+ " and max_entities is "
+						+ _limits.MaxEntities.ToString(CultureInfo.InvariantCulture)
+						+ ", counted across the whole decode with block expansion included"
+				);
+			}
+		}
+
+		// max_block_depth, applied to every kind of expansion and not only to
+		// INSERT. A dimension's picture and a hatch's boundary nest the same
+		// way and a file can nest either as deep as it likes, so a bound that
+		// only counted insertions was a bound with a way round it.
+		private void CheckDepth(int depth, string kind, ulong handle, string name)
+		{
+			if ((uint)depth <= _limits.MaxBlockDepth)
+			{
+				return;
+			}
+
+			throw new AbiException(
+				Result.LimitExceeded,
+				kind + " " + handle.ToString("X", CultureInfo.InvariantCulture)
+					+ " (" + name + ") is at expansion depth "
+					+ depth.ToString(CultureInfo.InvariantCulture)
+					+ " and max_block_depth is "
+					+ _limits.MaxBlockDepth.ToString(CultureInfo.InvariantCulture)
+			);
+		}
+
+		// max_polyline_points, applied where the points are counted rather
+		// than where they are encoded.
+		//
+		// The encoder does check, but it checks after the list exists: a
+		// spline with a million control points is a 24 MB allocation inside
+		// the library before anything compares it to the caller's bound, and
+		// the encoder was not checking splines at all. Counting first means
+		// the memory is never asked for.
+		private void CheckPointCount(int points, string what)
+		{
+			if ((ulong)points <= _limits.MaxPolylinePoints)
+			{
+				return;
+			}
+
+			throw new AbiException(
+				Result.LimitExceeded,
+				what + " carries " + points.ToString(CultureInfo.InvariantCulture)
+					+ " points and max_polyline_points is "
+					+ _limits.MaxPolylinePoints.ToString(CultureInfo.InvariantCulture)
+			);
+		}
+
 		// -------------------------------------------------------- the walk
 
-		public IEnumerable<Primitive> Walk(IEnumerable<Entity> roots)
+		// `canceled` is polled inside the loop, not between batches.
+		//
+		// Between batches is where the export reads the caller's flag, and
+		// that is only enough while every step of the walk produces a record.
+		// A document can make this loop run for a long time producing none: a
+		// chain of block records each holding several insertions of the next
+		// expands exponentially, and twenty-one block records with forty-one
+		// entities in them ran for thirty-four seconds without yielding once.
+		// While that runs the export never gets control back, so a caller that
+		// sets the flag is waiting on a decode that will never look at it.
+		// Polling here is what makes cancellation mean anything.
+		public IEnumerable<Primitive> Walk(IEnumerable<Entity> roots, Func<bool> canceled = null)
 		{
 			Stack<Frame> stack = new Stack<Frame>();
 			stack.Push(new Frame { Items = Root(roots).GetEnumerator() });
+			ulong sinceLastPoll = 0ul;
 
 			try
 			{
 				while (stack.Count > 0)
 				{
+					// Not on every entity: reading a volatile through a
+					// delegate on a hot loop is not free, and a thousand
+					// entities is well under a millisecond even on the
+					// pathological documents above.
+					sinceLastPoll = sinceLastPoll + 1ul;
+					if (sinceLastPoll >= CancelPollInterval)
+					{
+						sinceLastPoll = 0ul;
+						if (canceled != null && canceled())
+						{
+							throw new AbiException(
+								Result.Canceled,
+								"the caller set cancel_flag while the decode was walking the document"
+							);
+						}
+					}
+
 					Frame frame = stack.Peek();
 					if (!frame.Items.MoveNext())
 					{
@@ -154,7 +279,17 @@ namespace Viprs.Cad
 					}
 
 					Pending item = frame.Items.Current;
-					_entities = _entities + 1ul;
+
+					// A record a composite already made. It is not an entity,
+					// so it does not count against max_entities here; the
+					// batch writer counts every record it emits separately.
+					if (item.Record != null)
+					{
+						yield return item.Record;
+						continue;
+					}
+
+					CountEntity();
 
 					if (item.Entity is Insert insert)
 					{
@@ -170,8 +305,32 @@ namespace Viprs.Cad
 						continue;
 					}
 
+					// A dimension's picture and a hatch's boundary are both
+					// made of entities, and both used to be walked by calling
+					// Map again. They go on the same explicit stack as an
+					// insertion now, at one more depth, so the depth bound and
+					// the entity bound apply to them and nothing recurses.
+					if (item.Entity is Dimension dimension)
+					{
+						CheckDepth(item.Depth + 1, "DIMENSION", dimension.Handle, dimension.ObjectName);
+						stack.Push(new Frame { Items = DimensionBody(dimension, item).GetEnumerator() });
+						continue;
+					}
+
+					if (item.Entity is Hatch hatch)
+					{
+						CheckDepth(item.Depth + 1, "HATCH", hatch.Handle, hatch.ObjectName);
+						stack.Push(new Frame { Items = HatchBody(hatch, item).GetEnumerator() });
+						continue;
+					}
+
 					foreach (Primitive p in Map(item.Entity, item.Transform, item.Depth))
 					{
+						if (item.HandleOverride != 0ul)
+						{
+							p.ItemHandle = item.HandleOverride;
+						}
+
 						yield return p;
 					}
 				}
@@ -236,17 +395,7 @@ namespace Viprs.Cad
 				return Empty();
 			}
 
-			if ((uint)(item.Depth + 1) > _limits.MaxBlockDepth)
-			{
-				throw new AbiException(
-					Result.LimitExceeded,
-					"INSERT " + insert.Handle.ToString("X", CultureInfo.InvariantCulture)
-						+ " of block " + block.Name + " is at nesting depth "
-						+ (item.Depth + 1).ToString(CultureInfo.InvariantCulture)
-						+ " and max_block_depth is "
-						+ _limits.MaxBlockDepth.ToString(CultureInfo.InvariantCulture)
-				);
-			}
+			CheckDepth(item.Depth + 1, "INSERT", insert.Handle, "block " + block.Name);
 
 			return InsertBody(insert, block, item).GetEnumerator();
 		}
@@ -418,6 +567,13 @@ namespace Viprs.Cad
 					// this walk can apply lands exactly on the transformed
 					// control points. Knots and weights are untouched by
 					// construction.
+					// Counted before anything is allocated. The encoder's own
+					// guard never ran for a spline, and by the time it would
+					// have, the control points, the knots and the weights are
+					// already a list the library asked the allocator for.
+					CheckPointCount(spline.ControlPoints.Count, "a Spline record's control points");
+					CheckPointCount(spline.Knots.Count, "a Spline record's knots");
+
 					List<double> ctrl = new List<double>(spline.ControlPoints.Count * 3);
 					foreach (XYZ p in spline.ControlPoints)
 					{
@@ -443,6 +599,7 @@ namespace Viprs.Cad
 						yield return NonUniform(h, flags, "LWPOLYLINE");
 					}
 
+					CheckPointCount(lw.Vertices.Count, "a Polyline record");
 					List<double> pts = new List<double>(lw.Vertices.Count * 3);
 					double[] lwBulges = new double[lw.Vertices.Count];
 					for (int i = 0; i < lw.Vertices.Count; i++)
@@ -468,6 +625,7 @@ namespace Viprs.Cad
 					bool anyBulge = false;
 					foreach (IVertex v in poly.Vertices)
 					{
+						CheckPointCount(bulges.Count + 1, "a Polyline record");
 						IVector loc = v.Location;
 						double x = loc.Dimension > 0 ? loc[0] : 0.0;
 						double y = loc.Dimension > 1 ? loc[1] : 0.0;
@@ -526,23 +684,10 @@ namespace Viprs.Cad
 					yield break;
 				}
 
-				case Dimension dim:
-				{
-					foreach (Primitive p in MapDimension(dim, t, depth))
-					{
-						yield return p;
-					}
-					yield break;
-				}
-
-				case Hatch hatch:
-				{
-					foreach (Primitive p in MapHatch(hatch, t, depth))
-					{
-						yield return p;
-					}
-					yield break;
-				}
+				// DIMENSION and HATCH are not here. They are composites: they
+				// expand into other entities, and expanding them from inside
+				// Map is what put a file-controlled recursion on the CLR
+				// stack. Walk dispatches them onto its own stack instead.
 
 				default:
 				{
@@ -733,49 +878,63 @@ namespace Viprs.Cad
 
 		// -------------------------------------------------------- DIMENSION
 
-		private IEnumerable<Primitive> MapDimension(Dimension dim, Transform t, int depth)
+		// A dimension's picture, as items for the walk's own stack.
+		//
+		// This used to call Map on every entity in the block, which recursed
+		// whenever one of them was itself a dimension and never looked at
+		// max_block_depth. A file with a chain of nested dimensions took the
+		// process down with a stack overflow the export could not catch, and
+		// two dimensions whose blocks hold each other did it without needing
+		// to be deep. Handing the entities back instead means the walk applies
+		// the same depth bound and the same entity count it applies to an
+		// insertion.
+		private IEnumerable<Pending> DimensionBody(Dimension dim, Pending item)
 		{
 			BlockRecord block = dim.Block;
-			int emitted = 0;
+			int handed = 0;
 			if (block != null)
 			{
 				foreach (Entity e in block.Entities)
 				{
-					// One level only, and never through an INSERT: a
-					// dimension block is generated geometry, not a user
-					// block, and walking it as a block would hand it a second
-					// depth budget.
+					// Never through an INSERT: a dimension block is generated
+					// geometry, not a user block, and walking it as a block
+					// would hand it a second depth budget.
 					if (e is Insert)
 					{
 						continue;
 					}
 
-					foreach (Primitive p in Map(e, t, depth))
+					handed++;
+					yield return new Pending
 					{
-						emitted++;
-						yield return p;
-					}
+						Entity = e,
+						Transform = item.Transform,
+						Depth = item.Depth + 1,
+					};
 				}
 			}
 
-			if (emitted == 0)
+			if (handed == 0)
 			{
 				Primitive w = Primitive.Warning(
 					WarningCodes.DimensionWithoutBlock,
 					dim.Handle,
 					dim.ObjectName + " carries no block geometry, so there is nothing to draw"
 				);
-				w.Flags = depth > 0 ? FlagFromBlock : 0u;
-				yield return w;
+				w.Flags = item.Depth > 0 ? FlagFromBlock : 0u;
+				yield return new Pending { Record = w, Depth = item.Depth };
 			}
 		}
 
 		// ------------------------------------------------------------ HATCH
 
-		private IEnumerable<Primitive> MapHatch(Hatch hatch, Transform t, int depth)
+		// A hatch's boundary, as items for the walk's own stack: finished
+		// records where a loop is a polygon, and entities where it is not.
+		private IEnumerable<Pending> HatchBody(Hatch hatch, Pending item)
 		{
 			ulong h = hatch.Handle;
-			uint flags = depth > 0 ? FlagFromBlock : 0u;
+			uint flags = item.Depth > 0 ? FlagFromBlock : 0u;
+			Transform t = item.Transform;
 			int loops = 0;
 
 			foreach (Hatch.BoundaryPath path in hatch.Paths)
@@ -789,14 +948,19 @@ namespace Viprs.Cad
 				double[] pts;
 				if (TryPolygon(path, hatch.Elevation, t, out pts))
 				{
-					yield return Primitive.Polygon(h, flags, pts);
+					CheckPointCount(pts.Length / 3, "a Polygon record");
+					yield return new Pending
+					{
+						Record = Primitive.Polygon(h, flags, pts),
+						Depth = item.Depth,
+					};
 					continue;
 				}
 
-				// An ellipse or spline edge cannot be a bulge, and turning
-				// one into a bulge would be tessellation by another name. The
-				// loop goes out as its own edges instead, which is strictly
-				// more than a polygon carries.
+				// An ellipse or spline edge cannot be a bulge, and turning one
+				// into a bulge would be tessellation by another name. The loop
+				// goes out as its own edges instead, which is strictly more
+				// than a polygon carries.
 				Primitive w = Primitive.Warning(
 					WarningCodes.HatchLoopNotPolygon,
 					h,
@@ -805,18 +969,17 @@ namespace Viprs.Cad
 						+ "follow as records"
 				);
 				w.Flags = flags;
-				yield return w;
+				yield return new Pending { Record = w, Depth = item.Depth };
 
 				foreach (Hatch.BoundaryPath.Edge edge in path.Edges)
 				{
-					// CadObject.Handle has an internal setter, so a
-					// synthesised edge cannot be relabelled. Everything it
-					// produces is relabelled with the hatch's handle instead.
-					foreach (Primitive p in Map(edge.ToEntity(), t, depth))
+					yield return new Pending
 					{
-						p.ItemHandle = h;
-						yield return p;
-					}
+						Entity = edge.ToEntity(),
+						Transform = t,
+						Depth = item.Depth + 1,
+						HandleOverride = h,
+					};
 				}
 			}
 
@@ -825,12 +988,12 @@ namespace Viprs.Cad
 				yield break;
 			}
 
-			// Pattern only. ACadSharp's own ExplodePattern clips the pattern
-			// to the boundary and returns nothing when there is no boundary,
-			// so on the pinned version this always reaches the warning. The
-			// call is still here because a later upstream that can produce
-			// unbounded pattern lines should reach the Line arm rather than
-			// silently change shape.
+			// Pattern only. ACadSharp's own ExplodePattern clips the pattern to
+			// the boundary and returns nothing when there is no boundary, so on
+			// the pinned version this always reaches the warning. The call is
+			// still here because a later upstream that can produce unbounded
+			// pattern lines should reach the Line arm rather than silently
+			// change shape.
 			int lines = 0;
 			foreach (Entity e in hatch.ExplodePattern())
 			{
@@ -840,11 +1003,13 @@ namespace Viprs.Cad
 				}
 
 				lines++;
-				foreach (Primitive p in Map(e, t, depth))
+				yield return new Pending
 				{
-					p.ItemHandle = h;
-					yield return p;
-				}
+					Entity = e,
+					Transform = t,
+					Depth = item.Depth + 1,
+					HandleOverride = h,
+				};
 			}
 
 			if (lines == 0)
@@ -855,7 +1020,7 @@ namespace Viprs.Cad
 					"HATCH has no boundary loop, and its pattern produced no geometry to draw"
 				);
 				w.Flags = flags;
-				yield return w;
+				yield return new Pending { Record = w, Depth = item.Depth };
 			}
 		}
 

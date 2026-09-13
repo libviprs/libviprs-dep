@@ -46,6 +46,15 @@ namespace Viprs.Sources
 		// purpose: a batch is filled by pulling from this, so a decode that
 		// is cancelled or hits a limit stops reading the document rather
 		// than finishing the work and throwing it away.
-		IEnumerable<Primitive> EnumerateView(int index);
+		//
+		// `canceled` is the decode's cancel flag, and a source that can spend
+		// real time between two primitives has to poll it. Reading the flag
+		// only between calls to decode_next_batch is not enough: a document
+		// can make a source do unbounded work without yielding anything (a
+		// chain of block records each holding several insertions of the next
+		// expands exponentially and emits nothing), and while that runs the
+		// export never returns to look at the flag. A source that always
+		// yields promptly may ignore it. Null means never cancelled.
+		IEnumerable<Primitive> EnumerateView(int index, Func<bool> canceled);
 	}
 }

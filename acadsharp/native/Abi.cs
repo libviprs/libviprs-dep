@@ -255,22 +255,6 @@ namespace Viprs.Abi
 				}
 			}
 		}
-
-		// How many handles are alive, for viprs_acad__test_live_handles().
-		//
-		// This exists for one test: every malformed input has to leave the
-		// count at zero, so a failure path that forgets to close something
-		// shows up as a number rather than as a slow leak nobody measures.
-		public static int LiveCount
-		{
-			get
-			{
-				lock (Gate)
-				{
-					return Live.Count;
-				}
-			}
-		}
 	}
 
 	// The one string convention on this boundary, in one place.

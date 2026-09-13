@@ -93,6 +93,12 @@ public static class Corpus
 		yield return Pair("g13_scale_16x.dwg", p => WriteScale(p, 16));
 		yield return Pair("g13_many_inserts.dwg", WriteManyInserts);
 		yield return Pair("g13_ac1009.dwg", WriteAc1009);
+		yield return Pair("g13_dimension_cycle.dwg", WriteDimensionCycle);
+		yield return Pair("g13_dimension_deep.dwg", WriteDimensionDeep);
+		yield return Pair("g13_dimension_shallow.dwg", WriteDimensionShallow);
+		yield return Pair("g13_fanout.dwg", WriteFanout);
+		yield return Pair("g13_wide_spline.dwg", WriteWideSpline);
+		yield return Pair("g13_huge_text.dwg", WriteHugeText);
 	}
 
 	private static KeyValuePair<string, Action<string>> Pair(string name, Action<string> w)
@@ -473,6 +479,156 @@ public static class Corpus
 			});
 		}
 
+		Write(doc, path);
+	}
+
+	// ------------------------------------------------- hostile but valid
+
+	// The corpus needed a shape it did not have: files that open cleanly and
+	// then make the walk do the damage.
+	//
+	// Every malformed derivative in this suite fails inside DwgReader at the
+	// same line, so until these landed the flattener, the encoder and the
+	// batch writer had never seen a byte of hostile input. Both Criticals the
+	// review found live exactly there.
+
+	// How deep the nested-dimension chain goes. Well past the roughly 2686
+	// stack frames the recursive walk died at, so a build that still recurses
+	// aborts rather than passing because the fixture was too small.
+	public const int DimensionChainDepth = 6000;
+
+	// The shallow control: the same shape, inside every bound, decodes.
+	public const int ShallowDimensionChainDepth = 4;
+
+	// A chain of block records each holding this many insertions of the next.
+	// Expansions are Fanout^Depth, and nothing in that expansion yields a
+	// record, so the output-shaped bounds never see it.
+	public const int FanoutWidth = 2;
+	public const int FanoutDepth = 24;
+
+	public const int WideSplineControlPoints = 20000;
+
+	// Past the 65536-byte default max_string_bytes, so this one refuses at the
+	// defaults rather than needing a limit set for it.
+	public const int HugeTextBytes = 200000;
+
+	private static DimensionLinear Dim(CadDocument doc, double y)
+	{
+		DimensionLinear dim = new DimensionLinear
+		{
+			FirstPoint = new XYZ(0, y, 0),
+			SecondPoint = new XYZ(10, y, 0),
+			DefinitionPoint = new XYZ(10, y, 0),
+			TextMiddlePoint = new XYZ(5, y + 3, 0),
+			Offset = 3,
+			Layer = L(doc),
+		};
+		doc.Entities.Add(dim);
+		dim.UpdateBlock();
+		return dim;
+	}
+
+	// Two dimensions whose blocks hold each other. Walking one walks the
+	// other, forever, and depth is not the thing that stops it: the cycle is
+	// two levels wide.
+	public static void WriteDimensionCycle(string path)
+	{
+		CadDocument doc = NewDoc();
+		DimensionLinear a = Dim(doc, 0);
+		DimensionLinear b = Dim(doc, 20);
+		a.Block.Entities.Add(b);
+		b.Block.Entities.Add(a);
+		Write(doc, path);
+	}
+
+	private static void WriteDimensionChain(string path, int depth)
+	{
+		CadDocument doc = NewDoc();
+		DimensionLinear[] chain = new DimensionLinear[depth];
+		for (int i = 0; i < depth; i++)
+		{
+			chain[i] = Dim(doc, i * 20.0);
+		}
+
+		// Each dimension's picture holds the next one, so a walk that follows
+		// a dimension block without bounding its depth follows all of them.
+		for (int i = 0; i < depth - 1; i++)
+		{
+			chain[i].Block.Entities.Add(chain[i + 1]);
+		}
+
+		Write(doc, path);
+	}
+
+	public static void WriteDimensionDeep(string path)
+	{
+		WriteDimensionChain(path, DimensionChainDepth);
+	}
+
+	public static void WriteDimensionShallow(string path)
+	{
+		WriteDimensionChain(path, ShallowDimensionChainDepth);
+	}
+
+	// The expansion that emits nothing. Twenty-five block records and
+	// forty-nine entities, and 2^24 expansions if nothing counts them.
+	public static void WriteFanout(string path)
+	{
+		CadDocument doc = NewDoc();
+		BlockRecord[] levels = new BlockRecord[FanoutDepth + 1];
+		for (int i = 0; i <= FanoutDepth; i++)
+		{
+			levels[i] = new BlockRecord("VIPRS_G13_FANOUT_" + i);
+			doc.BlockRecords.Add(levels[i]);
+		}
+
+		for (int i = 0; i < FanoutDepth; i++)
+		{
+			for (int k = 0; k < FanoutWidth; k++)
+			{
+				levels[i].Entities.Add(new Insert(levels[i + 1]) { InsertPoint = new XYZ(k, 0, 0) });
+			}
+		}
+
+		// The deepest block is empty, so the whole expansion produces no
+		// record at all.
+		doc.Entities.Add(new Insert(levels[0]) { InsertPoint = XYZ.Zero, Layer = L(doc) });
+		Write(doc, path);
+	}
+
+	// A spline wide enough that building its control points is a large
+	// allocation, which is what max_polyline_points is there to refuse and
+	// what the encoder's own guard never looked at.
+	public static void WriteWideSpline(string path)
+	{
+		CadDocument doc = NewDoc();
+		Spline s = new Spline { Degree = 3, Layer = L(doc) };
+		for (int i = 0; i < WideSplineControlPoints; i++)
+		{
+			s.ControlPoints.Add(new XYZ(i * 0.25, (i % 11) * 0.5, 0));
+		}
+
+		for (int i = 0; i < WideSplineControlPoints + 4; i++)
+		{
+			s.Knots.Add(i * 0.001);
+		}
+
+		doc.Entities.Add(s);
+		Write(doc, path);
+	}
+
+	// A text past the default max_string_bytes, so the refusal happens with
+	// no limit set by the caller at all.
+	public static void WriteHugeText(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new MText
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			Height = 1.0,
+			Value = new string('W', HugeTextBytes),
+			Layer = L(doc),
+		});
 		Write(doc, path);
 	}
 

@@ -310,7 +310,7 @@ namespace Viprs.Cad.Fixtures
 
 			if (openCode != Result.Ok)
 			{
-				json.Num("live_handles", Handles.LiveCount);
+				json.UNum("live_handles", Handles.LiveCount);
 				json.Num("peak_rss_kb", PeakRss());
 				json.Str("decode_code", "NOT_REACHED");
 				Emit(json);
@@ -337,7 +337,7 @@ namespace Viprs.Cad.Fixtures
 			if (o.NoDecode)
 			{
 				CloseDocument(documentHandle);
-				json.Num("live_handles", Handles.LiveCount);
+				json.UNum("live_handles", Handles.LiveCount);
 				json.Num("peak_rss_kb", PeakRss());
 				json.Str("decode_code", "SKIPPED");
 				Emit(json);
@@ -456,7 +456,7 @@ namespace Viprs.Cad.Fixtures
 				try
 				{
 					int index = 0;
-					foreach (Primitive p in source.EnumerateView(o.View))
+					foreach (Primitive p in source.EnumerateView(o.View, null))
 					{
 						dump.Add(CanonicalDump.Line(index, p));
 						index++;
@@ -489,7 +489,7 @@ namespace Viprs.Cad.Fixtures
 			Marshal.FreeHGlobal(cancelFlag);
 			GC.KeepAlive(buffer);
 
-			json.Num("live_handles", Handles.LiveCount);
+			json.UNum("live_handles", Handles.LiveCount);
 			json.Num("peak_rss_kb", PeakRss());
 			Emit(json);
 			return 0;

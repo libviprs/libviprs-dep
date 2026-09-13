@@ -299,17 +299,17 @@ namespace Viprs.Sources
 
 		// ---------------------------------------------------------- decode
 
-		public IEnumerable<Primitive> EnumerateView(int index)
+		public IEnumerable<Primitive> EnumerateView(int index, Func<bool> canceled)
 		{
 			if (index < 0 || index >= _views.Count)
 			{
 				throw new AbiException(Result.InvalidArgument, "no such view index");
 			}
 
-			return Stream(index);
+			return Stream(index, canceled);
 		}
 
-		private IEnumerable<Primitive> Stream(int index)
+		private IEnumerable<Primitive> Stream(int index, Func<bool> canceled)
 		{
 			// The reader's notifications are about the document, not about
 			// one view, so they head every view's stream. A consumer decoding
@@ -328,7 +328,7 @@ namespace Viprs.Sources
 			}
 
 			Flattener flattener = new Flattener(_limits);
-			foreach (Primitive p in flattener.Walk(block.Entities))
+			foreach (Primitive p in flattener.Walk(block.Entities, canceled))
 			{
 				yield return p;
 			}
