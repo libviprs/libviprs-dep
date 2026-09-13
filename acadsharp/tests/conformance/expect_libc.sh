@@ -67,7 +67,7 @@ echo "the library asks for:"
 if [ -z "${NEEDED//[[:space:]]/}" ]; then
   echo "  (nothing)"
 else
-  echo "$NEEDED" | sed 's/^/  /'
+  echo "  ${NEEDED//$'\n'/$'\n'  }"
 fi
 
 # An empty list is the failure that looks most like a pass. A readelf whose
