@@ -194,8 +194,7 @@ class TestTheLayoutRules:
         names = set(re.findall(r"struct (viprs_[a-z0-9_]+)", code))
         stray = sorted(n for n in names if not n.startswith("viprs_acad_"))
         assert not stray, (
-            f"{stray} sits on the boundary without the viprs_acad_ prefix everything "
-            "else carries."
+            f"{stray} sits on the boundary without the viprs_acad_ prefix everything else carries."
         )
 
     def test_no_abi_struct_is_typedefed_to_its_own_name(self, code):

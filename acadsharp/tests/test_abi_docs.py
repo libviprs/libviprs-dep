@@ -244,7 +244,11 @@ class TestTheTwoRefusalsAreToldApart:
 
     def test_the_buffer_code_is_in_the_table(self, abi):
         assert "VIPRS_ACAD_BUFFER_TOO_SMALL" in abi
-        row = [ln for ln in abi.splitlines() if "`VIPRS_ACAD_BUFFER_TOO_SMALL`" in ln and ln.startswith("|")]
+        row = [
+            ln
+            for ln in abi.splitlines()
+            if "`VIPRS_ACAD_BUFFER_TOO_SMALL`" in ln and ln.startswith("|")
+        ]
         assert row, "VIPRS_ACAD_BUFFER_TOO_SMALL has no row in the result-code table"
         flat = re.sub(r"\s+", " ", row[0])
         assert re.search(r"retr", flat, re.I), (
@@ -265,8 +269,7 @@ class TestTheTwoRefusalsAreToldApart:
             "meanings, which is the conflation the new code removes"
         )
         assert "viprs_acad_limits_v1" in flat, (
-            "and it has to say what it does mean: a bound in the limits struct, and "
-            "nothing else"
+            "and it has to say what it does mean: a bound in the limits struct, and nothing else"
         )
 
     def test_the_limit_code_is_stated_to_be_terminal(self, abi_flat):
@@ -360,7 +363,8 @@ class TestTheFingerprintIsDefined:
         # ABI_MISMATCH on a pair that works. So a comment-only edit moves the
         # number on purpose, and a reader who does not know that reads a moved
         # fingerprint as a bug.
-        assert re.search(r"the (published )?header file|the file itself|whole file", abi_flat, re.I), (
+        over_the_file = r"the (published )?header file|the file itself|whole file"
+        assert re.search(over_the_file, abi_flat, re.I), (
             "the document never says the digest is over the file, so a reader assumes "
             "it is over the declarations and reports a comment-only move as a defect"
         )
