@@ -14,6 +14,12 @@ give the failure it prevents rather than the tool that would have caught it.
 The batch protocol the decode calls emit lives in [WIRE.md](WIRE.md). This
 file stops at the boundary.
 
+Getting the library onto a link line in the first place is a third document,
+[LINKINFO.md](LINKINFO.md), which defines every field of the archive's
+`metadata/LINKINFO.json` and the linking recipe measured for it. All three ship
+inside the archive, so a consumer can be built from what is published without
+the producer's source.
+
 ## What this boundary is not
 
 It carries no type from the library that happens to back it. Every value

@@ -27,6 +27,7 @@ ACADSHARP = os.path.dirname(HERE)
 DOCS = os.path.join(ACADSHARP, "docs")
 ABI_MD = os.path.join(DOCS, "ABI.md")
 WIRE_MD = os.path.join(DOCS, "WIRE.md")
+LINKINFO_MD = os.path.join(DOCS, "LINKINFO.md")
 HEADER = os.path.join(ACADSHARP, "include", "viprs_acadsharp.h")
 
 ENTRY_POINTS = (
@@ -89,6 +90,18 @@ def abi():
 def wire():
     with open(WIRE_MD) as f:
         return f.read()
+
+
+@pytest.fixture(scope="module")
+def linkinfo():
+    with open(LINKINFO_MD) as f:
+        return f.read()
+
+
+@pytest.fixture(scope="module")
+def linkinfo_flat(linkinfo):
+    """LINKINFO.md with its hard wrapping collapsed, same reason as `abi_flat`."""
+    return re.sub(r"\s+", " ", linkinfo)
 
 
 @pytest.fixture(scope="module")
@@ -250,6 +263,177 @@ class TestTheSyntheticBackingIsDocumented:
         assert "WIRE.md" in abi
 
 
+class TestTheManifestSpecIsEnoughToLinkFrom:
+    """`LINKINFO.md` is the third contract, and the one that did not exist.
+
+    The header could always be consumed from the archive. `LINKINFO.json`
+    could not: its field list was a tuple in the build driver, its types
+    were implicit, and the rule that decides whether a static link works
+    at all lived in a comment in that same driver. So the person writing
+    a consumer read the producer's source, which is the coupling freezing
+    the ABI was supposed to remove.
+
+    Unlike ABI.md and WIRE.md, this document is allowed to name a build
+    system. A manifest is not a boundary: it matters only to whatever
+    parses it at build time, and the failure it exists to prevent is
+    invisible unless the recipe is spelled out in that reader's own
+    directives. The price of that exemption is the rule below that the
+    linker-level form has to be there too, so a consumer built with
+    something else is still served.
+    """
+
+    # The field table is checked against the driver's frozen tuple in
+    # test_build_manifests.py, which is the file that holds it. What is
+    # checked here is the prose around it: the rules a reader cannot
+    # infer from a table of names and types.
+
+    def test_the_schema_version_forward_rule_is_stated(self, linkinfo, linkinfo_flat):
+        assert "schema_version" in linkinfo
+        assert re.search(r"higher than.{0,120}refuse", linkinfo_flat, re.I), (
+            "the document has to say what a consumer does when schema_version is "
+            "higher than the one it knows. Pressing on with the fields it recognises "
+            "turns a manifest change into a crash in somebody else's binary."
+        )
+        assert re.search(r"lower than.{0,160}(accept|may)", linkinfo_flat, re.I), (
+            "and what it does with an older one, or every consumer refuses every "
+            "archive published before its own release"
+        )
+
+    def test_the_fingerprint_format_is_pinned(self, linkinfo, linkinfo_flat):
+        assert re.search(r"16 lowercase hex", linkinfo_flat, re.I), (
+            "the width and the case are part of the format: a consumer comparing "
+            "strings rather than numbers gets this wrong on a leading zero"
+        )
+        assert re.search(r"first eight bytes", linkinfo_flat, re.I)
+        assert re.search(r"big[- ]endian", linkinfo_flat, re.I), (
+            "which end the eight bytes come from decides the number"
+        )
+        assert re.search(r"carries no `0x` prefix", linkinfo_flat), (
+            "the value carries no 0x prefix, and a radix-16 parse of a prefixed "
+            "string fails rather than skipping it. Saying so is the whole point of "
+            "documenting a format."
+        )
+
+    def test_absent_is_distinguished_from_empty(self, linkinfo_flat):
+        assert re.search(r"absent, not empty", linkinfo_flat, re.I), (
+            "static_library is missing from the JSON on a target that built none, "
+            "never present and empty, and a consumer that tests truthiness rather "
+            "than presence cannot tell those apart"
+        )
+        assert re.search(r"empty string is a path", linkinfo_flat, re.I)
+
+    def test_static_certified_is_defined_as_linked_and_ran(self, linkinfo, linkinfo_flat):
+        assert re.search(r"linked.{0,80}and ran", linkinfo_flat, re.I), (
+            "an archive that links and aborts on the first call is indistinguishable "
+            "from a working one until something runs it, so the flag is defined on "
+            "running and not on linking"
+        )
+        assert re.search(r"`false` whenever", linkinfo_flat), (
+            "the false side needs stating too: every target that never attempts a "
+            "static build reports false, and that is not a failure"
+        )
+
+    def test_the_recipe_is_written_out_in_full_and_in_order(self, linkinfo):
+        # The one part of this document that is not prose. Indented
+        # directives only: the field table quotes the same lines in a
+        # different order, because it is ordered by field name, and a
+        # whole-file search for them would read that as the recipe.
+        directives = [
+            line.strip()
+            for line in linkinfo.splitlines()
+            if re.match(r"^ {4}cargo:rustc-link", line)
+        ]
+        assert directives == [
+            "cargo:rustc-link-search=native=<archive>/lib",
+            "cargo:rustc-link-lib=static:-bundle,+whole-archive=acadsharp_native_init",
+            "cargo:rustc-link-lib=static:-bundle=acadsharp_native",
+            "cargo:rustc-link-lib=<each static_system_libraries entry>",
+        ], (
+            "this is the measured working recipe, and every part of it is "
+            "load-bearing: both modifiers on both libraries, and the initialiser "
+            "archive ahead of the main one. A consumer reading a reordered or "
+            "abbreviated copy reinvents a link that fails on RhRegisterOSModule or "
+            "a binary that aborts at the first call."
+        )
+
+    @staticmethod
+    def _paragraph(text, needle):
+        """The one paragraph containing `needle`, hard wrapping collapsed.
+
+        Scoped rather than whole-file on purpose. The document states the
+        left-to-right rule twice, once for the linker in general and once
+        for this specific trap, so a whole-file search for it stays green
+        while the explanation that matters is deleted. It did: the first
+        version of this check passed against a copy with the paragraph
+        rewritten.
+        """
+        for block in text.split("\n\n"):
+            if needle in block:
+                return re.sub(r"\s+", " ", block)
+        raise AssertionError(f"LINKINFO.md has no paragraph containing {needle!r}")
+
+    def test_it_explains_why_both_libraries_are_unbundled(self, linkinfo):
+        para = self._paragraph(linkinfo, "`-bundle` on both")
+        assert "`+bundle`" in para, (
+            "the default is the trap, so the document has to name it rather than "
+            "only naming the flag that avoids it"
+        )
+        assert "rlib" in para, (
+            "with the default, rustc packs the archive into the crate's own rlib "
+            "instead of passing a -l flag, and that rlib lands ahead of the "
+            "whole-archived initialiser"
+        )
+        assert re.search(r"left to right", para, re.I), (
+            "the reason the position matters at all is that the linker reads left "
+            "to right and cannot go back, and it has to be said here rather than "
+            "only in the general section"
+        )
+
+    def test_it_says_the_initialiser_archive_comes_first_and_what_happens_otherwise(
+        self, linkinfo, linkinfo_flat
+    ):
+        assert "RhRegisterOSModule" in linkinfo, (
+            "a reader who hits this error needs to find it in the document that "
+            "would have prevented it"
+        )
+        assert re.search(r"undefined reference", linkinfo_flat, re.I)
+        assert re.search(r"first", linkinfo_flat, re.I)
+
+    def test_it_says_a_link_argument_does_not_travel(self, linkinfo, linkinfo_flat):
+        assert "cargo:rustc-link-arg" in linkinfo
+        assert re.search(
+            r"does \*\*not\*\* propagate|goes no further|never reaches", linkinfo_flat, re.I
+        ), (
+            "this is the failure the initialiser archive exists to avoid, and it is "
+            "silent: the producing crate's own tests link correctly and every "
+            "dependent binary does not. A reader who does not know it reinvents the "
+            "bug, because forcing the symbol is the obvious fix."
+        )
+
+    def test_the_rule_is_stated_in_linker_terms_as_well(self, linkinfo):
+        # The price of being the one document that may name a build
+        # system. A consumer written in anything else reads this half.
+        assert "--whole-archive" in linkinfo, (
+            "the general rule is a linker rule, and a consumer that is not the one "
+            "we happen to have needs it in those terms"
+        )
+        assert "force_load" in linkinfo, (
+            "and on the Apple linker it is spelled differently, which is exactly "
+            "the kind of thing a build-script-only recipe hides"
+        )
+
+    def test_it_points_at_the_other_two_contracts(self, linkinfo):
+        assert "ABI.md" in linkinfo and "WIRE.md" in linkinfo
+
+    def test_the_abi_document_points_back_at_it(self, abi):
+        # Three files, and a reader arrives at whichever one they were
+        # handed. ABI.md already names metadata/LINKINFO.json; it has to
+        # name the document that defines it too.
+        assert "LINKINFO.md" in abi, (
+            "a reader who starts at ABI.md has no way to learn the manifest is specified anywhere"
+        )
+
+
 class TestNoDocumentPrintsALiveDigest:
     """A real fingerprint in prose goes stale the first time the header moves.
 
@@ -271,7 +455,7 @@ class TestNoDocumentPrintsALiveDigest:
         with open(HEADER, "rb") as f:
             return hashlib.sha256(f.read()).hexdigest()
 
-    @pytest.mark.parametrize("doc", ["ABI.md", "WIRE.md"])
+    @pytest.mark.parametrize("doc", ["ABI.md", "WIRE.md", "LINKINFO.md"])
     def test_no_prefix_of_the_header_digest_appears(self, doc):
         digest = self._digest()
         path = os.path.join(DOCS, doc)

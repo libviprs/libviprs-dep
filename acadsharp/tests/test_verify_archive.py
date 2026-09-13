@@ -523,6 +523,14 @@ class TestMissingMembers:
         "missing",
         [
             "include/viprs_acadsharp.h",
+            # The three frozen contracts. An archive without them is one a
+            # consumer cannot be built from: the batch stream and the
+            # manifest schema are defined in these files and nowhere else,
+            # so the next person writing a consumer reads the build driver
+            # instead, which is the coupling freezing the ABI removed.
+            "docs/ABI.md",
+            "docs/WIRE.md",
+            "docs/LINKINFO.md",
             "metadata/LINKINFO.json",
             "metadata/BUILDINFO.json",
             "LICENSES/ACadSharp-LICENSE",

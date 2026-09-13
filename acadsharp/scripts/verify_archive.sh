@@ -14,8 +14,12 @@
 #
 # Invariants enforced:
 #   1. Exactly one top-level directory, named after the tarball, holding
-#      the documented layout: the shared library, the header, both
-#      manifests, CHECKSUMS.txt, both licence files and the README.
+#      the documented layout: the shared library, the header, the three
+#      frozen contract documents under docs/, both manifests,
+#      CHECKSUMS.txt, both licence files and the README. The documents
+#      are load-bearing rather than decoration: the wire format and the
+#      manifest schema are defined nowhere else, so an archive without
+#      them is one a consumer has to read the producer's source to use.
 #   2. CHECKSUMS.txt covers every other file in the archive and every
 #      digest matches. A file the manifest does not mention is as much a
 #      defect as one whose digest is wrong.
@@ -361,6 +365,9 @@ fi
 for rel in \
   "lib/$SHARED_NAME" \
   "include/viprs_acadsharp.h" \
+  "docs/ABI.md" \
+  "docs/WIRE.md" \
+  "docs/LINKINFO.md" \
   "metadata/LINKINFO.json" \
   "metadata/BUILDINFO.json" \
   "metadata/CHECKSUMS.txt" \

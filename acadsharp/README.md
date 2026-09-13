@@ -31,8 +31,9 @@ hashed.
 Five archives, not six: there is no Microsoft-platform artifact here, and the
 mac slice is Apple Silicon only. The Rust triple lives in each archive's
 `metadata/LINKINFO.json`, which is what the `acadsharp-rs` crate's `build.rs`
-reads; the version lives in the release tag rather than in the filename, the
-same convention `pdfium/` and `zstd/` use.
+reads and which [`docs/LINKINFO.md`](docs/LINKINFO.md) specifies; the version
+lives in the release tag rather than in the filename, the same convention
+`pdfium/` and `zstd/` use.
 
 ## Why a shim and not a port
 
@@ -134,7 +135,9 @@ acadsharp/
   VERSION                   # 3.7.1-viprs.1
   native/                   # the shim: csproj, exports, probe, SDK pin, lock file
   patches/                  # empty; upstream patches go here if a site needs one
-  docs/adr/                 # 0001 is the spike's verdict
+  docs/                     # ABI.md, WIRE.md and LINKINFO.md, the three frozen
+                            # contracts; every one ships inside the archive
+  docs/adr/                 # 0001 is the spike's verdict, and stays in the repo
   tests/                    # pytest guards over the pins, the project and the captures
   tests/fixtures/gen/       # writes the DWG fixtures with ACadSharp's own DwgWriter
   tests/fixtures/captures/  # the recorded JIT and NativeAOT reads of each fixture
