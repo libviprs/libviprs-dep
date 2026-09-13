@@ -101,8 +101,27 @@
       <Output TaskParameter="Lines" ItemName="ViprsVersionLine" />
     </ReadLinesFromFile>
 
+    <!-- acadsharp/VERSION is <upstream>-viprs.<revision>, and the two halves
+         answer two different questions. The artifact version names the
+         archive; the upstream half is the ACadSharp release, which is what
+         viprs_acad_capabilities_v1 is documented to report and what
+         LINKINFO.json records as acadsharp_version.
+
+         It used to report the whole string, so the call wrote the artifact
+         version into a parameter the header calls "the pinned ACadSharp
+         version" while the manifest beside it carried only the upstream
+         half. Two frozen surfaces, one question, two answers. -->
     <PropertyGroup>
       <ViprsShimVersion>@(ViprsVersionLine)</ViprsShimVersion>
+      <ViprsVersionSuffixIndex>$(ViprsShimVersion.IndexOf('-viprs.'))</ViprsVersionSuffixIndex>
+    </PropertyGroup>
+
+    <Error
+      Condition="'$(ViprsVersionSuffixIndex)' == '-1'"
+      Text="$(ViprsVersionFile) reads '$(ViprsShimVersion)', which is not &lt;upstream&gt;-viprs.&lt;revision&gt;. viprs_acad_capabilities_v1 reports the upstream half and there is no way to take it from this." />
+
+    <PropertyGroup>
+      <ViprsUpstreamVersion>$(ViprsShimVersion.Substring(0, $(ViprsVersionSuffixIndex)))</ViprsUpstreamVersion>
     </PropertyGroup>
 
     <WriteLinesToFile
@@ -115,7 +134,7 @@
       File="$(IntermediateOutputPath)AcadSharpVersion.g.cs"
       Overwrite="true"
       WriteOnlyWhenDifferent="true"
-      Lines="// &lt;auto-generated /&gt;;// Generated from acadsharp/VERSION by the GenerateAbiFingerprint target.;namespace Viprs.Abi;{;%09internal static class AcadSharpVersion;%09{;%09%09public const string Text = &quot;$(ViprsShimVersion)&quot;%3B;%09};}" />
+      Lines="// &lt;auto-generated /&gt;;// Generated from acadsharp/VERSION by the GenerateAbiFingerprint target.;// Text is the upstream ACadSharp release, which is what the header promises;// viprs_acad_capabilities_v1 writes and what LINKINFO.json records.;namespace Viprs.Abi;{;%09internal static class AcadSharpVersion;%09{;%09%09public const string Text = &quot;$(ViprsUpstreamVersion)&quot;%3B;%09};}" />
 
     <ItemGroup>
       <Compile Include="$(IntermediateOutputPath)AbiFingerprint.g.cs" />

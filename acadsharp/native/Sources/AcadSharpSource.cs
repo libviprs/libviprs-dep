@@ -62,42 +62,15 @@ namespace Viprs.Sources
 		// signature is read and judged before the reader is constructed, so
 		// an unreadable version is UNSUPPORTED_FORMAT and never CORRUPT_INPUT
 		// from somewhere deep in a parse.
+		//
+		// The bound itself is SourceFactory's, and applying it here as well
+		// is what gave the same failure two different codes: this copy called
+		// a failed stat INVALID_ARGUMENT and SourceFactory calls it
+		// CORRUPT_INPUT. Nothing reaches this method except through
+		// SourceFactory.OpenPath, which has already refused anything too big.
 		public static AcadSharpSource OpenPath(string path, ResolvedLimits limits)
 		{
 			limits = limits ?? ResolvedLimits.Defaults;
-
-			long length;
-			try
-			{
-				FileInfo info = new FileInfo(path);
-				if (!info.Exists)
-				{
-					throw new AbiException(Result.InvalidArgument, "no file at the given path");
-				}
-
-				length = info.Length;
-			}
-			catch (AbiException)
-			{
-				throw;
-			}
-			catch (Exception ex)
-			{
-				throw new AbiException(
-					Result.InvalidArgument,
-					ex.GetType().Name + ": " + ex.Message
-				);
-			}
-
-			if ((ulong)length > limits.MaxInputBytes)
-			{
-				throw new AbiException(
-					Result.LimitExceeded,
-					"the file is " + length.ToString(System.Globalization.CultureInfo.InvariantCulture)
-						+ " bytes and max_input_bytes is "
-						+ limits.MaxInputBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)
-				);
-			}
 
 			byte[] head = new byte[MagicLength];
 			int read;
@@ -132,16 +105,8 @@ namespace Viprs.Sources
 				throw new AbiException(Result.InvalidArgument, "data is null");
 			}
 
-			if ((ulong)data.LongLength > limits.MaxInputBytes)
-			{
-				throw new AbiException(
-					Result.LimitExceeded,
-					"the buffer is " + data.LongLength.ToString(System.Globalization.CultureInfo.InvariantCulture)
-						+ " bytes and max_input_bytes is "
-						+ limits.MaxInputBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)
-				);
-			}
-
+			// As above: SourceFactory.OpenMemory applies max_input_bytes
+			// before it decides which source these bytes belong to.
 			uint version = Gate(data, data.Length < MagicLength ? data.Length : MagicLength);
 			AcadSharpSource source = new AcadSharpSource(limits);
 			source.Read(() => new MemoryStream(data, 0, data.Length, false, true), version);

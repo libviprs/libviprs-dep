@@ -42,8 +42,20 @@ case "$lib_dir/" in
     *) mounts+=(-v "$lib_dir":"$lib_dir") ;;
 esac
 
+# The upstream half of acadsharp/VERSION. build.rs turns it into a constant
+# the consumer compares the capability string against, for the same reason the
+# fingerprint is computed here: a version this crate carried would agree with
+# the shim on the day it was typed.
+version="$(tr -d '[:space:]' < "$repo/acadsharp/VERSION")"
+acadsharp_version="${version%%-viprs.*}"
+if [ "$acadsharp_version" = "$version" ]; then
+    echo "acadsharp/VERSION reads '$version', which is not <upstream>-viprs.<revision>" >&2
+    exit 2
+fi
+
 echo "library: $library"
 echo "image:   $image ($platform)"
+echo "upstream: $acadsharp_version"
 
 docker run --rm --platform "$platform" \
     "${mounts[@]}" \
@@ -53,6 +65,7 @@ docker run --rm --platform "$platform" \
     -e CARGO_TARGET_DIR=/tmp/target \
     -e VIPRS_ACAD_LIB_DIR=/tmp/viprs-lib \
     -e VIPRS_ACAD_HEADER="$repo/acadsharp/include/viprs_acadsharp.h" \
+    -e VIPRS_ACAD_EXPECTED_ACADSHARP_VERSION="$acadsharp_version" \
     -e LD_LIBRARY_PATH=/tmp/viprs-lib \
     --user "$(id -u):$(id -g)" \
     "$image" \

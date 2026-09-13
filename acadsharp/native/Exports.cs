@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Viprs;
@@ -110,17 +109,23 @@ public static class Exports
 			}
 
 			string text = Encoding.UTF8.GetString(path, (int)pathLen);
-			if (text.Length == 0 || !File.Exists(text))
+			if (text.Length == 0 || text.IndexOf('\0') >= 0)
 			{
+				// An embedded NUL is the caller's argument being wrong, not
+				// the input's problem, and it is the one malformed path the
+				// platform rejects before it ever stats anything. Refusing it
+				// here keeps it INVALID_ARGUMENT, which is what ABI.md says a
+				// path that names nothing readable is. Everything else about
+				// the path is SourceFactory's.
 				return Result.InvalidArgument;
 			}
 
-			long size = new FileInfo(text).Length;
-			if ((ulong)size > resolved.MaxInputBytes)
-			{
-				return Result.LimitExceeded;
-			}
-
+			// No stat and no max_input_bytes here. Both used to be, and this
+			// copy mapped a failed stat to INVALID_ARGUMENT where
+			// SourceFactory maps it to CORRUPT_INPUT, so the code a caller
+			// saw depended on which of the two noticed first. SourceFactory
+			// stats once, refuses a missing path with INVALID_ARGUMENT and
+			// applies the bound before the file is opened.
 			IDocumentSource source = SourceFactory.OpenPath(text, resolved);
 			*outHandle = Handles.Add(new DocumentHandle(source, resolved));
 			return Result.Ok;
@@ -163,10 +168,16 @@ public static class Exports
 				return Result.InvalidArgument;
 			}
 
-			if (dataLen > resolved.MaxInputBytes || dataLen > (ulong)int.MaxValue)
+			if (dataLen > (ulong)int.MaxValue)
 			{
 				return Result.LimitExceeded;
 			}
+
+			// max_input_bytes, before the copy below rather than after it.
+			// SourceFactory owns the number and the message; this asks it,
+			// because a bound applied after the duplication has already paid
+			// for the allocation it exists to refuse.
+			SourceFactory.CheckInputBytes(dataLen, resolved, "buffer");
 
 			// The header says this call duplicates the input and open_path
 			// does not, and this is where that is true: the caller owns the
@@ -387,6 +398,11 @@ public static class Exports
 			DecodeSession session = Handles.Remove<DecodeSession>(handle);
 			if (session != null)
 			{
+				// Out of the document's list as well as out of the handle
+				// table. Releasing only the table leaves the document holding
+				// a handle that no longer resolves, once per decode the
+				// caller opened, for as long as the document is open.
+				session.Document.Untrack(handle);
 				session.Dispose();
 			}
 		}
@@ -469,7 +485,8 @@ public static class Exports
 	// outside: closing a document with the wrong close function used to
 	// orphan it and every decode it tracked, and from the caller's side that
 	// looked exactly like a close that worked. A count a consumer can read
-	// before and after makes it a test rather than an argument.
+	// before and after makes it a test rather than an argument. The malformed
+	// corpus reads it after every refusal.
 	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__test_live_handles")]
 	public static ulong TestLiveHandles()
 	{

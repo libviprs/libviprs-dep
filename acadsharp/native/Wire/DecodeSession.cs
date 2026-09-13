@@ -35,6 +35,27 @@ namespace Viprs.Wire
 			}
 		}
 
+		// The other half of Track, and it was missing.
+		//
+		// decode_close took the handle out of the global table and disposed
+		// the session, and left the entry here, so this list only ever
+		// emptied when the document did. A consumer decoding one view in a
+		// loop grew it by a handle per iteration for the life of the
+		// document. Nothing could see it: viprs_acad__test_live_handles
+		// counts the handle table, which is the one thing decode_close did
+		// clean up.
+		//
+		// Same lock as Track and as Dispose, because Dispose walks this list
+		// from whatever thread closed the document and a close racing a
+		// decode_close is a documented shape, not a misuse.
+		public void Untrack(IntPtr decode)
+		{
+			lock (_decodes)
+			{
+				_decodes.Remove(decode);
+			}
+		}
+
 		// Closing a document releases every decode still open on it. The
 		// alternative is a decode handle that outlives the thing it reads
 		// from, and a consumer that then uses it is reading freed state with
