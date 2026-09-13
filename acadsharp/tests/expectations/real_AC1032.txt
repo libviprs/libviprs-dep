@@ -84,36 +84,36 @@
 00083 Warning handle=44D flags=0 code=UNSUPPORTED_ENTITY message="WIPEOUT is not a primitive this version flattens"
 00084 Warning handle=512 flags=0 code=UNSUPPORTED_ENTITY message="LEADER is not a primitive this version flattens"
 00085 Text handle=513 flags=0 p=[(741.023750,14.696812,0.000000)] h=1.424925 rot=0.000000 value="Sample annotation"
-00086 Line handle=626 flags=0 pts=[(329.976559,3.482445,0.000000);(319.276189,22.016030,0.000000)]
-00087 Line handle=627 flags=0 pts=[(364.174764,37.680650,0.000000);(359.733100,45.373838,0.000000)]
-00088 Line handle=628 flags=0 pts=[(322.066253,22.183498,0.000000);(358.193037,43.041307,0.000000)]
-00089 Warning handle=629 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00090 Warning handle=62A flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00091 Text handle=62B flags=0 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
-00092 Warning handle=62C flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00093 Warning handle=62D flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00094 Warning handle=62E flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00095 Line handle=62F flags=0 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
-00096 Line handle=630 flags=0 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
-00097 Arc handle=631 flags=0 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
-00098 Warning handle=632 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00099 Warning handle=633 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00100 Text handle=634 flags=0 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
-00101 Warning handle=635 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00102 Warning handle=636 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00103 Warning handle=637 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00104 Warning handle=638 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00105 Line handle=639 flags=0 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
-00106 Line handle=63A flags=0 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
-00107 Arc handle=63B flags=0 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
-00108 Warning handle=63C flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00109 Warning handle=63D flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00110 Text handle=63E flags=0 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
-00111 Warning handle=63F flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00112 Warning handle=640 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00113 Warning handle=641 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00114 Warning handle=642 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00115 Warning handle=643 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00086 Line handle=626 flags=1 pts=[(329.976559,3.482445,0.000000);(319.276189,22.016030,0.000000)]
+00087 Line handle=627 flags=1 pts=[(364.174764,37.680650,0.000000);(359.733100,45.373838,0.000000)]
+00088 Line handle=628 flags=1 pts=[(322.066253,22.183498,0.000000);(358.193037,43.041307,0.000000)]
+00089 Warning handle=629 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00090 Warning handle=62A flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00091 Text handle=62B flags=1 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
+00092 Warning handle=62C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00093 Warning handle=62D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00094 Warning handle=62E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00095 Line handle=62F flags=1 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
+00096 Line handle=630 flags=1 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
+00097 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
+00098 Warning handle=632 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00099 Warning handle=633 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00100 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00101 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00102 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00103 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00104 Warning handle=638 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00105 Line handle=639 flags=1 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
+00106 Line handle=63A flags=1 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
+00107 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
+00108 Warning handle=63C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00109 Warning handle=63D flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00110 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00111 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00112 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00113 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00114 Warning handle=642 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00115 Warning handle=643 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00116 Line handle=517 flags=0 pts=[(330.289059,2.941179,0.000000);(364.487264,37.139384,0.000000)]
 00117 Line handle=518 flags=0 pts=[(381.586367,8.640880,0.000000);(415.784572,42.839085,0.000000)]
 00118 Line handle=519 flags=0 pts=[(438.583375,14.340581,0.000000);(444.283076,37.139384,0.000000)]
@@ -122,38 +122,38 @@
 00121 Line handle=51C flags=0 pts=[(495.580383,14.340581,0.000000);(512.679486,8.640880,0.000000)]
 00122 Circle handle=51D flags=0 c=[(569.676494,25.739983,0.000000)] r=11.399402 normal=[(0.000000,0.000000,1.000000)]
 00123 Circle handle=51E flags=0 c=[(626.673502,25.739983,0.000000)] r=22.798803 normal=[(0.000000,0.000000,1.000000)]
-00124 Line handle=666 flags=0 pts=[(588.432922,44.496411,0.000000);(579.504855,35.568344,0.000000)]
-00125 Text handle=667 flags=0 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
-00126 Line handle=668 flags=0 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
-00127 Warning handle=669 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00128 Warning handle=66A flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00129 Warning handle=66B flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00130 Line handle=64A flags=0 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
-00131 Text handle=64B flags=0 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="∅45,6"
-00132 Warning handle=64C flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00133 Warning handle=64D flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00134 Warning handle=64E flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00135 Line handle=64F flags=0 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
-00136 Line handle=650 flags=0 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
-00137 Line handle=651 flags=0 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
-00138 Text handle=652 flags=0 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
-00139 Warning handle=653 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00140 Warning handle=654 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00141 Warning handle=655 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00142 Line handle=656 flags=0 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
-00143 Line handle=657 flags=0 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
-00144 Line handle=658 flags=0 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
-00145 Text handle=659 flags=0 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
-00146 Warning handle=65A flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00147 Warning handle=65B flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00148 Warning handle=65C flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00149 Line handle=65D flags=0 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
-00150 Line handle=65E flags=0 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
-00151 Line handle=65F flags=0 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
-00152 Text handle=662 flags=0 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
-00153 Warning handle=663 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00154 Warning handle=664 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00155 Warning handle=665 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00124 Line handle=666 flags=1 pts=[(588.432922,44.496411,0.000000);(579.504855,35.568344,0.000000)]
+00125 Text handle=667 flags=1 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
+00126 Line handle=668 flags=1 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
+00127 Warning handle=669 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00128 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00129 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00130 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
+00131 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="∅45,6"
+00132 Warning handle=64C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00133 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00134 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00135 Line handle=64F flags=1 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
+00136 Line handle=650 flags=1 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
+00137 Line handle=651 flags=1 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
+00138 Text handle=652 flags=1 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
+00139 Warning handle=653 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00140 Warning handle=654 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00141 Warning handle=655 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00142 Line handle=656 flags=1 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
+00143 Line handle=657 flags=1 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
+00144 Line handle=658 flags=1 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
+00145 Text handle=659 flags=1 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
+00146 Warning handle=65A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00147 Warning handle=65B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00148 Warning handle=65C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00149 Line handle=65D flags=1 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
+00150 Line handle=65E flags=1 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
+00151 Line handle=65F flags=1 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
+00152 Text handle=662 flags=1 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
+00153 Warning handle=663 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00154 Warning handle=664 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00155 Warning handle=665 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00156 Warning handle=571 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
 00157 Text handle=572 flags=1 p=[(826.163031,44.793268,0.000000)] h=4.000000 rot=0.000000 value="Table sample"
 00158 Text handle=573 flags=1 p=[(791.964826,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
@@ -259,16 +259,16 @@
 00258 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
 00259 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
 00260 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
-00261 Line handle=9D4 flags=0 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
-00262 Line handle=9D5 flags=0 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
-00263 Line handle=9D6 flags=0 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
-00264 Line handle=9D7 flags=0 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
-00265 Warning handle=9D8 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00266 Warning handle=9D9 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00267 Text handle=9DA flags=0 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
-00268 Warning handle=9DB flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00269 Warning handle=9DC flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00270 Warning handle=9DD flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00261 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
+00262 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
+00263 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
+00264 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
+00265 Warning handle=9D8 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00266 Warning handle=9D9 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00267 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
+00268 Warning handle=9DB flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00269 Warning handle=9DC flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00270 Warning handle=9DD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00271 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
 00272 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
 00273 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
@@ -328,24 +328,24 @@
 00327 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)]
 00328 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)]
 00329 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
-00330 Line handle=C9A flags=0 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
-00331 Line handle=C9B flags=0 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
-00332 Line handle=C9C flags=0 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
-00333 Line handle=C9D flags=0 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
-00334 Text handle=CA0 flags=0 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
-00335 Warning handle=CA1 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00336 Warning handle=CA2 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00337 Warning handle=CA3 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00338 Line handle=CD6 flags=0 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
-00339 Line handle=CD7 flags=0 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
-00340 Line handle=CD8 flags=0 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
-00341 Line handle=CD9 flags=0 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
-00342 Warning handle=CDA flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00343 Warning handle=CDB flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00344 Text handle=CDC flags=0 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
-00345 Warning handle=CDD flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00346 Warning handle=CDE flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00347 Warning handle=CDF flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00330 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
+00331 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
+00332 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
+00333 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
+00334 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
+00335 Warning handle=CA1 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00336 Warning handle=CA2 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00337 Warning handle=CA3 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00338 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
+00339 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
+00340 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
+00341 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
+00342 Warning handle=CDA flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00343 Warning handle=CDB flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00344 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
+00345 Warning handle=CDD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00346 Warning handle=CDE flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00347 Warning handle=CDF flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00348 Warning handle=D07 flags=0 code=UNSUPPORTED_ENTITY message="PDFUNDERLAY is not a primitive this version flattens"
 00349 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
 00350 Warning handle=D65 flags=0 code=UNSUPPORTED_ENTITY message="3DSOLID is not a primitive this version flattens"

@@ -49,7 +49,7 @@
       "notification_count": 4,
       "output_bytes": 916,
       "records": 5,
-      "sha256": "df3e472bef51cd4ceae3bde9297d674173ef2eb9ef006d01859e4182c0ad484e",
+      "sha256": "c3b09b470908d35265ef50e2aa70db9551533286778dc9182018cd4f059785b1",
       "view_count": 2
     },
     "g13_circle.dwg": {
@@ -64,7 +64,7 @@
       "notification_count": 4,
       "output_bytes": 900,
       "records": 5,
-      "sha256": "09489d5c2d91eb7f0d71ef99a5e5ad926fef5f02e6f83b75505aeb978f5a3e8d",
+      "sha256": "6122b77ff962a84e7b18a07c7a3b92da9934ec82044ca363032d53c45167a523",
       "view_count": 2
     },
     "g13_deep_blocks.dwg": {
@@ -79,7 +79,7 @@
       "notification_count": 4,
       "output_bytes": 892,
       "records": 5,
-      "sha256": "b6cc1596101d2a1395eb734b780525b17d2b3843383185a0bcfa6b1cd1c1e564",
+      "sha256": "2749f007a82dd4156b61c151ebb6097cb1d36d4551d6e31611b8d39e86fb0f19",
       "view_count": 2
     },
     "g13_dimension.dwg": {
@@ -95,7 +95,23 @@
       "notification_count": 4,
       "output_bytes": 1592,
       "records": 14,
-      "sha256": "18bccc3672409d6d976edeee43f8199c56bdb408a159dc0abb3f67a0e5af9f2e",
+      "sha256": "1460af678540fef90a9514d020fce2ea9c085e5cc4dacc4bc64f81e96b7bd6d4",
+      "view_count": 2
+    },
+    "g13_dimension_shallow.dwg": {
+      "batches": 1,
+      "bytes": 11979,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 12,
+        "Text": 4,
+        "Warning": 28
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3908,
+      "records": 44,
+      "sha256": "f62d9df1588434447b034dc0fd4c76e806973c63bc83aea2146ebf0d9aca4a36",
       "view_count": 2
     },
     "g13_ellipse.dwg": {
@@ -110,7 +126,7 @@
       "notification_count": 4,
       "output_bytes": 940,
       "records": 5,
-      "sha256": "50dfc3a7936dab60d033b420c08767c3a014d136e20dc37f6a92ffe828330cc4",
+      "sha256": "253a70252949dd6521e520dd97effa51c976882e6b9395cb1931d575cb0e677b",
       "view_count": 2
     },
     "g13_hatch.dwg": {
@@ -128,7 +144,7 @@
       "notification_count": 4,
       "output_bytes": 1860,
       "records": 13,
-      "sha256": "7fc8f78d914b7245863f63eeec90d0258c7282969cff659c90b0a6bb2aa2d6fd",
+      "sha256": "a4a03f09a683e01acee05a5338f1dfdf1abd5209c666561c0a6ce970d3916bfb",
       "view_count": 2
     },
     "g13_insert.dwg": {
@@ -144,7 +160,7 @@
       "notification_count": 4,
       "output_bytes": 972,
       "records": 6,
-      "sha256": "68e912765e1c7ccef106fe6bd136d6fdd4fd779d959f127d1773399cc0ac7fac",
+      "sha256": "c8c1fcb0bdbd34c634c64ffc36421ffac7c59332e310018d9549986f7d5c86d1",
       "view_count": 2
     },
     "g13_line.dwg": {
@@ -159,7 +175,7 @@
       "notification_count": 4,
       "output_bytes": 892,
       "records": 5,
-      "sha256": "7f813d1853d0abe63654b168a7daacad34214432afc157589271c7ca2a825ce0",
+      "sha256": "9e914e1c1cf03c55b88813679e1aa594b35b9c7c039c6debec799a8bc87c1476",
       "view_count": 2
     },
     "g13_long_text.dwg": {
@@ -174,7 +190,7 @@
       "notification_count": 4,
       "output_bytes": 9084,
       "records": 5,
-      "sha256": "7f45af814c71c87d7360b54ea36a20a971be1e9e8fdeda8736ae8988bfe2d2c5",
+      "sha256": "b9c8b8f42779c6785ff9d19e8f8dfc48384739423978dc41065f8d722c126775",
       "view_count": 2
     },
     "g13_nonuniform.dwg": {
@@ -189,7 +205,7 @@
       "notification_count": 4,
       "output_bytes": 1064,
       "records": 6,
-      "sha256": "32e5583a9e78d6d29bccc1e2d150708c110248b741e9a71f42e02560759e05b5",
+      "sha256": "e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b",
       "view_count": 2
     },
     "g13_polyline.dwg": {
@@ -205,7 +221,7 @@
       "notification_count": 4,
       "output_bytes": 1204,
       "records": 8,
-      "sha256": "3bfb5f11bc681c15d4829a2ede8923936210da16c3a054a1fcaa4a614058f0b8",
+      "sha256": "815bf452eb40b0c5f75049e3155f13c0c2f3272b2d3464b92d01ee3636635bd3",
       "view_count": 2
     },
     "g13_scale_1x.dwg": {
@@ -221,7 +237,7 @@
       "notification_count": 4,
       "output_bytes": 10548,
       "records": 132,
-      "sha256": "40a0a8c92c8c731a72748c9f3685c5a14b3f6e2a8ab832c1aeb2d25c481c7cdf",
+      "sha256": "b01dd0ad9a175400e6ba6d1c033e8df862a3a85264efda9dfbe362531617a087",
       "view_count": 2
     },
     "g13_spline.dwg": {
@@ -236,7 +252,7 @@
       "notification_count": 4,
       "output_bytes": 1028,
       "records": 5,
-      "sha256": "7cbd150685a1ac657db15a053a86471497170e0948cc9b2611be8b25fff1f4d6",
+      "sha256": "e2540a81ed652694385e89fba90eec7462c6a67e7d47cb3af45f4edd879b1a5a",
       "view_count": 2
     },
     "g13_text.dwg": {
@@ -251,7 +267,7 @@
       "notification_count": 4,
       "output_bytes": 996,
       "records": 6,
-      "sha256": "1e7d3881498763aebfef3aa90d3ceb2c70786ab993d009f68a1458ac2346b530",
+      "sha256": "c791143334c6d2ccda33a72e7e85fc2fd93e2c1b8e8acd5a75e1b2254aa54e0f",
       "view_count": 2
     },
     "g13_two_entities.dwg": {
@@ -266,12 +282,12 @@
       "notification_count": 4,
       "output_bytes": 964,
       "records": 6,
-      "sha256": "7fa13b20d5d3f0f748e62e1f3345163f155de19d5f4379ad4942f62942b72645",
+      "sha256": "d2955fa942a735f18c57a6cacf3e46175de2f6e2e76e0eea4d5697a3faaee757",
       "view_count": 2
     },
     "g13_unsupported.dwg": {
       "batches": 1,
-      "bytes": 10539,
+      "bytes": 10571,
       "decode_code": "OK",
       "kinds": {
         "Warning": 6
@@ -280,7 +296,7 @@
       "notification_count": 4,
       "output_bytes": 980,
       "records": 6,
-      "sha256": "fda0963b0ecaab011a1d309bfd78e9e1e5b898dd10a4f2cd097fdd0f9a59dd7b",
+      "sha256": "1a0387b575f894ac8315a1075b0e2399bd3473d24d3eb5b72a2a08f7f62df365",
       "view_count": 2
     },
     "g13_wide_polyline.dwg": {
@@ -295,7 +311,7 @@
       "notification_count": 4,
       "output_bytes": 99180,
       "records": 5,
-      "sha256": "1240e92c3a3ff26c68381b7f7b25bda46f3d756d8be5283a881ea74c3220b4b4",
+      "sha256": "63495a02a7ef1f359f4be91b1964652ac099b6ac352c986367938882aecd1761",
       "view_count": 2
     },
     "g13_xref.dwg": {
@@ -309,7 +325,7 @@
       "notification_count": 4,
       "output_bytes": 952,
       "records": 5,
-      "sha256": "2824107829ce93938479662f0e3126397ea756cea384ea062d5a892ec4f70f57",
+      "sha256": "4e78ce6186919f14ccfe47a442a787c918391070760d5de27962c76887f363ae",
       "view_count": 2
     },
     "real_AC1018.dwg": {

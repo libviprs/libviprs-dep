@@ -54,10 +54,15 @@ DLL = "/out/artifacts/bin/Viprs.ACadSharp.FixtureGen/debug/fixturegen.dll"
 
 BATCH_BYTES = 65536
 
-# The fixtures whose whole record stream is committed as an expectation. The
-# hostile ones are left out on purpose: g13_many_inserts.dwg decodes to tens of
-# thousands of records and a committed dump of those is a file nobody can read
-# in a diff. Its shape is pinned by the benchmark instead.
+# The fixtures whose whole record stream is committed as an expectation.
+#
+# The hostile ones are left out on purpose. g13_many_inserts.dwg decodes to
+# tens of thousands of records and a committed dump of those is a file nobody
+# can read in a diff; its shape is pinned by the benchmark instead.
+# g13_dimension_deep.dwg and g13_wide_spline.dwg are refused rather than
+# decoded, so there is no stream to dump, and the scenario capture is where
+# they are checked. g13_dimension_shallow.dwg is the readable one of that pair
+# and is dumped.
 DUMPED = (
     "g13_line.dwg",
     "g13_polyline.dwg",
@@ -77,6 +82,7 @@ DUMPED = (
     "g13_wide_polyline.dwg",
     "g13_long_text.dwg",
     "g13_scale_1x.dwg",
+    "g13_dimension_shallow.dwg",
     "real_AC1032.dwg",
     "real_AC1018.dwg",
     "g11_shapes.dwg",
@@ -353,6 +359,32 @@ def scenarios(scratch):
         "scenarios": [],
     }
 
+    def fan(name, depth, width, args, note):
+        cmd = docker_cmd(
+            scratch,
+            ["dotnet", DLL, "fanout", str(depth), str(width)] + [str(a) for a in args],
+        )
+        proc = run(cmd, check=False)
+        try:
+            result = json.loads(proc.stdout)
+        except ValueError:
+            result = {
+                "code": "PROCESS_FAILED",
+                "detail": (proc.stderr or proc.stdout or "")[-2000:],
+            }
+        result["exit_code"] = proc.returncode
+        out["scenarios"].append(
+            {
+                "name": name,
+                "input": f"an in-memory fan-out, depth {depth} width {width}",
+                "args": [str(a) for a in args],
+                "note": note,
+                "result": result,
+            }
+        )
+        print(f"{name}: code={result.get('code')} walked={result.get('entities_walked')}")
+        return result
+
     def record(name, fixture, args, note, **kw):
         result = decode(scratch, fixture, *args, **kw)
         entry = {
@@ -490,6 +522,78 @@ def scenarios(scratch):
     for name in ("limits/max_input_below_size_unreadable", "limits/unreadable_control"):
         r = [s for s in out["scenarios"] if s["name"] == name][0]["result"]
         print(f"{name}: open={r.get('open_code')} decode={r.get('decode_code')}")
+
+    # The two Criticals the review found, each with the control that proves
+    # the refusal is a bound and not a crash.
+    #
+    # A DIMENSION carries a block of its own and that block can hold another
+    # dimension. Walking that by recursion put a file-controlled depth on the
+    # CLR stack, and a StackOverflowException cannot be caught, so the export's
+    # catch-all never saw it: the runtime calls FailFast and the caller's
+    # process dies. The deep fixture is three thousand levels, comfortably past
+    # the roughly 2686 frames the recursive walk died at, so a build that still
+    # recurses aborts here rather than passing because the fixture was small.
+    record(
+        "criticals/dimension_chain_deep",
+        fixture_arg("g13_dimension_deep.dwg"),
+        [],
+        "three thousand dimensions nested one inside the next, at default limits",
+    )
+    record(
+        "criticals/dimension_chain_shallow",
+        fixture_arg("g13_dimension_shallow.dwg"),
+        [],
+        "the same shape four deep, which is inside every bound and decodes",
+    )
+
+    # An INSERT emits no record, it pushes a frame, so a bound that counted
+    # records never saw this one coming: a chain of block records each holding
+    # two insertions of the next expands exponentially, emits nothing, and
+    # keeps its nesting inside max_block_depth the whole way.
+    # The fan-out is built in memory rather than read from a file, because
+    # ACadSharp cannot store it: `new Insert(record)` deep-clones a record
+    # that belongs to a document, so assembling the chain and then pointing at
+    # it clones the whole expansion and never returns. That costs nothing
+    # here. The hole was never about a file format; it is about a walk that
+    # can do unbounded work while producing nothing.
+    fan(
+        "criticals/fanout_bounded",
+        24,
+        2,
+        ["--max-entities", 100000],
+        "twenty-five block records and forty-nine entities, 2^25 expansions, "
+        "stopped by the entity counter",
+    )
+    fan(
+        "criticals/fanout_shallow",
+        8,
+        2,
+        [],
+        "the same shape eight deep, which fits inside every default bound and decodes",
+    )
+    fan(
+        "criticals/fanout_cancelled",
+        24,
+        2,
+        ["--cancel"],
+        "the flag is already up when the walk starts, and this document never "
+        "yields a record, so only a poll inside the walk can notice it",
+    )
+
+    # A spline's points were never counted. The encoder guarded Polyline and
+    # Polygon only, and it guarded after the list existed.
+    record(
+        "limits/spline_points_4096",
+        fixture_arg("g13_wide_spline.dwg"),
+        ["--max-polyline", 4096],
+        "twenty thousand control points, four thousand allowed",
+    )
+    record(
+        "limits/spline_points_65536",
+        fixture_arg("g13_wide_spline.dwg"),
+        ["--max-polyline", 65536],
+        "the same fixture with the bound above its width",
+    )
 
     # Cancellation, set between two batches and nowhere else.
     record(

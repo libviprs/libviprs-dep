@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using ACadSharp;
+using ACadSharp.Entities;
 using Viprs.Abi;
 using Viprs.Cad;
 using Viprs.Sources;
@@ -490,6 +493,94 @@ namespace Viprs.Cad.Fixtures
 			GC.KeepAlive(buffer);
 
 			json.UNum("live_handles", Handles.LiveCount);
+			json.Num("peak_rss_kb", PeakRss());
+			Emit(json);
+			return 0;
+		}
+
+		// ------------------------------------------------------- fan-out
+
+		// Walk a document built in memory rather than read from a file.
+		//
+		// The case this exists for cannot be stored as a DWG: ACadSharp's
+		// writer does not come back from a block-record chain assembled this
+		// way. It does not need to be. The hole was never about a file
+		// format, it is about a walk that can do unbounded work while
+		// producing nothing, and the document is what produces that.
+		public static int Fanout(string[] args)
+		{
+			int depth = args.Length > 0 ? int.Parse(args[0], CultureInfo.InvariantCulture) : 24;
+			int width = args.Length > 1 ? int.Parse(args[1], CultureInfo.InvariantCulture) : 2;
+			ulong maxEntities = 0ul;
+			bool cancelAfterFirst = false;
+			for (int i = 2; i < args.Length; i++)
+			{
+				if (args[i] == "--max-entities")
+				{
+					maxEntities = ulong.Parse(args[++i], CultureInfo.InvariantCulture);
+				}
+				else if (args[i] == "--cancel")
+				{
+					cancelAfterFirst = true;
+				}
+			}
+
+			ResolvedLimits limits = new ResolvedLimits();
+			if (maxEntities != 0ul)
+			{
+				limits.MaxEntities = maxEntities;
+			}
+
+			CadDocument doc = Corpus.BuildFanout(depth, width);
+			List<Entity> roots = new List<Entity>();
+			foreach (Entity e in doc.Entities)
+			{
+				roots.Add(e);
+			}
+
+			Json json = new Json();
+			json.Str("case", "fanout");
+			json.Num("depth", depth);
+			json.Num("width", width);
+			json.Num("block_records", depth + 1);
+			json.Num("entities_in_document", (depth * width) + 1);
+			json.UNum("max_entities", limits.MaxEntities);
+			json.UNum("max_block_depth", limits.MaxBlockDepth);
+			json.Bool("cancel_set_before_the_walk", cancelAfterFirst);
+
+			// The flag is up before the first pull, so the only thing that can
+			// notice it is a poll inside the walk: this document yields no
+			// record at all, so nothing ever returns to the caller to look.
+			int polls = 0;
+			Func<bool> canceled = cancelAfterFirst
+				? new Func<bool>(() => { polls++; return true; })
+				: null;
+
+			Flattener flattener = new Flattener(limits);
+			Stopwatch sw = Stopwatch.StartNew();
+			ulong records = 0ul;
+			string code = "OK";
+			string detail = null;
+			try
+			{
+				foreach (Primitive p in flattener.Walk(roots, canceled))
+				{
+					records = records + 1ul;
+				}
+			}
+            catch (AbiException ex)
+			{
+				code = Name(ex.Code);
+				detail = ex.Message;
+			}
+
+			sw.Stop();
+			json.Str("code", code);
+			json.Str("detail", detail);
+			json.UNum("records", records);
+			json.UNum("entities_walked", flattener.EntitiesVisited);
+			json.Num("elapsed_ms", sw.ElapsedMilliseconds);
+			json.Num("cancel_polls", polls);
 			json.Num("peak_rss_kb", PeakRss());
 			Emit(json);
 			return 0;

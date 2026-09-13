@@ -43,29 +43,54 @@ and the stream tests recompute them, so changing a fixture without rerunning
 the generator is a red test that names the fixture.
 
 | `g13_ac1009.dwg` | `0f7c1ae8358511b569895fd84f9d79cedccda520a8a9a762aeff7ae67223265d` | Not a drawing. The six bytes `AC1009` and then zeros, which is a DWG version this build does not read. ACadSharp's writer cannot produce an AC1009 file, so this one is written byte by byte. |
-| `g13_arc.dwg` | `df3e472bef51cd4ceae3bde9297d674173ef2eb9ef006d01859e4182c0ad484e` | One ARC. |
-| `g13_circle.dwg` | `09489d5c2d91eb7f0d71ef99a5e5ad926fef5f02e6f83b75505aeb978f5a3e8d` | One CIRCLE. |
-| `g13_deep_blocks.dwg` | `b6cc1596101d2a1395eb734b780525b17d2b3843383185a0bcfa6b1cd1c1e564` | Six blocks nested one inside the next, for the max_block_depth bound. |
-| `g13_dimension.dwg` | `18bccc3672409d6d976edeee43f8199c56bdb408a159dc0abb3f67a0e5af9f2e` | A linear DIMENSION with the block ACadSharp generates for it. |
-| `g13_ellipse.dwg` | `50dfc3a7936dab60d033b420c08767c3a014d136e20dc37f6a92ffe828330cc4` | One ELLIPSE with a ratio and a parameter range. |
-| `g13_hatch.dwg` | `7fc8f78d914b7245863f63eeec90d0258c7282969cff659c90b0a6bb2aa2d6fd` | Four HATCHes: a loop of straight edges, a loop with a circular arc, a loop with a spline edge, and one with no boundary at all. |
-| `g13_insert.dwg` | `68e912765e1c7ccef106fe6bd136d6fdd4fd779d959f127d1773399cc0ac7fac` | An INSERT of a block that itself inserts a second block, scaled and rotated. The malformed derivatives are cut from this one. |
-| `g13_line.dwg` | `7f813d1853d0abe63654b168a7daacad34214432afc157589271c7ca2a825ce0` | One LINE on a named layer. |
-| `g13_long_text.dwg` | `7f45af814c71c87d7360b54ea36a20a971be1e9e8fdeda8736ae8988bfe2d2c5` | One MTEXT of 8192 bytes, for the max_string_bytes bound. |
-| `g13_many_inserts.dwg` | `dc7e02a78708663a139a58b176a68b053ee94ac802a10ffb2631ac9bc32e1af1` | One three-entity block inserted ten thousand times. The amplification benchmark is a decode of this. |
-| `g13_nonuniform.dwg` | `32e5583a9e78d6d29bccc1e2d150708c110248b741e9a71f42e02560759e05b5` | A CIRCLE inside a block inserted with unequal X and Y scale. |
-| `g13_polyline.dwg` | `3bfb5f11bc681c15d4829a2ede8923936210da16c3a054a1fcaa4a614058f0b8` | An LWPOLYLINE carrying a bulge, a 2D POLYLINE and a 3D POLYLINE. |
-| `g13_scale_16x.dwg` | `b68e2878c916dc2baa2d00fbe1e1cefbb1eff0bd5baf6048b5b177eaf489585b` | 2048 entities, the 16x point. |
-| `g13_scale_1x.dwg` | `40a0a8c92c8c731a72748c9f3685c5a14b3f6e2a8ab832c1aeb2d25c481c7cdf` | 128 entities, the 1x point of the streaming measurement. |
-| `g13_scale_4x.dwg` | `5f122fbc40fce247aa960b7e06f782de1c07a891483fe743f59c85d69a0d5149` | 512 entities, the 4x point. |
-| `g13_spline.dwg` | `7cbd150685a1ac657db15a053a86471497170e0948cc9b2611be8b25fff1f4d6` | One SPLINE, degree 3, four control points and eight knots. |
-| `g13_text.dwg` | `1e7d3881498763aebfef3aa90d3ceb2c70786ab993d009f68a1458ac2346b530` | One TEXT and one MTEXT. |
-| `g13_two_entities.dwg` | `7fa13b20d5d3f0f748e62e1f3345163f155de19d5f4379ad4942f62942b72645` | Exactly two LINEs, for the max_entities bound. |
-| `g13_unsupported.dwg` | `fda0963b0ecaab011a1d309bfd78e9e1e5b898dd10a4f2cd097fdd0f9a59dd7b` | A POINT and a SOLID, neither of which this version flattens. |
-| `g13_wide_polyline.dwg` | `1240e92c3a3ff26c68381b7f7b25bda46f3d756d8be5283a881ea74c3220b4b4` | One LWPOLYLINE of 4096 vertices, for the max_polyline_points bound. |
-| `g13_xref.dwg` | `2824107829ce93938479662f0e3126397ea756cea384ea062d5a892ec4f70f57` | An INSERT of a block record that names an external reference nothing resolves. |
+| `g13_arc.dwg` | `c3b09b470908d35265ef50e2aa70db9551533286778dc9182018cd4f059785b1` | One ARC. |
+| `g13_circle.dwg` | `6122b77ff962a84e7b18a07c7a3b92da9934ec82044ca363032d53c45167a523` | One CIRCLE. |
+| `g13_deep_blocks.dwg` | `2749f007a82dd4156b61c151ebb6097cb1d36d4551d6e31611b8d39e86fb0f19` | Six blocks nested one inside the next, for the max_block_depth bound. |
+| `g13_dimension.dwg` | `1460af678540fef90a9514d020fce2ea9c085e5cc4dacc4bc64f81e96b7bd6d4` | A linear DIMENSION with the block ACadSharp generates for it. |
+| `g13_dimension_deep.dwg` | `9cf367a3d2de9c1ab80e4716dc48a3db02f0c4105e6adac5b6e70e484c21fd1d` | Three thousand dimensions, each one living inside the previous one's block. Walking that by recursion is a stack overflow the boundary cannot report, and the recursive walk died at roughly 2686 frames, so the fixture is sized well past it. |
+| `g13_dimension_shallow.dwg` | `f62d9df1588434447b034dc0fd4c76e806973c63bc83aea2146ebf0d9aca4a36` | The same shape four deep, which is inside every bound and decodes. Without it, refusing the deep one could be a decoder that cannot read a nested dimension at all. |
+| `g13_ellipse.dwg` | `253a70252949dd6521e520dd97effa51c976882e6b9395cb1931d575cb0e677b` | One ELLIPSE with a ratio and a parameter range. |
+| `g13_hatch.dwg` | `a4a03f09a683e01acee05a5338f1dfdf1abd5209c666561c0a6ce970d3916bfb` | Four HATCHes: a loop of straight edges, a loop with a circular arc, a loop with a spline edge, and one with no boundary at all. |
+| `g13_insert.dwg` | `c8c1fcb0bdbd34c634c64ffc36421ffac7c59332e310018d9549986f7d5c86d1` | An INSERT of a block that itself inserts a second block, scaled and rotated. The malformed derivatives are cut from this one. |
+| `g13_line.dwg` | `9e914e1c1cf03c55b88813679e1aa594b35b9c7c039c6debec799a8bc87c1476` | One LINE on a named layer. |
+| `g13_long_text.dwg` | `b9c8b8f42779c6785ff9d19e8f8dfc48384739423978dc41065f8d722c126775` | One MTEXT of 8192 bytes, for the max_string_bytes bound. |
+| `g13_many_inserts.dwg` | `72bb475c6071a567d7c672005518bc7e7323b0450cdbca00ebe9404e38047387` | One three-entity block inserted ten thousand times. The amplification benchmark is a decode of this. |
+| `g13_nonuniform.dwg` | `e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b` | A CIRCLE inside a block inserted with unequal X and Y scale. |
+| `g13_polyline.dwg` | `815bf452eb40b0c5f75049e3155f13c0c2f3272b2d3464b92d01ee3636635bd3` | An LWPOLYLINE carrying a bulge, a 2D POLYLINE and a 3D POLYLINE. |
+| `g13_scale_16x.dwg` | `a88ecd131e361a1db298d2fef7d20caeb2157cb2edb38456675cdb54b63414cd` | 2048 entities, the 16x point. |
+| `g13_scale_1x.dwg` | `b01dd0ad9a175400e6ba6d1c033e8df862a3a85264efda9dfbe362531617a087` | 128 entities, the 1x point of the streaming measurement. |
+| `g13_scale_4x.dwg` | `99ded530c49c5f23c2d7a02c62fdb9296cb647f0a1c32c09b849a7ab4a1641c1` | 512 entities, the 4x point. |
+| `g13_spline.dwg` | `e2540a81ed652694385e89fba90eec7462c6a67e7d47cb3af45f4edd879b1a5a` | One SPLINE, degree 3, four control points and eight knots. |
+| `g13_text.dwg` | `c791143334c6d2ccda33a72e7e85fc2fd93e2c1b8e8acd5a75e1b2254aa54e0f` | One TEXT and one MTEXT. |
+| `g13_two_entities.dwg` | `d2955fa942a735f18c57a6cacf3e46175de2f6e2e76e0eea4d5697a3faaee757` | Exactly two LINEs, for the max_entities bound. |
+| `g13_unsupported.dwg` | `1a0387b575f894ac8315a1075b0e2399bd3473d24d3eb5b72a2a08f7f62df365` | A POINT and a SOLID, neither of which this version flattens. |
+| `g13_wide_polyline.dwg` | `63495a02a7ef1f359f4be91b1964652ac099b6ac352c986367938882aecd1761` | One LWPOLYLINE of 4096 vertices, for the max_polyline_points bound. |
+| `g13_wide_spline.dwg` | `dfd4283a4f67ec1a63897e6a9e94a2bc898c7b5123736eccea5b8117ee4fd6f8` | One SPLINE of 20000 control points. max_polyline_points did not apply to splines at all, and the encoder's own guard ran after the points were already gathered. |
+| `g13_xref.dwg` | `4e78ce6186919f14ccfe47a442a787c918391070760d5de27962c76887f363ae` | An INSERT of a block record that names an external reference nothing resolves. |
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
+
+Three shapes are not here, and not for want of trying. They are recorded
+because the next person will reach for them too.
+
+* **A cycle.** Two dimensions whose blocks hold each other, or two block
+  records each inserting the other. ACadSharp cannot build either: a
+  `CadObject` gets exactly one owner and `Add` refuses a second, and
+  `new Insert(record)` deep-clones a record that belongs to a document, so the
+  second edge recurses until the stack goes. A file from another writer can
+  carry one, and the walk refuses it the same way it refuses
+  `g13_dimension_deep.dwg`, by depth and by entity count, neither of which
+  cares whether the graph closes.
+* **A fan-out as a file.** A chain of block records each holding two
+  insertions of the next. Building it in memory is fine as long as the root
+  insertion is made before the chain is filled, but `DwgWriter` does not come
+  back from writing one. It is built in memory by the generator instead and
+  driven through the flattener directly, which is what the hole was about
+  anyway.
+* **A string past the 64 KiB default `max_string_bytes`.** ACadSharp's DWG
+  round trip silently shortens a long MText value: 8,192 characters come back
+  whole, 40,000 come back as 7,232, 70,000 as 4,464 and 200,000 as 3,392.
+  `g13_long_text.dwg` exercises the bound with a limit the caller sets.
 
 Two files are not committed because nothing needs them to be. The malformed
 derivatives (`g13_insert.dwg` truncated at 25, 50 and 90 percent, and with 64

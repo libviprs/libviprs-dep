@@ -31,7 +31,7 @@ public static class Program
 		// writer sitting next to the thing that reads what it wrote.
 		if (args[0] == "corpus")
 		{
-			foreach (string name in Viprs.Cad.Fixtures.Corpus.WriteAll(args[1]))
+			foreach (string name in Viprs.Cad.Fixtures.Corpus.WriteAll(args[1], args.Length > 2 ? args[2] : null))
 			{
 				Console.Out.Write(name);
 				Console.Out.Write("\n");
@@ -48,6 +48,13 @@ public static class Program
 			Viprs.Cad.Fixtures.Corpus.WriteLarge(args[1], points);
 			Console.Error.WriteLine("wrote " + args[1] + " with " + points + " points");
 			return 0;
+		}
+
+		if (args[0] == "fanout")
+		{
+			string[] rest = new string[args.Length - 1];
+			Array.Copy(args, 1, rest, 0, rest.Length);
+			return Viprs.Cad.Fixtures.Harness.Fanout(rest);
 		}
 
 		if (args[0] == "decode")

@@ -54,13 +54,22 @@ public static class Corpus
 		DwgWriter.Write(path, doc);
 	}
 
-	public static IEnumerable<string> WriteAll(string dir)
+	// `only` writes just the fixtures whose name contains it, so a rerun does
+	// not have to rewrite the slow ones. Every DWG carries a timestamp, so a
+	// rewrite is a new file even when the content is identical, and the
+	// expectations are pinned to the digest.
+	public static IEnumerable<string> WriteAll(string dir, string only = null)
 	{
 		Directory.CreateDirectory(dir);
 		List<string> written = new List<string>();
 
 		foreach (KeyValuePair<string, Action<string>> kv in Writers())
 		{
+			if (!string.IsNullOrEmpty(only) && kv.Key.IndexOf(only, StringComparison.Ordinal) < 0)
+			{
+				continue;
+			}
+
 			string path = Path.Combine(dir, kv.Key);
 			kv.Value(path);
 			written.Add(kv.Key);
@@ -93,12 +102,9 @@ public static class Corpus
 		yield return Pair("g13_scale_16x.dwg", p => WriteScale(p, 16));
 		yield return Pair("g13_many_inserts.dwg", WriteManyInserts);
 		yield return Pair("g13_ac1009.dwg", WriteAc1009);
-		yield return Pair("g13_dimension_cycle.dwg", WriteDimensionCycle);
 		yield return Pair("g13_dimension_deep.dwg", WriteDimensionDeep);
 		yield return Pair("g13_dimension_shallow.dwg", WriteDimensionShallow);
-		yield return Pair("g13_fanout.dwg", WriteFanout);
 		yield return Pair("g13_wide_spline.dwg", WriteWideSpline);
-		yield return Pair("g13_huge_text.dwg", WriteHugeText);
 	}
 
 	private static KeyValuePair<string, Action<string>> Pair(string name, Action<string> w)
@@ -492,10 +498,14 @@ public static class Corpus
 	// batch writer had never seen a byte of hostile input. Both Criticals the
 	// review found live exactly there.
 
-	// How deep the nested-dimension chain goes. Well past the roughly 2686
-	// stack frames the recursive walk died at, so a build that still recurses
-	// aborts rather than passing because the fixture was too small.
-	public const int DimensionChainDepth = 6000;
+	// How deep the nested-dimension chain goes.
+	//
+	// The recursive walk this replaced died at roughly 2686 stack frames, and
+	// it spent two or three of those per level, so it was gone somewhere
+	// around a thousand. Three thousand is comfortably past that and still
+	// writes a fixture of about a megabyte; every level is a generated
+	// dimension block, so the file size is the depth.
+	public const int DimensionChainDepth = 3000;
 
 	// The shallow control: the same shape, inside every bound, decodes.
 	public const int ShallowDimensionChainDepth = 4;
@@ -506,55 +516,63 @@ public static class Corpus
 	public const int FanoutWidth = 2;
 	public const int FanoutDepth = 24;
 
+	// The control: the same shape, small enough that the whole expansion fits
+	// inside every default bound and decodes. Without it, "the fan-out is
+	// refused" could be a decoder that refuses fan-outs.
+	public const int ShallowFanoutDepth = 8;
+
 	public const int WideSplineControlPoints = 20000;
 
-	// Past the 65536-byte default max_string_bytes, so this one refuses at the
-	// defaults rather than needing a limit set for it.
-	public const int HugeTextBytes = 200000;
+	// There is no fixture past the 65536-byte default max_string_bytes, and
+	// not for want of trying. ACadSharp's DWG round trip silently shortens a
+	// long MText value: 8,192 characters come back whole, 40,000 come back as
+	// 7,232, 70,000 as 4,464 and 200,000 as 3,392. So the writer cannot
+	// produce a string that trips the default, and g13_long_text.dwg exercises
+	// the bound with a limit the caller sets instead. A real drawing can still
+	// carry one, and the bound is the same bound.
 
-	private static DimensionLinear Dim(CadDocument doc, double y)
+	private static DimensionLinear NewDim(double y, Layer layer)
 	{
-		DimensionLinear dim = new DimensionLinear
+		return new DimensionLinear
 		{
 			FirstPoint = new XYZ(0, y, 0),
 			SecondPoint = new XYZ(10, y, 0),
 			DefinitionPoint = new XYZ(10, y, 0),
 			TextMiddlePoint = new XYZ(5, y + 3, 0),
 			Offset = 3,
-			Layer = L(doc),
+			Layer = layer,
 		};
-		doc.Entities.Add(dim);
-		dim.UpdateBlock();
-		return dim;
 	}
 
-	// Two dimensions whose blocks hold each other. Walking one walks the
-	// other, forever, and depth is not the thing that stops it: the cycle is
-	// two levels wide.
-	public static void WriteDimensionCycle(string path)
-	{
-		CadDocument doc = NewDoc();
-		DimensionLinear a = Dim(doc, 0);
-		DimensionLinear b = Dim(doc, 20);
-		a.Block.Entities.Add(b);
-		b.Block.Entities.Add(a);
-		Write(doc, path);
-	}
-
+	// A chain of dimensions, each one living inside the previous one's block.
+	//
+	// Only the first is in model space, because ACadSharp gives every
+	// CadObject exactly one owner and refuses a second.
+	//
+	// There is no cycle fixture beside this one, and not for want of trying.
+	// The pinned writer cannot build a cycle of any shape: an entity cannot
+	// have two owners, so two dimensions cannot hold each other, and
+	// `new Insert(BlockRecord)` deep-clones the record it is handed, so two
+	// block records cannot either (it recurses until the stack goes). A file
+	// from another writer can carry one, and the walk refuses it exactly the
+	// way it refuses this chain, by depth and by entity count, neither of
+	// which cares whether the graph closes.
 	private static void WriteDimensionChain(string path, int depth)
 	{
 		CadDocument doc = NewDoc();
-		DimensionLinear[] chain = new DimensionLinear[depth];
-		for (int i = 0; i < depth; i++)
-		{
-			chain[i] = Dim(doc, i * 20.0);
-		}
+		Layer layer = L(doc);
 
-		// Each dimension's picture holds the next one, so a walk that follows
-		// a dimension block without bounding its depth follows all of them.
-		for (int i = 0; i < depth - 1; i++)
+		DimensionLinear root = NewDim(0, layer);
+		doc.Entities.Add(root);
+		root.UpdateBlock();
+
+		DimensionLinear previous = root;
+		for (int i = 1; i < depth; i++)
 		{
-			chain[i].Block.Entities.Add(chain[i + 1]);
+			DimensionLinear next = NewDim(i * 20.0, layer);
+			previous.Block.Entities.Add(next);
+			next.UpdateBlock();
+			previous = next;
 		}
 
 		Write(doc, path);
@@ -572,28 +590,51 @@ public static class Corpus
 
 	// The expansion that emits nothing. Twenty-five block records and
 	// forty-nine entities, and 2^24 expansions if nothing counts them.
-	public static void WriteFanout(string path)
+	// The fan-out is built in memory and never written.
+	//
+	// ACadSharp's DwgWriter does not come back from it. `new Insert(record)`
+	// clones the record when it belongs to a document, so a chain assembled
+	// this way leaves the writer resolving references it cannot settle, and
+	// the write never finishes. The reviewer who found this hole drove the
+	// flattener over an in-memory document for the same reason.
+	//
+	// That costs nothing here: the hole was never about a file format. It is
+	// about a walk that can do unbounded work while producing nothing, and the
+	// document is what produces that, not the bytes it might have been stored
+	// as.
+	public static CadDocument BuildFanout(int depth, int width)
 	{
 		CadDocument doc = NewDoc();
-		BlockRecord[] levels = new BlockRecord[FanoutDepth + 1];
-		for (int i = 0; i <= FanoutDepth; i++)
+		BlockRecord[] levels = new BlockRecord[depth + 1];
+		for (int i = 0; i <= depth; i++)
 		{
 			levels[i] = new BlockRecord("VIPRS_G13_FANOUT_" + i);
 			doc.BlockRecords.Add(levels[i]);
 		}
 
-		for (int i = 0; i < FanoutDepth; i++)
+		// The root insertion is made first, while the block it names is still
+		// empty. `new Insert(record)` deep-clones a record that belongs to a
+		// document, so making it last would clone the whole expansion it is
+		// about to point at, which is the same exponential the fixture exists
+		// to demonstrate and which never returns. Adding it to the document
+		// resolves the clone back to the record by name.
+		Insert root = new Insert(levels[0]) { InsertPoint = XYZ.Zero, Layer = L(doc) };
+		doc.Entities.Add(root);
+
+		// Each level is filled after the insertions naming it were made, for
+		// the same reason and in the same order.
+		for (int i = 0; i < depth; i++)
 		{
-			for (int k = 0; k < FanoutWidth; k++)
+			for (int k = 0; k < width; k++)
 			{
 				levels[i].Entities.Add(new Insert(levels[i + 1]) { InsertPoint = new XYZ(k, 0, 0) });
 			}
 		}
 
 		// The deepest block is empty, so the whole expansion produces no
-		// record at all.
-		doc.Entities.Add(new Insert(levels[0]) { InsertPoint = XYZ.Zero, Layer = L(doc) });
-		Write(doc, path);
+		// record at all: nothing to count against max_entities if the count is
+		// of records, and no bytes to count against max_output_bytes.
+		return doc;
 	}
 
 	// A spline wide enough that building its control points is a large
@@ -614,21 +655,6 @@ public static class Corpus
 		}
 
 		doc.Entities.Add(s);
-		Write(doc, path);
-	}
-
-	// A text past the default max_string_bytes, so the refusal happens with
-	// no limit set by the caller at all.
-	public static void WriteHugeText(string path)
-	{
-		CadDocument doc = NewDoc();
-		doc.Entities.Add(new MText
-		{
-			InsertPoint = new XYZ(0, 0, 0),
-			Height = 1.0,
-			Value = new string('W', HugeTextBytes),
-			Layer = L(doc),
-		});
 		Write(doc, path);
 	}
 

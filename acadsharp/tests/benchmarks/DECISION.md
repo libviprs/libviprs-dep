@@ -22,7 +22,7 @@ not add block-definition and block-instance records before release.**
 | Bytes out | 2,481,264 |
 | Byte amplification | 13.85x the input |
 | Batches at 64 KiB | 38 |
-| Peak RSS | 94,036 KB |
+| Peak RSS | 94,536 KB |
 | Managed bytes retained across the whole decode | 1 KB |
 
 That last row is the one that settles it. Thirty thousand records cross the
@@ -78,7 +78,7 @@ make the stream harder to consume rather than cheaper.
 in every case, and `g13_many_inserts.dwg` at 30,004 records retains 1 KB too.
 Peak RSS during a decode moves by a few hundred kilobytes to a few megabytes
 and does not track the record count: 2,052 records grew RSS by 2,700 KB and
-30,004 records grew it by 344 KB. That is a managed collector's allocation
+30,004 records grew it by 636 KB. That is a managed collector's allocation
 churn, not the stream accumulating, and the retention number is the one that
 says so.
 
@@ -87,9 +87,24 @@ RSS between `open_path_utf8` and `open_memory` is a few hundred kilobytes
 either way, because the fixture is 175 KB and the run-to-run spread of peak RSS
 on a managed runtime is a couple of megabytes. The same pair on the same
 drawing with 32 MiB appended, which the decode does not read (it produces the
-same 2,481,264 bytes of records), separates cleanly: 32,688 KB of peak RSS on a
-32,942 KB input, and an allocation difference of 33,723,536 bytes against a
+same 2,481,264 bytes of records), separates cleanly: 32,908 KB of peak RSS on a
+32,942 KB input, and an allocation difference of 33,716,648 bytes against a
 33,733,582 byte file. The shortfall of about 250 KB is the path route's stream
 buffering, which the memory route does not need because it wraps the caller's
 array. The claim that a path-based open does not duplicate the input to cross
 FFI is that measurement.
+
+## What both Criticals had in common, which is worth more than either fix
+
+Every bound this decoder had counted *output*. `max_entities` counted records
+emitted, `max_output_bytes` counted bytes, `max_block_depth` counted one kind
+of nesting. Nothing counted what the walk *did*, and a document can make a
+walk do an unbounded amount of work while producing none of those three: a
+chain of block records each holding a few insertions of the next expands
+exponentially and emits nothing at all. Both Criticals the review found live
+in exactly that gap, and the fix for both is the same shape, counting visits
+rather than results.
+
+The next limit anyone adds to this ABI should be checked against that
+question before it is written down: does it bound the work, or only the thing
+the work happens to produce?
