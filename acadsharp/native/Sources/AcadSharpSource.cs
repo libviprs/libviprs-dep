@@ -29,10 +29,10 @@ namespace Viprs.Sources
 		private CadDocument _document;
 		private readonly ResolvedLimits _limits;
 		private readonly List<string> _notifications = new List<string>();
-		private int _viewsWithoutExtents;
 		private readonly List<SourceView> _views = new List<SourceView>();
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
 		private uint _drawingVersion;
+		private int _viewsWithoutExtents;
 		private bool _closed;
 
 		private AcadSharpSource(ResolvedLimits limits)
@@ -49,11 +49,11 @@ namespace Viprs.Sources
 		// not four finite numbers.
 		//
 		// Nothing on the boundary reads this and it is not on the wire. It
-		// exists so the corpus can tell a clamp that ran from a drawing whose
-		// extents were fine all along: once the substitution works, every
-		// capture shows four good numbers and the one fixture that carries a
-		// NaN looks exactly like the twenty-nine that do not. A guard nobody
-		// can watch fire is a guard that quietly stops firing.
+		// exists so the corpus can tell a substitution that ran from a drawing
+		// whose extents were fine all along: once it works, every capture shows
+		// four good numbers and the fixture carrying a NaN looks exactly like
+		// every fixture that does not. A guard nobody can watch fire is a guard
+		// that quietly stops firing.
 		public int ViewsWithoutExtents
 		{
 			get { return _viewsWithoutExtents; }

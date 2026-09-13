@@ -768,10 +768,10 @@ namespace Viprs.Cad
 			ulong h = e.Handle;
 			uint flags = depth > 0 ? FlagFromBlock : 0u;
 
-			// The basis and the identity test are read inside the arms that
-			// use them and nowhere else. Half these arms never look at either,
-			// and measuring for them was six transform applications, three
-			// square roots and an atan2 spent on an answer nothing read.
+			// The basis is read inside the arms that use it and nowhere else.
+			// Half these arms never look at it, and measuring for them was six
+			// transform applications, three square roots and an atan2 spent on
+			// an answer nothing read.
 			switch (e)
 			{
 				case Line line:
