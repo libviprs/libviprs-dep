@@ -43,8 +43,8 @@ from ac18_forge import (
     GAP_PAGE_SIZE,
     MAX_SECTION_PAGES,
     OFFSET_PAGE_SIZE,
-    PRODUCT_PAGES,
     PRODUCT_PAGE_SIZE,
+    PRODUCT_PAGES,
     SECTION_NAME,
     control_case,
     inputs,
@@ -70,6 +70,12 @@ CONTROL = control_case()
 # not track it" to be a claim. The zero case is the other kind of evidence.
 SIZED = [c for c in CASES if c["declared"] >= (1 << 20)]
 SIZED_NAMES = [c["name"] for c in SIZED]
+
+# The branches an input reaches at two declared numbers, which are the only
+# ones a low-against-high comparison can be made on.
+PAIRED_SITES = sorted(
+    {c["site"] for c in CASES if len([x for x in CASES if x["site"] == c["site"]]) > 1}
+)
 
 
 def by_site(site):
@@ -277,7 +283,7 @@ class TestADeclaredCountIsRefusedRatherThanWalked:
             "report of something that already happened."
         )
 
-    @pytest.mark.parametrize("site", sorted({c["site"] for c in CASES if len(by_site(c["site"])) > 1}))
+    @pytest.mark.parametrize("site", PAIRED_SITES)
     def test_the_allocation_does_not_track_the_declared_number(self, site):
         """The claim a single number cannot make.
 
@@ -288,9 +294,7 @@ class TestADeclaredCountIsRefusedRatherThanWalked:
         """
         cases = sorted(by_site(site), key=lambda c: c["declared"])
         low, high = cases[0], cases[-1]
-        allocations = [
-            scenario(c["scenario"])["result"]["alloc_open_bytes"] for c in (low, high)
-        ]
+        allocations = [scenario(c["scenario"])["result"]["alloc_open_bytes"] for c in (low, high)]
         assert high["declared"] - low["declared"] > 0, site
         assert abs(allocations[1] - allocations[0]) < 65536, (
             f"{site} allocated {allocations[0]} and {allocations[1]} for declared "

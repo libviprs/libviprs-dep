@@ -102,10 +102,38 @@ MAGIC_INCREMENT = 0x269EC3
 # would otherwise produce a file whose header decodes to bytes nobody chose.
 MAGIC_PREFIX = bytes(
     (
-        0x29, 0x23, 0xBE, 0x84, 0xE1, 0x6C, 0xD6, 0xAE,
-        0x52, 0x90, 0x49, 0xF1, 0xF1, 0xBB, 0xE9, 0xEB,
-        0xB3, 0xA6, 0xDB, 0x3C, 0x87, 0x0C, 0x3E, 0x99,
-        0x24, 0x5E, 0x0D, 0x1C, 0x06, 0xB7, 0x47, 0xDE,
+        0x29,
+        0x23,
+        0xBE,
+        0x84,
+        0xE1,
+        0x6C,
+        0xD6,
+        0xAE,
+        0x52,
+        0x90,
+        0x49,
+        0xF1,
+        0xF1,
+        0xBB,
+        0xE9,
+        0xEB,
+        0xB3,
+        0xA6,
+        0xDB,
+        0x3C,
+        0x87,
+        0x0C,
+        0x3E,
+        0x99,
+        0x24,
+        0x5E,
+        0x0D,
+        0x1C,
+        0x06,
+        0xB7,
+        0x47,
+        0xDE,
     )
 )
 
@@ -340,9 +368,7 @@ def page_header(section_type, decompressed_size, compressed_size, compression=2)
     Declaring more than the payload decompresses to leaves the tail zeroed and
     the loop reads a run of record 0s out of it.
     """
-    return struct.pack(
-        "<iiiii", section_type, decompressed_size, compressed_size, compression, 0
-    )
+    return struct.pack("<iiiii", section_type, decompressed_size, compressed_size, compression, 0)
 
 
 def page_map(records):
@@ -375,9 +401,7 @@ def section_map(descriptors, ndescriptions=None):
         out += struct.pack("<i", 0)
         out += name + bytes(64 - len(name))
         for page in pages:
-            out += struct.pack(
-                "<iiQ", page["page_number"], page["compressed_size"], page["offset"]
-            )
+            out += struct.pack("<iiQ", page["page_number"], page["compressed_size"], page["offset"])
     return out
 
 
@@ -440,7 +464,8 @@ def read_back(blob):
         raise AssertionError(f"{blob[:6]!r} is not a signature the AC18 reader takes")
     key = keystream(HEADER_BLOCK_BYTES)
     block = bytes(
-        b ^ k for b, k in zip(blob[HEADER_BLOCK_OFFSET : HEADER_BLOCK_OFFSET + HEADER_BLOCK_BYTES], key)
+        b ^ k
+        for b, k in zip(blob[HEADER_BLOCK_OFFSET : HEADER_BLOCK_OFFSET + HEADER_BLOCK_BYTES], key)
     )
     if block[:12] != b"AcFssFcAJMB\0":
         raise AssertionError("the header block does not decode to the file ID string")
@@ -512,8 +537,7 @@ def descriptor(page_count, decompressed_size, offsets=(0,), compressed_size=None
         "decompressed_size": decompressed_size,
         "compressed_size": compressed_size,
         "pages": [
-            {"page_number": 1, "compressed_size": 0x20, "offset": offset}
-            for offset in offsets
+            {"page_number": 1, "compressed_size": 0x20, "offset": offset} for offset in offsets
         ],
     }
 
@@ -575,9 +599,7 @@ def descriptor_zero_input():
 
 def descriptor_product_input():
     """Trips `CheckDescriptor`'s product branch, with both factors legal."""
-    return forge(
-        [descriptor(PRODUCT_PAGES, PRODUCT_PAGE_SIZE, offsets=(0,) * PRODUCT_PAGES)]
-    )
+    return forge([descriptor(PRODUCT_PAGES, PRODUCT_PAGE_SIZE, offsets=(0,) * PRODUCT_PAGES)])
 
 
 def page_offset_input(value):
