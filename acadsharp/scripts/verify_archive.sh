@@ -575,15 +575,17 @@ if [ ! -s "$ENTRY_POINTS" ]; then
   fail "the shipped header declares no entry points, so the export check would pass over anything"
 fi
 
-# require_symbols <symbol-file> <label>
+# require_symbols <symbol-file> <label> -> 0 when every entry point is there
 require_symbols() {
-  local have="$1" label="$2" sym
+  local have="$1" label="$2" sym missing=0
   while read -r sym; do
     [ -n "$sym" ] || continue
     if ! grep -qxF "$sym" "$have"; then
       fail "$label does not define $sym, which the shipped header declares"
+      missing=1
     fi
   done < "$ENTRY_POINTS"
+  return "$missing"
 }
 
 # ---------------------------------------------------------------------------
@@ -615,8 +617,9 @@ if [ -f "$SHARED_LIB" ]; then
       case "$rc" in
         1) fail "$SHARED_NAME is truncated: its section or symbol tables run past the end" ;;
         2) fail "$SHARED_NAME has no dynamic symbol table, so it exports nothing" ;;
-        *) require_symbols "$SYMS" "$SHARED_NAME"
-           echo "  exports every entry point the header declares" ;;
+        *) if require_symbols "$SYMS" "$SHARED_NAME"; then
+             echo "  exports every entry point the header declares"
+           fi ;;
       esac
     else
       FILETYPE=$(read_bytes "$SHARED_LIB" 12 4)
@@ -630,8 +633,9 @@ if [ -f "$SHARED_LIB" ]; then
       case "$rc" in
         1) fail "$SHARED_NAME is truncated: its symbol or string table runs past the end" ;;
         2) fail "$SHARED_NAME has no LC_SYMTAB, so it exports nothing" ;;
-        *) require_symbols "$SYMS" "$SHARED_NAME"
-           echo "  exports every entry point the header declares" ;;
+        *) if require_symbols "$SYMS" "$SHARED_NAME"; then
+             echo "  exports every entry point the header declares"
+           fi ;;
       esac
     fi
   fi
@@ -731,8 +735,9 @@ if [ -f "$STATIC_LIB" ]; then
     if [ ! -s "$INDEX_SYMS" ]; then
       fail "$STATIC_NAME has no symbol index — consumers would need a manual ranlib"
     else
-      require_symbols "$INDEX_SYMS" "$STATIC_NAME's symbol index"
-      echo "  symbol index defines every entry point the header declares"
+      if require_symbols "$INDEX_SYMS" "$STATIC_NAME's symbol index"; then
+        echo "  symbol index defines every entry point the header declares"
+      fi
     fi
   fi
 
