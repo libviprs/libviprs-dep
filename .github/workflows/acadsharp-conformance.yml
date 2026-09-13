@@ -1,0 +1,166 @@
+name: acadsharp conformance
+
+# The evidence, run.
+#
+# Everything under acadsharp/tests that checks behaviour reads a committed
+# capture, because pytest here has no .NET and is not getting one (ADR 0001).
+# The two things that do execute the boundary are the C conformance consumer
+# and the generated Rust one, and until this file nothing ran either: ci.yml
+# never mentions them, and release-acadsharp.yml checks that the exported
+# symbols are present and never calls one. So a large, careful suite was
+# measuring a build nobody could prove still existed.
+#
+# A file of its own rather than a job in ci.yml, and that is not a style
+# choice. libviprs-tests' `Hook Mirror (every repo in the org)` job reads this
+# repo's ci.yml at the main tip and mirrors every job there into the shared
+# pre-commit hook unless it is listed as deferred, so a job added to ci.yml
+# reddens that repo until a pairing PR merges, and a .NET SDK is not something
+# a pre-commit hook should need. That guard reads ci.yml only, and so does
+# zstd/tests/test_ci_coverage.py's refusal to hardcode a dependency directory,
+# which matters because everything below names acadsharp/ on purpose: this
+# workflow is about one dependency, and gating it on that dependency's paths
+# is what keeps it cheap. ADR 0001 said a separate file was the cheaper way in
+# once there was an artifact to verify. There is one now.
+#
+# The first run is against the archive rather than the build tree, because the
+# premise of the epic is that a consumer links what we publish, so what is
+# worth proving still behaves is what we publish. The second is against the
+# test configuration, which is the only build carrying the exports that make
+# the exception and handle-leak cases runnable at all, and which had stopped
+# compiling on main without anything saying so.
+
+on:
+  push:
+    paths:
+      - 'acadsharp/**'
+      - '.github/workflows/acadsharp-conformance.yml'
+  workflow_dispatch:
+
+concurrency:
+  # One run per ref is enough, and a superseded one is not worth a runner.
+  group: acadsharp-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consumers:
+    # Native arm64, no emulation, the same rule release-acadsharp.yml follows:
+    # ADR 0001 measured a cross-architecture publish producing the object file
+    # and then failing at the native link, and .NET documents qemu-user-static
+    # as unsupported.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      # The runners' default is a local image name that exists on one machine.
+      # CI has to name something a registry can serve, and the runners take it
+      # from the environment for exactly this.
+      VIPRS_CONFORMANCE_IMAGE: rust:1.98.1
+      VIPRS_CONFORMANCE_PLATFORM: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the linux/arm64 archive
+        # No --version: the driver reads acadsharp/VERSION, which is what a
+        # push to a branch is asking about.
+        run: python3 acadsharp/build_acadsharp.py --platform linux --arch arm64
+
+      - name: Verify the archive before anything runs against it
+        # Named, not globbed: a glob that matches nothing verifies nothing and
+        # still exits 0.
+        run: |
+          bash acadsharp/scripts/verify_archive.sh \
+            bin/acadsharp-linux-arm64.tgz linux arm64
+
+      - name: Unpack it the way a consumer would
+        run: |
+          set -eu
+          mkdir -p bin/unpacked
+          tar -xzf bin/acadsharp-linux-arm64.tgz -C bin/unpacked
+          find bin/unpacked -maxdepth 2
+
+      - name: Run the C consumer against the unpacked archive
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked/acadsharp-linux-arm64
+        run: acadsharp/tests/conformance/c/run.sh
+
+      - name: Run the generated Rust consumer against the unpacked archive
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked/acadsharp-linux-arm64
+        run: acadsharp/tests/conformance/rust/run.sh
+
+      - name: Name the builder image the archive build left behind
+        id: builder
+        # Asked of the driver rather than spelled out here. The tag is
+        # assembled from the version and the cell, and a copy of that rule in
+        # this file is a copy that goes stale on the first bump.
+        run: |
+          set -eu
+          python3 - >> "$GITHUB_OUTPUT" <<'PY'
+          import importlib.util
+
+          spec = importlib.util.spec_from_file_location(
+              "build_acadsharp", "acadsharp/build_acadsharp.py"
+          )
+          driver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(driver)
+          print(f"image={driver.builder_image_tag(driver.read_version(), 'linux', 'arm64')}")
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      - name: Publish the test configuration in that image
+        # The AbiTest configuration is Release plus the two exports that let a
+        # consumer make the library throw and read its live handle count, so
+        # it is the only build against which the exception cases and the
+        # handle-leak cases can run at all. Nothing publishes it, which is how
+        # main came to carry a duplicate entry point that made it stop
+        # compiling while every green check stayed green.
+        #
+        # It builds in the image the archive build just made, which already
+        # holds the SDK, clang, the pinned upstream source and a warm package
+        # cache, so this costs one publish and no downloads. The sources come
+        # from the checkout rather than from the copy baked into the image, so
+        # what runs is what was pushed.
+        env:
+          BUILDER: ${{ steps.builder.outputs.image }}
+        run: |
+          set -eu
+          mkdir -p bin/abitest
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD/acadsharp":/acadsharp:ro \
+            -v "$PWD/bin/abitest":/out \
+            --entrypoint sh "$BUILDER" -c '
+              set -eu
+              cp -r /acadsharp /tmp/acadsharp
+              cd /tmp/acadsharp/native
+              project=$(ls -d /build/ACadSharp-*/src/ACadSharp/ACadSharp.csproj)
+              dotnet publish Viprs.ACadSharp.Native.csproj \
+                  -r linux-arm64 -c AbiTest \
+                  -p:AcadSharpProject="$project" \
+                  --artifacts-path /tmp/art \
+                  > /tmp/publish-abitest.log 2>&1 \
+                || { tail -60 /tmp/publish-abitest.log; exit 1; }
+              library=$(find /tmp/art -path "*publish*" -name viprs_acadsharp.so | head -1)
+              [ -n "$library" ] || { echo "the publish produced no library" >&2; exit 1; }
+              cp "$library" /out/
+              chmod a+r /out/viprs_acadsharp.so
+            '
+
+      - name: Run the C consumer against the test configuration
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/abitest
+        run: acadsharp/tests/conformance/c/run.sh
+
+      - name: Run the generated Rust consumer against the test configuration
+        env:
+          VIPRS_LIB_DIR: ${{ github.workspace }}/bin/abitest
+        run: acadsharp/tests/conformance/rust/run.sh
+
+      - name: Keep the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-conformance
+          path: bin/logs/
+          if-no-files-found: warn

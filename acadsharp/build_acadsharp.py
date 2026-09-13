@@ -473,6 +473,19 @@ def release_tag(version):
     return f"acadsharp-{version}"
 
 
+def builder_image_tag(version, plat, arch):
+    """The image one cell builds in: acadsharp-builder-3.7.1-viprs.1-linux-arm64
+
+    A function rather than an expression inside the build, because the image
+    outlives the build that made it and something else wants it by name.
+    `.github/workflows/acadsharp-conformance.yml` publishes the test
+    configuration in it, which costs one publish instead of a second SDK, a
+    second clang and a second package restore. A copy of this rule in that
+    file is a copy that goes stale on the first version bump.
+    """
+    return f"acadsharp-builder-{version}-{plat}-{normalize_arch(arch)}".lower()
+
+
 def shared_ext(plat):
     """Shared library extension for a platform."""
     return "dylib" if plat == "mac" else "so"
@@ -1532,7 +1545,7 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
     """Build inside a container pinned to the target architecture."""
     rid = rid_for(plat, arch)
     info = TARGETS[rid]
-    image_tag = f"acadsharp-builder-{version}-{plat}-{arch}".lower()
+    image_tag = builder_image_tag(version, plat, arch)
     container_name = f"acadsharp-extract-{version}-{plat}-{arch}".lower()
     dir_name = staging_dir_name(plat, arch)
     output_path = os.path.join(output_dir, archive_name(plat, arch))

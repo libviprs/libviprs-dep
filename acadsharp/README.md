@@ -126,6 +126,41 @@ python3 acadsharp/build_acadsharp.py --target linux-arm64    # shared library
 python3 acadsharp/build_acadsharp.py --target linux-x64 --static
 ```
 
+## Conformance
+
+Two consumers link the published library and exercise the boundary from
+outside: a C one that includes the header, and a Rust one that generates every
+declaration from that same header at build time. Both build and run in a
+container with no .NET in it, which is the other half of the point.
+
+```bash
+acadsharp/tests/conformance/c/run.sh
+acadsharp/tests/conformance/rust/run.sh
+```
+
+With no `VIPRS_LIB_DIR` they look in the build tree's publish directory. Point
+it at an unpacked `acadsharp-*.tgz` and they run against the archive instead,
+which is what CI does:
+
+```bash
+tar xzf bin/acadsharp-linux-arm64.tgz -C bin/unpacked
+VIPRS_LIB_DIR=$PWD/bin/unpacked/acadsharp-linux-arm64 \
+    acadsharp/tests/conformance/c/run.sh
+```
+
+Each runner asks the library whether it carries the test-only exports and says
+which mode it ran in. They exist only in the `AbiTest` configuration, and the
+cases that make the library throw and that read its live handle count need
+them, so a run against a release build reports those as skipped rather than
+pretending.
+
+`.github/workflows/acadsharp-conformance.yml` runs all of this on a push that
+touches `acadsharp/`: it builds the linux/arm64 archive, verifies it, runs both
+consumers against the unpacked archive, then publishes the `AbiTest`
+configuration in the image the archive build already made and runs both again.
+It is a file of its own rather than a job in `ci.yml`, and ADR 0001's C#
+coverage section says why.
+
 ## Layout
 
 ```

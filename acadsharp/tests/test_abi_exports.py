@@ -105,6 +105,35 @@ def header_entry_points():
     return sorted(set(re.findall(r"\b(viprs_acad_[a-z0-9_]+)\s*\(", no_comments)))
 
 
+class TestEveryEntryPointIsDeclaredOnce:
+    """A duplicate entry point does not compile, and nothing here noticed.
+
+    `_bodies` above is keyed by entry-point name, so a second method
+    carrying the same `EntryPoint` silently replaced the first and every
+    check in this file went on passing against whichever body came last.
+    `main` carried two `viprs_acad__test_live_handles` for exactly that
+    reason, which means the AbiTest configuration had not compiled since the
+    adapter merged, which means neither conformance consumer could be built,
+    which nothing in CI would have said. The names are counted from the
+    attributes rather than from the map, because the map is where the
+    duplicate goes missing.
+    """
+
+    def test_no_two_exports_share_an_entry_point(self, code):
+        names = re.findall(r'\[UnmanagedCallersOnly\(EntryPoint = "(\w+)"\)\]', code)
+        duplicated = sorted({n for n in names if names.count(n) > 1})
+        assert not duplicated, (
+            f"{duplicated} is declared more than once in Exports.cs. The project does "
+            "not compile in any configuration that defines it, and the checks in this "
+            "file keep passing because they read a map that only holds the last one."
+        )
+
+    def test_no_two_methods_share_a_name(self, code):
+        names = re.findall(r"public static \w+ (\w+)\(", code)
+        duplicated = sorted({n for n in names if names.count(n) > 1})
+        assert not duplicated, f"Exports.cs defines {duplicated} twice, so it will not compile"
+
+
 class TestTheHeaderAndTheShimAgree:
     def test_every_declared_entry_point_is_exported(self, bodies, header_entry_points):
         missing = [e for e in header_entry_points if e not in bodies]
