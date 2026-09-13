@@ -544,6 +544,62 @@ class TestScriptShape:
             assert "<tgz-path> [platform] [cpu]" in f.read()
 
 
+class TestTheProbeAsksForTheNameTheHeaderDeclares:
+    """The probe links the library, so the capabilities call is resolved
+    when it compiles. A literal there stops compiling the day that call is
+    renamed, and the verifier then refuses every archive with "the static
+    smoke cannot link the archive", which says nothing about what is
+    wrong. The name comes off the shipped header's own declarations and
+    reaches the compiler as a macro."""
+
+    def _script(self):
+        with open(SCRIPT_PATH) as f:
+            return f.read()
+
+    def test_the_probe_does_not_name_the_call(self):
+        script = self._script()
+        assert "VIPRS_CAPS_CALL(&caps" in script
+        assert "-DVIPRS_CAPS_CALL=$CAPS_CALL" in script
+        assert "viprs_acad_capabilities_v1(&caps" not in script, (
+            "the probe calls the capabilities export by a name typed here, so it "
+            "stops compiling the day the header renames it"
+        )
+
+    def test_the_struct_is_still_named_directly(self):
+        # Only the call is renamed. The struct keeps its name, and the
+        # probe has to declare one to pass in.
+        assert "struct viprs_acad_capabilities_v1 caps;" in self._script()
+
+    def test_a_header_with_no_capabilities_call_does_not_abort_the_run(self, tmp_path):
+        # The script runs under `set -euo pipefail`, so an unguarded
+        # `grep | head` over a header that declares no such call exits 1
+        # and takes the whole verification with it, before the refusal
+        # that explains why. The line is pulled out of the script and run
+        # under the same options rather than restated.
+        line = [ln for ln in self._script().splitlines() if ln.strip().startswith("CAPS_CALL=$(")]
+        assert len(line) == 1, "the extraction moved, so this is testing nothing"
+        entry_points = tmp_path / "entry-points.txt"
+        entry_points.write_text("viprs_acad_abi_version\nviprs_acad_close\n")
+        done = subprocess.run(
+            [
+                "bash",
+                "-c",
+                "set -euo pipefail\n"
+                f'ENTRY_POINTS="{entry_points}"\n'
+                f"{line[0].strip()}\n"
+                'printf "survived:%s\\n" "${CAPS_CALL:-<empty>}"',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode == 0, (
+            f"the lookup aborts a strict-mode script when the header declares no "
+            f"capabilities call:\n{done.stdout}{done.stderr}"
+        )
+        assert "survived:<empty>" in done.stdout
+
+
 class TestArguments:
     def test_no_argument_is_a_usage_error(self):
         result = subprocess.run(["bash", SCRIPT_PATH], capture_output=True, text=True, check=False)

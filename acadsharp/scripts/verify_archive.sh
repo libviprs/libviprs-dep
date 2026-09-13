@@ -1110,7 +1110,11 @@ PROBE
     # literal here would stop compiling the day the call is renamed, and
     # the verifier would refuse every archive with "the static smoke
     # cannot link the archive", which says nothing about what is wrong.
-    CAPS_CALL=$(grep -E 'capabilities' "$ENTRY_POINTS" | head -1)
+    # `|| true` because the script runs under `set -e` with pipefail: a
+    # header declaring no capabilities call makes grep exit 1, which
+    # would abort the whole verification here, before the refusal below
+    # ever ran.
+    CAPS_CALL=$(grep -E 'capabilities' "$ENTRY_POINTS" | head -1 || true)
     if [ -z "$CAPS_CALL" ]; then
       fail "the shipped header declares no capabilities call, so the probe cannot ask
     the library what it reads"
