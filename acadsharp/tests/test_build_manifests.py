@@ -11,6 +11,7 @@ that describe the real link cannot be filled in from an example.
 import hashlib
 import json
 import os
+import re
 
 import build_acadsharp as ba
 import pytest
@@ -498,6 +499,105 @@ class TestTheGeneratedSmokes:
         source = ba.static_smoke_source()
         for name in ba.header_entry_points():
             assert name in source
+
+
+class TestEveryFileTheBuildReadsIsStaged:
+    """The container only has what the build context puts in it.
+
+    `acadsharp/VERSION` was not one of those things. The csproj reads it
+    during the build to generate the string `viprs_acad_capabilities_v1`
+    reports, msbuild's `ReadLinesFromFile` returns nothing for a file that is
+    not there rather than failing, and so every archive published shipped a
+    library that answers the version question with an empty string. The C
+    conformance consumer found it the first time CI ran it against an
+    unpacked archive.
+
+    So this reads the paths out of the csproj rather than listing them, and a
+    third file added to that list is covered the day it lands.
+    """
+
+    @staticmethod
+    def project_inputs():
+        with open(os.path.join(ACAD_DIR, "native", "Viprs.ACadSharp.Native.csproj")) as f:
+            csproj = f.read()
+        found = re.findall(r"\$\(MSBuildProjectDirectory\)/\.\./([^<\s]+)", csproj)
+        assert found, "the csproj no longer names its build inputs where this reader looks"
+        return sorted(set(found))
+
+    def test_the_csproj_reads_the_header_and_the_version(self):
+        inputs = self.project_inputs()
+        assert "VERSION" in inputs
+        assert any(name.endswith("viprs_acadsharp.h") for name in inputs)
+
+    def test_the_build_context_carries_every_one_of_them(self, tmp_path):
+        ctx = str(tmp_path / "ctx")
+        os.makedirs(ctx)
+        ba._write_build_context(ctx, "linux")
+        for name in self.project_inputs():
+            assert os.path.isfile(os.path.join(ctx, name)), (
+                f"the csproj reads {name} during the build and the build context does "
+                "not carry it, so msbuild reads nothing and says nothing about it"
+            )
+
+    def test_the_staged_version_is_the_repository_version(self, tmp_path):
+        ctx = str(tmp_path / "ctx")
+        os.makedirs(ctx)
+        ba._write_build_context(ctx, "linux")
+        with open(os.path.join(ctx, "VERSION")) as f:
+            staged = f.read().strip()
+        assert staged == ba.read_version(), (
+            f"the build would stamp {staged!r} into the library while the repository "
+            f"says {ba.read_version()!r}"
+        )
+
+    def test_the_dockerfile_copies_every_one_of_them(self):
+        dockerfile = ba.make_dockerfile(ba.read_version(), "linux", "arm64")
+        copied = " ".join(line for line in dockerfile.splitlines() if line.startswith("COPY "))
+        for name in self.project_inputs():
+            top = name.split("/")[0]
+            assert top in copied, (
+                f"the Dockerfile never copies {top}, so the build reads {name} from a "
+                "path that does not exist in the image"
+            )
+
+
+class TestTheShippedLibraryHasToSayWhatItIs:
+    """The smoke asks, because nothing else did.
+
+    `verify_archive.sh` reads symbols out of the bytes and the conformance
+    consumers were not run by anything, so a library that loaded and answered
+    every numeric question with the right number, and the one text question
+    with nothing at all, shipped four times.
+    """
+
+    def test_the_smoke_asks_for_the_backing_version(self):
+        source = ba.archive_smoke_source()
+        assert "viprs_acad_capabilities_v1" in source
+        assert "BACKING_VERSION=" in source
+
+    def test_the_smoke_refuses_an_empty_one(self):
+        source = ba.archive_smoke_source()
+        assert "needed == 0" in source, (
+            "the smoke reads the backing version and does not refuse an empty one, "
+            "which is the state every published archive was in"
+        )
+
+    def test_the_smoke_includes_the_header_rather_than_declaring_the_struct(self):
+        source = ba.archive_smoke_source()
+        assert '#include "viprs_acadsharp.h"' in source
+        assert "struct viprs_acad_capabilities_v1 {" not in source, (
+            "the smoke declares the frozen struct by hand, so it agrees with whoever "
+            "typed it and with nothing else"
+        )
+
+    def test_the_staging_script_compiles_it_against_the_staged_header(self):
+        stage = ba.stage_script("linux")
+        assert '-I"$WORK/include"' in stage, (
+            "the smoke includes the header, so the compile line has to say where it is"
+        )
+
+    def test_the_backing_version_is_recorded_as_a_fact(self):
+        assert "fact backing_version" in ba.stage_script("linux")
 
 
 class TestAnUncertifiedStaticLibraryIsNotShipped:
