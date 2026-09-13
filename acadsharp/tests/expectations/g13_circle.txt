@@ -1,0 +1,5 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Circle handle=49 flags=0 c=[(-5.500000,6.250000,0.000000)] r=9.875000 normal=[(0.000000,0.000000,1.000000)]

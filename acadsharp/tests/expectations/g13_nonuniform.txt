@@ -1,0 +1,6 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Warning handle=4C flags=1 code=NON_UNIFORM_BLOCK_SCALE message="CIRCLE crossed under a block transform that is not a similarity, so its parameters describe a shape the transform does not preserve"
+00005 Circle handle=4C flags=1 c=[(0.000000,0.000000,0.000000)] r=12.000000 normal=[(0.000000,0.000000,1.000000)]

@@ -1,0 +1,6 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Text handle=49 flags=0 p=[(1.250000,2.500000,0.000000)] h=3.750000 rot=0.125000 value="VIPRS-G13-TEXT"
+00005 Text handle=4A flags=0 p=[(11.250000,12.500000,0.000000)] h=1.500000 rot=0.000000 value="VIPRS-G13-MTEXT"

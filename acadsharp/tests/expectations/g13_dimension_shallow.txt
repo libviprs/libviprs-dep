@@ -1,0 +1,44 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Warning handle=4D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00005 Warning handle=4F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00006 Warning handle=50 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00007 Warning handle=51 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00008 Line handle=52 flags=1 pts=[(0.000000,3.000000,0.000000);(10.000000,3.000000,0.000000)]
+00009 Warning handle=53 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00010 Warning handle=54 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00011 Line handle=55 flags=1 pts=[(0.000000,0.625000,0.000000);(0.000000,4.250000,0.000000)]
+00012 Line handle=56 flags=1 pts=[(10.000000,0.625000,0.000000);(10.000000,4.250000,0.000000)]
+00013 Text handle=57 flags=1 p=[(5.000000,3.625000,0.000000)] h=0.180000 rot=0.000000 value="10"
+00014 Warning handle=5C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00015 Warning handle=5D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00016 Warning handle=5E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00017 Warning handle=5F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00018 Line handle=60 flags=1 pts=[(0.000000,23.000000,0.000000);(10.000000,23.000000,0.000000)]
+00019 Warning handle=61 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00020 Warning handle=62 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00021 Line handle=63 flags=1 pts=[(0.000000,20.625000,0.000000);(0.000000,24.250000,0.000000)]
+00022 Line handle=64 flags=1 pts=[(10.000000,20.625000,0.000000);(10.000000,24.250000,0.000000)]
+00023 Text handle=65 flags=1 p=[(5.000000,23.625000,0.000000)] h=0.180000 rot=0.000000 value="10"
+00024 Warning handle=6A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00025 Warning handle=6B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00026 Warning handle=6C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00027 Warning handle=6D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00028 Line handle=6E flags=1 pts=[(0.000000,43.000000,0.000000);(10.000000,43.000000,0.000000)]
+00029 Warning handle=6F flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00030 Warning handle=70 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00031 Line handle=71 flags=1 pts=[(0.000000,40.625000,0.000000);(0.000000,44.250000,0.000000)]
+00032 Line handle=72 flags=1 pts=[(10.000000,40.625000,0.000000);(10.000000,44.250000,0.000000)]
+00033 Text handle=73 flags=1 p=[(5.000000,43.625000,0.000000)] h=0.180000 rot=0.000000 value="10"
+00034 Warning handle=78 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00035 Warning handle=79 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00036 Warning handle=7A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00037 Warning handle=7B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00038 Line handle=7C flags=1 pts=[(0.000000,63.000000,0.000000);(10.000000,63.000000,0.000000)]
+00039 Warning handle=7D flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00040 Warning handle=7E flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00041 Line handle=7F flags=1 pts=[(0.000000,60.625000,0.000000);(0.000000,64.250000,0.000000)]
+00042 Line handle=80 flags=1 pts=[(10.000000,60.625000,0.000000);(10.000000,64.250000,0.000000)]
+00043 Text handle=81 flags=1 p=[(5.000000,63.625000,0.000000)] h=0.180000 rot=0.000000 value="10"

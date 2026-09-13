@@ -150,7 +150,7 @@ namespace Viprs.Wire
 				view.Name
 			);
 
-			foreach (Primitive p in _document.Source.EnumerateView((int)_viewIndex))
+			foreach (Primitive p in _document.Source.EnumerateView((int)_viewIndex, IsCanceled))
 			{
 				_items = _items + 1ul;
 				if (_items > _document.Limits.MaxEntities)

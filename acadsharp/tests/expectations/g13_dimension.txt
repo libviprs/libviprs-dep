@@ -1,0 +1,14 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Warning handle=4D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00005 Warning handle=4F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00006 Warning handle=50 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00007 Warning handle=51 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00008 Line handle=52 flags=1 pts=[(0.000000,3.000000,0.000000);(10.000000,3.000000,0.000000)]
+00009 Warning handle=53 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00010 Warning handle=54 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00011 Line handle=55 flags=1 pts=[(0.000000,0.625000,0.000000);(0.000000,4.250000,0.000000)]
+00012 Line handle=56 flags=1 pts=[(10.000000,0.625000,0.000000);(10.000000,4.250000,0.000000)]
+00013 Text handle=57 flags=1 p=[(5.000000,3.625000,0.000000)] h=0.180000 rot=0.000000 value="10"

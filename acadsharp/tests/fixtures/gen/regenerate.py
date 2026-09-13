@@ -1,0 +1,849 @@
+#!/usr/bin/env python3
+"""Regenerate the G1.3 corpus, expectations, scenario captures and benchmarks.
+
+    python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --plan
+    python3 acadsharp/tests/fixtures/gen/regenerate.py --scratch DIR --acad-source DIR --all
+
+Everything below runs inside the pinned .NET SDK container. The only host tools
+it needs are docker and python3, which is the rule the rest of this repository
+builds under.
+
+What it produces, and what reads it back:
+
+* ``tests/fixtures/g13_*.dwg`` - the corpus, committed, because a DWG header
+  carries creation and update timestamps and a rerun produces different bytes.
+* ``tests/expectations/*.txt`` - the canonical record dump per fixture, which
+  is the expectation ``test_adapter_stream.py`` compares against.
+  ``fixturegen decode --check`` is what names the first differing record.
+* ``tests/fixtures/captures/g13_scenarios.json`` - every limit, refusal and
+  malformed-input run, with the code each produced.
+* ``tests/benchmarks/amplification.json`` - the block-expansion, path-versus-
+  memory and streaming numbers.
+
+pytest has no .NET and is not getting one (ADR 0001), so the committed files
+are what the tests read. That only means something if a capture is provably a
+run of the file in the tree, so every capture carries the sha256 of its fixture
+and the tests recompute it.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import random
+import subprocess
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ACAD_ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
+REPO_ROOT = os.path.dirname(ACAD_ROOT)
+FIXTURES = os.path.join(ACAD_ROOT, "tests", "fixtures")
+EXPECTATIONS = os.path.join(ACAD_ROOT, "tests", "expectations")
+# Not tests/fixtures/captures: that directory is the G1.1 JIT-versus-AOT
+# parity set and test_acadsharp_recorded_parity.py asserts every JSON in it
+# carries a system-variable count. A scenario capture is a different kind of
+# artefact and sits with the expectations it belongs to.
+CAPTURES = EXPECTATIONS
+BENCHMARKS = os.path.join(ACAD_ROOT, "tests", "benchmarks")
+
+SDK_IMAGE = "mcr.microsoft.com/dotnet/sdk:10.0.401-noble"
+PLATFORM = "linux/arm64"
+PROJECT = "tests/fixtures/gen/Viprs.ACadSharp.FixtureGen.csproj"
+DLL = "/out/artifacts/bin/Viprs.ACadSharp.FixtureGen/debug/fixturegen.dll"
+
+BATCH_BYTES = 65536
+
+# The fixtures whose whole record stream is committed as an expectation.
+#
+# The hostile ones are left out on purpose. g13_many_inserts.dwg decodes to
+# tens of thousands of records and a committed dump of those is a file nobody
+# can read in a diff; its shape is pinned by the benchmark instead.
+# g13_dimension_deep.dwg and g13_wide_spline.dwg are refused rather than
+# decoded, so there is no stream to dump, and the scenario capture is where
+# they are checked. g13_dimension_shallow.dwg is the readable one of that pair
+# and is dumped.
+DUMPED = (
+    "g13_line.dwg",
+    "g13_polyline.dwg",
+    "g13_arc.dwg",
+    "g13_circle.dwg",
+    "g13_ellipse.dwg",
+    "g13_spline.dwg",
+    "g13_text.dwg",
+    "g13_insert.dwg",
+    "g13_dimension.dwg",
+    "g13_hatch.dwg",
+    "g13_unsupported.dwg",
+    "g13_xref.dwg",
+    "g13_nonuniform.dwg",
+    "g13_two_entities.dwg",
+    "g13_deep_blocks.dwg",
+    "g13_wide_polyline.dwg",
+    "g13_long_text.dwg",
+    "g13_scale_1x.dwg",
+    "g13_dimension_shallow.dwg",
+    "real_AC1032.dwg",
+    "real_AC1018.dwg",
+    "g11_shapes.dwg",
+    "g11_codepage.dwg",
+)
+
+MALFORMED_SOURCE = "g13_insert.dwg"
+TRUNCATIONS = (25, 50, 90)
+FLIP_COUNT = 64
+FLIP_SEED = 4713
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sha256_bytes(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def truncate(data, percent):
+    return data[: max(1, (len(data) * percent) // 100)]
+
+
+def bitflip(data, count=FLIP_COUNT, seed=FLIP_SEED):
+    """`count` bytes flipped where a fixed seed puts them.
+
+    Fixed seed so the derivative is the same file on every run and a failure is
+    reproducible. The positions come back too, because a flip inside the
+    six-byte version signature is a different refusal from one in the body and
+    a test that cannot tell them apart is asserting on luck.
+    """
+    rng = random.Random(seed)
+    out = bytearray(data)
+    positions = []
+    for _ in range(count):
+        p = rng.randrange(len(out))
+        out[p] ^= 1 << rng.randrange(8)
+        positions.append(p)
+    return bytes(out), positions
+
+
+def docker_cmd(scratch, args, network=None, repo_ro=False, read_only=False):
+    repo_mount = f"{REPO_ROOT}:/work:ro" if repo_ro else f"{REPO_ROOT}:/work"
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--platform",
+        PLATFORM,
+        "-v",
+        repo_mount,
+        "-v",
+        f"{scratch}:/scratch",
+        "-v",
+        f"{os.path.join(scratch, 'home')}:/home/build",
+        "-v",
+        f"{os.path.join(scratch, 'out')}:/out",
+        "-e",
+        "HOME=/home/build",
+        "-e",
+        "DOTNET_CLI_HOME=/home/build",
+        "-e",
+        "DOTNET_CLI_TELEMETRY_OPTOUT=1",
+        "-e",
+        "DOTNET_NOLOGO=1",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "-w",
+        "/work/acadsharp",
+    ]
+    if network:
+        cmd += ["--network", network]
+    if read_only:
+        cmd += ["--read-only", "--tmpfs", "/tmp:exec"]
+    return cmd + [SDK_IMAGE] + list(args)
+
+
+def run(cmd, check=True):
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if check and proc.returncode != 0:
+        sys.stderr.write(proc.stdout or "")
+        sys.stderr.write(proc.stderr or "")
+        raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}")
+    return proc
+
+
+def build(scratch, acad_source, plan=False):
+    cmd = docker_cmd(
+        scratch,
+        [
+            "dotnet",
+            "build",
+            PROJECT,
+            "-c",
+            "Debug",
+            "-p:AcadSharpProject=/acs/src/ACadSharp/ACadSharp.csproj",
+            "--artifacts-path",
+            "/out/artifacts",
+        ],
+    )
+    cmd.insert(cmd.index(SDK_IMAGE), "-v")
+    cmd.insert(cmd.index(SDK_IMAGE), f"{acad_source}:/acs")
+    print(" ".join(cmd))
+    if not plan:
+        run(cmd)
+
+
+def decode(scratch, path, *args, **kwargs):
+    cmd = docker_cmd(scratch, ["dotnet", DLL, "decode", path] + [str(a) for a in args], **kwargs)
+    proc = run(cmd, check=False)
+    try:
+        result = json.loads(proc.stdout)
+    except ValueError:
+        result = {
+            "open_code": "PROCESS_FAILED",
+            "open_detail": (proc.stderr or proc.stdout or "")[-2000:],
+        }
+    result["exit_code"] = proc.returncode
+    return result
+
+
+def decode_unreadable(scratch, source_fixture, extra):
+    """Decode a mode-000 copy of a fixture, made inside the container.
+
+    The copy is made in the container's own tmpfs rather than in a bind mount,
+    because a macOS bind mount does not carry Linux permissions and a file that
+    is supposed to be unreadable comes back merely missing. Inside the
+    container it is a real Linux file with a real mode, the process runs as a
+    non-root user, and "cannot be opened" means what it says. The shell checks
+    that before the decode runs, so a control that quietly stopped controlling
+    anything shows up in the capture.
+    """
+    script = (
+        "set -e\n"
+        f"cp {source_fixture} /tmp/sealed.dwg\n"
+        "chmod 000 /tmp/sealed.dwg\n"
+        "if head -c 1 /tmp/sealed.dwg >/dev/null 2>&1; then\n"
+        "  echo 'CONTROL FAILED: the process can still read a mode 000 file' >&2\n"
+        "  exit 3\n"
+        "fi\n"
+        f"exec dotnet {DLL} decode /tmp/sealed.dwg {extra}\n"
+    )
+    cmd = docker_cmd(scratch, ["sh", "-c", script])
+    cmd.insert(cmd.index(SDK_IMAGE), "--tmpfs")
+    cmd.insert(cmd.index(SDK_IMAGE), "/tmp:exec")
+    proc = run(cmd, check=False)
+    try:
+        result = json.loads(proc.stdout)
+    except ValueError:
+        result = {
+            "open_code": "PROCESS_FAILED",
+            "open_detail": (proc.stderr or proc.stdout or "")[-2000:],
+        }
+    result["exit_code"] = proc.returncode
+    result["control"] = "mode 000 copy in the container tmpfs, non-root, read proven to fail"
+    return result
+
+
+def write_corpus(scratch):
+    run(docker_cmd(scratch, ["dotnet", DLL, "corpus", "/work/acadsharp/tests/fixtures"]))
+
+
+def stem(fixture):
+    return os.path.splitext(fixture)[0]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--scratch", required=True, help="a writable directory outside the repo")
+    parser.add_argument("--acad-source", required=True, help="the unpacked ACadSharp checkout")
+    parser.add_argument("--plan", action="store_true", help="print the build command and stop")
+    parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--skip-corpus", action="store_true")
+    parser.add_argument("--only", help="run one stage: expectations, scenarios, benchmarks")
+    args = parser.parse_args(argv)
+
+    scratch = os.path.abspath(args.scratch)
+    for d in ("home", "out", "derived"):
+        os.makedirs(os.path.join(scratch, d), exist_ok=True)
+    for d in (FIXTURES, EXPECTATIONS, CAPTURES, BENCHMARKS):
+        os.makedirs(d, exist_ok=True)
+
+    if not args.skip_build:
+        build(scratch, os.path.abspath(args.acad_source), plan=args.plan)
+    if args.plan:
+        return 0
+
+    if not args.skip_corpus:
+        write_corpus(scratch)
+
+    stage = args.only
+    if stage in (None, "expectations"):
+        expectations(scratch)
+    if stage in (None, "scenarios"):
+        scenarios(scratch)
+    if stage in (None, "benchmarks"):
+        benchmarks(scratch)
+    return 0
+
+
+def expectations(scratch):
+    manifest = {
+        "recorded": time.strftime("%Y-%m-%d"),
+        "runner": f"fixturegen decode --dump, {SDK_IMAGE}, {PLATFORM}",
+        "batch_bytes": BATCH_BYTES,
+        "fixtures": {},
+    }
+
+    for fixture in DUMPED:
+        path = os.path.join(FIXTURES, fixture)
+        if not os.path.isfile(path):
+            raise RuntimeError(f"{fixture} is not in tests/fixtures")
+
+        out = f"/work/acadsharp/tests/expectations/{stem(fixture)}.txt"
+        result = decode(
+            scratch,
+            f"/work/acadsharp/tests/fixtures/{fixture}",
+            "--dump",
+            out,
+            "--batch",
+            BATCH_BYTES,
+        )
+        if result.get("dump_error"):
+            raise RuntimeError(f"{fixture}: {result['dump_error']}")
+
+        lines = open(os.path.join(EXPECTATIONS, f"{stem(fixture)}.txt")).read().splitlines()
+        counts = {}
+        for line in lines:
+            if not line:
+                continue
+            kind = line.split(" ")[1]
+            counts[kind] = counts.get(kind, 0) + 1
+
+        manifest["fixtures"][fixture] = {
+            "sha256": sha256_file(path),
+            "bytes": os.path.getsize(path),
+            "records": len([x for x in lines if x]),
+            "kinds": counts,
+            "view_count": result.get("view_count"),
+            "notification_count": result.get("notification_count"),
+            "batches": result.get("batches"),
+            "output_bytes": result.get("output_bytes"),
+            "live_handles": result.get("live_handles"),
+            "decode_code": result.get("decode_code"),
+        }
+        print(f"{fixture}: {manifest['fixtures'][fixture]['records']} records {counts}")
+
+    with open(os.path.join(EXPECTATIONS, "MANIFEST.json"), "w") as f:
+        json.dump(manifest, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def fixture_arg(name):
+    return f"/work/acadsharp/tests/fixtures/{name}"
+
+
+def scenarios(scratch):
+    derived = os.path.join(scratch, "derived")
+    out = {
+        "recorded": time.strftime("%Y-%m-%d"),
+        "runner": f"fixturegen decode, {SDK_IMAGE}, {PLATFORM}",
+        "batch_bytes": BATCH_BYTES,
+        "malformed": {
+            "source": MALFORMED_SOURCE,
+            "truncations": list(TRUNCATIONS),
+            "flip_count": FLIP_COUNT,
+            "flip_seed": FLIP_SEED,
+        },
+        "scenarios": [],
+    }
+
+    def fan(name, depth, width, args, note):
+        cmd = docker_cmd(
+            scratch,
+            ["dotnet", DLL, "fanout", str(depth), str(width)] + [str(a) for a in args],
+        )
+        proc = run(cmd, check=False)
+        try:
+            result = json.loads(proc.stdout)
+        except ValueError:
+            result = {
+                "code": "PROCESS_FAILED",
+                "detail": (proc.stderr or proc.stdout or "")[-2000:],
+            }
+        result["exit_code"] = proc.returncode
+        out["scenarios"].append(
+            {
+                "name": name,
+                "input": f"an in-memory fan-out, depth {depth} width {width}",
+                "args": [str(a) for a in args],
+                "note": note,
+                "result": result,
+            }
+        )
+        print(f"{name}: code={result.get('code')} walked={result.get('entities_walked')}")
+        return result
+
+    def record(name, fixture, args, note, **kw):
+        result = decode(scratch, fixture, *args, **kw)
+        entry = {
+            "name": name,
+            "input": fixture,
+            "args": [str(a) for a in args],
+            "note": note,
+            "result": result,
+        }
+        if fixture.startswith("/work/acadsharp/tests/fixtures/"):
+            local = os.path.join(FIXTURES, os.path.basename(fixture))
+            entry["fixture_sha256"] = sha256_file(local)
+        out["scenarios"].append(entry)
+        print(f"{name}: open={result.get('open_code')} decode={result.get('decode_code')}")
+        return entry
+
+    # The version gate, and the control that shows it runs before parsing. Both
+    # files are six good bytes and then nothing: one signature this build reads
+    # and one it does not. A refusal that told them apart only by failing later
+    # would give the same answer to both.
+    record(
+        "gate/signature_out_of_range",
+        fixture_arg("g13_ac1009.dwg"),
+        [],
+        "AC1009 is a DWG this build does not read, refused on the signature",
+    )
+    control = os.path.join(derived, "g13_ac1032_zeros.dwg")
+    with open(control, "wb") as f:
+        f.write(b"AC1032" + bytes(506))
+    record(
+        "gate/signature_in_range_but_garbage",
+        "/scratch/derived/g13_ac1032_zeros.dwg",
+        [],
+        "the same file with a signature this build does read, so the refusal has "
+        "to come from the parse and be CORRUPT_INPUT",
+    )
+
+    # Limits, each with the loosened control beside it. A bound that has only
+    # ever been seen refusing is a bound that might refuse everything.
+    record(
+        "limits/max_entities_1",
+        fixture_arg("g13_two_entities.dwg"),
+        ["--max-entities", 1],
+        "two entities, one allowed",
+    )
+    record(
+        "limits/max_entities_default",
+        fixture_arg("g13_two_entities.dwg"),
+        [],
+        "the same fixture with the default bound",
+    )
+    record(
+        "limits/max_polyline_2048",
+        fixture_arg("g13_wide_polyline.dwg"),
+        ["--max-polyline", 2048],
+        "a 4096-vertex polyline, 2048 allowed",
+    )
+    record(
+        "limits/max_polyline_8192",
+        fixture_arg("g13_wide_polyline.dwg"),
+        ["--max-polyline", 8192],
+        "the same fixture with the bound above its width",
+    )
+    record(
+        "limits/max_string_4096",
+        fixture_arg("g13_long_text.dwg"),
+        ["--max-string", 4096],
+        "an 8192-byte string, 4096 allowed",
+    )
+    record(
+        "limits/max_string_16384",
+        fixture_arg("g13_long_text.dwg"),
+        ["--max-string", 16384],
+        "the same fixture with the bound above its length",
+    )
+    record(
+        "limits/max_output_2048",
+        fixture_arg("g13_many_inserts.dwg"),
+        ["--max-output", 2048],
+        "ten thousand insertions, 2 KiB of output allowed",
+    )
+    record(
+        "limits/max_block_depth_5",
+        fixture_arg("g13_deep_blocks.dwg"),
+        ["--max-depth", 5],
+        "blocks nested six deep, five allowed",
+    )
+    record(
+        "limits/max_block_depth_7",
+        fixture_arg("g13_deep_blocks.dwg"),
+        ["--max-depth", 7],
+        "the same fixture with the bound past its depth, which is what proves "
+        "the refusal is the bound and not a crash",
+    )
+
+    # max_input_bytes, and the control that shows the file was never read. The
+    # unreadable copy is mode 000 and the container runs as a non-root user, so
+    # anything that opened it would fail; refusing on the length cannot.
+    record(
+        "limits/max_input_below_size",
+        fixture_arg("g13_line.dwg"),
+        ["--max-input", 1024],
+        "the bound is below the file size",
+    )
+    record(
+        "limits/max_input_default",
+        fixture_arg("g13_line.dwg"),
+        [],
+        "the same file with the default bound",
+    )
+    sealed_source = "tests/fixtures/g13_line.dwg"
+    out["scenarios"].append(
+        {
+            "name": "limits/max_input_below_size_unreadable",
+            "input": "a mode 000 copy of g13_line.dwg",
+            "args": ["--max-input", "1024"],
+            "note": "the bound is below the size and the file cannot be opened, so a "
+            "refusal that arrives at all is a refusal that never read it",
+            "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_line.dwg")),
+            "result": decode_unreadable(scratch, sealed_source, "--max-input 1024"),
+        }
+    )
+    out["scenarios"].append(
+        {
+            "name": "limits/unreadable_control",
+            "input": "a mode 000 copy of g13_line.dwg",
+            "args": [],
+            "note": "the same unreadable copy with the default bound, which has to "
+            "fail on the open and is what makes the scenario above mean "
+            "something",
+            "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_line.dwg")),
+            "result": decode_unreadable(scratch, sealed_source, ""),
+        }
+    )
+    for name in ("limits/max_input_below_size_unreadable", "limits/unreadable_control"):
+        r = [s for s in out["scenarios"] if s["name"] == name][0]["result"]
+        print(f"{name}: open={r.get('open_code')} decode={r.get('decode_code')}")
+
+    # The two Criticals the review found, each with the control that proves
+    # the refusal is a bound and not a crash.
+    #
+    # A DIMENSION carries a block of its own and that block can hold another
+    # dimension. Walking that by recursion put a file-controlled depth on the
+    # CLR stack, and a StackOverflowException cannot be caught, so the export's
+    # catch-all never saw it: the runtime calls FailFast and the caller's
+    # process dies. The deep fixture is three thousand levels, comfortably past
+    # the roughly 2686 frames the recursive walk died at, so a build that still
+    # recurses aborts here rather than passing because the fixture was small.
+    record(
+        "criticals/dimension_chain_deep",
+        fixture_arg("g13_dimension_deep.dwg"),
+        [],
+        "three thousand dimensions nested one inside the next, at default limits",
+    )
+    record(
+        "criticals/dimension_chain_shallow",
+        fixture_arg("g13_dimension_shallow.dwg"),
+        [],
+        "the same shape four deep, which is inside every bound and decodes",
+    )
+
+    # An INSERT emits no record, it pushes a frame, so a bound that counted
+    # records never saw this one coming: a chain of block records each holding
+    # two insertions of the next expands exponentially, emits nothing, and
+    # keeps its nesting inside max_block_depth the whole way.
+    # The fan-out is built in memory rather than read from a file, because
+    # ACadSharp cannot store it: `new Insert(record)` deep-clones a record
+    # that belongs to a document, so assembling the chain and then pointing at
+    # it clones the whole expansion and never returns. That costs nothing
+    # here. The hole was never about a file format; it is about a walk that
+    # can do unbounded work while producing nothing.
+    fan(
+        "criticals/fanout_bounded",
+        24,
+        2,
+        ["--max-entities", 100000],
+        "twenty-five block records and forty-nine entities, 2^25 expansions, "
+        "stopped by the entity counter",
+    )
+    fan(
+        "criticals/fanout_shallow",
+        8,
+        2,
+        [],
+        "the same shape eight deep, which fits inside every default bound and decodes",
+    )
+    fan(
+        "criticals/fanout_cancelled",
+        24,
+        2,
+        ["--cancel"],
+        "the flag is already up when the walk starts, and this document never "
+        "yields a record, so only a poll inside the walk can notice it",
+    )
+
+    # A spline's points were never counted. The encoder guarded Polyline and
+    # Polygon only, and it guarded after the list existed.
+    record(
+        "limits/spline_points_4096",
+        fixture_arg("g13_wide_spline.dwg"),
+        ["--max-polyline", 4096],
+        "twenty thousand control points, four thousand allowed",
+    )
+    record(
+        "limits/spline_points_65536",
+        fixture_arg("g13_wide_spline.dwg"),
+        ["--max-polyline", 65536],
+        "the same fixture with the bound above its width",
+    )
+
+    # Cancellation, set between two batches and nowhere else.
+    record(
+        "cancel/after_one_batch",
+        fixture_arg("g13_many_inserts.dwg"),
+        ["--batch", 4096, "--cancel-after", 1],
+        "the flag goes up after the first batch returns",
+    )
+    record(
+        "cancel/never",
+        fixture_arg("g13_many_inserts.dwg"),
+        ["--batch", 4096],
+        "the same decode with the flag left alone",
+    )
+
+    # Warnings, each with an input that triggers it.
+    record(
+        "warnings/unsupported_entity",
+        fixture_arg("g13_unsupported.dwg"),
+        [],
+        "a POINT and a SOLID, neither of which this version flattens",
+    )
+    record(
+        "warnings/reader_notification",
+        fixture_arg("real_AC1032.dwg"),
+        [],
+        "a drawing AutoCAD produced, carrying objects ACadSharp's reader cannot name and reports",
+    )
+    record(
+        "warnings/unresolved_xref",
+        fixture_arg("g13_xref.dwg"),
+        [],
+        "an INSERT of an external reference",
+    )
+    record(
+        "warnings/nonuniform_block_scale",
+        fixture_arg("g13_nonuniform.dwg"),
+        [],
+        "a circle under a block transform that squashes one axis",
+    )
+    record(
+        "warnings/dimension_block",
+        fixture_arg("g13_dimension.dwg"),
+        [],
+        "a dimension whose block carries the lines and the text",
+    )
+
+    # The same XREF fixture with no network and a read-only repository. It must
+    # complete with the warning rather than reach for the file it names.
+    record(
+        "warnings/unresolved_xref_sealed",
+        fixture_arg("g13_xref.dwg"),
+        [],
+        "no network, and the repository mounted read-only",
+        network="none",
+        repo_ro=True,
+        read_only=True,
+    )
+
+    # Malformed derivatives, derived here and written to the scratch directory
+    # so the fixture in the tree is never the thing that was mutilated.
+    with open(os.path.join(FIXTURES, MALFORMED_SOURCE), "rb") as f:
+        source = f.read()
+
+    for pct in TRUNCATIONS:
+        name = f"truncated_{pct}"
+        blob = truncate(source, pct)
+        path = os.path.join(derived, f"{name}.dwg")
+        with open(path, "wb") as f:
+            f.write(blob)
+        entry = record(
+            f"malformed/{name}",
+            f"/scratch/derived/{name}.dwg",
+            [],
+            f"{MALFORMED_SOURCE} cut at {pct} percent",
+        )
+        entry["derived"] = {
+            "kind": "truncation",
+            "percent": pct,
+            "sha256": sha256_bytes(blob),
+            "bytes": len(blob),
+        }
+
+    flipped, positions = bitflip(source)
+    path = os.path.join(derived, "bitflip_64.dwg")
+    with open(path, "wb") as f:
+        f.write(flipped)
+    entry = record(
+        "malformed/bitflip_64",
+        "/scratch/derived/bitflip_64.dwg",
+        [],
+        f"{MALFORMED_SOURCE} with {FLIP_COUNT} bytes flipped under seed {FLIP_SEED}",
+    )
+    entry["derived"] = {
+        "kind": "bitflip",
+        "count": FLIP_COUNT,
+        "seed": FLIP_SEED,
+        "positions": positions,
+        "touches_signature": any(p < 6 for p in positions),
+        "sha256": sha256_bytes(flipped),
+        "bytes": len(flipped),
+    }
+
+    with open(os.path.join(CAPTURES, "g13_scenarios.json"), "w") as f:
+        json.dump(out, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def benchmarks(scratch):
+    out = {
+        "recorded": time.strftime("%Y-%m-%d"),
+        "runner": f"fixturegen decode, {SDK_IMAGE}, {PLATFORM}",
+        "batch_bytes": BATCH_BYTES,
+        "host": "Apple Silicon, arm64 containers, one scenario per process",
+    }
+
+    amp = decode(scratch, fixture_arg("g13_many_inserts.dwg"), "--batch", BATCH_BYTES)
+    one = decode(scratch, fixture_arg("g13_insert.dwg"), "--batch", BATCH_BYTES)
+    out["amplification"] = {
+        "fixture": "g13_many_inserts.dwg",
+        "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_many_inserts.dwg")),
+        "file_bytes": amp.get("file_bytes"),
+        "output_bytes": amp.get("output_bytes"),
+        "batches": amp.get("batches"),
+        "peak_rss_kb": amp.get("peak_rss_kb"),
+        "rss_after_begin_kb": amp.get("rss_after_begin_kb"),
+        "rss_peak_during_decode_kb": amp.get("rss_peak_during_decode_kb"),
+        "managed_retained_kb": amp.get("managed_retained_kb"),
+        "single_instance": {
+            "fixture": "g13_insert.dwg",
+            "output_bytes": one.get("output_bytes"),
+        },
+    }
+
+    # Five pairs rather than one. Peak RSS on a managed runtime moves by a
+    # couple of megabytes between identical runs, and the caller's copy of the
+    # largest fixture in the corpus is 175 KB, so a single pair would be
+    # reporting the collector's mood. The allocation numbers beside them are
+    # the exact version of the same claim.
+    runs = []
+    for _ in range(5):
+        p = decode(scratch, fixture_arg("g13_many_inserts.dwg"))
+        m = decode(scratch, fixture_arg("g13_many_inserts.dwg"), "--memory")
+        runs.append(
+            {
+                "path_peak_rss_kb": p.get("peak_rss_kb"),
+                "memory_peak_rss_kb": m.get("peak_rss_kb"),
+                "peak_delta_kb": (m.get("peak_rss_kb") or 0) - (p.get("peak_rss_kb") or 0),
+                "path_alloc_open_bytes": p.get("alloc_open_bytes"),
+                "memory_alloc_open_bytes": m.get("alloc_open_bytes"),
+                "alloc_delta_bytes": (m.get("alloc_open_bytes") or 0)
+                - (p.get("alloc_open_bytes") or 0),
+                "path_caller_copy_bytes": p.get("caller_copy_bytes"),
+                "memory_caller_copy_bytes": m.get("caller_copy_bytes"),
+            }
+        )
+
+    def median(values):
+        v = sorted(values)
+        return v[len(v) // 2]
+
+    # And the same pair on an input big enough for peak RSS to see it.
+    #
+    # The corpus has no 32 MB drawing because ACadSharp's writer costs minutes
+    # to produce one, so this is the largest fixture with 32 MiB of
+    # pseudorandom bytes appended, built here and never committed. The padding
+    # is not read: the decode produces the same record bytes as the unpadded
+    # fixture, which is asserted rather than assumed. What it changes is the
+    # size of the caller's copy in the memory case, which is the whole thing
+    # the claim is about.
+    padded = os.path.join(scratch, "out", "derived", "g13_padded.dwg")
+    os.makedirs(os.path.dirname(padded), exist_ok=True)
+    with open(os.path.join(FIXTURES, "g13_many_inserts.dwg"), "rb") as f:
+        base = f.read()
+    rng = random.Random(FLIP_SEED)
+    chunk = bytes(rng.getrandbits(8) for _ in range(1 << 20))
+    with open(padded, "wb") as f:
+        f.write(base)
+        for _ in range(32):
+            f.write(chunk)
+
+    padded_runs = []
+    for _ in range(3):
+        p = decode(scratch, "/out/derived/g13_padded.dwg")
+        m = decode(scratch, "/out/derived/g13_padded.dwg", "--memory")
+        padded_runs.append(
+            {
+                "path_peak_rss_kb": p.get("peak_rss_kb"),
+                "memory_peak_rss_kb": m.get("peak_rss_kb"),
+                "peak_delta_kb": (m.get("peak_rss_kb") or 0) - (p.get("peak_rss_kb") or 0),
+                "path_output_bytes": p.get("output_bytes"),
+                "memory_output_bytes": m.get("output_bytes"),
+                "path_alloc_open_bytes": p.get("alloc_open_bytes"),
+                "memory_alloc_open_bytes": m.get("alloc_open_bytes"),
+                "alloc_delta_bytes": (m.get("alloc_open_bytes") or 0)
+                - (p.get("alloc_open_bytes") or 0),
+            }
+        )
+    padded_bytes = os.path.getsize(padded)
+
+    file_bytes = runs and decode(scratch, fixture_arg("g13_many_inserts.dwg"), "--no-decode").get(
+        "file_bytes"
+    )
+    out["path_versus_memory"] = {
+        "fixture": "g13_many_inserts.dwg",
+        "fixture_sha256": sha256_file(os.path.join(FIXTURES, "g13_many_inserts.dwg")),
+        "file_bytes": file_bytes,
+        "runs": runs,
+        "median_peak_delta_kb": median([r["peak_delta_kb"] for r in runs]),
+        "min_peak_delta_kb": min(r["peak_delta_kb"] for r in runs),
+        "median_alloc_delta_bytes": median([r["alloc_delta_bytes"] for r in runs]),
+        "min_alloc_delta_bytes": min(r["alloc_delta_bytes"] for r in runs),
+        "padded": {
+            "input": "g13_many_inserts.dwg with 32 MiB of pseudorandom bytes appended, "
+            "built at measurement time and not committed",
+            "file_bytes": padded_bytes,
+            "file_kb": padded_bytes // 1024,
+            "runs": padded_runs,
+            "median_peak_delta_kb": median([r["peak_delta_kb"] for r in padded_runs]),
+            "min_peak_delta_kb": min(r["peak_delta_kb"] for r in padded_runs),
+            "median_alloc_delta_bytes": median([r["alloc_delta_bytes"] for r in padded_runs]),
+            "unpadded_output_bytes": None,
+        },
+    }
+    out["path_versus_memory"]["padded"]["unpadded_output_bytes"] = out["amplification"][
+        "output_bytes"
+    ]
+
+    streaming = []
+    for name in ("g13_scale_1x.dwg", "g13_scale_4x.dwg", "g13_scale_16x.dwg"):
+        r = decode(scratch, fixture_arg(name), "--batch", BATCH_BYTES)
+        streaming.append(
+            {
+                "fixture": name,
+                "batches": r.get("batches"),
+                "output_bytes": r.get("output_bytes"),
+                "rss_after_begin_kb": r.get("rss_after_begin_kb"),
+                "rss_peak_during_decode_kb": r.get("rss_peak_during_decode_kb"),
+                "rss_decode_growth_kb": r.get("rss_decode_growth_kb"),
+                "managed_after_begin_kb": r.get("managed_after_begin_kb"),
+                "managed_after_decode_kb": r.get("managed_after_decode_kb"),
+                "managed_retained_kb": r.get("managed_retained_kb"),
+            }
+        )
+    out["streaming"] = streaming
+
+    with open(os.path.join(BENCHMARKS, "amplification.json"), "w") as f:
+        json.dump(out, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
