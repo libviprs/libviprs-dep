@@ -400,6 +400,17 @@ gigabyte for one section allocated 1,077,539,656 bytes during the open, a
 hundred thousand times its own size, and then opened successfully and decoded.
 The ceiling was not a ratio at all: it was whatever fits in a 32-bit field.
 
+The AC1021 path is the same field twice over, and nothing in the corpus
+reaches it. `readFileHeader` sends AC1024 and later to the AC18 reader, so the
+one drawing AutoCAD 2018 wrote is on the other path, and upstream's writer
+refuses to produce AC1021 at all, so that version has to be written by hand to
+be measured. A 1,152-byte AC1021 file declaring a gigabyte for its page map
+allocated 2,219,411,248 bytes during the open, 1.9 million times its own
+length, because the declared size is committed twice: once as the block buffer
+the interleave is read into and once as the page decoded out of it.
+`tests/ac21_forge.py` writes those files and the `declared/ac21_*` scenarios in
+`tests/expectations/g13_scenarios.json` are the recorded runs.
+
 None of that can be bounded from out here. The allocating types are `internal`
 to ACadSharp with no injection point, and the only process-wide lever is a GC
 hard limit, which kills the process and so breaks the promise above that a
