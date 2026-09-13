@@ -335,9 +335,9 @@ class TestTheMuslLibraryIsRunAndNotOnlyLinked:
         _name, _job, job_steps = self.musl_job()
         bodies = " ".join(s.get("run", "") for s in job_steps)
         assert "-c AbiTest" not in bodies, (
-            "the musl job publishes an AbiTest build. The cases that needs are "
-            "managed logic that cannot differ by libc, so it costs a NativeAOT "
-            "publish for no musl-specific answer"
+            "the musl job publishes an AbiTest build. The cases that build "
+            "unlocks are managed logic that cannot differ by libc, so it costs "
+            "a second NativeAOT publish for no musl-specific answer"
         )
 
 
