@@ -497,6 +497,22 @@ def scenarios(scratch):
         ["--max-polyline", 2048],
         "a 4096-vertex polyline, 2048 allowed",
     )
+    # max_polyline_points bounds vertices, and wire version 2 gave the record a
+    # second array of the same length. The slot is four vertices and four
+    # bulges: at a bound of four it decodes, and a bound that counted the
+    # bulges would see eight and refuse.
+    record(
+        "limits/bulged_polyline_at_the_bound",
+        fixture_arg("g13_slot.dwg"),
+        ["--max-polyline", 4],
+        "four vertices and four bulges, four allowed",
+    )
+    record(
+        "limits/bulged_polyline_past_the_bound",
+        fixture_arg("g13_slot.dwg"),
+        ["--max-polyline", 3],
+        "the control: the same file one vertex over the bound",
+    )
     record(
         "limits/max_polyline_8192",
         fixture_arg("g13_wide_polyline.dwg"),

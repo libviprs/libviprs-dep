@@ -198,14 +198,13 @@
       "bytes": 10699,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 1,
         "Polyline": 1,
-        "Warning": 5
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1196,
-      "records": 7,
+      "output_bytes": 980,
+      "records": 5,
       "sha256": "4f947ae65e647dbca558eb1d67ba961a38733718f20c8be66b8e197ffd39faaf",
       "view_count": 2
     },
@@ -214,14 +213,13 @@
       "bytes": 10604,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 1,
         "Polyline": 2,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1164,
-      "records": 7,
+      "output_bytes": 1116,
+      "records": 6,
       "sha256": "85e3873b3ba01f03e1451e4dc2e941c432b69b39b03c8ce5e3e502d9e50c39ae",
       "view_count": 2
     },
@@ -245,14 +243,13 @@
       "bytes": 10731,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 1,
         "Polyline": 3,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1300,
-      "records": 8,
+      "output_bytes": 1252,
+      "records": 7,
       "sha256": "815bf452eb40b0c5f75049e3155f13c0c2f3272b2d3464b92d01ee3636635bd3",
       "view_count": 2
     },
@@ -277,14 +274,13 @@
       "bytes": 10539,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 2,
-        "Polyline": 2,
+        "Polyline": 1,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1236,
-      "records": 8,
+      "output_bytes": 1012,
+      "records": 5,
       "sha256": "db6c6facccbce67169329528279cba795d4ddb0aaec26bbb8fe04f6475c68ee6",
       "view_count": 2
     },
@@ -293,14 +289,13 @@
       "bytes": 10731,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 6,
-        "Polyline": 6,
+        "Polyline": 3,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 2068,
-      "records": 16,
+      "output_bytes": 1396,
+      "records": 7,
       "sha256": "41245b50e234db83f45be266a88539665b77f21833a14d2fd05a050fb91f933d",
       "view_count": 2
     },
@@ -397,7 +392,7 @@
       "bytes": 1097214,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 23,
+        "Arc": 3,
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
@@ -409,8 +404,8 @@
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 35840,
-      "records": 354,
+      "output_bytes": 34536,
+      "records": 334,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4
     },
@@ -419,7 +414,7 @@
       "bytes": 1081979,
       "decode_code": "OK",
       "kinds": {
-        "Arc": 23,
+        "Arc": 3,
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
@@ -431,8 +426,8 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 37020,
-      "records": 361,
+      "output_bytes": 35716,
+      "records": 341,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4
     }
@@ -440,11 +435,11 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "929b9b5a5d30c860ffb049e683b4c0c57b499244b6e1d50ee2568a7bc6ad9bd2",
+    "sha256": "ced5bb66898708db62d06f355c49b73dff5d1bde4d96b42de8c88cab146f4178",
     "sources": {
       "native/Abi.cs": "6169a32c16fd47c83248a7cb914aa5408bbfd9959a9c85974659ac52fc7f8dc0",
       "native/Adapter/CanonicalDump.cs": "bacdcd27e5e1605603dee2b2da9ea638268a38cf4ef5f352bd22655a7b44d01f",
-      "native/Adapter/Flattener.cs": "294374e37e56eda7cbbd94306690c3677eb90f13d6b416275dcef79ca6ba4ace",
+      "native/Adapter/Flattener.cs": "34580d059a3e217c88a3f17e7d53e134ac23ee5f1b95608160d193a0a5a21374",
       "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
       "native/Adapter/WarningCodes.cs": "6644f9b752305e1a43dd7299e88a870ae950a3d74c35d3f4452af03c8db4e2e3",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",

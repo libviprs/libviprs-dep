@@ -113,13 +113,27 @@ namespace Viprs.Cad
 			public double Rotation;
 			public bool Mirrored;
 
-			public bool IsSimilarity
+			// Equal scale factors, mirror or no mirror. This is what a
+			// polyline needs: under a reflection its vertices transform and
+			// its bulges negate, and the result is exactly the shape the
+			// drawing has. Nothing is approximated, so there is nothing to
+			// warn about.
+			public bool IsUniform
 			{
 				get
 				{
 					double m = Math.Max(Math.Max(ScaleX, ScaleY), 1.0);
-					return !Mirrored && Math.Abs(ScaleX - ScaleY) <= 1e-9 * m;
+					return Math.Abs(ScaleX - ScaleY) <= 1e-9 * m;
 				}
+			}
+
+			// Uniform and orientation-preserving. Arc, Circle and Ellipse need
+			// this stronger one: they cross as a centre and angles measured
+			// counter-clockwise, and a reflection flips what counter-clockwise
+			// means without any field of theirs following it.
+			public bool IsSimilarity
+			{
+				get { return !Mirrored && IsUniform; }
 			}
 		}
 
@@ -594,27 +608,32 @@ namespace Viprs.Cad
 
 				case LwPolyline lw:
 				{
-					if (!identity && !basis.IsSimilarity && HasBulge(lw))
-					{
-						yield return NonUniform(h, flags, "LWPOLYLINE");
-					}
-
 					CheckPointCount(lw.Vertices.Count, "a Polyline record");
 					List<double> pts = new List<double>(lw.Vertices.Count * 3);
 					double[] lwBulges = new double[lw.Vertices.Count];
+					bool lwAnyBulge = false;
 					for (int i = 0; i < lw.Vertices.Count; i++)
 					{
 						LwPolyline.Vertex v = lw.Vertices[i];
 						Append(pts, t, new XYZ(v.Location.X, v.Location.Y, lw.Elevation));
 						lwBulges[i] = v.Bulge;
+						lwAnyBulge |= v.Bulge != 0.0;
 					}
 
-					foreach (Primitive p in EmitPolyline(
-						h, flags, lw.IsClosed, pts.ToArray(), lwBulges, lw.Normal))
+					if (!identity && !basis.IsUniform && lwAnyBulge)
 					{
-						yield return p;
+						yield return NonUniform(h, flags, "LWPOLYLINE");
 					}
 
+					yield return OnePolyline(
+						h,
+						flags,
+						lw.IsClosed,
+						pts.ToArray(),
+						lwBulges,
+						basis.Mirrored,
+						lw.Normal
+					);
 					yield break;
 				}
 
@@ -635,17 +654,20 @@ namespace Viprs.Cad
 						anyBulge |= v.Bulge != 0.0;
 					}
 
-					if (!identity && !basis.IsSimilarity && anyBulge)
+					if (!identity && !basis.IsUniform && anyBulge)
 					{
 						yield return NonUniform(h, flags, "POLYLINE");
 					}
 
-					foreach (Primitive p in EmitPolyline(
-						h, flags, poly.IsClosed, pts.ToArray(), bulges.ToArray(), poly.Normal))
-					{
-						yield return p;
-					}
-
+					yield return OnePolyline(
+						h,
+						flags,
+						poly.IsClosed,
+						pts.ToArray(),
+						bulges.ToArray(),
+						basis.Mirrored,
+						poly.Normal
+					);
 					yield break;
 				}
 
@@ -703,168 +725,70 @@ namespace Viprs.Cad
 			}
 		}
 
-		// A polyline, as wire version 1 can carry it.
+		// A polyline, exactly as wire version 2 carries it: one record,
+		// whatever its bulges are.
 		//
-		// docs/WIRE.md's Polyline is a point count and a run of triples: it
-		// has nowhere to put a bulge. Dropping the bulge would turn an arc
-		// into a chord, which is the tessellation this whole lane exists to
-		// avoid, and only worse because a chord is not even a good
-		// approximation of an arc. Adding a field would be a wire version
-		// bump, which belongs to the ABI issue and not to this one.
+		// docs/WIRE.md's Polyline has a slot for every vertex's bulge, so
+		// nothing here has a decision to make. What used to be here did: it
+		// split a bulged polyline into straight runs and one Arc per bulged
+		// span, and that lost three things a consumer cannot get back.
+		// Closed-ness, because a run of Polyline records has nowhere to say
+		// the path closes. Instance identity, because under block expansion
+		// every instance of a block carries the block entity's own handle, so
+		// three insertions of one slot arrived as twelve records under one
+		// handle with no delimiter anywhere. And accuracy, because a centre
+		// and two angles reconstructed from a small bulge drift from the
+		// vertices either side of them: at 1e-12 an endpoint is already 2.6e-5
+		// chord lengths out, and every arc-to-polyline conversion in every CAD
+		// tool leaves bulges of about 1e-15 behind.
 		//
-		// So a bulged polyline goes out as what it is: the straight runs as
-		// Polyline records and every bulged span as an Arc carrying its own
-		// centre, radius and angles. Nothing is approximated, every record
-		// keeps the source entity's handle so a consumer can regroup them,
-		// and a polyline with no bulge anywhere is still exactly one record.
-		private static IEnumerable<Primitive> EmitPolyline(
+		// One record per entity, in walk order, and all three come back free.
+		private static Primitive OnePolyline(
 			ulong handle,
 			uint flags,
 			bool closed,
 			double[] points,
 			double[] bulges,
+			bool mirrored,
 			XYZ normal
 		)
 		{
 			int n = points.Length / 3;
-			bool anyBulge = false;
-			for (int i = 0; i < bulges.Length && i < n; i++)
+
+			// The array is left out when every span is straight, which keeps a
+			// plain polyline the size it was. This is the one place `== 0.0`
+			// on a double belongs in this file: it is a size decision, not a
+			// geometry one. A bulge of 1e-300 is emitted exactly as read,
+			// because calling it straight is a tolerance decision and the
+			// consumer is the only layer that knows its tolerance.
+			double[] b = null;
+			for (int i = 0; i < n && i < bulges.Length; i++)
 			{
-				if (bulges[i] != 0.0 && (closed || i + 1 < n))
+				if (bulges[i] != 0.0)
 				{
-					anyBulge = true;
+					b = new double[n];
 					break;
 				}
 			}
 
-			if (!anyBulge || n < 2)
+			if (b != null)
 			{
-				yield return Primitive.Polyline(
-					handle, flags, closed, points, null, normal.X, normal.Y, normal.Z);
-				yield break;
-			}
-
-			List<double> run = new List<double>();
-			int segments = closed ? n : n - 1;
-			for (int i = 0; i < segments; i++)
-			{
-				int j = (i + 1) % n;
-				double b = i < bulges.Length ? bulges[i] : 0.0;
-
-				if (b == 0.0)
+				for (int i = 0; i < n; i++)
 				{
-					if (run.Count == 0)
-					{
-						AddPoint(run, points, i);
-					}
+					double v = i < bulges.Length ? bulges[i] : 0.0;
 
-					AddPoint(run, points, j);
-					continue;
-				}
-
-				foreach (Primitive p in Flush(handle, flags, run, normal))
-				{
-					yield return p;
-				}
-
-				yield return ArcFromBulge(handle, flags, points, i, j, b, normal);
-			}
-
-			foreach (Primitive p in Flush(handle, flags, run, normal))
-			{
-				yield return p;
-			}
-		}
-
-		private static void AddPoint(List<double> into, double[] points, int index)
-		{
-			into.Add(points[(index * 3) + 0]);
-			into.Add(points[(index * 3) + 1]);
-			into.Add(points[(index * 3) + 2]);
-		}
-
-		private static IEnumerable<Primitive> Flush(
-			ulong handle, uint flags, List<double> run, XYZ normal)
-		{
-			if (run.Count >= 6)
-			{
-				yield return Primitive.Polyline(
-					handle, flags, false, run.ToArray(), null, normal.X, normal.Y, normal.Z);
-			}
-
-			run.Clear();
-		}
-
-		// The arc a bulge names, exactly.
-		//
-		// A bulge is the tangent of a quarter of the included angle, negative
-		// when the arc runs clockwise from the first point to the second, so
-		// the centre and radius follow in closed form from the two endpoints
-		// and that one number. The record's angles are counter-clockwise, as
-		// docs/WIRE.md requires, which is why a negative bulge swaps them
-		// rather than being carried as a sign.
-		private static Primitive ArcFromBulge(
-			ulong handle,
-			uint flags,
-			double[] points,
-			int i,
-			int j,
-			double bulge,
-			XYZ normal
-		)
-		{
-			double x0 = points[(i * 3) + 0];
-			double y0 = points[(i * 3) + 1];
-			double z0 = points[(i * 3) + 2];
-			double x1 = points[(j * 3) + 0];
-			double y1 = points[(j * 3) + 1];
-			double z1 = points[(j * 3) + 2];
-
-			double k = (1.0 - (bulge * bulge)) / (4.0 * bulge);
-			double cx = ((x0 + x1) / 2.0) - ((y1 - y0) * k);
-			double cy = ((y0 + y1) / 2.0) + ((x1 - x0) * k);
-			double cz = (z0 + z1) / 2.0;
-
-			double dx = x1 - x0;
-			double dy = y1 - y0;
-			double chord = Math.Sqrt((dx * dx) + (dy * dy));
-			double radius = chord * (1.0 + (bulge * bulge)) / (4.0 * Math.Abs(bulge));
-
-			double a0 = Math.Atan2(y0 - cy, x0 - cx);
-			double a1 = Math.Atan2(y1 - cy, x1 - cx);
-			if (bulge < 0.0)
-			{
-				double swap = a0;
-				a0 = a1;
-				a1 = swap;
-			}
-
-			return Primitive.Arc(
-				handle,
-				flags,
-				cx,
-				cy,
-				cz,
-				radius,
-				a0,
-				a1,
-				normal.X,
-				normal.Y,
-				normal.Z
-			);
-		}
-
-		private static bool HasBulge(LwPolyline lw)
-		{
-			foreach (LwPolyline.Vertex v in lw.Vertices)
-			{
-				if (v.Bulge != 0.0)
-				{
-					return true;
+					// A reflection flips which side of the chord the arc
+					// bulges to. The vertices follow the transform and the
+					// bulge does not, so negating it is the whole of the
+					// correction, and it is exact: no tolerance, no centre,
+					// nothing reconstructed. The `v != 0.0` guard only keeps a
+					// straight span from crossing as negative zero.
+					b[i] = mirrored && v != 0.0 ? -v : v;
 				}
 			}
 
-			return false;
+			return Primitive.Polyline(
+				handle, flags, closed, points, b, normal.X, normal.Y, normal.Z);
 		}
 
 		private static Primitive NonUniform(ulong handle, uint flags, string what)
