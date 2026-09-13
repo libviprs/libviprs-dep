@@ -478,6 +478,75 @@ No zstd release has been cut yet. Because the first publish of an
 already-committed version changes no file, dispatch the workflow by
 hand rather than pushing something to `release` to trigger it.
 
+### Cutting an acadsharp release
+
+acadsharp has its own workflow too, `.github/workflows/release-acadsharp.yml`,
+on the same `release`-branch trigger plus `workflow_dispatch`. Same
+reason as zstd: `release.yml` is pdfium-shaped throughout, and one
+dependency's flake should not colour another's release run red.
+
+- `resolve-version` reads `acadsharp/VERSION`, hands it to
+  `build_acadsharp.split_version` so an empty or malformed file fails
+  there, and asks `build_acadsharp.source_sha256` for the pinned digest
+  of the upstream half. It then checks `acadsharp/native/global.json`
+  names an `sdk.version` and proves that SDK installs, with
+  `actions/setup-dotnet` reading the same file. A bad pin of any of
+  those three kinds dies in this one job rather than on five claimed
+  runners.
+- `create-release` creates `acadsharp-<VERSION>`, not marked as a
+  pre-release, so `gh release view` without a tag still resolves it the
+  way it does for pdfium and zstd. It carries
+  a notes preamble generated from `acadsharp/VERSION`,
+  `acadsharp/native/global.json`, `acadsharp/include/viprs_acadsharp.h`
+  and `acadsharp/build_acadsharp.py`. Nothing version-bearing is typed
+  into the workflow, so bumping a pin cannot leave the release page
+  stating the old one.
+- Four container cells cover `{linux, musl} × {x64, arm64}`, and one
+  `macos-15` job builds the mac slice with the pinned SDK installed on
+  the runner. Each cell carries both words for its architecture, because
+  there are two: the driver's CLI takes `--arch amd64|arm64` like
+  `build_zstd.py` and `build_pdfium.py`, while the archive name and
+  `verify_archive.sh`'s third argument take `x64|arm64`. The cell spells
+  out both rather than leaning on the driver's `ARCH_ALIASES` to convert,
+  so a cell that would build one target and upload another under a name
+  the build never produced is something a test can see.
+  Nothing is emulated: ADR 0001 measured a cross-architecture
+  publish producing the object file and then failing at the native link,
+  and the .NET runtime documents `qemu-user-static` as unsupported, so
+  arm64 cells take `ubuntu-24.04-arm` instead. `fail-fast` is off.
+- Every cell runs `acadsharp/scripts/verify_archive.sh` over its own
+  archive, with the cell's platform and cpu passed in, between the build
+  and the upload. `--upload` is deliberately not passed to the driver:
+  it would publish before the verifier ran.
+- Each cell passes `--version` as well, so a dispatched `version` input
+  reaches the build and not just the tag. Without it an override would
+  publish archives built from the committed `acadsharp/VERSION` under a
+  different tag, with `LINKINFO.json` and the release page disagreeing.
+- `release-notes` runs whatever happened above. It downloads whatever
+  actually reached the release, hashes each asset, reads
+  `static_certified` and the Rust triple out of each archive's
+  `metadata/LINKINFO.json`, and rewrites the release body with a row per
+  archive. Every target that did not publish gets a line naming the job
+  that should have produced it, because a release that quietly ships four
+  of five is worse than one that ships four and says so.
+- It also reads each archive's `artifact_version` and refuses any that is
+  not the version being published, or that records none at all. The notes
+  go up first, then the offending assets come off the release, then the
+  run fails. An archive that disagrees with its own tag is worse than a
+  missing one because it looks right.
+
+No acadsharp release has been cut yet, and `acadsharp/README.md` says so
+rather than linking archives that do not exist. Cut the first one by
+dispatching the workflow by hand, for the same reason zstd's has to be
+dispatched: publishing an already-committed version changes no file, so
+there is nothing to push at `release`.
+
+To try the whole thing without committing to a version, dispatch it with
+the `version` input set to a throwaway (`3.7.1-viprs.0`, say). It needs a
+`SOURCE_SHA256` entry for its upstream half like any other version, and
+it publishes to `acadsharp-3.7.1-viprs.0`, which is then deleted with
+`gh release delete acadsharp-3.7.1-viprs.0 --cleanup-tag`.
+
 ## ARTIFACT LAYOUT
 
 Each `.tgz` extracts to a self-contained directory:
