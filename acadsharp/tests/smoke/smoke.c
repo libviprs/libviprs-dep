@@ -24,8 +24,8 @@ int main(int argc, char **argv)
 	}
 
 	abi_fn abi = (abi_fn)dlsym(h, "viprs_acad_abi_version");
-	describe_fn describe = (describe_fn)dlsym(h, "viprs_acad_describe");
-	count_fn count = (count_fn)dlsym(h, "viprs_acad_entity_count");
+	describe_fn describe = (describe_fn)dlsym(h, "viprs_acad__spike_describe");
+	count_fn count = (count_fn)dlsym(h, "viprs_acad__spike_entity_count");
 	if (!abi || !describe || !count) {
 		fprintf(stderr, "DLSYM_FAILED: %s\n", dlerror());
 		return 4;
