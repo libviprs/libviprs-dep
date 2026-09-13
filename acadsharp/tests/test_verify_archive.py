@@ -74,12 +74,20 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
     sets, so a probe that only links and never runs cannot tell a good
     archive from a broken one here either.
 
-    `viprs_acad_capabilities_v1` is not here: the verifier now asks the
-    library what AC10xx range it reads and holds the manifest to the
-    answer, and a `return 0u` stub would make that check pass over
-    anything. It is written out properly in `CAPABILITIES_SOURCE`, which
-    is a translation unit of its own because it includes the real header
-    and every other stub here has a signature the header contradicts.
+    The capabilities call is not here: the verifier now asks the library
+    what AC10xx range it reads and holds the manifest to the answer, and a
+    `return 0u` stub would make that check pass over anything. It is
+    written out properly in `CAPABILITIES_SOURCE`, which is a translation
+    unit of its own because it includes the real header and every other
+    stub here has a signature the header contradicts.
+
+    Its name comes from the header through the driver, never from a
+    literal here. A literal is what made this fixture wrong the first time
+    the call was renamed: the special case stopped matching, the loop
+    below emitted a `uint32_t name(void) { return 0u; }` under the new
+    name, and the verifier's probe resolved that instead. It answered a
+    read range of 0 to 0 and the verifier refused every good archive, with
+    a message about a manifest that was correct.
     """
     fingerprint = int(ba.abi_fingerprint(), 16)
     body = [
@@ -100,7 +108,7 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
         elif name == "viprs_acad_abi_version":
             tail = f" + {undefined}()" if undefined else ""
             body.append(f"uint32_t {name}(void) {{{guard}\n\treturn 1u{tail};\n}}")
-        elif name == "viprs_acad_capabilities_v1":
+        elif name == ba.capabilities_entry_point():
             continue  # CAPABILITIES_SOURCE, compiled separately
         else:
             body.append(f"uint32_t {name}(void) {{ return 0u; }}")
@@ -115,13 +123,20 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
 # It fills the struct the header declares and writes the pinned version
 # string out, so a sizing call and a fetching call each behave the way
 # ABI.md says they do.
+#
+# The two version numbers come from the header's own macros rather than
+# from digits typed here, because the verifier compares what the library
+# answers against what the shipped header declares. A literal `1u` made
+# this fixture answer 1 to a header saying 2, which is the exact drift
+# that check exists to catch, reported against a fixture rather than
+# against a build.
 CAPABILITIES_SOURCE = """\
 #include <stdint.h>
 #include <string.h>
 
 #include "viprs_acadsharp.h"
 
-uint32_t viprs_acad_capabilities_v1(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
+uint32_t %s(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
 \tuint64_t cap, uint64_t *required)
 {
 \tstatic const char VERSION[] = "3.7.1";
@@ -131,8 +146,8 @@ uint32_t viprs_acad_capabilities_v1(struct viprs_acad_capabilities_v1 *caps, uin
 \tif (caps->struct_size != (uint32_t)sizeof *caps) {
 \t\treturn 1u;
 \t}
-\tcaps->abi_version = 1u;
-\tcaps->wire_version = 2u;
+\tcaps->abi_version = VIPRS_ACAD_ABI_VERSION;
+\tcaps->wire_version = VIPRS_ACAD_WIRE_VERSION;
 \tcaps->dwg_version_min = %du;
 \tcaps->dwg_version_max = %du;
 \t*required = (uint64_t)(sizeof VERSION - 1);
@@ -294,7 +309,7 @@ def _build_linux_tree(
 
     caps_src = os.path.join(work, "caps.c")
     with open(caps_src, "w") as f:
-        f.write(CAPABILITIES_SOURCE % (STUB_DWG_MIN, STUB_DWG_MAX))
+        f.write(CAPABILITIES_SOURCE % (ba.capabilities_entry_point(), STUB_DWG_MIN, STUB_DWG_MAX))
     include = os.path.join(ACAD_DIR, "include")
 
     def with_caps(names, *sources):
@@ -303,7 +318,7 @@ def _build_linux_tree(
         A fixture that drops an entry point has to drop it from both
         libraries, so the test that removes one sees it removed.
         """
-        if "viprs_acad_capabilities_v1" in names:
+        if ba.capabilities_entry_point() in names:
             return list(sources) + [caps_src]
         return list(sources)
 
@@ -336,7 +351,7 @@ def _build_linux_tree(
 
     static_names = static_symbols or symbols
     caps_objs = []
-    if "viprs_acad_capabilities_v1" in static_names:
+    if ba.capabilities_entry_point() in static_names:
         caps_obj = os.path.join(work, "caps.o")
         subprocess.run(["cc", "-fPIC", "-I", include, "-c", caps_src, "-o", caps_obj], check=True)
         caps_objs = [caps_obj]

@@ -93,6 +93,22 @@ namespace Viprs.Wire
 		private ulong _items;
 		private ulong _warnings;
 
+		// The code this decode died of, or Result.Ok while it is still alive.
+		//
+		// Without it a refused decode could be asked again and would answer.
+		// Stream() is an iterator, and an iterator whose body threw is
+		// finished: every later MoveNext returns false. BatchWriter reads
+		// that as "no more records", frames an empty batch with the
+		// last-batch flag, reports done 1 and returns Ok. So the
+		// grow-and-retry the header documents after a max_entities breach
+		// handed the caller a well-formed, complete-looking stream missing
+		// every record after the bound, with nothing to look at. That is
+		// silent truncation, which is the one failure the limits section
+		// promises cannot happen.
+		//
+		// Set once, never cleared. A decode is not a thing you recover.
+		private uint _terminal;
+
 		public DecodeSession(DocumentHandle document, uint viewIndex, IntPtr cancelFlag)
 		{
 			_document = document;
@@ -111,19 +127,72 @@ namespace Viprs.Wire
 			written = 0ul;
 			done = 0;
 
+			// Whatever this decode died of, it says again, forever. Nothing
+			// is written and done stays 0, so a caller's loop cannot read a
+			// refusal as the end of a complete drawing.
+			if (_terminal != Result.Ok)
+			{
+				return _terminal;
+			}
+
 			// Checked before any work, so a flag already set when the first
 			// call arrives stops the decode without reading the document.
 			if (IsCanceled())
 			{
-				return Result.Canceled;
+				_terminal = Result.Canceled;
+				return _terminal;
 			}
 
+			// Not latched. The decode is fine; the document under it was
+			// closed, which is the caller's ordering mistake and is reported
+			// the same way every other bad handle is.
 			if (_document.Closed)
 			{
 				return Result.InvalidArgument;
 			}
 
-			return _writer.NextBatch(buf, cap, out written, out done);
+			try
+			{
+				uint code = _writer.NextBatch(buf, cap, out written, out done);
+
+				// BufferTooSmall is the one refusal that is not the decode's:
+				// nothing was consumed, the caller grows its buffer and asks
+				// again. Everything else that is not Ok ends it. Today that
+				// is only max_output_bytes, which reaches here as a return
+				// rather than a throw.
+				if (code != Result.Ok && code != Result.BufferTooSmall)
+				{
+					_terminal = code;
+					written = 0ul;
+					done = 0;
+				}
+
+				return code;
+			}
+			catch (AbiException ex)
+			{
+				// max_entities, max_string_bytes, max_polyline_points,
+				// max_block_depth and a cancel noticed inside the walk all
+				// arrive here. The export turns this into the same code; what
+				// it cannot do is remember it, because the export holds no
+				// state and the next call is a new one.
+				_terminal = ex.Code;
+				written = 0ul;
+				done = 0;
+				throw;
+			}
+			catch (Exception)
+			{
+				// A bug, which the export reports as INTERNAL_ERROR. The
+				// iterator behind the stream is just as dead as it is after a
+				// coded failure, so the latch has to cover this too or the
+				// call after a bug is the one that returns the truncated
+				// stream.
+				_terminal = Result.InternalError;
+				written = 0ul;
+				done = 0;
+				throw;
+			}
 		}
 
 		private unsafe bool IsCanceled()

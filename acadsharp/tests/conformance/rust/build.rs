@@ -50,7 +50,7 @@ fn main() {
     ));
 
     // The upstream release the shim was built over, handed in by run.sh from
-    // acadsharp/VERSION. The header promises viprs_acad_capabilities_v1 writes
+    // acadsharp/VERSION. The header promises viprs_acad_get_capabilities_v1 writes
     // "the pinned ACadSharp version" and it wrote the artifact version for a
     // while, so the consumer holds the string against the one file that
     // decides it rather than against a copy in its own source.

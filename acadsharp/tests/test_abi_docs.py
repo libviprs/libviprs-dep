@@ -33,11 +33,11 @@ HEADER = os.path.join(ACADSHARP, "include", "viprs_acadsharp.h")
 ENTRY_POINTS = (
     "viprs_acad_abi_version",
     "viprs_acad_abi_fingerprint",
-    "viprs_acad_capabilities_v1",
+    "viprs_acad_get_capabilities_v1",
     "viprs_acad_open_path_utf8",
     "viprs_acad_open_memory",
     "viprs_acad_view_count",
-    "viprs_acad_view_info_v1",
+    "viprs_acad_get_view_info_v1",
     "viprs_acad_decode_begin",
     "viprs_acad_decode_next_batch",
     "viprs_acad_decode_close",
@@ -55,13 +55,16 @@ RESULT_CODES = (
     "VIPRS_ACAD_INTERNAL_ERROR",
     "VIPRS_ACAD_ABI_MISMATCH",
     "VIPRS_ACAD_LIMIT_EXCEEDED",
+    "VIPRS_ACAD_BUFFER_TOO_SMALL",
 )
 
 STRUCTS = (
     "viprs_acad_limits_v1",
     "viprs_acad_capabilities_v1",
-    "viprs_view_info_v1",
+    "viprs_acad_view_info_v1",
 )
+
+HANDLES = ("viprs_acad_handle", "viprs_acad_decode_handle")
 
 # The toolchain name is assembled rather than spelled. This directory is
 # swept by test_acadsharp_targets.py for exactly that token, and that guard
@@ -228,6 +231,153 @@ class TestTheModelsAreStated:
         )
 
 
+class TestTheTwoRefusalsAreToldApart:
+    """`LIMIT_EXCEEDED` used to mean two things, and the document said so.
+
+    One of them ends the decode and one of them is the caller being told to
+    come back with a bigger buffer. A consumer holding one number for both
+    either retries a decode that is over and gets nothing, or gives up on a
+    buffer it could simply have grown. The only thing separating them was
+    whether `written` came back larger than the cap that was passed in, and
+    no document ever said that.
+    """
+
+    def test_the_buffer_code_is_in_the_table(self, abi):
+        assert "VIPRS_ACAD_BUFFER_TOO_SMALL" in abi
+        row = [
+            ln
+            for ln in abi.splitlines()
+            if "`VIPRS_ACAD_BUFFER_TOO_SMALL`" in ln and ln.startswith("|")
+        ]
+        assert row, "VIPRS_ACAD_BUFFER_TOO_SMALL has no row in the result-code table"
+        flat = re.sub(r"\s+", " ", row[0])
+        assert re.search(r"retr", flat, re.I), (
+            "the row has to say the call may be retried, because that is the whole "
+            "difference between this code and the one it was split out of"
+        )
+
+    def test_the_limit_row_no_longer_mentions_a_buffer(self, abi):
+        row = [
+            ln
+            for ln in abi.splitlines()
+            if "`VIPRS_ACAD_LIMIT_EXCEEDED`" in ln and ln.startswith("|")
+        ]
+        assert row, "VIPRS_ACAD_LIMIT_EXCEEDED has no row in the result-code table"
+        flat = re.sub(r"\s+", " ", row[0]).lower()
+        assert "buffer" not in flat, (
+            "the LIMIT_EXCEEDED row still describes a short buffer as one of its "
+            "meanings, which is the conflation the new code removes"
+        )
+        assert "viprs_acad_limits_v1" in flat, (
+            "and it has to say what it does mean: a bound in the limits struct, and nothing else"
+        )
+
+    def test_the_limit_code_is_stated_to_be_terminal(self, abi_flat):
+        assert re.search(
+            r"VIPRS_ACAD_LIMIT_EXCEEDED[^.]{0,200}terminal|terminal[^.]{0,200}VIPRS_ACAD_LIMIT_EXCEEDED",
+            abi_flat,
+        ), "nothing says a breached bound ends the decode rather than pausing it"
+
+
+class TestTheOneLimitThatDoesNotRefuse:
+    """`max_string_bytes` stopped being a plain refusal and the document said it was.
+
+    A `Warning` message is the decoder's own sentence about the drawing, and
+    the drawing usually decided its length: the reader's "unlisted object with
+    DXF name ..." notification carries a name the file chose. Refusing it cost
+    every record after it, so a message past the bound is shortened and marked
+    instead. A `Text` record and a view's name are still refused, because a
+    consumer cannot tell a label the file carries from one that was cut.
+
+    The sentence after the limits table said "exceeding any of them is
+    VIPRS_ACAD_LIMIT_EXCEEDED", full stop, which is the kind of blanket claim a
+    second implementation would follow exactly.
+    """
+
+    def test_the_exception_is_stated(self, abi_flat):
+        assert re.search(
+            r"exception[^.]{0,120}max_string_bytes|max_string_bytes[^.]{0,120}exception",
+            abi_flat,
+            re.I,
+        ), (
+            "ABI.md still says every bound refuses, which is no longer true of a "
+            "Warning past max_string_bytes"
+        )
+
+    def test_it_says_which_strings_still_refuse(self, abi_flat):
+        assert re.search(r"`Text`.{0,200}(refus|reject)", abi_flat, re.I), (
+            "the exception is about one record type, and a document that states only "
+            "the exception reads as if every string is now shortened"
+        )
+
+    def test_it_does_not_weaken_the_no_silent_truncation_promise(self, abi_flat):
+        assert re.search(r"never a silently truncated stream", abi_flat), (
+            "the limits section has to keep promising it, because a shortened message "
+            "that says it was shortened is not a silent truncation and the two must "
+            "not be confused"
+        )
+
+
+class TestARefusalEndsTheDecode:
+    """The silent truncation, written down.
+
+    A decode that refused once used to be able to carry on. The stream behind
+    it is an iterator, and an iterator that threw is finished, so the next
+    call framed an empty last batch, reported `done` 1 and returned OK. A
+    caller that followed the documented grow-and-retry got a well-formed,
+    complete-looking stream with every record after the breach missing.
+    """
+
+    def test_the_latch_is_documented(self, abi_flat):
+        assert re.search(r"every later call|every subsequent call", abi_flat, re.I), (
+            "ABI.md never says what a second viprs_acad_decode_next_batch after a "
+            "refusal does, so a consumer cannot tell a finished stream from a "
+            "truncated one"
+        )
+        assert re.search(r"same code", abi_flat, re.I)
+
+    def test_it_says_what_the_out_parameters_hold_afterwards(self, abi_flat):
+        window = abi_flat[abi_flat.lower().index("every later call") - 400 :][:1200]
+        assert re.search(r"`done`.{0,80}0|0.{0,40}through `done`", window), (
+            "a latched call has to report done 0, or a caller's loop reads the "
+            "refusal as the end of a complete stream"
+        )
+        assert re.search(r"writes nothing|nothing is written|written.{0,30}0", window, re.I)
+
+    def test_the_buffer_code_is_excluded_from_the_latch(self, abi_flat):
+        assert re.search(
+            r"VIPRS_ACAD_BUFFER_TOO_SMALL[^.]{0,240}(not|never)[^.]{0,240}terminal"
+            r"|(not|never)[^.]{0,240}VIPRS_ACAD_BUFFER_TOO_SMALL",
+            abi_flat,
+        ), (
+            "a short buffer is about the caller's buffer and not about the decode, so "
+            "it must be excluded from the latch in writing. Latching it would make "
+            "the documented grow-and-retry impossible."
+        )
+
+
+class TestTheCancelReadIsDescribedAsTheCodeDoesIt:
+    """ABI.md said the read was a plain load. It is a volatile one.
+
+    A consumer cannot observe the difference, which is exactly why nobody
+    caught it, and a second implementation written from this document would
+    have been allowed to hoist the read out of a loop and turn a cancel into
+    something that arrives eventually or not at all.
+    """
+
+    def test_it_does_not_promise_a_plain_load(self, abi_flat):
+        assert "plain load" not in abi_flat, (
+            "ABI.md still says the cancel flag is read with a plain load while the "
+            "implementation reads it volatile"
+        )
+
+    def test_it_says_the_read_is_ordered(self, abi_flat):
+        assert re.search(r"cancel_flag[^.]{0,600}(volatile|atomic|acquire)", abi_flat, re.I), (
+            "the threading section has to say how the flag is read, because it is the "
+            "one word on this boundary two threads touch at once"
+        )
+
+
 class TestTheFingerprintIsDefined:
     def test_the_algorithm_is_written_down(self, abi_flat):
         assert "sha256" in abi_flat.lower()
@@ -243,6 +393,23 @@ class TestTheFingerprintIsDefined:
         assert re.search(r"generated .*build time|at build time", abi_flat, re.I), (
             "the value is generated from the header at build time rather than assigned, "
             "and a consumer author needs to know that is the guarantee being offered."
+        )
+
+    def test_it_says_the_digest_is_of_the_file_and_not_of_the_declarations(self, abi_flat):
+        # Canonicalising the header before hashing was considered and dropped:
+        # it needs the same whitespace-and-comment algorithm in five separate
+        # implementations, and drift between any two of them is a false
+        # ABI_MISMATCH on a pair that works. So a comment-only edit moves the
+        # number on purpose, and a reader who does not know that reads a moved
+        # fingerprint as a bug.
+        over_the_file = r"the (published )?header file|the file itself|whole file"
+        assert re.search(over_the_file, abi_flat, re.I), (
+            "the document never says the digest is over the file, so a reader assumes "
+            "it is over the declarations and reports a comment-only move as a defect"
+        )
+        assert re.search(r"comment", abi_flat, re.I), (
+            "and it has to say a comment change moves it, which is the case that looks "
+            "like a bug and is not"
         )
 
 

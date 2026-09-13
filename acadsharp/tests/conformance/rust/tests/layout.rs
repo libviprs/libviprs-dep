@@ -81,16 +81,16 @@ fn capabilities_layout_is_what_the_header_says() {
 
 #[test]
 fn view_info_layout_is_what_the_header_says() {
-    layout_struct!(viprs_view_info_v1, 56, 8);
-    layout_field!(viprs_view_info_v1, struct_size, 0, 4);
-    layout_field!(viprs_view_info_v1, struct_version, 4, 4);
-    layout_field!(viprs_view_info_v1, index, 8, 4);
-    layout_field!(viprs_view_info_v1, kind, 12, 4);
-    layout_field!(viprs_view_info_v1, min_x, 16, 8);
-    layout_field!(viprs_view_info_v1, min_y, 24, 8);
-    layout_field!(viprs_view_info_v1, max_x, 32, 8);
-    layout_field!(viprs_view_info_v1, max_y, 40, 8);
-    layout_field!(viprs_view_info_v1, entity_count, 48, 8);
+    layout_struct!(viprs_acad_view_info_v1, 56, 8);
+    layout_field!(viprs_acad_view_info_v1, struct_size, 0, 4);
+    layout_field!(viprs_acad_view_info_v1, struct_version, 4, 4);
+    layout_field!(viprs_acad_view_info_v1, index, 8, 4);
+    layout_field!(viprs_acad_view_info_v1, kind, 12, 4);
+    layout_field!(viprs_acad_view_info_v1, min_x, 16, 8);
+    layout_field!(viprs_acad_view_info_v1, min_y, 24, 8);
+    layout_field!(viprs_acad_view_info_v1, max_x, 32, 8);
+    layout_field!(viprs_acad_view_info_v1, max_y, 40, 8);
+    layout_field!(viprs_acad_view_info_v1, entity_count, 48, 8);
 }
 
 /// The result codes are generated from the header's own #defines, so this
@@ -107,6 +107,7 @@ fn the_result_codes_keep_their_frozen_numbers() {
     assert_eq!(viprs_conformance::VIPRS_ACAD_INTERNAL_ERROR, 7);
     assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_MISMATCH, 8);
     assert_eq!(viprs_conformance::VIPRS_ACAD_LIMIT_EXCEEDED, 9);
-    assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_VERSION, 1);
+    assert_eq!(viprs_conformance::VIPRS_ACAD_BUFFER_TOO_SMALL, 10);
+    assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_VERSION, 2);
     assert_eq!(viprs_conformance::VIPRS_ACAD_WIRE_VERSION, 2);
 }

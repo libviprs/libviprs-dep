@@ -33,7 +33,16 @@ namespace Viprs.Sources
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
 		private uint _drawingVersion;
 		private int _viewsWithoutExtents;
-		private bool _closed;
+
+		// Volatile because two threads reach it. ABI.md says two handles may
+		// be used from two threads and that closing a document releases every
+		// decode open on it, so a close on one thread racing a decode on
+		// another is a documented shape rather than a misuse. Every path
+		// below is managed, so the worst outcome of losing the race was
+		// always INTERNAL_ERROR and never a fault, but a plain bool lets a
+		// reader keep a stale false for as long as it likes. Volatile turns
+		// most of that window into the documented refusal instead.
+		private volatile bool _closed;
 
 		private AcadSharpSource(ResolvedLimits limits)
 		{
