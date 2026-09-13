@@ -1178,7 +1178,7 @@ class TestTheModuleSectionIsRetained:
         result = _verify(_pack(_clone(good_tree, tmp_path)))
 
         assert result.returncode == 0, _output(result)
-        assert "__modules is retained" in result.stdout
+        assert "encapsulation sections are retained" in result.stdout
 
     def test_an_archive_without_the_flag_is_refused(self, tmp_path, good_tree):
         root = _clone(good_tree, tmp_path)
