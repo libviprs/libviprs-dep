@@ -1255,6 +1255,50 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                 rmdir "$d" 2>/dev/null || true
             done < /tmp/merge-sources.txt
 
+            # The module table has to survive --gc-sections, and by
+            # default under lld it does not.
+            #
+            # ILC puts the runtime's module headers in a section called
+            # __modules and the bootstrapper walks it through
+            # __start___modules and __stop___modules, the symbols a linker
+            # synthesises around any section whose name is a C identifier.
+            # Nothing relocates against the section, so those two symbols
+            # are the only references to it, and lld has defaulted to
+            # -z start-stop-gc since version 13, which says a reference
+            # through an encapsulation symbol is not a reason to keep a
+            # section. rustc asks for --gc-sections, so on every target
+            # whose linker is lld the section goes and the link fails with
+            # an undefined __start___modules. GNU ld keeps it, which is
+            # why the C smoke below passes, why every arm64 job passed,
+            # and why this only ever showed up on linux/x64 (#67).
+            #
+            # Setting SHF_GNU_RETAIN on the section makes the archive
+            # carry its own requirement. The alternative is asking every
+            # consumer to pass -z nostart-stop-gc, and a consumer cannot:
+            # cargo:rustc-link-arg does not travel from a dependency's
+            # build script to the binary that links it, which is the same
+            # limitation that put the initialiser in its own archive.
+            RETAINED=0
+            for OBJ in "$MERGE_DIR"/*.o; do
+                [ -f "$OBJ" ] || continue
+                readelf -S -W "$OBJ" 2>/dev/null \
+                    | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\) .*/\1/p' \
+                    | grep -qx __modules || continue
+                if python3 /work/retain_sections.py "$OBJ" __modules; then
+                    RETAINED=$((RETAINED + 1))
+                else
+                    MERGE_OK=0
+                fi
+            done
+            fact retained_module_sections "$RETAINED"
+            # One object carries it, the one ILC produced. Zero means the
+            # runtime renamed the section and every consumer using lld
+            # would have found out instead of this build.
+            if [ "$RETAINED" -ne 1 ]; then
+                echo "expected one object carrying __modules, found $RETAINED"
+                MERGE_OK=0
+            fi
+
             if [ "$MERGE_OK" != "1" ]; then
                 echo "the merge would have dropped an object; shipping shared-only"
                 rm -f "$INIT_A" "$MERGED"
@@ -1346,13 +1390,13 @@ def make_dockerfile(version, plat, arch):
         install_deps = (
             "RUN apk add --no-cache bash curl ca-certificates git clang build-base \\\n"
             "    zlib-dev zlib-static openssl-dev openssl-libs-static binutils file \\\n"
-            "    libstdc++ libgcc icu-libs krb5-libs lld"
+            "    libstdc++ libgcc icu-libs krb5-libs lld python3"
         )
     else:
         install_deps = (
             "RUN apt-get update && apt-get install -y --no-install-recommends \\\n"
             "    curl ca-certificates git clang zlib1g-dev libssl-dev binutils \\\n"
-            "    build-essential file libicu72 \\\n"
+            "    build-essential file libicu72 python3-minimal \\\n"
             "    && rm -rf /var/lib/apt/lists/*"
         )
 
@@ -1397,7 +1441,7 @@ RUN rmdir {src_root}/src/CSUtilities 2>/dev/null || true; \\
 COPY native /work/native
 COPY include /work/include
 COPY VERSION /work/VERSION
-COPY archive_smoke.c static_archive_smoke.c stage.sh /work/
+COPY archive_smoke.c static_archive_smoke.c stage.sh retain_sections.py /work/
 
 # Step 5: publish the shared library. The log is kept because the AOT
 # warning count in BUILDINFO.json is read out of it.
@@ -1612,6 +1656,13 @@ def _write_build_context(ctx, plat):
     # constant comes out as "", and every archive published so far shipped a
     # library that answers the version question with an empty string.
     shutil.copy2(VERSION_FILE, os.path.join(ctx, "VERSION"))
+    # Copied rather than generated: it is a real script with its own
+    # tests, and a second copy inside a Python string is a second thing to
+    # keep right.
+    shutil.copy2(
+        os.path.join(SCRIPTS_DIR, "retain_sections.py"),
+        os.path.join(ctx, "retain_sections.py"),
+    )
     for name, text in (
         ("archive_smoke.c", archive_smoke_source()),
         ("static_archive_smoke.c", static_smoke_source()),
