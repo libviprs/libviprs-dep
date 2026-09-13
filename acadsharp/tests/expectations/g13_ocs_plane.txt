@@ -2,8 +2,9 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Arc handle=49 flags=0 c=[(4.000000,3.000000,0.000000)] r=2.000000 a0=0.000000 a1=1.570796 normal=[(0.000000,0.000000,-1.000000)]
-00005 Circle handle=4A flags=0 c=[(6.000000,-2.000000,1.000000)] r=3.000000 normal=[(0.000000,0.000000,-1.000000)]
-00006 Polyline handle=4B flags=0 n=3 closed=0 pts=[(0.000000,0.000000,2.000000);(10.000000,0.000000,2.000000);(10.000000,10.000000,2.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,-1.000000)]
-00007 Circle handle=4C flags=0 c=[(5.000000,0.000000,7.000000)] r=1.000000 normal=[(1.000000,2.000000,2.000000)]
-00008 Polyline handle=4D flags=0 n=3 closed=0 pts=[(1.000000,2.000000,3.000000);(4.000000,5.000000,6.000000);(7.000000,8.000000,9.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00004 Arc handle=49 flags=0 c=[(-4.000000,3.000000,0.000000)] r=2.000000 a0=0.000000 a1=1.570796 normal=[(0.000000,0.000000,-1.000000)]
+00005 Circle handle=4A flags=0 c=[(-6.000000,-2.000000,-1.000000)] r=3.000000 normal=[(0.000000,0.000000,-1.000000)]
+00006 Polyline handle=4B flags=0 n=3 closed=0 pts=[(0.000000,0.000000,-2.000000);(-10.000000,0.000000,-2.000000);(-10.000000,10.000000,-2.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,-1.000000)]
+00007 Circle handle=4C flags=0 c=[(-2.138803,6.902735,4.666667)] r=1.000000 normal=[(0.333333,0.666667,0.666667)]
+00008 Polyline handle=4D flags=0 n=3 closed=0 pts=[(-20.000000,0.000000,0.000000);(-30.000000,5.000000,0.000000);(-40.000000,0.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,-1.000000)]
+00009 Polyline handle=52 flags=0 n=3 closed=0 pts=[(1.000000,2.000000,3.000000);(4.000000,5.000000,6.000000);(7.000000,8.000000,9.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]

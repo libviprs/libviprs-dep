@@ -230,7 +230,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1064,
+      "output_bytes": 1172,
       "records": 6,
       "sha256": "e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b",
       "view_count": 2
@@ -243,30 +243,30 @@
         "Arc": 2,
         "Circle": 2,
         "Ellipse": 2,
-        "Warning": 7
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1900,
-      "records": 13,
+      "output_bytes": 1412,
+      "records": 10,
       "sha256": "b0fd5629a7fa9f9007f8cfe47df084b310eee3461d9fef208ebe98f562002c5f",
       "view_count": 2
     },
     "g13_ocs_plane.dwg": {
       "batches": 1,
-      "bytes": 10731,
+      "bytes": 10892,
       "decode_code": "OK",
       "kinds": {
         "Arc": 1,
         "Circle": 2,
-        "Polyline": 2,
+        "Polyline": 3,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1372,
-      "records": 9,
-      "sha256": "54d319f90623962bea7cb9ac76a70477a04c5352dfe13074dead668b85ef823e",
+      "output_bytes": 1508,
+      "records": 10,
+      "sha256": "ec548ccabd14ad4fc785cf7f948d53ebc8ef07cbc05156349f58ef28ef8fe587",
       "view_count": 2
     },
     "g13_ocs_rotated.dwg": {
@@ -293,12 +293,12 @@
       "kinds": {
         "Circle": 1,
         "Polyline": 1,
-        "Warning": 4
+        "Warning": 6
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1060,
-      "records": 6,
+      "output_bytes": 1608,
+      "records": 8,
       "sha256": "5d5242f2914922521e9bafff42e98700a2f3d62f64f1158fdffa2204747a8c90",
       "view_count": 2
     },
@@ -499,12 +499,12 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "26029bfa04596992dcbd6cae46f5029390e9dead8dd2e5f33117f955746952b9",
+    "sha256": "1677c92ae8f5c26735fff8f06fa966de66d755350e6f11375bdf851bceff0675",
     "sources": {
       "native/Abi.cs": "d718bb652005e9e874eaceebd62b802d2fa26adf360ddfc8d37d1925c82cd377",
-      "native/Adapter/Flattener.cs": "bb592e06c6692f470e81fbc2b33b0ca700ffef01cb1d2fddd8b90bb32322db48",
+      "native/Adapter/Flattener.cs": "59eaf3d8cdc8ff0d5b47acf87fd3ee9ec40da9f00a3c5d24b51e8217f441301b",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
-      "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
+      "native/Adapter/VersionGate.cs": "8b6d2ce10d17df9416239abd79d2e162b1bbd27fbefbe615440da6706dea9331",
       "native/Adapter/WarningCodes.cs": "4353d888362af137a1219bfb96144e6c22c01f974d33250213c41d3be941df53",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "bc580b340df172da5ddd905e26559de28e64b4acd69116d4035a2636927eada3",

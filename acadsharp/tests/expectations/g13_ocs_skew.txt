@@ -2,5 +2,7 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Circle handle=4C flags=1 c=[(0.000000,0.000000,0.000000)] r=8.944272 normal=[(0.000000,0.000000,1.000000)]
-00005 Polyline handle=4D flags=1 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(21.213203,7.071068,0.000000);(0.000000,14.142136,0.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]
+00004 Warning handle=4C flags=1 code=NON_UNIFORM_BLOCK_SCALE message="CIRCLE crossed under a block transform that does not scale its plane uniformly, so the shape its parameters describe is stretched in the drawing and they no longer name it. A reflection is not this case and raises nothing: a mirror is exact"
+00005 Circle handle=4C flags=1 c=[(0.000000,0.000000,0.000000)] r=8.944272 normal=[(0.000000,0.000000,1.000000)]
+00006 Warning handle=4D flags=1 code=NON_UNIFORM_BLOCK_SCALE message="LWPOLYLINE crossed under a block transform that does not scale its plane uniformly, so the shape its parameters describe is stretched in the drawing and they no longer name it. A reflection is not this case and raises nothing: a mirror is exact"
+00007 Polyline handle=4D flags=1 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(21.213203,7.071068,0.000000);(0.000000,14.142136,0.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]

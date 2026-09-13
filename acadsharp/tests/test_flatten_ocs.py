@@ -56,7 +56,15 @@ FLIPPED = (0.0, 0.0, -1.0)
 OBLIQUE = (1.0, 2.0, 2.0)
 OBLIQUE_ELEVATION = 7.0
 
+# A coordinate read straight off a dump.
 TOL = 1e-6
+
+# A point reconstructed through an angle. The dump prints six decimals, so an
+# angle on it is only good to 5e-7, and the radius multiplies that error into
+# the position: at r = 5 the reconstruction is a couple of parts in a million
+# out however right the shim is. Tightening this back to TOL makes the arc
+# assertions fail on the printing rather than on the geometry.
+ANGLE_TOL = 1e-5
 
 
 def geometry(fixture):
@@ -69,6 +77,24 @@ def of_kind(fixture, kind):
 
 def approx(point):
     return pytest.approx(point, abs=TOL)
+
+
+def swept(point):
+    return pytest.approx(point, abs=ANGLE_TOL)
+
+
+def flat(points):
+    """A sequence of triples as one list of numbers.
+
+    ``pytest.approx`` does not reach inside a list of tuples: it compares each
+    tuple with plain ``==``, so ``[(1.0, 2.0)] == approx([(1.0, 2.0000001)])``
+    is False however wide the tolerance is. A nested comparison is therefore
+    an exact one wearing approx's clothes, and it passes for as long as the
+    numbers happen to round to the same six decimals. Flattening first is what
+    makes the tolerance real, and it is why every multi-point comparison here
+    goes through this.
+    """
+    return [x for p in points for x in p]
 
 
 class TestTheHelperIsTheAlgorithm:
@@ -140,11 +166,14 @@ class TestAnEntitysPlaneIsLiftedIntoWorldSpace:
         lw = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "4B"]
         assert len(lw) == 1, f"the lwpolyline came out as {len(lw)} records"
         pts, bulges, normal = vertex_record(lw[0]["rest"])
-        assert pts == approx([(0.0, 0.0, -2.0), (-10.0, 0.0, -2.0), (-10.0, 10.0, -2.0)])
+        assert flat(pts) == approx(
+            flat([(0.0, 0.0, -2.0), (-10.0, 0.0, -2.0), (-10.0, 10.0, -2.0)])
+        )
         assert normal == approx(FLIPPED)
         # Nothing here is a reflection: the placement is the identity and the
         # plane is the entity's own, so the bulge crosses exactly as read.
         assert bulges == approx([0.0, 0.5, 0.0])
+
 
     def test_the_bulged_span_lands_on_the_arc_the_drawing_has(self):
         # In its own plane the span (10,0) to (10,10) with bulge 0.5 has its
@@ -185,20 +214,51 @@ class TestAnEntitysPlaneIsLiftedIntoWorldSpace:
         assert distance(circle["normal"], (0.0, 0.0, 0.0)) == pytest.approx(1.0, abs=TOL)
         assert circle["normal"] == approx(normalize(OBLIQUE))
 
+    def test_a_two_dimensional_polyline_is_lifted_as_well(self):
+        """The other half of the arm a 3D polyline goes through.
+
+        An LWPOLYLINE and a POLYLINE reach the flattener through different
+        cases, so the assertion above says nothing about this one. Without
+        this record the lift on the shared arm is never run at all and the
+        3D control below is a comparison against a branch that does nothing.
+
+        The z is 0 rather than the elevation the fixture sets, because
+        upstream's DwgWriter does not round-trip a 2D polyline's elevation.
+        The x negating is what says the lift ran.
+        """
+        p2 = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "4D"]
+        assert len(p2) == 1
+        pts, bulges, normal = vertex_record(p2[0]["rest"])
+        assert flat(pts) == approx(
+            flat([(-20.0, 0.0, 0.0), (-30.0, 5.0, 0.0), (-40.0, 0.0, 0.0)])
+        )
+        assert bulges == []
+        assert normal == approx(FLIPPED)
+
     def test_a_three_dimensional_polyline_is_not_lifted(self):
         """The control that keeps the fix from being "lift every polyline".
 
         POLYLINE's 3D flag is exactly the flag that says its vertices are
-        world coordinates. The fixture gives this one an extrusion of -Z as
-        well, so a lift applied here would move all three points rather than
-        being silently the identity.
+        world coordinates, and the shared arm takes its points from the plain
+        placement for that reason.
+
+        What this cannot show is the branch failing. The fixture asks for an
+        extrusion of -Z here and the record comes back with +Z, because a DWG
+        has nowhere to put a 3D polyline's extrusion and upstream reads it as
+        the default. So the wrong behaviour, lifting by the entity's own
+        normal, is the identity on any 3D polyline this format can hold, and
+        the branch is a statement about DXF rather than something this corpus
+        can watch fail. It is still what the specification says, and the 2D
+        record above is what proves the other side of it runs.
         """
-        p3 = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "4D"]
+        p3 = [r for r in of_kind(PLANE, "Polyline") if r["handle"] == "52"]
         assert len(p3) == 1
         pts, bulges, normal = vertex_record(p3[0]["rest"])
-        assert pts == approx([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)])
+        assert flat(pts) == approx(
+            flat([(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)])
+        )
         assert bulges == []
-        assert normal == approx(FLIPPED)
+        assert normal == approx((0.0, 0.0, 1.0))
 
 
 class TestAnArcUnderAMirroredInsertion:
@@ -243,7 +303,7 @@ class TestAnArcUnderAMirroredInsertion:
 
         want = sorted(negate_x(p) for p in along(plain))
         got = sorted(along(mirrored))
-        assert got == approx(want)
+        assert flat(got) == swept(flat(want))
 
     def test_the_arcs_midpoint_is_the_probe_and_its_start_is_not(self):
         """Named separately because the endpoints alone cannot fail.
@@ -259,7 +319,7 @@ class TestAnArcUnderAMirroredInsertion:
         mid = arc_point(plain, (plain["a0"] + plain["a1"]) / 2.0)
         want = negate_x(mid)
         got = arc_point(mirrored, (mirrored["a0"] + mirrored["a1"]) / 2.0)
-        assert got == approx(want)
+        assert got == swept(want)
         assert abs(want[1]) > 1.0, (
             "the midpoint this test probes has come to sit on the mirror axis, so "
             "it is now a fixed point and cannot tell a correct arc from its "
@@ -278,7 +338,7 @@ class TestAnArcUnderAMirroredInsertion:
 
         want = sorted(negate_x(p) for p in along(plain))
         got = sorted(along(mirrored))
-        assert got == approx(want)
+        assert flat(got) == swept(flat(want))
 
     def test_a_mirror_raises_no_warning_about_the_scale(self):
         # Both scale magnitudes are 1. A reflection preserves every shape
@@ -315,17 +375,19 @@ class TestARecordsNormalFollowsTheTransform:
         # The block's arc runs (5,0,0) to (0,5,0) about the origin. The
         # insertion sends x to -x and y to z, so those become (-5,0,0) and
         # (0,0,5) with the midpoint at (-3.5355, 0, 3.5355).
-        assert arc_point(arc, arc["a0"]) == approx((-5.0, 0.0, 0.0))
-        assert arc_point(arc, arc["a1"]) == approx((0.0, 0.0, 5.0))
+        assert arc_point(arc, arc["a0"]) == swept((-5.0, 0.0, 0.0))
+        assert arc_point(arc, arc["a1"]) == swept((0.0, 0.0, 5.0))
         half = 5.0 * math.cos(math.pi / 4.0)
-        assert arc_point(arc, (arc["a0"] + arc["a1"]) / 2.0) == approx((-half, 0.0, half))
+        assert arc_point(arc, (arc["a0"] + arc["a1"]) / 2.0) == swept((-half, 0.0, half))
 
     def test_the_bulge_is_measured_about_the_plane_the_polyline_is_in(self):
         rs = of_kind(ROTATED, "Polyline")
         assert len(rs) == 1
         pts, bulges, normal = vertex_record(rs[0]["rest"])
         assert normal == approx(self.EXTRUSION)
-        assert pts == approx([(0.0, 0.0, 0.0), (-10.0, 0.0, 0.0), (-10.0, 0.0, 10.0)])
+        assert flat(pts) == approx(
+            flat([(0.0, 0.0, 0.0), (-10.0, 0.0, 0.0), (-10.0, 0.0, 10.0)])
+        )
         # (12.5, 5, 0) in the block, which the insertion sends to
         # (-12.5, 0, 5). With the normal left at +Z the cross product in the
         # midpoint formula is parallel to the chord and collapses to zero, so

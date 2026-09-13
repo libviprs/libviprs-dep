@@ -592,6 +592,17 @@ public static class Corpus
 			Layer = L(doc),
 		});
 
+		// A 2D POLYLINE in the same plane, which is the other half of the
+		// IPolyline arm. An LWPOLYLINE and a POLYLINE reach the flattener
+		// through different cases, and this is the one that shares its case
+		// with the 3D polyline below, so without it the lift on that arm is
+		// never run at all.
+		Polyline2D p2 = new Polyline2D { Normal = OcsFlipped, Elevation = 2.0, Layer = L(doc) };
+		p2.Vertices.Add(new Vertex2D(new XY(20, 0)));
+		p2.Vertices.Add(new Vertex2D(new XY(30, 5)));
+		p2.Vertices.Add(new Vertex2D(new XY(40, 0)));
+		doc.Entities.Add(p2);
+
 		// The control, and the reason this is not "lift every polyline".
 		// POLYLINE's 3D flag is exactly the flag that says its vertices are
 		// world coordinates, so lifting these three would move points that are

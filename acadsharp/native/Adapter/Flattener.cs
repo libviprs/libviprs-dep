@@ -96,61 +96,174 @@ namespace Viprs.Cad
 			into.Add(v.Z);
 		}
 
-		// The in-plane scale factors and rotation a transform applies,
-		// measured rather than decomposed. A composed chain of insertions is
-		// not guaranteed to decompose into the translate, rotate and scale it
-		// was built from, and a measurement of the basis always is.
+		// ----------------------------------------------- object coordinates
+
+		// A DWG entity does not store world coordinates. It stores them in the
+		// object coordinate system its extrusion direction defines, and DXF's
+		// arbitrary axis algorithm is what turns one into the other: the plane is
+		// the one the normal names, and the algorithm's whole job is to pick a
+		// repeatable x axis inside it.
+		//
+		// None of it ran until this landed, and on a corpus of +Z extrusions that
+		// was invisible, because for +Z the algorithm is exactly the identity.
+		// docs/WIRE.md's records 4, 5, 6, 7 and 9 each carry a normal so a
+		// consumer knows which plane the record's angles and bulges are measured
+		// in; they were carrying a plane the coordinates beside them were not in.
+
+		// The band inside which the algorithm crosses the normal with the world y
+		// axis instead of the world z axis.
+		//
+		// Near the z axis the cross product with z shrinks towards nothing and its
+		// direction is decided by the last few bits of the normal, so without the
+		// band two drawings that agree to twelve decimals get frames ninety
+		// degrees apart. Upstream's Matrix4.GetArbitraryAxis writes the same
+		// constant as `(1 / 64)`, which C# evaluates as integer division to zero,
+		// so its test never fires and a normal of (1e-3, 0, 1) comes back with an
+		// x axis the algorithm does not give it. That is why this file runs its
+		// own, and why InsertMatrix below builds the INSERT transform here rather
+		// than calling Insert.GetTransform().
+		private const double ArbitraryAxisBand = 1.0 / 64.0;
+
+		// A unit vector, and the one place this file divides by a length.
+		//
+		// A normal a drawing holds need not be a unit vector, and a damaged file
+		// can hold three zeroes, which is not a plane and does not become one by
+		// being divided by. That case keeps the world's own plane. A value that is
+		// not finite goes straight through on purpose: Finite is what refuses that
+		// one, and it refuses it naming the handle.
+		private static XYZ Unit(XYZ v)
+		{
+			double len = v.GetLength();
+			return len < Eps ? XYZ.AxisZ : new XYZ(v.X / len, v.Y / len, v.Z / len);
+		}
+
+		internal static XYZ ArbitraryAxisX(XYZ normal)
+		{
+			XYZ n = Unit(normal);
+			XYZ x = Math.Abs(n.X) < ArbitraryAxisBand && Math.Abs(n.Y) < ArbitraryAxisBand
+				? XYZ.Cross(XYZ.AxisY, n)
+				: XYZ.Cross(XYZ.AxisZ, n);
+			return Unit(x);
+		}
+
+		// The matrix that takes a point in that system to world space.
+		//
+		// For a normal of +Z it is the identity, exactly, which is why every
+		// expectation recorded before this existed is unchanged by it.
+		private static Matrix4 ObjectToWorld(XYZ normal)
+		{
+			XYZ n = Unit(normal);
+			XYZ x = ArbitraryAxisX(n);
+			XYZ y = XYZ.Cross(n, x);
+			return new Matrix4(
+				x.X, y.X, n.X, 0.0,
+				x.Y, y.Y, n.Y, 0.0,
+				x.Z, y.Z, n.Z, 0.0,
+				0.0, 0.0, 0.0, 1.0
+			);
+		}
+
+		// What a transform does to the plane an entity is drawn in, measured
+		// rather than decomposed. A composed chain of insertions is not
+		// guaranteed to decompose into the translate, rotate and scale it was
+		// built from, and a measurement of the basis always is.
+		//
+		// The plane is the entity's own and not the world's XY: every field here
+		// is read off a placement that already has the entity's object coordinate
+		// system composed into it, so the two vectors behind it are the images of
+		// the entity's own in-plane axes.
 		internal struct Basis
 		{
+			// What the transform does to the length of each in-plane axis.
 			public double ScaleX;
 			public double ScaleY;
-			public double Rotation;
+
+			// The plane the record says it is in, as a unit vector, on the same
+			// side of that plane the entity's own normal was on.
+			public XYZ Normal;
+
+			// The angle from that normal's arbitrary axis to the image of the
+			// entity's own x axis, counter-clockwise about the normal. An Arc's
+			// angles are offset by it, and for a transform that stays inside the
+			// world's XY plane it is the plain rotation the old code measured.
+			public double Turn;
+
+			// Whether the transform reverses handedness. An Arc's angles, an
+			// Ellipse's parameters and a bulge are all counter-clockwise about
+			// Normal, and a reflection reverses what that means, so all three have
+			// a correction and all three are exact.
 			public bool Mirrored;
 
-			// Equal scale factors, mirror or no mirror. This is what a
-			// polyline needs: under a reflection its vertices transform and
-			// its bulges negate, and the result is exactly the shape the
-			// drawing has. Nothing is approximated, so there is nothing to
-			// warn about.
-			public bool IsUniform
-			{
-				get
-				{
-					double m = Math.Max(Math.Max(ScaleX, ScaleY), 1.0);
-					return Math.Abs(ScaleX - ScaleY) <= 1e-9 * m;
-				}
-			}
+			// Equal in-plane scale factors that are still at right angles to each
+			// other, mirror or no mirror. This is the gate
+			// NON_UNIFORM_BLOCK_SCALE hangs off.
+			//
+			// It used to be the two lengths and nothing else, which calls a 3x
+			// scale composed with a forty-five degree rotation uniform: the two
+			// images come out the same length, sqrt(5) each, and stop being
+			// perpendicular. A circle under that is an ellipse, and this warning
+			// is exactly the thing that should have said so.
+			public bool Uniform;
+		}
 
-			// Uniform and orientation-preserving. Arc, Circle and Ellipse need
-			// this stronger one: they cross as a centre and angles measured
-			// counter-clockwise, and a reflection flips what counter-clockwise
-			// means without any field of theirs following it.
-			public bool IsSimilarity
-			{
-				get { return !Mirrored && IsUniform; }
-			}
+		// The three images of a frame's axes, as a Basis.
+		//
+		// `c` is only ever read for its sign. Handedness is the sign of the
+		// determinant, which is the triple product of the three; the test used to
+		// be the z component of a 2D cross product, which is the determinant of
+		// the top-left 2x2 and says nothing about a transform that leaves the XY
+		// plane. An insertion that stands the block on its side measured 0 there,
+		// and a mirror in z measured positive.
+		private static Basis MeasureBasis(XYZ a, XYZ b, XYZ c)
+		{
+			Basis basis = new Basis();
+			basis.ScaleX = a.GetLength();
+			basis.ScaleY = b.GetLength();
+
+			XYZ n = XYZ.Cross(a, b);
+			basis.Mirrored = n.Dot(c) < 0.0;
+
+			// A cross product of length nothing is a transform that has collapsed
+			// the plane onto a line, which a scale factor of zero does. There is no
+			// plane left to name, so the third axis' image is the closest thing to
+			// one and the record still says which way the entity faced.
+			XYZ plane = n.GetLength() < Eps ? Unit(c) : Unit(n);
+			basis.Normal = basis.Mirrored ? -plane : plane;
+
+			XYZ u = ArbitraryAxisX(basis.Normal);
+			XYZ v = XYZ.Cross(basis.Normal, u);
+			basis.Turn = Math.Atan2(a.Dot(v), a.Dot(u));
+
+			double m = Math.Max(Math.Max(basis.ScaleX, basis.ScaleY), 1.0);
+			basis.Uniform = Math.Abs(basis.ScaleX - basis.ScaleY) <= 1e-9 * m
+				&& Math.Abs(a.Dot(b)) <= 1e-9 * m * m;
+			return basis;
 		}
 
 		// One transform, and what it measures out to, computed at most once.
 		//
-		// A transform belongs to a block instance, not to an entity: every
-		// entity under one INSERT crosses under the same matrix. The basis and
-		// the identity test used to be recomputed for each of them, and before
-		// the switch rather than inside it, so six 4x4 multiplies, three square
-		// roots and an atan2 ran for every LINE, SPLINE, DIMENSION, HATCH and
-		// unsupported entity in the document, none of which reads either
-		// number. This holds the answer beside the transform and works it out
-		// the first time something asks.
+		// A transform belongs to a block instance, not to an entity: every entity
+		// under one INSERT crosses under the same matrix. The basis used to be
+		// recomputed for each of them, and before the switch rather than inside
+		// it, so six 4x4 multiplies, three square roots and an atan2 ran for every
+		// LINE, SPLINE, DIMENSION, HATCH and unsupported entity in the document,
+		// none of which reads any of it. This holds the answer beside the
+		// transform and works it out the first time something asks.
 		//
-		// A class rather than a struct on purpose: the Pending items that share
-		// a placement have to share the memo as well, and a struct would give
-		// each of them a copy that measures again.
+		// WithOcs returning `this` for an extrusion of +Z is what keeps that
+		// sharing: an entity in the world's own plane measures the placement it
+		// was handed rather than a copy of it. An entity in some other plane gets
+		// a placement of its own and measures once for itself, which is the right
+		// price, because its plane is its own.
+		//
+		// A class rather than a struct on purpose: the Pending items that share a
+		// placement have to share the memo as well, and a struct would give each
+		// of them a copy that measures again.
 		internal sealed class Placement
 		{
 			public readonly Matrix4 Matrix;
 
 			private Basis _basis;
-			private bool _identity;
 			private bool _measured;
 
 			public Placement(Matrix4 matrix)
@@ -164,55 +277,66 @@ namespace Viprs.Cad
 			// The matrix rather than the Transform, because CSMath's
 			// Transform(Matrix4) constructor decomposes the matrix it is handed
 			// into a translation, a scale and a quaternion turned into Euler
-			// angles, allocating on the way, and this file has never read any
-			// of the three. One composed insertion was paying for a full
+			// angles, allocating on the way, and this file has never read any of
+			// the three. One composed insertion was paying for a full
 			// decomposition it then threw away.
 			public XYZ Apply(XYZ p)
 			{
 				return (Matrix * p).RoundZero();
 			}
 
+			// The same placement with an entity's own object coordinate system
+			// composed in front of it, so a coordinate the entity stores can go to
+			// Apply exactly as the file holds it.
+			public Placement WithOcs(XYZ normal, double elevation)
+			{
+				bool flat = Math.Abs(normal.X) < Eps
+					&& Math.Abs(normal.Y) < Eps
+					&& normal.Z > 0.0;
+				if (flat && elevation == 0.0)
+				{
+					return this;
+				}
+
+				Matrix4 ocs = ObjectToWorld(normal);
+				if (elevation != 0.0)
+				{
+					ocs = Compose(
+						ocs,
+						Transform.CreateTranslation(new XYZ(0.0, 0.0, elevation)).Matrix
+					);
+				}
+
+				return new Placement(Compose(Matrix, ocs));
+			}
+
 			public Basis Basis
 			{
 				get
 				{
-					Measure();
+					if (!_measured)
+					{
+						_measured = true;
+						_basis = BasisOf(XYZ.AxisX, XYZ.AxisY);
+					}
+
 					return _basis;
 				}
 			}
 
-			public bool IsIdentity
+			// The same measurement for an entity whose in-plane x axis is not the
+			// arbitrary axis of its normal. An ELLIPSE is the one that needs it:
+			// its major axis is on the record, in world coordinates, so its two
+			// parameters are measured from that vector and not from a frame the
+			// normal implies. Not memoised, because it is asked once per ellipse.
+			public Basis BasisOf(XYZ u, XYZ v)
 			{
-				get
-				{
-					Measure();
-					return _identity;
-				}
-			}
-
-			// The two used to walk the basis separately, three transform
-			// applications each. They are the same three, so they are applied
-			// once and both answers fall out of them.
-			private void Measure()
-			{
-				if (_measured)
-				{
-					return;
-				}
-
-				_measured = true;
 				XYZ o = Apply(XYZ.Zero);
-				XYZ x = Apply(XYZ.AxisX) - o;
-				XYZ y = Apply(XYZ.AxisY) - o;
-
-				_basis.ScaleX = x.GetLength();
-				_basis.ScaleY = y.GetLength();
-				_basis.Rotation = Math.Atan2(x.Y, x.X);
-				_basis.Mirrored = (x.X * y.Y) - (x.Y * y.X) < 0.0;
-
-				_identity = o.GetLength() < Eps
-					&& Math.Abs(x.X - 1.0) < Eps && Math.Abs(x.Y) < Eps
-					&& Math.Abs(y.Y - 1.0) < Eps && Math.Abs(y.X) < Eps;
+				return MeasureBasis(
+					Apply(u) - o,
+					Apply(v) - o,
+					Apply(XYZ.Cross(u, v)) - o
+				);
 			}
 		}
 
@@ -532,9 +656,34 @@ namespace Viprs.Cad
 			yield break;
 		}
 
+		// The INSERT's own transform, built here rather than taken from
+		// upstream's Insert.GetTransform().
+		//
+		// The same composition it makes, in the same order: the insertion's own
+		// object coordinate system, the translation to the insertion point less
+		// the block's base point, the rotation about z, then the scale. The one
+		// difference is that the object coordinate system comes from this
+		// file's arbitrary axis rather than from Matrix4.GetArbitraryAxis,
+		// whose 1/64 test is integer division and never fires. For an insertion
+		// with an extrusion of +Z, which is every insertion in a drawing nobody
+		// has rotated out of plan, the two are identical.
+		private static Matrix4 InsertMatrix(Insert insert, BlockRecord block)
+		{
+			XYZ basePoint = block == null || block.BlockEntity == null
+				? XYZ.Zero
+				: block.BlockEntity.BasePoint;
+
+			return ObjectToWorld(insert.Normal)
+				* Transform.CreateTranslation(insert.InsertPoint - basePoint).Matrix
+				* Transform.CreateRotation(XYZ.AxisZ, insert.Rotation).Matrix
+				* Transform.CreateScaling(
+					new XYZ(insert.XScale, insert.YScale, insert.ZScale)
+				).Matrix;
+		}
+
 		private IEnumerable<Pending> InsertBody(Insert insert, BlockRecord block, Pending item)
 		{
-			Matrix4 local = insert.GetTransform().Matrix;
+			Matrix4 local = InsertMatrix(insert, block);
 			int rows = insert.RowCount < 1 ? 1 : insert.RowCount;
 			int cols = insert.ColumnCount < 1 ? 1 : insert.ColumnCount;
 
@@ -615,15 +764,39 @@ namespace Viprs.Cad
 				// the other order silently turns every arc into a full circle.
 				case Arc arc:
 				{
-					Basis basis = place.Basis;
-					bool identity = place.IsIdentity;
-					if (!identity && !basis.IsSimilarity)
+					// The centre is in the arc's own plane and the angles are
+					// counter-clockwise about its normal, so the whole
+					// correction is the placement with that plane composed into
+					// it. Turn carries the rotation and Mirrored carries the
+					// reflection, and neither is a special case of the other.
+					//
+					// The gate is Uniform rather than the old IsSimilarity,
+					// which excluded a mirror. A reflection preserves every
+					// shape exactly; it was only worth warning about while the
+					// angles below did not follow it.
+					Placement ocs = place.WithOcs(arc.Normal, 0.0);
+					Basis basis = ocs.Basis;
+					if (!basis.Uniform)
 					{
 						yield return NonUniform(h, flags, "ARC");
 					}
 
-					XYZ c = place.Apply(arc.Center);
-					double turn = identity ? 0.0 : basis.Rotation;
+					XYZ c = ocs.Apply(arc.Center);
+
+					// Under a reflection the image of the sweep runs the other
+					// way round the circle, so the record's two ends swap. The
+					// sweep is preserved: end minus start is still the included
+					// angle the drawing has. What a mirror cannot preserve is
+					// which end the drawing called the start, and no record
+					// whose angles are counter-clockwise about its normal can
+					// say that.
+					double start = basis.Mirrored
+						? basis.Turn - arc.EndAngle
+						: arc.StartAngle + basis.Turn;
+					double end = basis.Mirrored
+						? basis.Turn - arc.StartAngle
+						: arc.EndAngle + basis.Turn;
+
 					yield return Primitive.Arc(
 						h,
 						flags,
@@ -631,24 +804,28 @@ namespace Viprs.Cad
 						c.Y,
 						c.Z,
 						arc.Radius * basis.ScaleX,
-						arc.StartAngle + turn,
-						arc.EndAngle + turn,
-						arc.Normal.X,
-						arc.Normal.Y,
-						arc.Normal.Z
+						start,
+						end,
+						basis.Normal.X,
+						basis.Normal.Y,
+						basis.Normal.Z
 					);
 					yield break;
 				}
 
 				case Circle circle:
 				{
-					Basis basis = place.Basis;
-					if (!place.IsIdentity && !basis.IsSimilarity)
+					// The same lift, and no angle correction to make: a circle
+					// has no angles, which is why it was the one of the three
+					// that a reflection was already getting right.
+					Placement ocs = place.WithOcs(circle.Normal, 0.0);
+					Basis basis = ocs.Basis;
+					if (!basis.Uniform)
 					{
 						yield return NonUniform(h, flags, "CIRCLE");
 					}
 
-					XYZ c = place.Apply(circle.Center);
+					XYZ c = ocs.Apply(circle.Center);
 					yield return Primitive.Circle(
 						h,
 						flags,
@@ -656,22 +833,35 @@ namespace Viprs.Cad
 						c.Y,
 						c.Z,
 						circle.Radius * basis.ScaleX,
-						circle.Normal.X,
-						circle.Normal.Y,
-						circle.Normal.Z
+						basis.Normal.X,
+						basis.Normal.Y,
+						basis.Normal.Z
 					);
 					yield break;
 				}
 
 				case Ellipse ellipse:
 				{
-					if (!place.IsIdentity && !place.Basis.IsSimilarity)
+					// An ELLIPSE is the one curve DXF stores in world
+					// coordinates already, so there is no lift here. Its two
+					// parameters are measured from the major axis, which is on
+					// the record, so there is no Turn either: the frame the
+					// parameters live in is carried rather than implied, and
+					// the only thing a transform can do to them is reverse
+					// them.
+					XYZ tc = place.Apply(ellipse.Center);
+					XYZ tm = place.Apply(ellipse.Center + ellipse.MajorAxisEndPoint) - tc;
+
+					XYZ major = Unit(ellipse.MajorAxisEndPoint);
+					Basis basis = place.BasisOf(
+						major,
+						XYZ.Cross(Unit(ellipse.Normal), major)
+					);
+					if (!basis.Uniform)
 					{
 						yield return NonUniform(h, flags, "ELLIPSE");
 					}
 
-					XYZ tc = place.Apply(ellipse.Center);
-					XYZ tm = place.Apply(ellipse.Center + ellipse.MajorAxisEndPoint) - tc;
 					yield return Primitive.Ellipse(
 						h,
 						flags,
@@ -682,11 +872,11 @@ namespace Viprs.Cad
 						tm.Y,
 						tm.Z,
 						ellipse.RadiusRatio,
-						ellipse.StartParameter,
-						ellipse.EndParameter,
-						ellipse.Normal.X,
-						ellipse.Normal.Y,
-						ellipse.Normal.Z
+						basis.Mirrored ? -ellipse.EndParameter : ellipse.StartParameter,
+						basis.Mirrored ? -ellipse.StartParameter : ellipse.EndParameter,
+						basis.Normal.X,
+						basis.Normal.Y,
+						basis.Normal.Z
 					);
 					yield break;
 				}
@@ -734,13 +924,20 @@ namespace Viprs.Cad
 				case LwPolyline lw:
 				{
 					CheckPointCount(lw.Vertices.Count, "a Polyline record");
+
+					// A vertex is two numbers in the plane the normal defines
+					// and the elevation is its third, so all three go through
+					// the lift together. Lifting the pair and leaving the
+					// elevation behind is the half-fix that puts a flat
+					// polyline on the wrong side of its own plane.
+					Placement ocs = place.WithOcs(lw.Normal, 0.0);
 					double[] pts = new double[lw.Vertices.Count * 3];
 					double[] lwBulges = new double[lw.Vertices.Count];
 					bool lwAnyBulge = false;
 					for (int i = 0; i < lw.Vertices.Count; i++)
 					{
 						LwPolyline.Vertex v = lw.Vertices[i];
-						XYZ at = place.Apply(
+						XYZ at = ocs.Apply(
 							new XYZ(v.Location.X, v.Location.Y, lw.Elevation)
 						);
 						pts[i * 3] = at.X;
@@ -750,8 +947,8 @@ namespace Viprs.Cad
 						lwAnyBulge |= v.Bulge != 0.0;
 					}
 
-					Basis basis = place.Basis;
-					if (!place.IsIdentity && !basis.IsUniform && lwAnyBulge)
+					Basis basis = ocs.Basis;
+					if (!basis.Uniform && lwAnyBulge)
 					{
 						yield return NonUniform(h, flags, "LWPOLYLINE");
 					}
@@ -763,13 +960,25 @@ namespace Viprs.Cad
 						pts,
 						lwBulges,
 						basis.Mirrored,
-						lw.Normal
+						basis.Normal
 					);
 					yield break;
 				}
 
 				case IPolyline poly:
 				{
+					// POLYLINE's 3D flag is exactly the flag that says its
+					// vertices are world coordinates: a 2D one stores them in
+					// the plane its normal defines with the elevation as the
+					// third, and a 3D one does not and need not even be planar.
+					// So the plane and the points come from two placements
+					// here. The plane is still the entity's, because that is
+					// what a bulge's sign is measured about and what the record
+					// is telling a consumer; the points of a 3D one are already
+					// where they belong and lifting them would move them.
+					Placement plane = place.WithOcs(poly.Normal, 0.0);
+					Placement at = poly is Polyline3D ? place : plane;
+
 					List<double> pts = new List<double>();
 					List<double> bulges = new List<double>();
 					bool anyBulge = false;
@@ -780,13 +989,13 @@ namespace Viprs.Cad
 						double x = loc.Dimension > 0 ? loc[0] : 0.0;
 						double y = loc.Dimension > 1 ? loc[1] : 0.0;
 						double z = loc.Dimension > 2 ? loc[2] : poly.Elevation;
-						Append(pts, place, new XYZ(x, y, z));
+						Append(pts, at, new XYZ(x, y, z));
 						bulges.Add(v.Bulge);
 						anyBulge |= v.Bulge != 0.0;
 					}
 
-					Basis basis = place.Basis;
-					if (!place.IsIdentity && !basis.IsUniform && anyBulge)
+					Basis basis = plane.Basis;
+					if (!basis.Uniform && anyBulge)
 					{
 						yield return NonUniform(h, flags, "POLYLINE");
 					}
@@ -798,15 +1007,16 @@ namespace Viprs.Cad
 						pts.ToArray(),
 						bulges.ToArray(),
 						basis.Mirrored,
-						poly.Normal
+						basis.Normal
 					);
 					yield break;
 				}
 
 				case MText mtext:
 				{
+					// MTEXT's insertion point is in world coordinates, unlike
+					// TEXT's below, so there is no lift on this arm.
 					Basis basis = place.Basis;
-					bool identity = place.IsIdentity;
 					XYZ p = place.Apply(mtext.InsertPoint);
 					yield return Primitive.TextAt(
 						h,
@@ -815,7 +1025,7 @@ namespace Viprs.Cad
 						p.Y,
 						p.Z,
 						mtext.Height * basis.ScaleY,
-						mtext.Rotation + (identity ? 0.0 : basis.Rotation),
+						mtext.Rotation + basis.Turn,
 						mtext.Value ?? string.Empty
 					);
 					yield break;
@@ -826,9 +1036,19 @@ namespace Viprs.Cad
 				// actually shows.
 				case TextEntity text:
 				{
-					Basis basis = place.Basis;
-					bool identity = place.IsIdentity;
-					XYZ p = place.Apply(text.InsertPoint);
+					// TEXT's insertion point is in the plane its normal
+					// defines, so it is lifted the way an arc's centre is.
+					//
+					// The rotation is not, and cannot be: record 10 carries no
+					// normal, so there is nowhere to tell a consumer which
+					// plane the angle is measured in, and the in-plane angle is
+					// the closest this version gets. Giving Text a normal is a
+					// wire change and is not this one. Lifting the point is
+					// still right on its own: an unlifted one is not in the
+					// drawing at all.
+					Placement ocs = place.WithOcs(text.Normal, 0.0);
+					Basis basis = ocs.Basis;
+					XYZ p = ocs.Apply(text.InsertPoint);
 					yield return Primitive.TextAt(
 						h,
 						flags,
@@ -836,7 +1056,7 @@ namespace Viprs.Cad
 						p.Y,
 						p.Z,
 						text.Height * basis.ScaleY,
-						text.Rotation + (identity ? 0.0 : basis.Rotation),
+						text.Rotation + basis.Turn,
 						text.Value ?? string.Empty
 					);
 					yield break;
@@ -963,13 +1183,26 @@ namespace Viprs.Cad
 			);
 		}
 
+		// What the warning says, which used to be false on the input it was
+		// most likely to be read on.
+		//
+		// It read "a block transform that is not a similarity, so its
+		// parameters describe a shape the transform does not preserve". A
+		// reflection is not a similarity and it preserves every shape exactly;
+		// what it does not preserve is handedness, and every record that has a
+		// handedness now follows it. What is left is the case the code name has
+		// always claimed: a transform that scales the entity's plane by
+		// different amounts in different directions, under which a circle is an
+		// ellipse and a bulge is an elliptical arc.
 		private static Primitive NonUniform(ulong handle, uint flags, string what)
 		{
 			Primitive w = Primitive.Warning(
 				WarningCodes.NonUniformBlockScale,
 				handle,
-				what + " crossed under a block transform that is not a similarity, so its "
-					+ "parameters describe a shape the transform does not preserve"
+				what + " crossed under a block transform that does not scale its plane "
+					+ "uniformly, so the shape its parameters describe is stretched in "
+					+ "the drawing and they no longer name it. A reflection is not this "
+					+ "case and raises nothing: a mirror is exact"
 			);
 			w.Flags = flags;
 			return w;
@@ -1033,7 +1266,16 @@ namespace Viprs.Cad
 		{
 			ulong h = hatch.Handle;
 			uint flags = item.Depth > 0 ? FlagFromBlock : 0u;
-			Placement place = item.Placement;
+
+			// A hatch's boundary is in the plane its normal and elevation
+			// define, and so is every edge upstream hands back from
+			// Edge.ToEntity(), which builds one with a z of zero and a normal
+			// of +Z whatever the hatch says. Composing the hatch's own system
+			// into the placement once puts both paths in the right plane at the
+			// same time: the polygon's vertices go through it, and so does
+			// every edge entity the not-a-polygon path emits as a record of its
+			// own, because those go back onto the walk carrying this placement.
+			Placement place = item.Placement.WithOcs(hatch.Normal, hatch.Elevation);
 			int loops = 0;
 
 			foreach (Hatch.BoundaryPath path in hatch.Paths)
@@ -1046,7 +1288,7 @@ namespace Viprs.Cad
 				loops++;
 				double[] pts;
 				double[] bulges;
-				if (TryPolygon(path, hatch.Elevation, place, out pts, out bulges))
+				if (TryPolygon(path, place, out pts, out bulges))
 				{
 					CheckPointCount(pts.Length / 3, "a Polygon record");
 
@@ -1061,7 +1303,7 @@ namespace Viprs.Cad
 					}
 
 					Basis basis = place.Basis;
-					if (!place.IsIdentity && !basis.IsUniform && anyBulge)
+					if (!basis.Uniform && anyBulge)
 					{
 						Primitive squashed = NonUniform(h, flags, "HATCH");
 						yield return new Pending { Record = squashed, Depth = item.Depth };
@@ -1069,7 +1311,7 @@ namespace Viprs.Cad
 
 					yield return new Pending
 					{
-						Record = OnePolygon(h, flags, pts, bulges, basis.Mirrored, hatch.Normal),
+						Record = OnePolygon(h, flags, pts, bulges, basis.Mirrored, basis.Normal),
 						Depth = item.Depth,
 					};
 					continue;
@@ -1157,7 +1399,6 @@ namespace Viprs.Cad
 		// means.
 		private static bool TryPolygon(
 			Hatch.BoundaryPath path,
-			double elevation,
 			Placement place,
 			out double[] points,
 			out double[] bulges
@@ -1173,7 +1414,7 @@ namespace Viprs.Cad
 				switch (edge)
 				{
 					case Hatch.BoundaryPath.Line line:
-						Append(pts, place, new XYZ(line.Start.X, line.Start.Y, elevation));
+						Append(pts, place, new XYZ(line.Start.X, line.Start.Y, 0.0));
 						bs.Add(0.0);
 						break;
 
@@ -1186,7 +1427,7 @@ namespace Viprs.Cad
 							return false;
 						}
 
-						Append(pts, place, new XYZ(start.X, start.Y, elevation));
+						Append(pts, place, new XYZ(start.X, start.Y, 0.0));
 						bs.Add(bulge);
 						break;
 					}
@@ -1197,7 +1438,7 @@ namespace Viprs.Cad
 						// upstream's own storage and not a coordinate.
 						foreach (XYZ v in poly.Vertices)
 						{
-							Append(pts, place, new XYZ(v.X, v.Y, elevation));
+							Append(pts, place, new XYZ(v.X, v.Y, 0.0));
 							bs.Add(v.Z);
 						}
 
