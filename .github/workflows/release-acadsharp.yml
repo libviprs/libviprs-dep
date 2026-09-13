@@ -255,10 +255,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: linux, cpu: x64, runner: ubuntu-latest }
-          - { platform: linux, cpu: arm64, runner: ubuntu-24.04-arm }
-          - { platform: musl, cpu: x64, runner: ubuntu-latest }
-          - { platform: musl, cpu: arm64, runner: ubuntu-24.04-arm }
+          - { platform: linux, cpu: x64, arch: amd64, runner: ubuntu-latest }
+          - { platform: linux, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm }
+          - { platform: musl, cpu: x64, arch: amd64, runner: ubuntu-latest }
+          - { platform: musl, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -270,6 +270,14 @@ jobs:
           python-version: "3.12"
 
       - name: Build ${{ matrix.platform }}/${{ matrix.cpu }}
+        # --arch, not --cpu. The driver speaks amd64/arm64 at the CLI,
+        # like build_zstd.py and build_pdfium.py before it, while the
+        # archive name and the verifier's third argument speak x64/arm64.
+        # Each cell carries both rather than leaning on the driver's
+        # ARCH_ALIASES to paper over the difference, so the two
+        # vocabularies stay visible and a mismatched cell is a thing a
+        # test can see.
+        #
         # No --upload. The driver can publish by itself, and doing that
         # here would put the archive on the release page before the
         # verifier had looked at it, which makes the verification
@@ -279,7 +287,7 @@ jobs:
         run: |
           python3 acadsharp/build_acadsharp.py \
             --platform ${{ matrix.platform }} \
-            --cpu ${{ matrix.cpu }}
+            --arch ${{ matrix.arch }}
 
       - name: Verify the ${{ matrix.platform }}/${{ matrix.cpu }} archive
         # Named rather than globbed on purpose: a glob that matches
@@ -317,7 +325,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: mac, cpu: arm64 }
+          - { platform: mac, cpu: arm64, arch: arm64 }
     runs-on: macos-15
     timeout-minutes: 60
     permissions:
@@ -339,7 +347,7 @@ jobs:
         run: |
           python3 acadsharp/build_acadsharp.py \
             --platform ${{ matrix.platform }} \
-            --cpu ${{ matrix.cpu }}
+            --arch ${{ matrix.arch }}
 
       - name: Verify the ${{ matrix.platform }}/${{ matrix.cpu }} archive
         run: |

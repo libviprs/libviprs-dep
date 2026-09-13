@@ -23,12 +23,17 @@ so ``TestReleaseNotesAreGenerated`` asserts the workflow reads each
 manifest by name and carries no copy of the version, the SDK pin or the
 DWG range as a literal.
 
-``build_acadsharp.py`` does not carry ``archive_name()``,
-``release_tag()`` or a default matrix yet: issue #48 is writing them in
-parallel with this workflow. Everything here asserts against the
+``build_acadsharp.py`` grows ``archive_name()``, ``release_tag()``,
+``resolve_jobs()`` and a default matrix in issue #48, which was written
+in parallel with this workflow. Everything here asserts against the
 contract that issue freezes, and ``TestTheDriverSpeaksTheSameContract``
-re-asserts the same values *through the driver* as soon as those
-functions exist, so the two lanes cannot drift apart quietly.
+re-asserts the same values *through the driver* as soon as those exist.
+That is not decoration: this workflow shipped passing ``--cpu`` to the
+driver, which takes ``--arch``, and those tests are what caught it the
+moment the two branches were composed. They stay skipped on a branch
+that does not have the driver, so composing is the only place they can
+speak. Running this file alone, or this branch alone, would not have
+found it.
 """
 
 import hashlib
@@ -67,16 +72,36 @@ ABI_HEADER = os.path.join(ACADSHARP_DIR, "include", "viprs_acadsharp.h")
 UNPUBLISHED_MARKER = "No archives are published yet"
 
 # ---------------------------------------------------------------------------
-# The contract issue #48 freezes.
+# The contract issue #48 freezes, in the two vocabularies it is written in.
 #
 # Archive names are <dep>-<platform>-<cpu>.tgz with platform in
 # linux | musl | mac and cpu in x64 | arm64, which is what
 # pdfium/tests/test_naming.py and zstd/tests/test_zstd_naming.py already
 # pin for the other two dependencies and what the verifier infers from a
 # filename. The version lives in the release tag, not the archive name.
+#
+# The drivers' CLI speaks a different word for the same thing: --arch
+# takes amd64 | arm64, and build_acadsharp.py follows build_zstd.py and
+# build_pdfium.py in that. So a cell has both, and CPU_FOR_ARCH is the
+# only place the two are tied together. I had the workflow passing --cpu
+# to the driver, which the driver does not accept; the tests below now
+# hold each vocabulary against the side that actually speaks it.
 # ---------------------------------------------------------------------------
-DEFAULT_CELLS = [("linux", "x64"), ("linux", "arm64"), ("musl", "x64"), ("musl", "arm64")]
-MAC_CELLS = [("mac", "arm64")]
+CPU_FOR_ARCH = {"amd64": "x64", "arm64": "arm64"}
+
+# (platform, arch): what the CLI and the driver's default matrix speak.
+DEFAULT_JOBS_EXPECTED = [
+    ("linux", "amd64"),
+    ("linux", "arm64"),
+    ("musl", "amd64"),
+    ("musl", "arm64"),
+]
+MAC_JOBS_EXPECTED = [("mac", "arm64")]
+ALL_JOBS_EXPECTED = DEFAULT_JOBS_EXPECTED + MAC_JOBS_EXPECTED
+
+# (platform, cpu): what the archive name and the verifier speak.
+DEFAULT_CELLS = [(p, CPU_FOR_ARCH[a]) for p, a in DEFAULT_JOBS_EXPECTED]
+MAC_CELLS = [(p, CPU_FOR_ARCH[a]) for p, a in MAC_JOBS_EXPECTED]
 ALL_CELLS = DEFAULT_CELLS + MAC_CELLS
 
 TAG_PREFIX = "acadsharp-"
@@ -519,6 +544,40 @@ class TestMatrixCoversEveryArchive:
             )
             assert cell["platform"] in ("linux", "musl", "mac"), (
                 f"{cell} names a platform the archive naming convention does not use"
+            )
+
+    def test_every_cell_carries_both_vocabularies_and_they_agree(self):
+        # A cell says `arch: amd64` to the driver and `cpu: x64` to the
+        # verifier and the archive name. Nothing in the workflow ties
+        # those together, so a cell with `arch: arm64, cpu: x64` would
+        # build one target and then verify and upload another, under a
+        # name that the build never produced. The driver's ARCH_ALIASES
+        # would happily accept `--arch x64` and hide the whole problem,
+        # which is the reason both are spelled out rather than derived.
+        for cell in self.cells:
+            assert "arch" in cell, f"{cell} has no arch, so the Build step has nothing to pass"
+            assert cell["arch"] in CPU_FOR_ARCH, (
+                f"{cell} names an arch the drivers' CLI does not take"
+            )
+            assert CPU_FOR_ARCH[cell["arch"]] == cell["cpu"], (
+                f"{cell} builds {cell['arch']} and then names the archive "
+                f"{cell['cpu']}, so it would verify and upload a target it did not build"
+            )
+
+    def test_the_build_step_selects_the_cell_by_arch(self):
+        # The flag the driver takes is --arch. It was --cpu here, which
+        # the driver rejects, and nothing in this file noticed until
+        # build_acadsharp.py grew a CLI to be checked against.
+        wf = load_workflow()
+        for name in BUILD_JOBS:
+            job = wf["jobs"][name]
+            run = job["steps"][step_index(job, "Build")].get("run", "")
+            assert "--arch ${{ matrix.arch }}" in run, (
+                f"{name}'s Build step does not select its cell with --arch ${{{{ matrix.arch }}}}"
+            )
+            assert "--cpu" not in run, (
+                f"{name}'s Build step passes --cpu, which build_acadsharp.py, "
+                "build_zstd.py and build_pdfium.py all reject"
             )
 
     def test_the_archive_name_is_built_from_the_cell(self):
@@ -1019,17 +1078,43 @@ class TestTheDriverSpeaksTheSameContract:
         assert release_tag(version) == f"{TAG_PREFIX}{version}"
 
     def test_archive_names_match_the_workflow(self):
+        # archive_name takes the CLI's arch and returns the name's cpu.
+        # It is the function that crosses between the two vocabularies,
+        # so it is the one worth asking rather than assuming.
         archive_name = driver_attr("archive_name")
         if archive_name is None:
             pytest.skip("build_acadsharp.archive_name() lands with issue #48")
-        for platform, cpu in ALL_CELLS:
-            assert archive_name(platform, cpu) == expected_archive(platform, cpu)
+        for platform, arch in ALL_JOBS_EXPECTED:
+            assert archive_name(platform, arch) == expected_archive(platform, CPU_FOR_ARCH[arch])
 
     def test_the_default_matrix_matches_the_container_cells(self):
         default_jobs = driver_attr("DEFAULT_JOBS")
         if default_jobs is None:
             pytest.skip("build_acadsharp.DEFAULT_JOBS lands with issue #48")
-        assert sorted(tuple(cell) for cell in default_jobs) == sorted(DEFAULT_CELLS)
+        assert sorted(tuple(cell) for cell in default_jobs) == sorted(DEFAULT_JOBS_EXPECTED)
+
+    def test_the_workflows_cells_are_what_the_driver_resolves(self):
+        # The end-to-end version of the two above: hand the driver the
+        # flags each cell actually passes and check it comes back with
+        # that one cell. This is the assertion that would have caught
+        # --cpu directly, rather than through the flag-name check.
+        resolve_jobs = driver_attr("resolve_jobs")
+        if resolve_jobs is None:
+            pytest.skip("build_acadsharp.resolve_jobs() lands with issue #48")
+        wf = load_workflow()
+        cells = matrix_cells(wf["jobs"]["build-linux"]) + matrix_cells(wf["jobs"]["build-mac"])
+        for cell in cells:
+            got = resolve_jobs([cell["platform"]], cell["arch"])
+            assert got == [(cell["platform"], cell["arch"])], (
+                f"the driver resolves --platform {cell['platform']} --arch "
+                f"{cell['arch']} to {got}, not to that one cell"
+            )
+
+    def test_the_container_cells_are_what_the_driver_builds_by_default(self):
+        resolve_jobs = driver_attr("resolve_jobs")
+        if resolve_jobs is None:
+            pytest.skip("build_acadsharp.resolve_jobs() lands with issue #48")
+        assert resolve_jobs(None, None) == DEFAULT_JOBS_EXPECTED
 
     def test_the_verifier_the_workflow_calls_exists(self):
         script = os.path.join(REPO_ROOT, VERIFIER)
