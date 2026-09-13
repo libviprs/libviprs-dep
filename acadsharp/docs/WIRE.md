@@ -327,9 +327,12 @@ reports the inverted box instead, `min_x` and `min_y` at `1e20` and `max_x` and
 "this view has no usable extents", which is a comparison it can actually make,
 and `1e20` is not to be read as an extent.
 
-The box does not say why. A view that is empty and a view whose extents the
-drawing has damaged report the same box, and nothing else on this wire tells
-them apart.
+The box does not say why, on its own. A view that is empty and a view whose
+extents the drawing has damaged report the same box, so the code below that
+goes with it is `EMPTY_VIEW`, which a view emits when it produced no geometry
+record at all. The two are read together: this box, that warning, and no other
+warning in the view is a drawing with nothing in it, and the same pair with
+other warnings beside it is a drawing something went wrong reading.
 
 A consumer should still refuse a non-finite `f64` in a geometry record rather
 than trust the guarantee, because the bytes may not have come from this
