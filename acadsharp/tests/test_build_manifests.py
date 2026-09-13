@@ -340,3 +340,119 @@ class TestChecksums:
             text = f.read()
         assert "include/viprs_acadsharp.h" in text
         assert str(tmp_path) not in text
+
+
+class TestTheGeneratedStagingScript:
+    """The script that measures the link facts is generated, so its holes
+    have to be filled. A placeholder left in place would be a shell script
+    that runs and silently records nothing."""
+
+    @pytest.mark.parametrize("plat", ["linux", "musl", "mac"])
+    def test_no_placeholder_survives_substitution(self, plat):
+        script = ba.stage_script(plat)
+        assert "RUNTIME_ARCHIVE_LIST" not in script
+        assert "STATIC_SYSTEM_LIBRARY_LADDER" not in script
+
+    def test_it_forces_the_runtime_initialiser_it_finds(self):
+        # libbootstrapperdll.o defines no global symbol at all, so nothing
+        # can pull it out of an archive and the first managed call aborts.
+        # The merge globalises the initialiser and the link forces it.
+        script = ba.stage_script("linux")
+        assert "--globalize-symbol" in script
+        assert "_GLOBAL__sub_I" in script
+        assert "-Wl,-u," in script
+
+    def test_it_does_not_reach_for_the_symbol_that_no_longer_exists(self):
+        # Comments come out first: the script explains at length why that
+        # symbol is gone, and a whole-file grep would fire on the prose
+        # explaining the rule. zstd/tests/test_ci_coverage.py grew
+        # `without_comments()` for exactly this.
+        for plat in ("linux", "musl", "mac"):
+            code = "\n".join(
+                line
+                for line in ba.stage_script(plat).splitlines()
+                if not line.lstrip().startswith("#")
+            )
+            assert ba.DEAD_STATIC_INIT_SYMBOL not in code
+
+    def test_the_system_library_ladder_starts_narrow(self):
+        # Recording more than the link needs would make every consumer
+        # carry flags nothing measured.
+        for plat, ladder in ba.STATIC_SYSTEM_LIBRARY_LADDER.items():
+            assert ladder[0] == "m", plat
+            for rung, wider in zip(ladder, ladder[1:]):
+                assert set(rung.split()) < set(wider.split())
+
+    def test_only_one_of_each_mutually_exclusive_runtime_archive(self):
+        # Merging both GC flavours, or both eventpipe flavours, is a
+        # duplicate-symbol link error rather than belt and braces.
+        for a, b in (
+            ("libRuntime.WorkstationGC.a", "libRuntime.ServerGC.a"),
+            ("libeventpipe-disabled.a", "libeventpipe-enabled.a"),
+            ("libstandalonegc-disabled.a", "libstandalonegc-enabled.a"),
+        ):
+            assert (a in ba.RUNTIME_ARCHIVES) != (b in ba.RUNTIME_ARCHIVES)
+
+
+class TestTheGeneratedSmokes:
+    def test_the_shared_smoke_resolves_every_entry_point(self):
+        source = ba.archive_smoke_source()
+        for name in ba.header_entry_points():
+            assert f'"{name}",' in source
+
+    def test_the_shared_smoke_checks_the_live_fingerprint(self):
+        source = ba.archive_smoke_source()
+        assert "viprs_acad_abi_fingerprint" in source
+        assert "ABI_FINGERPRINT=" in source
+
+    def test_the_static_smoke_references_every_entry_point(self):
+        source = ba.static_smoke_source()
+        for name in ba.header_entry_points():
+            assert name in source
+
+
+class TestAnUncertifiedStaticLibraryIsNotShipped:
+    def _stage(self, tmp_path, facts):
+        root = tmp_path / "acadsharp-linux-x64"
+        (root / "lib").mkdir(parents=True)
+        (root / "include").mkdir()
+        (root / "lib" / ba.STATIC_LIBRARY_NAME).write_bytes(b"!<arch>\n")
+        (root / "lib" / "libacadsharp_native.so").write_bytes(b"x")
+        ba.finish_archive(str(root), "linux", "amd64", facts, builder_image="debian:bookworm-slim")
+        return root
+
+    def test_a_failed_static_smoke_removes_the_archive(self, tmp_path):
+        # A managed-only or unlinkable `.a` is useless to a consumer, and
+        # shipping one invites a link nobody has watched succeed.
+        root = self._stage(tmp_path, {"static_ok": "0", "aot_warning_count": "16"})
+        assert not (root / "lib" / ba.STATIC_LIBRARY_NAME).exists()
+        with open(root / "metadata" / "LINKINFO.json") as f:
+            info = json.load(f)
+        assert "static_library" not in info
+        assert info["static_certified"] is False
+
+    def test_a_passed_static_smoke_keeps_it_and_records_the_link(self, tmp_path):
+        root = self._stage(
+            tmp_path,
+            {
+                "static_ok": "1",
+                "aot_warning_count": "16",
+                "static_system_libraries": "m",
+                "static_link_args": "-Wl,-u,_GLOBAL__sub_I_main.cpp",
+            },
+        )
+        assert (root / "lib" / ba.STATIC_LIBRARY_NAME).exists()
+        with open(root / "metadata" / "LINKINFO.json") as f:
+            info = json.load(f)
+        assert info["static_certified"] is True
+        assert info["system_libraries"] == ["m"]
+        assert info["link_args"] == ["-Wl,-u,_GLOBAL__sub_I_main.cpp"]
+
+    def test_a_shared_only_target_records_what_the_library_needs(self, tmp_path):
+        root = self._stage(
+            tmp_path, {"static_ok": "0", "aot_warning_count": "16", "shared_needed": "m"}
+        )
+        with open(root / "metadata" / "LINKINFO.json") as f:
+            info = json.load(f)
+        assert info["system_libraries"] == ["m"]
+        assert info["link_args"] == []
