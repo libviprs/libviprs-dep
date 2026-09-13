@@ -40,6 +40,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -207,6 +208,19 @@ def step_named(job, name_substr):
 
 def matrix_cells(job):
     return job["strategy"]["matrix"]["include"]
+
+
+def build_command_for(job, cell):
+    """The Build step's own command line, with one matrix cell filled in.
+
+    Reconstructed from the step rather than retyped, so what gets run is
+    what the runner would run, line continuations and all.
+    """
+    run = job["steps"][step_index(job, "Build")]["run"]
+    line = " ".join(run.replace("\\\n", " ").split())
+    for key, value in cell.items():
+        line = line.replace("${{ matrix." + key + " }}", str(value))
+    return shlex.split(line)
 
 
 def run_text(job):
@@ -1121,6 +1135,45 @@ class TestTheDriverSpeaksTheSameContract:
         if not os.path.exists(script):
             pytest.skip(f"{VERIFIER} lands with issue #48")
         assert os.access(script, os.X_OK), f"{VERIFIER} is not executable"
+
+    def test_the_build_step_command_actually_plans_the_right_archive(self):
+        # The strongest form of this seam, and the one that would have
+        # caught --cpu on its own: take the Build step's real command
+        # line, substitute the cell, and run it with --plan. That goes
+        # through the driver's argparse and its own resolution, so a flag
+        # it rejects, a cell it resolves to something else, and an archive
+        # it would name differently all fail here. --plan prints the
+        # commands and stops, so nothing is built and no container starts.
+        help_text = driver_help()
+        if "--plan" not in help_text or "--platform" not in help_text:
+            pytest.skip("build_acadsharp.py grows --platform/--arch/--plan with issue #48")
+
+        wf = load_workflow()
+        for name in BUILD_JOBS:
+            job = wf["jobs"][name]
+            for cell in matrix_cells(job):
+                argv = build_command_for(job, cell)
+                assert not any("${{" in a for a in argv), (
+                    f"{name}: {argv} still carries an unsubstituted expression, so "
+                    "this check is running something the workflow does not"
+                )
+                done = subprocess.run(
+                    [sys.executable, *argv[1:], "--plan"],
+                    capture_output=True,
+                    text=True,
+                    cwd=REPO_ROOT,
+                    check=False,
+                )
+                assert done.returncode == 0, (
+                    f"{name} {cell['platform']}/{cell['cpu']}: the driver refused "
+                    f"{' '.join(argv[1:])}\n{done.stdout}{done.stderr}"
+                )
+                wanted = expected_archive(cell["platform"], cell["cpu"])
+                assert wanted in done.stdout, (
+                    f"{name} {cell['platform']}/{cell['cpu']}: the driver plans "
+                    f"something other than {wanted}, which is the archive this cell "
+                    f"goes on to verify and upload\n{done.stdout}"
+                )
 
     def test_the_build_step_passes_flags_the_driver_accepts(self):
         # The workflow selects a cell with --platform/--cpu, mirroring
