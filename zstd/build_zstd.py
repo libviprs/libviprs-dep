@@ -864,6 +864,28 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
 # ---------------------------------------------------------------------------
 
 
+def release_notes(version):
+    """Body of the ``zstd-<version>`` release.
+
+    Kept here rather than in the workflow so a release cut by CI and one
+    cut by a local ``--upload`` read the same, digest included. Raises
+    ``ValueError`` for a version with no pinned source hash, which is
+    the same refusal the build makes.
+    """
+    return (
+        f"zstd {version} built from source.\n\n"
+        "Each archive contains:\n"
+        "- `lib/libzstd.a` — static archive\n"
+        "- `lib/libzstd.so` (`.dylib` on mac) — shared library\n"
+        "- `lib/pkgconfig/libzstd.pc` — relocatable pkg-config file\n"
+        "- `include/` — public C headers\n"
+        "- `cmake-args.txt` — the exact CMake configure flags used\n"
+        "- `LICENSE` — zstd's own licence\n\n"
+        f"Source: {source_url(version)}\n"
+        f"sha256: `{source_sha256(version)}`"
+    )
+
+
 def upload_release(version, built_files):
     """Create or update the zstd-<version> Release with the built assets.
 
@@ -880,18 +902,7 @@ def upload_release(version, built_files):
 
     if not exists:
         print(f"Release '{tag}' doesn't exist, creating...", flush=True)
-        notes = (
-            f"zstd {version} built from source.\n\n"
-            "Each archive contains:\n"
-            "- `lib/libzstd.a` — static archive\n"
-            "- `lib/libzstd.so` (`.dylib` on mac) — shared library\n"
-            "- `lib/pkgconfig/libzstd.pc` — relocatable pkg-config file\n"
-            "- `include/` — public C headers\n"
-            "- `cmake-args.txt` — the exact CMake configure flags used\n"
-            "- `LICENSE` — zstd's own licence\n\n"
-            f"Source: {source_url(version)}\n"
-            f"sha256: `{source_sha256(version)}`"
-        )
+        notes = release_notes(version)
         subprocess.run(
             [
                 "gh",

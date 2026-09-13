@@ -1,6 +1,6 @@
 # zstd
 
-Pre-compiled [zstd](https://github.com/facebook/zstd) libraries for [libviprs](https://github.com/libviprs/libviprs). Built from source and published as GitHub Releases on this repo.
+Pre-compiled [zstd](https://github.com/facebook/zstd) libraries for [libviprs](https://github.com/libviprs/libviprs). Built from source here and published as GitHub Releases on this repo. No release has been cut yet, so see [Download](#download).
 
 zstd is the compression codec behind libviprs' packfile support. Today `libviprs --features packfile` pulls in `zip` → `zstd` → `zstd-safe` → `zstd-sys`, and `zstd-sys`' build script compiles 216 vendored C files on every clean build. `zstd-sys` already knows how to link a prebuilt library instead (it has a `pkg-config` feature and honours `ZSTD_SYS_USE_PKG_CONFIG`), so publishing the library here removes that compile without forking anything.
 
@@ -18,15 +18,17 @@ That number is not a guess at "latest". `libviprs` gets zstd through `zstd-sys v
 
 ## Download
 
-Archives are attached to the [`zstd-1.5.7`](https://github.com/libviprs/libviprs-dep/releases/tag/zstd-1.5.7) release:
+**No archives are published yet.** There is no `zstd-1.5.7` release on this repo, so there is no URL to hand you. Build them yourself with [Building from source](#building-from-source), or cut the release with [Publishing](#publishing). This section gets the six URLs and their sha256s the day that runs.
+
+The six archives the build produces, which is what a release carries:
 
 ```
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-linux-x64.tgz
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-linux-arm64.tgz
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-musl-x64.tgz
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-musl-arm64.tgz
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-mac-arm64.tgz
-https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-mac-x64.tgz
+zstd-linux-x64.tgz
+zstd-linux-arm64.tgz
+zstd-musl-x64.tgz
+zstd-musl-arm64.tgz
+zstd-mac-arm64.tgz
+zstd-mac-x64.tgz
 ```
 
 | Archive suffix | libc | Compatible runtime |
@@ -98,7 +100,7 @@ python3 zstd/build_zstd.py --platform mac --arch arm64
 # Everything at once
 python3 zstd/build_zstd.py --parallel
 
-# Build, verify, and publish to the zstd-<version> GitHub Release
+# Build, verify, and publish to the zstd-<version> GitHub Release (see Publishing)
 python3 zstd/build_zstd.py --upload
 ```
 
@@ -148,6 +150,32 @@ The same list is written into `cmake-args.txt` inside every archive, so a consum
 
 The script understands both GNU and BSD `ar` layouts, because a macOS archive stores long member names inside the member data (`#1/<len>`) and a linux one doesn't.
 
+## Publishing
+
+`.github/workflows/release-zstd.yml` cuts the release, so a version bump ships the same way pdfium's does rather than from whoever owns a Mac that week. It reads `zstd/VERSION`, refuses a version with no `SOURCE_SHA256` entry before anything builds, creates the `zstd-<version>` release, and then runs one job per cell: four `ubuntu-latest` jobs for `{linux, musl} × {amd64, arm64}` (the arm64 pair under QEMU, registered per job) and two `macos-15` jobs for the mac slices. Every job builds, runs `scripts/verify_archive.sh` over the archive it just produced, and only then uploads it with `gh release upload --clobber`. `--upload` is deliberately not passed to the driver there, because that would publish before the verifier got a look.
+
+Two ways to fire it:
+
+- Merge the bump into the `release` branch. That is the push that publishes pdfium too.
+- Run it by hand (`workflow_dispatch`), optionally overriding the version. The first publish of a version that is already committed changes no file, so there is nothing to push, which makes this the way to cut `zstd-1.5.7`.
+
+The local path still works and runs the same checks:
+
+```bash
+python3 zstd/build_zstd.py --parallel --upload
+```
+
+It needs Docker for the four Linux cells and a macOS host for the two mac ones, which is the whole reason the workflow exists.
+
+Once a release is up, put the six URLs and their digests into [Download](#download) and drop the note saying there are none:
+
+```bash
+gh release download zstd-1.5.7 -R libviprs/libviprs-dep
+shasum -a 256 zstd-linux-x64.tgz zstd-linux-arm64.tgz zstd-musl-x64.tgz zstd-musl-arm64.tgz zstd-mac-arm64.tgz zstd-mac-x64.tgz
+```
+
+`tests/test_zstd_version.py` fails if the README ends up claiming both or neither, and if URLs appear without digests beside them.
+
 ## Testing
 
 ```bash
@@ -158,10 +186,11 @@ pytest zstd/tests -v
 | File | What it covers |
 | --- | --- |
 | `test_zstd_naming.py` | Archive / staging directory / release tag naming, and that they agree with each other |
-| `test_zstd_version.py` | `VERSION` parses, has a pinned source hash, and matches the download URLs in this README |
+| `test_zstd_version.py` | `VERSION` parses, has a pinned source hash, drives the release notes, and agrees with what this README claims about the release |
 | `test_zstd_dockerfile.py` | Generated Dockerfile per platform and arch: base image, pinned checksum, CMake flags, step ordering |
 | `test_zstd_resolve_jobs.py` | `--platform` / `--arch` resolution and arch aliases |
 | `test_zstd_verify_archive.py` | Builds a real archive with the host compiler, then breaks it one way at a time and asserts `verify_archive.sh` rejects each break |
+| `test_zstd_release_workflow.py` | `release-zstd.yml`: what triggers it, that an unpinned version stops it before any build, that every cell the driver builds is in the matrix, and that verify runs between build and upload |
 | `test_ci_coverage.py` | That CI's paths are discovered from the tree rather than hardcoded, so the next dependency directory is covered the day it lands |
 
 ## Reference

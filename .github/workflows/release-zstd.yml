@@ -1,0 +1,264 @@
+name: Release zstd
+
+# Publishes every archive build_zstd.py knows how to make to the
+# zstd-<version> GitHub Release. Separate from release.yml because that
+# one is pdfium-shaped end to end (chromium branch input, lipo'd
+# universal job, its own summary table) and because a zstd flake should
+# not colour a pdfium release run red. Both fire on a push to `release`,
+# so a merge there publishes whichever versions changed; zstd's matrix
+# is minutes rather than hours, and `gh release upload --clobber` makes
+# a repeat run a no-op in effect.
+#
+# Same split as release.yml inside each job: build, then verify, then
+# upload, so an archive that fails zstd/scripts/verify_archive.sh never
+# reaches the release page. `--upload` is deliberately not passed to the
+# driver here, because that would publish before the verifier ran.
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "zstd version to publish (overrides zstd/VERSION)"
+        required: false
+
+concurrency:
+  # Two overlapping runs would race on the same tag's assets. Serialize
+  # per ref, and don't cancel: a release that is halfway through six
+  # uploads is worth finishing.
+  group: release-zstd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve zstd version
+        id: v
+        # The dispatch input arrives through `env:` rather than being
+        # interpolated into the script. Every other value in this file already
+        # does that; this one was the exception, and a `${{ }}` spliced straight
+        # into bash is the shape that turns a workflow input into shell.
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          set -eu
+          if [ -n "$REQUESTED" ]; then
+            V="$REQUESTED"
+          else
+            V="$(tr -d '[:space:]' < zstd/VERSION)"
+          fi
+          [ -n "$V" ] || { echo "zstd/VERSION is empty" >&2; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=zstd-$V" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse a version with no pinned source hash
+        # A VERSION bump with no matching SOURCE_SHA256 entry means the
+        # build would download whatever upstream serves that day. The
+        # driver already refuses; this asks it the same question up
+        # front, in the job everything else depends on, so the run dies
+        # red here instead of six jobs later.
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -eu
+          python3 - "$VERSION" <<'PY'
+          import importlib.util
+          import sys
+
+          spec = importlib.util.spec_from_file_location("build_zstd", "zstd/build_zstd.py")
+          driver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(driver)
+          try:
+              print("pinned sha256:", driver.source_sha256(sys.argv[1]))
+          except ValueError as exc:
+              sys.exit(str(exc))
+          PY
+
+  create-release:
+    # Created up front so the fan-out jobs never race on `gh release
+    # create`. Re-running is safe: an existing tag is left alone and the
+    # uploads below use --clobber.
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create or confirm release
+        # The notes come from build_zstd.release_notes so a release cut
+        # from here reads exactly like one cut by `--upload` from a
+        # laptop, including the pinned source digest.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          python3 - "$VERSION" > release-notes.md <<'PY'
+          import importlib.util
+          import sys
+
+          spec = importlib.util.spec_from_file_location("build_zstd", "zstd/build_zstd.py")
+          driver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(driver)
+          print(driver.release_notes(sys.argv[1]))
+          PY
+          gh release create "$TAG" --title "zstd $VERSION" --notes-file release-notes.md
+
+  build-linux:
+    # The four Docker cells, one job each, fail-fast off so a musl/arm64
+    # flake doesn't discard three good archives.
+    needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux, arch: amd64, cpu: x64 }
+          - { platform: linux, arch: arm64, cpu: arm64 }
+          - { platform: musl, arch: amd64, cpu: x64 }
+          - { platform: musl, arch: arm64, cpu: arm64 }
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Register QEMU for the foreign-architecture cells
+        # Nothing is cross-compiled: each cell builds in a container of
+        # the target architecture, so an arm64 cell on an x86_64 runner
+        # needs binfmt handlers registered or `docker build
+        # --platform=linux/arm64` fails before it starts. zstd is small
+        # enough that emulation costs minutes.
+        if: matrix.arch == 'arm64'
+        # Pinned to a commit rather than the `v3` tag. This is the only
+        # third-party action in the repo, it runs in a job that declares
+        # `contents: write` and publishes release assets, and its own job is to
+        # `docker run --privileged` a binfmt image, so a moved tag would be
+        # executing privileged code next to a token that can rewrite releases.
+        # c7c5346 is what `v3` pointed at when this landed. Upstream is on
+        # v4.3.0; moving majors is a separate, reviewable change.
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+
+      - name: Build ${{ matrix.platform }}/${{ matrix.arch }}
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          python3 zstd/build_zstd.py "$VERSION" \
+            --platform ${{ matrix.platform }} \
+            --arch ${{ matrix.arch }}
+
+      - name: Verify zstd-${{ matrix.platform }}-${{ matrix.cpu }}.tgz
+        # Named rather than globbed on purpose: a glob that matches
+        # nothing verifies nothing and still exits 0, which is a pass
+        # reported for a check that never ran.
+        run: bash zstd/scripts/verify_archive.sh "bin/zstd-${{ matrix.platform }}-${{ matrix.cpu }}.tgz"
+
+      - name: Upload release asset ${{ matrix.platform }}/${{ matrix.cpu }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: gh release upload "$TAG" "bin/zstd-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" --clobber
+
+      - name: Upload build logs on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.platform }}-${{ matrix.arch }}
+          path: bin/logs/
+          if-no-files-found: warn
+
+  build-mac:
+    # macOS has no container image, so these two build natively with the
+    # host CMake. macos runners are Apple Silicon; the x86_64 slice is
+    # produced with -DCMAKE_OSX_ARCHITECTURES and its smoke test links
+    # but does not run, which the driver already handles.
+    needs: [resolve-version, create-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: mac, arch: arm64, cpu: arm64 }
+          - { platform: mac, arch: amd64, cpu: x64 }
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build mac/${{ matrix.arch }}
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          python3 zstd/build_zstd.py "$VERSION" \
+            --platform mac \
+            --arch ${{ matrix.arch }}
+
+      - name: Verify zstd-mac-${{ matrix.cpu }}.tgz
+        run: bash zstd/scripts/verify_archive.sh "bin/zstd-mac-${{ matrix.cpu }}.tgz"
+
+      - name: Upload release asset mac/${{ matrix.cpu }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: gh release upload "$TAG" "bin/zstd-mac-${{ matrix.cpu }}.tgz" --clobber
+
+      - name: Upload build logs on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-mac-${{ matrix.arch }}
+          path: bin/logs/
+          if-no-files-found: warn
+
+  summary:
+    # Runs whatever happened above, so the release URL and the per-job
+    # results are on the run page even after a partial publish.
+    needs: [resolve-version, create-release, build-linux, build-mac]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit summary
+        env:
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+        run: |
+          set -eu
+          URL="https://github.com/${{ github.repository }}/releases/tag/$TAG"
+          {
+            echo "## zstd release: \`$TAG\`"
+            echo ""
+            echo "Release URL: $URL"
+            echo ""
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "| create-release | ${{ needs.create-release.result }} |"
+            echo "| build-linux    | ${{ needs.build-linux.result }} |"
+            echo "| build-mac      | ${{ needs.build-mac.result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
