@@ -156,9 +156,7 @@ class TestSettingTheFlag:
         assert open(path, "rb").read() == once
 
     def test_a_section_that_is_already_retained_stays_retained(self, tmp_path):
-        path = write_object(
-            tmp_path, ["__modules"], {"__modules": SHF_ALLOC | SHF_GNU_RETAIN}
-        )
+        path = write_object(tmp_path, ["__modules"], {"__modules": SHF_ALLOC | SHF_GNU_RETAIN})
 
         retain_sections.retain(path, ["__modules"])
 
