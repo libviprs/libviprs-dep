@@ -16,6 +16,32 @@ different bytes, because the DWG header carries creation and update timestamps.
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
+## The refused-entity corpus
+
+Written by `gen/` (`fixturegen corpus`, ACadSharp's `DwgWriter` at 3.7.1), one file per
+entity kind the flattener does not emit today, so that issues #82 through #90 have a small
+input to probe rather than only the 341-record `real_AC1032.dwg`.
+
+Each is shaped so the plausible wrong implementation fails it. A file that merely contains
+the entity would be satisfied by any output at all, which is the defect the `g13_ocs_*`
+files were added to stop being possible.
+
+Six refused kinds are absent here and stay on the real drawing, because ACadSharp's
+`DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
+MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
+
+Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
+
+| File | sha256 | What it holds |
+| --- | --- | --- |
+| `g13_point.dwg` | `1ad252dbaac1a298448551874ccddc8cb52e095267eac74b9c43b67420b708e1` | AC1032. Four POINTs, one at the origin, one off it, one with a Z, one with a non-Z normal so the arbitrary-axis lift is exercised. |
+| `g13_solid.dwg` | `8c277765bcec7d21ff2c41519fd0992fb929bb619077fc6fb82b25982bce79b9` | AC1032. Three SOLIDs: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one with a non-Z normal. |
+| `g13_ray_xline.dwg` | `3ddfb4fa3c1ba40368207d0631d6370a646ad6b9bce07bb494c208bc50033910` | AC1032. A RAY and an XLINE with non-axis-aligned directions, plus a bounded LINE that gives the drawing finite extents. |
+| `g13_polyface_mesh.dwg` | `7528fb81462fd4764bd69292234bc50f2afeced1b387491acce1a960252a3651` | AC1032. A POLYFACE_MESH of six vertices and two non-coplanar faces, vertices ordered so a line threaded through them in storage order self-intersects. |
+| `g13_polygon_mesh.dwg` | `eba255f5f084a8f5adcca003cea666fe9a1ef13e332dbf7cfac1e265c9f3e77c` | AC1032. A 3x4 POLYGON_MESH with alternating elevation, so an M/N transposition changes the record. |
+| `g13_mesh.dwg` | `4fc873fcbf40f24932e9a44baf3ea05e77de4c2ed521bf89deae9a58b86a0d0c` | AC1032. A MESH of two non-coplanar faces at subdivision level 2. |
+| `g13_tolerance.dwg` | `19cba079c557c4c83c35a60d95d625fc56e9a287526a6521f4ef7e89834f00a6` | AC1032. One TOLERANCE feature-control frame with two stacked rows. |
+
 ## From upstream
 
 ACadSharp ships sample drawings produced by AutoCAD itself. A round-trip of our

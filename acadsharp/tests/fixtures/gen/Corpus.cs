@@ -112,6 +112,16 @@ public static class Corpus
 		yield return Pair("g13_dimension.dwg", WriteDimension);
 		yield return Pair("g13_hatch.dwg", WriteHatch);
 		yield return Pair("g13_unsupported.dwg", WriteUnsupported);
+		// The refused-entity corpus. One file per kind the flattener does not
+		// emit today, written so a comparison against another reader has a small
+		// input to run rather than only the 341-record real drawing.
+		yield return Pair("g13_point.dwg", WritePoint);
+		yield return Pair("g13_solid.dwg", WriteSolidQuad);
+		yield return Pair("g13_ray_xline.dwg", WriteRayXline);
+		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
+		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
+		yield return Pair("g13_mesh.dwg", WriteMesh);
+		yield return Pair("g13_tolerance.dwg", WriteTolerance);
 		yield return Pair("g13_xref.dwg", WriteXref);
 		yield return Pair("g13_xref_long.dwg", WriteXrefLong);
 		yield return Pair("g13_nonuniform.dwg", WriteNonUniform);
@@ -389,6 +399,197 @@ public static class Corpus
 		CadDocument doc = NewDoc();
 		doc.Entities.Add(new Point { Location = new XYZ(1, 2, 3), Layer = L(doc) });
 		doc.Entities.Add(new Solid { Layer = L(doc) });
+		Write(doc, path);
+	}
+
+	// ------------------------------------------- the refused-entity corpus
+	//
+	// Every file below holds a kind the flattener refuses today, and every one
+	// is shaped so that the plausible wrong implementation fails it. That is
+	// the rule the g13_ocs_* files already state: a fixture built out of fixed
+	// points passes whether the code is right or wrong, and is worse than no
+	// fixture because it converts "untested" into "covered".
+
+	// POINT, which is 40 of the 88 entities refused on real_AC1032.dwg.
+	//
+	// The fourth point is the one that earns the file. A point's location is in
+	// the plane its normal defines, so an implementation that emits the stored
+	// coordinate without the arbitrary-axis lift is right about the first three
+	// and wrong about the last. The origin is here deliberately AND deliberately
+	// not alone: it is a fixed point of every transform.
+	public static void WritePoint(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Point { Location = new XYZ(0, 0, 0), Layer = L(doc) });
+		doc.Entities.Add(new Point { Location = new XYZ(3.25, -7.5, 0), Layer = L(doc) });
+		doc.Entities.Add(new Point { Location = new XYZ(-11.75, 4.5, 2.25), Layer = L(doc) });
+		doc.Entities.Add(new Point
+		{
+			Location = new XYZ(2, 3, 5),
+			Normal = new XYZ(1, 2, 2),
+			Layer = L(doc)
+		});
+		Write(doc, path);
+	}
+
+	// SOLID, and the corner order is the whole point.
+	//
+	// DXF stores the third and fourth corners swapped relative to traversal
+	// order, so an implementation that emits 1,2,3,4 as a closed polygon draws a
+	// bow-tie. Over a square that is invisible: a bow-tie and a correct quad
+	// cover plausible areas, and any assertion on area or bounding box passes
+	// either way. So the first solid has four corners with no symmetry at all,
+	// and an expectation has to compare the emitted point ORDER.
+	//
+	// The second is the triangle case (fourth corner equal to the third). The
+	// third carries a non-Z normal so the lift is exercised too.
+	public static void WriteSolidQuad(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Solid
+		{
+			FirstCorner = new XYZ(0, 0, 0),
+			SecondCorner = new XYZ(10, 1, 0),
+			ThirdCorner = new XYZ(2, 5, 0),
+			FourthCorner = new XYZ(11, 7, 0),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new Solid
+		{
+			FirstCorner = new XYZ(20, 0, 0),
+			SecondCorner = new XYZ(26, 2, 0),
+			ThirdCorner = new XYZ(22, 6, 0),
+			FourthCorner = new XYZ(22, 6, 0),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new Solid
+		{
+			FirstCorner = new XYZ(0, 0, 0),
+			SecondCorner = new XYZ(4, 0, 0),
+			ThirdCorner = new XYZ(0, 3, 0),
+			FourthCorner = new XYZ(4, 3, 0),
+			Normal = new XYZ(1, 2, 2),
+			Layer = L(doc)
+		});
+		Write(doc, path);
+	}
+
+	// RAY and XLINE, the two unbounded kinds, plus a bounded line.
+	//
+	// The line is load-bearing rather than decorative: it gives the drawing
+	// finite extents, so an implementation that decides to clip against them
+	// produces a specific wrong answer a test can pin instead of an unbounded
+	// one that errors and tells nobody anything.
+	//
+	// Neither direction is axis-aligned, for the same reason: an axis-aligned
+	// construction line clipped against an axis-aligned extents box lands on the
+	// box corners, which are fixed points, so a clipper that transposed X and Y
+	// would still look right.
+	public static void WriteRayXline(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Line(new XYZ(-10, -10, 0), new XYZ(10, 10, 0)) { Layer = L(doc) });
+		doc.Entities.Add(new Ray
+		{
+			StartPoint = new XYZ(1, 2, 0),
+			Direction = new XYZ(3, 1, 0),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new XLine
+		{
+			FirstPoint = new XYZ(-2, 3, 0),
+			Direction = new XYZ(1, 4, 0),
+			Layer = L(doc)
+		});
+		Write(doc, path);
+	}
+
+	// POLYFACE_MESH, which the flattener emits as a Polyline today because
+	// PolyfaceMesh derives from Polyline<T> and matches the `case IPolyline` arm.
+	//
+	// The vertex ORDER is what makes this file worth having. If the storage
+	// order happened to be a sensible path, the wrong output and the right
+	// output would look similar and the fixture would prove nothing. These six
+	// are ordered so a line threaded through them in storage order
+	// self-intersects and leaves the surface, which no correct rendering of two
+	// faces does.
+	public static void WritePolyfaceMesh(string path)
+	{
+		CadDocument doc = NewDoc();
+		PolyfaceMesh mesh = new PolyfaceMesh { Layer = L(doc) };
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 0, 0) });
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(10, 0, 0) });
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 10, 0) });
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(10, 10, 6) });
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(20, 0, 6) });
+		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(20, 10, 0) });
+		mesh.Faces.Add(new VertexFaceRecord { Index1 = 1, Index2 = 2, Index3 = 4, Index4 = 3 });
+		mesh.Faces.Add(new VertexFaceRecord { Index1 = 2, Index2 = 5, Index3 = 6, Index4 = 4 });
+		doc.Entities.Add(mesh);
+		Write(doc, path);
+	}
+
+	// POLYGON_MESH, the other kind the IPolyline arm catches.
+	//
+	// A 3x4 grid rather than a square one, so an implementation that transposes
+	// M and N is caught by the record's own shape rather than by someone looking
+	// at a picture. The alternating elevation keeps it off a single plane.
+	public static void WritePolygonMesh(string path)
+	{
+		CadDocument doc = NewDoc();
+		PolygonMesh mesh = new PolygonMesh { Layer = L(doc), MVertexCount = 3, NVertexCount = 4 };
+		for (int m = 0; m < 3; m++)
+		{
+			for (int n = 0; n < 4; n++)
+			{
+				mesh.Vertices.Add(new PolygonMeshVertex
+				{
+					Location = new XYZ(m * 5.0, n * 3.0, (m + n) % 2 == 0 ? 0.0 : 1.5)
+				});
+			}
+		}
+		doc.Entities.Add(mesh);
+		Write(doc, path);
+	}
+
+	// MESH: an explicit vertex list and face indices, no proprietary format
+	// anywhere, which is what separates it from 3DSOLID and REGION.
+	//
+	// The faces are deliberately not coplanar, because coplanar faces let an
+	// implementation that collapses the mesh to one polygon look correct. The
+	// subdivision level is deliberately non-zero for the same class of reason:
+	// the proposal is to emit the base mesh and ignore the level, and a fixture
+	// at level zero cannot show that anything was ignored.
+	public static void WriteMesh(string path)
+	{
+		CadDocument doc = NewDoc();
+		Mesh mesh = new Mesh { Layer = L(doc), SubdivisionLevel = 2 };
+		mesh.Vertices.Add(new XYZ(0, 0, 0));
+		mesh.Vertices.Add(new XYZ(10, 0, 0));
+		mesh.Vertices.Add(new XYZ(10, 10, 0));
+		mesh.Vertices.Add(new XYZ(0, 10, 4));
+		mesh.Faces.Add(new int[] { 0, 1, 2 });
+		mesh.Faces.Add(new int[] { 0, 2, 3 });
+		doc.Entities.Add(mesh);
+		Write(doc, path);
+	}
+
+	// TOLERANCE: a feature-control frame, whose geometry is computed from the
+	// dimension style rather than read out of the file, which makes it the
+	// refused kind most likely to disagree with what AutoCAD draws.
+	//
+	// Two stacked rows, because a single-row frame does not exercise the
+	// vertical stacking that is the part most likely to be wrong.
+	public static void WriteTolerance(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Tolerance
+		{
+			InsertionPoint = new XYZ(4, 6, 0),
+			Direction = new XYZ(1, 0, 0),
+			Text = "{\\Fgdt;j}%%v{\\Fgdt;n}0.25{\\Fgdt;m}%%vA%%v%%v%%v\\P{\\Fgdt;b}%%v0.5%%vB",
+			Layer = L(doc)
+		});
 		Write(doc, path);
 	}
 
