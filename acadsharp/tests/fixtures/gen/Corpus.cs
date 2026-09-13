@@ -103,6 +103,7 @@ public static class Corpus
 		yield return Pair("g13_ocs_rotated.dwg", WriteOcsRotated);
 		yield return Pair("g13_ocs_skew.dwg", WriteOcsSkew);
 		yield return Pair("g13_nan_bulge.dwg", WriteNanBulge);
+		yield return Pair("g13_bad_extents.dwg", WriteBadExtents);
 		yield return Pair("g13_wide_polyline.dwg", WriteWidePolyline);
 		yield return Pair("g13_long_text.dwg", WriteLongText);
 		yield return Pair("g13_scale_1x.dwg", p => WriteScale(p, 1));
@@ -770,6 +771,37 @@ public static class Corpus
 			ZScale = 1.0,
 			Layer = L(doc),
 		});
+
+		Write(doc, path);
+	}
+
+	// ------------------------------------------------------- view extents
+
+	// A drawing whose view extents are not numbers.
+	//
+	// docs/WIRE.md's finiteness guarantee covers records 3 to 10 and stops
+	// short of ViewBegin, on the grounds that its extents are a bounding box
+	// the source reports rather than a shape anybody draws, and a view holding
+	// nothing has no finite one. That is defensible and it is also a hole: a
+	// consumer reading min_x as NaN gets exactly the failure the guarantee
+	// exists to prevent, and a bounding box that is NaN in one direction is NaN
+	// in every direction by the time anything has compared it.
+	//
+	// A layout's extents are four doubles a file holds, so all three shapes are
+	// reachable, and this fixture carries a NaN and both infinities in one view.
+	// The line is there so the view is not empty: "no extents" and "nothing to
+	// have extents of" are the two cases the record has to be able to tell
+	// apart, and this is the first.
+	public static void WriteBadExtents(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(10, 5, 0)) { Layer = L(doc) });
+
+		foreach (Layout l in doc.Layouts)
+		{
+			l.MinExtents = new XYZ(double.NaN, double.NegativeInfinity, 0.0);
+			l.MaxExtents = new XYZ(double.PositiveInfinity, double.NaN, 0.0);
+		}
 
 		Write(doc, path);
 	}

@@ -41,10 +41,18 @@ namespace Viprs.Cad
 		// fetch, never a read of anything outside the file being decoded.
 		public const uint UnresolvedBlock = 105u;
 
-		// An INSERT scale that is not a similarity, under which a circle is
-		// an ellipse and a bulge is an elliptical arc. The parameters still
-		// cross unchanged; this says they were measured in a frame the
-		// transform does not preserve.
+		// A block transform that does not scale an entity's plane uniformly,
+		// under which a circle is an ellipse and a bulge is an elliptical arc.
+		// The parameters still cross unchanged; this says they were measured in
+		// a frame the transform does not preserve.
+		//
+		// Not a reflection. A mirror was raising this while the angles of an
+		// Arc and the parameters of an Ellipse followed nothing, and it stopped
+		// being true the moment they did: a reflection preserves every shape
+		// exactly and the records are exact under it. What is left is a genuine
+		// stretch, which includes a uniform scale composed with a rotation,
+		// because that comes out with two in-plane axes of equal length that
+		// are no longer at right angles.
 		public const uint NonUniformBlockScale = 106u;
 
 		// A geometry record whose values are not all finite, which is what a

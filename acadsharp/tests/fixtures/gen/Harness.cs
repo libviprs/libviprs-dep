@@ -335,6 +335,29 @@ namespace Viprs.Cad.Fixtures
 			}
 
 			json.Num("view_count", source.ViewCount);
+
+			// As strings, because JSON has no spelling for NaN or an infinity
+			// and this capture exists to show whether one reached the record.
+			// "R" round-trips every double, so a number that came back
+			// slightly different is visible rather than rounded away.
+			List<string> extents = new List<string>();
+			for (int viewIndex = 0; viewIndex < source.ViewCount; viewIndex++)
+			{
+				SourceView reported;
+				if (!source.TryGetView(viewIndex, out reported))
+				{
+					continue;
+				}
+
+				extents.Add(
+					reported.MinX.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MinY.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MaxX.ToString("R", CultureInfo.InvariantCulture) + ","
+						+ reported.MaxY.ToString("R", CultureInfo.InvariantCulture)
+				);
+			}
+
+			json.Strings("view_extents", extents);
 			json.Num("notification_count", notes.Count);
 			json.Strings("notifications", notes);
 
