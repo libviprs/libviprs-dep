@@ -6,8 +6,8 @@ use std::os::raw::{c_char, c_int, c_uint};
 #[link(name = "viprs_acadsharp")]
 extern "C" {
     fn viprs_acad_abi_version() -> c_uint;
-    fn viprs_acad_entity_count(path: *const c_char) -> c_int;
-    fn viprs_acad_describe(path: *const c_char, out: *mut u8, cap: c_int) -> c_int;
+    fn viprs_acad__spike_entity_count(path: *const c_char) -> c_int;
+    fn viprs_acad__spike_describe(path: *const c_char, out: *mut u8, cap: c_int) -> c_int;
 }
 
 fn main() {
@@ -15,9 +15,9 @@ fn main() {
     let c_path = CString::new(path).unwrap();
     unsafe {
         eprintln!("ABI={}", viprs_acad_abi_version());
-        eprintln!("ENTITY_COUNT={}", viprs_acad_entity_count(c_path.as_ptr()));
+        eprintln!("ENTITY_COUNT={}", viprs_acad__spike_entity_count(c_path.as_ptr()));
         let mut buf = vec![0u8; 1 << 20];
-        let n = viprs_acad_describe(c_path.as_ptr(), buf.as_mut_ptr(), buf.len() as c_int);
+        let n = viprs_acad__spike_describe(c_path.as_ptr(), buf.as_mut_ptr(), buf.len() as c_int);
         if n < 0 {
             eprintln!("DESCRIBE_FAILED code={n}");
             std::process::exit(6);

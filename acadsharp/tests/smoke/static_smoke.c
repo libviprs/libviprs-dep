@@ -5,8 +5,8 @@
 #include <string.h>
 
 extern unsigned int viprs_acad_abi_version(void);
-extern int viprs_acad_describe(const char *, char *, int);
-extern int viprs_acad_entity_count(const char *);
+extern int viprs_acad__spike_describe(const char *, char *, int);
+extern int viprs_acad__spike_entity_count(const char *);
 
 int main(int argc, char **argv)
 {
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 	}
 
 	fprintf(stderr, "ABI=%u\n", viprs_acad_abi_version());
-	fprintf(stderr, "ENTITY_COUNT=%d\n", viprs_acad_entity_count(argv[1]));
+	fprintf(stderr, "ENTITY_COUNT=%d\n", viprs_acad__spike_entity_count(argv[1]));
 
 	size_t cap = 1 << 20;
 	char *buf = malloc(cap);
@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 	}
 	memset(buf, 0, cap);
 
-	int written = viprs_acad_describe(argv[1], buf, (int)cap);
+	int written = viprs_acad__spike_describe(argv[1], buf, (int)cap);
 	if (written < 0) {
 		fprintf(stderr, "DESCRIBE_FAILED code=%d payload=%s\n", written, buf);
 		free(buf);
