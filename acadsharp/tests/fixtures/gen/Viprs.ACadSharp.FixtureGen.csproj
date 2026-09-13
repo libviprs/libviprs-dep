@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Writes the spike's DWG fixtures with ACadSharp's own DwgWriter, and
+       reads them back under the JIT to produce the oracle the NativeAOT
+       capture is compared against. It compiles the same Probe.cs the native
+       shim compiles, so a JIT/AOT difference cannot come from two versions of
+       the probe. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>fixturegen</AssemblyName>
+    <RootNamespace>Viprs.ACadSharp.FixtureGen</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>$(NoWarn);CS0618;CS0162</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../native/Probe.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(AcadSharpProject)' != ''">
+    <ProjectReference Include="$(AcadSharpProject)" />
+  </ItemGroup>
+
+  <Target Name="RequireAcadSharpProject" BeforeTargets="BeforeBuild">
+    <Error
+      Condition="'$(AcadSharpProject)' == ''"
+      Text="AcadSharpProject is not set. Build through acadsharp/build_acadsharp.py, which reads acadsharp/VERSION, fetches the pinned source and passes -p:AcadSharpProject." />
+  </Target>
+
+</Project>
