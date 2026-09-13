@@ -51,7 +51,13 @@
 #      documented cargo recipe is run against the archive too, because
 #      that is the path a consumer actually takes and the one where a
 #      requirement expressed as a link argument silently does not
-#      arrive.
+#      arrive. `VIPRS_REQUIRE_LINK_TEST=1` turns "this host cannot build
+#      for that target" from a line in a log into a failure, which is
+#      what the release and conformance workflows set: both musl cells
+#      build on glibc runners, so that line is what both musl archives
+#      got, every release, while shipping a cargo recipe nothing had ever
+#      run. scripts/verify_archive_matched_host.sh is the way to satisfy
+#      it.
 #   8. The AC10xx read range in LINKINFO.json is the range the library
 #      answers with. This is the one manifest field nothing in the bytes
 #      can settle: the header does not state the range, because it is a
@@ -62,6 +68,13 @@
 #      asks. Shape is checked from the bytes either way: both ends are
 #      integers, both are DWG version signatures, and the low end is not
 #      above the high one.
+#   9. The runtime's bundled llvm-libunwind ships under private names.
+#      rustc links a self-contained libunwind.a of its own for every musl
+#      target, the two copies define the same fifty-odd `__unw_*` and
+#      `libunwind::*` symbols, and the collision is a link error a
+#      consumer cannot work around from their side. This one reads the
+#      symbol index, so it holds on any host for any target, which is
+#      how it covers the cells the consumer link above skips.
 #
 # Why the binary readers are hand-rolled rather than `nm`: this script has
 # to verify a foreign-architecture archive on whatever runner is to hand.
@@ -951,6 +964,57 @@ if [ -f "$STATIC_LIB" ]; then
     if require_symbols "$WORK/static-index.txt" "$STATIC_NAME's symbol index"; then
       echo "  symbol index defines every entry point the header declares"
     fi
+
+    # The runtime bundles its own llvm-libunwind, and rustc links a
+    # `self-contained/libunwind.a` of its own for every musl target and
+    # for no glibc one. Both define `__unw_step`, `unw_local_addr_space`
+    # and `libunwind::LocalAddressSpace::sThisAddressSpace`, so a musl
+    # cargo link against an archive carrying the original names dies with
+    # a screen of `multiple definition of __unw_*`. stage.sh renames ours
+    # through scripts/privatise_unwind.sh; this asks the shipped bytes
+    # whether it did.
+    #
+    # Read out of the symbol index, which means no linker, no cargo and
+    # no matching architecture, so it holds on an arm64 Mac for an x64
+    # musl archive. That is the point: the consumer link further down
+    # runs only where the host matches, and a check that runs only there
+    # is how this shipped broken twice.
+    #
+    # Both halves, and the second is the one that earns its place. A
+    # check for the old names alone passes for an archive that bundles no
+    # libunwind at all, which is also what "the rename step silently
+    # stopped running" looks like from here if the runtime ever drops the
+    # copy. Requiring a privatised name gives the zero a positive
+    # control.
+    #
+    # `_Unwind_*` is not in either pattern. It is the public personality
+    # ABI, the merged archive defines none of them, and if it ever does
+    # they are not this problem.
+    if [ "$PLATFORM" != "mac" ]; then
+      # The index has had one leading underscore stripped, so the
+      # patterns are written against the bare name.
+      sed 's/^_*//' "$WORK/static-index.txt" > "$WORK/static-index-bare.txt"
+      BUNDLED_UNWIND=$(grep -cE '^(unw_|libunwind_|Z[A-Za-z]*N?9libunwind)' \
+        "$WORK/static-index-bare.txt" || true)
+      PRIVATE_UNWIND=$(grep -cE '^(viprs_unw_|viprs_libunwind_|Z[A-Za-z]*N?15viprs_libunwind)' \
+        "$WORK/static-index-bare.txt" || true)
+      if [ "$BUNDLED_UNWIND" != "0" ]; then
+        fail "$STATIC_NAME defines $BUNDLED_UNWIND libunwind symbols under their original
+    names, so the documented cargo recipe cannot link this archive on any musl
+    target: rustc brings its own self-contained libunwind.a and every one of
+    these collides. stage.sh runs scripts/privatise_unwind.sh for exactly this.
+$(sed 's/^_*//' "$WORK/static-index.txt" \
+        | grep -E '^(unw_|libunwind_|Z[A-Za-z]*N?9libunwind)' | head -6 | sed 's/^/    /')"
+      elif [ "$PRIVATE_UNWIND" = "0" ]; then
+        fail "$STATIC_NAME defines no libunwind symbol at all, under either name. Either
+    the runtime stopped bundling libunwind, which wants a look, or the rename
+    in stage.sh stopped running and the next runtime that bundles one again
+    ships an archive no musl consumer can link."
+      else
+        echo "  the bundled libunwind is private ($PRIVATE_UNWIND symbols), so rustc's own copy"
+        echo "  can sit beside it"
+      fi
+    fi
   fi
 
   # The runtime's module headers live in `__modules` and the bootstrapper
@@ -1170,11 +1234,20 @@ $(tail -20 "$WORK/probe.log")"
         fail "the documented cargo recipe fails against this archive:
 $(tail -25 "$WORK/consumer.log")"
       fi
+    elif [ "${VIPRS_REQUIRE_LINK_TEST:-0}" = "1" ]; then
+      fail "VIPRS_REQUIRE_LINK_TEST is set and there is no cargo here, so the one
+    recipe MANUAL.md tells a consumer to use went unrun."
     else
       echo "  cargo recipe: not run (no cargo on this host)"
     fi
+  elif [ "${VIPRS_REQUIRE_LINK_TEST:-0}" = "1" ]; then
+    fail "VIPRS_REQUIRE_LINK_TEST is set, this host is $HOST_PLATFORM/$HOST_CPU and the
+    archive is $PLATFORM/$CPU, so nothing linked it. Run it through
+    scripts/verify_archive_matched_host.sh, which puts a musl archive in front
+    of a musl host rather than writing a line about it into a log."
   else
     echo "  static_certified: not link-tested (this host cannot build for $PLATFORM/$CPU)"
+    echo "  set VIPRS_REQUIRE_LINK_TEST=1 to make that a failure instead of this line"
   fi
 fi
 
