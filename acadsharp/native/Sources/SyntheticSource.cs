@@ -100,10 +100,13 @@ namespace Viprs.Sources
 			}
 
 			view.Kind = index == 0 ? 0u : 1u;
-			view.MinX = -100.0 - index;
-			view.MinY = -50.0 - index;
-			view.MaxX = 100.0 + index;
-			view.MaxY = 50.0 + index;
+			// Four different numbers, none of them round and none of them a
+			// plausible stand-in for another, for the same reason the record
+			// payloads use probes: equal or symmetric extents hide a swap.
+			view.MinX = -100.25 - index;
+			view.MinY = -50.5 - index;
+			view.MaxX = 100.75 + index;
+			view.MaxY = 50.125 + index;
 			view.ItemCount = _itemsPerView;
 			view.Name = index == 0
 				? "Model"
@@ -111,138 +114,214 @@ namespace Viprs.Sources
 			return true;
 		}
 
-		// One of every geometry record type first, so a consumer that stops
-		// after the first view has still seen all of them, then repeats to
-		// reach the requested count.
+		// Every scalar in this document is a placement probe, not geometry.
+		//
+		// The k-th double in a record's payload, counting from zero after the
+		// geometry prologue, is 100 * type + k + 0.25, and the item handle is
+		// 1000000 + type. So no two fields of a record hold the same number,
+		// no field holds zero, and no field holds a value that would be
+		// plausible in its neighbour's place. That is the only way a consumer
+		// can prove it reads each field at the offset docs/WIRE.md gives it:
+		// against a document full of zeroes and repeats, swapping an arc's
+		// radius with its start angle changes nothing anybody can see.
+		//
+		// docs/ABI.md documents the rule, because a conformance consumer
+		// asserts on these numbers and that makes them part of the contract.
+		public const double ProbeFraction = 0.25;
+		public const ulong ProbeHandleBase = 1000000ul;
+		public const string ProbeText = "VIPRS-TEXT-PROBE-\u00C4";
+		public const string ProbeWarning = "VIPRS-WARNING-PROBE";
+		public const uint ProbeWarningCode = 1100u;
+		public const uint ProbeSplineDegree = 3u;
+
+		public static double Probe(ushort type, int k)
+		{
+			return (100.0 * type) + k + ProbeFraction;
+		}
+
+		public static ulong ProbeHandle(ushort type)
+		{
+			return ProbeHandleBase + type;
+		}
+
+		private static double[] Probes(ushort type, int count)
+		{
+			double[] values = new double[count];
+			for (int k = 0; k < count; k++)
+			{
+				values[k] = Probe(type, k);
+			}
+
+			return values;
+		}
+
+		// One of every record type in the first nine, so a consumer that
+		// stops after nine primitives has still seen all of them, then
+		// repeats. The variable-length records change length as they repeat,
+		// which is what exercises the padding and the length invariants at
+		// every residue rather than only at the convenient one.
 		public IEnumerable<Primitive> EnumerateView(int index)
 		{
 			for (uint i = 0; i < _itemsPerView; i++)
 			{
-				ulong handle = (ulong)((index + 1) * 1000) + i + 1ul;
-				double d = i;
-
 				switch (i % 9)
 				{
 					case 0:
-						yield return Primitive.Line(handle, 0u, d, d, 0.0, d + 10.0, d + 20.0, 0.0);
+					{
+						double[] v = Probes(WireFormat.TypeLine, 6);
+						yield return Primitive.Line(
+							ProbeHandle(WireFormat.TypeLine),
+							0u,
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5]
+						);
 						break;
+					}
 
 					case 1:
+					{
+						int points = 3 + (int)(i % 4);
 						yield return Primitive.Polyline(
-							handle,
+							ProbeHandle(WireFormat.TypePolyline),
 							0u,
 							i % 2 == 0,
-							new double[] { d, d, 0.0, d + 1.0, d + 2.0, 0.0, d + 3.0, d, 0.0 }
+							Probes(WireFormat.TypePolyline, points * 3)
 						);
 						break;
+					}
 
 					case 2:
+					{
+						double[] v = Probes(WireFormat.TypeArc, 9);
 						yield return Primitive.Arc(
-							handle,
+							ProbeHandle(WireFormat.TypeArc),
 							0u,
-							d,
-							d,
-							0.0,
-							5.0 + d,
-							0.0,
-							1.5707963267948966,
-							0.0,
-							0.0,
-							1.0
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5],
+							v[6],
+							v[7],
+							v[8]
 						);
 						break;
+					}
 
 					case 3:
-						yield return Primitive.Circle(handle, 0u, d, d, 0.0, 3.0 + d, 0.0, 0.0, 1.0);
+					{
+						double[] v = Probes(WireFormat.TypeCircle, 7);
+						yield return Primitive.Circle(
+							ProbeHandle(WireFormat.TypeCircle),
+							0u,
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5],
+							v[6]
+						);
 						break;
+					}
 
 					case 4:
+					{
+						double[] v = Probes(WireFormat.TypeEllipse, 12);
 						yield return Primitive.Ellipse(
-							handle,
+							ProbeHandle(WireFormat.TypeEllipse),
 							0u,
-							d,
-							d,
-							0.0,
-							10.0,
-							0.0,
-							0.0,
-							0.5,
-							0.0,
-							6.283185307179586,
-							0.0,
-							0.0,
-							1.0
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5],
+							v[6],
+							v[7],
+							v[8],
+							v[9],
+							v[10],
+							v[11]
 						);
 						break;
+					}
 
 					case 5:
+					{
+						// knots, then control points, then weights, numbered
+						// as one run so a consumer can tell the three apart by
+						// where they start rather than by their values.
+						int knots = 8;
+						int controls = 4;
+						int weights = 4;
+						double[] all = Probes(
+							WireFormat.TypeSpline,
+							knots + (controls * 3) + weights
+						);
+						double[] k = new double[knots];
+						double[] c = new double[controls * 3];
+						double[] w = new double[weights];
+						Array.Copy(all, 0, k, 0, knots);
+						Array.Copy(all, knots, c, 0, controls * 3);
+						Array.Copy(all, knots + (controls * 3), w, 0, weights);
 						yield return Primitive.Spline(
-							handle,
+							ProbeHandle(WireFormat.TypeSpline),
 							0u,
-							3u,
+							ProbeSplineDegree,
 							0u,
-							new double[] { 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 },
-							new double[]
-							{
-								d,
-								d,
-								0.0,
-								d + 1.0,
-								d + 3.0,
-								0.0,
-								d + 4.0,
-								d + 3.0,
-								0.0,
-								d + 5.0,
-								d,
-								0.0,
-							},
-							new double[] { 1.0, 0.8, 0.8, 1.0 }
+							k,
+							c,
+							w
 						);
 						break;
+					}
 
 					case 6:
+					{
+						int points = 3 + (int)(i % 3);
 						yield return Primitive.Polygon(
-							handle,
+							ProbeHandle(WireFormat.TypePolygon),
 							0u,
-							new double[]
-							{
-								d,
-								d,
-								0.0,
-								d + 4.0,
-								d,
-								0.0,
-								d + 4.0,
-								d + 4.0,
-								0.0,
-								d,
-								d + 4.0,
-								0.0,
-							}
+							Probes(WireFormat.TypePolygon, points * 3)
 						);
 						break;
+					}
 
 					case 7:
+					{
+						double[] v = Probes(WireFormat.TypeText, 5);
+						// The probe string is 19 bytes, which is not a
+						// multiple of four, and the repeat adds nought to
+						// three more, so the padding is exercised at every
+						// residue rather than only at the one that is zero.
 						yield return Primitive.TextAt(
-							handle,
+							ProbeHandle(WireFormat.TypeText),
 							0u,
-							d,
-							d,
-							0.0,
-							2.5,
-							0.0,
-							"VIPRS synthetic ÄÖÜ " + i.ToString(CultureInfo.InvariantCulture)
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							ProbeText + new string('z', (int)(i % 4))
 						);
 						break;
+					}
 
 					default:
+					{
 						yield return Primitive.Warning(
-							1u,
-							handle,
-							"synthetic warning, nothing is wrong with this document"
+							ProbeWarningCode,
+							ProbeHandle(WireFormat.TypeWarning),
+							ProbeWarning
 						);
 						break;
+					}
 				}
 			}
 		}

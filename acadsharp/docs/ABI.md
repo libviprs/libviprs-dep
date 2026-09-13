@@ -346,6 +346,41 @@ emits at least one of every record type, and it deliberately emits one
 record from the forward-probe range described in WIRE.md, so a consumer's
 skip-the-unknown path runs on a real stream on every conformance run.
 
-Nothing else about it is contractual. A build may generate different
-geometry, and a consumer must not assert on the numbers, only on the shape:
-the record types that appear, the order they appear in, and the framing.
+### Its numbers are contractual, and they are probes
+
+Every scalar in this document is chosen to make a misplaced field visible,
+and a consumer is expected to assert on them. That is the opposite of what I
+first wrote here, and the reason is worth stating: against a document full of
+zeroes and repeated values, swapping an arc's `radius` with its `start_angle`
+in the encoder changes nothing any test can see. A field-layout document
+nobody reads a field out of is a field-layout document that drifts.
+
+The rule is one sentence. **The k-th `double` in a record's payload, counting
+from zero after the geometry prologue, is `100 * type + k + 0.25`.** So a
+`Line`, which is type 3, carries `300.25` through `305.25`, and an `Arc`,
+type 5, carries `500.25` through `508.25` in the order WIRE.md lists them. No
+two fields of a record hold the same number, none holds zero, and none holds
+a value that would look right in its neighbour's place.
+
+The rest, in the same spirit:
+
+- `item_handle` is `1000000 + type`, and `flags` and every reserved field are
+  zero.
+- A `Spline`'s knots, control points and weights are numbered as one run, so
+  a consumer tells the three apart by where they start rather than by their
+  values.
+- `Polyline` and `Polygon` change vertex count as they repeat, and `Text`
+  changes length, so the padding and the length invariants are exercised at
+  every residue rather than only at the one that happens to be zero. The
+  `Text` probe is 19 bytes before the repeat adds up to three more.
+- A view's extents are four different numbers, none of them round and none
+  symmetric with another.
+
+These are placement probes and not drawable geometry: an `Ellipse` probe has
+a ratio above one, which no real ellipse does. Anything reading this document
+as a drawing is reading the wrong thing.
+
+What is still not contractual is how much of it there is. The view count and
+the primitive count come from the caller's magic bytes, and a build may
+choose different defaults, so a consumer asserts the values of the fields it
+reads and the shape of the stream, never how many records arrived.

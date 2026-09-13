@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Viprs.Abi;
 using Viprs.Sources;
 
@@ -111,7 +112,13 @@ namespace Viprs.Wire
 				return false;
 			}
 
-			return *(uint*)_cancelFlag.ToPointer() != 0u;
+			// Volatile, not a plain load. It happens once per call today, so
+			// the compiler has no chance to hoist it, but the moment anything
+			// reads it inside a loop a plain load may be read once and reused
+			// for the rest of the decode. That turns a cancel into something
+			// that arrives eventually or not at all, which is the worst
+			// version of a cancel.
+			return Volatile.Read(ref *(uint*)_cancelFlag.ToPointer()) != 0u;
 		}
 
 		// DocumentBegin, ViewBegin, the view's primitives, one forward probe,

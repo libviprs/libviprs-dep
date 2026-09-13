@@ -33,8 +33,8 @@ GENERATED = "AbiFingerprint.g.cs"
 
 # sha256 of acadsharp/include/viprs_acadsharp.h, and the first eight bytes of
 # it read big-endian, which is what the export returns.
-HEADER_SHA256 = "03bb8e542f149ec03b1686b215177a6b60f6b7429655a3cf8fdd7403500d65ad"
-ABI_FINGERPRINT = 0x03BB8E542F149EC0
+HEADER_SHA256 = "31dd6592f50747e09b54ffc1469923500fb343c19738fd99ac14d5396a6c1523"
+ABI_FINGERPRINT = 0x31DD6592F50747E0
 
 
 @pytest.fixture(scope="module")

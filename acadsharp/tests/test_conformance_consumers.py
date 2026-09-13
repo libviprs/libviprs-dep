@@ -37,6 +37,7 @@ RUST_SOURCES = (
     "build.rs",
     os.path.join("src", "lib.rs"),
     os.path.join("src", "main.rs"),
+    os.path.join("src", "payload.rs"),
     os.path.join("src", "wire.rs"),
     os.path.join("tests", "layout.rs"),
     "run.sh",
@@ -56,6 +57,7 @@ _MS_TOOLCHAIN = "ms" + "vc"
 HAND_DECLARED = (
     os.path.join("src", "lib.rs"),
     os.path.join("src", "main.rs"),
+    os.path.join("src", "payload.rs"),
     os.path.join("src", "wire.rs"),
 )
 

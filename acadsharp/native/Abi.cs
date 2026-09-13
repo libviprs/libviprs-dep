@@ -215,13 +215,43 @@ namespace Viprs.Abi
 			lock (Gate)
 			{
 				object found;
-				if (!Live.TryGetValue(handle.ToInt64(), out found))
+				long key = handle.ToInt64();
+				if (!Live.TryGetValue(key, out found))
 				{
 					return null;
 				}
 
-				Live.Remove(handle.ToInt64());
-				return found as T;
+				// Cast first, evict second, and never the other way round.
+				// Evicting first means a close called with the wrong handle
+				// type takes the entry out of the table and then fails the
+				// cast, so the object is orphaned: nothing can reach it to
+				// release it, and nothing can reach it to report that it is
+				// still there. A document closed that way keeps every decode
+				// it tracked, and each of those keeps the whole parsed
+				// drawing. The caller has no way back, and no code told it.
+				T typed = found as T;
+				if (typed == null)
+				{
+					return null;
+				}
+
+				Live.Remove(key);
+				return typed;
+			}
+		}
+
+		// How many handles this library has issued and not yet released. Only
+		// the test exports read it; it exists because "closing the wrong
+		// handle leaks the right one" is not observable from the outside
+		// otherwise, and a leak nobody can see is a leak nobody fixes.
+		public static ulong LiveCount
+		{
+			get
+			{
+				lock (Gate)
+				{
+					return (ulong)Live.Count;
+				}
 			}
 		}
 	}

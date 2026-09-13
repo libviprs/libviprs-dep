@@ -18,6 +18,7 @@ namespace Viprs.Wire
 
 		private Primitive _pending;
 		private bool _exhausted;
+		private bool _closed;
 		private ulong _emitted;
 
 		public BatchWriter(IEnumerator<Primitive> stream, ResolvedLimits limits)
@@ -36,6 +37,30 @@ namespace Viprs.Wire
 		{
 			written = 0ul;
 			done = 0;
+
+			// The batch header goes out whatever else happens, so the buffer
+			// has to hold it before anything is written. Without this check
+			// those twelve bytes land past the end of a shorter buffer and
+			// the call still reports OK with *written 12, which is the one
+			// shape a caller cannot defend against: it has been told the call
+			// succeeded and that twelve bytes are there to read.
+			if (cap < (ulong)WireFormat.BatchHeaderBytes)
+			{
+				written = (ulong)WireFormat.BatchHeaderBytes;
+				return Result.LimitExceeded;
+			}
+
+			// Everything was said on an earlier call. Another call is legal
+			// and gets an empty final batch, so a loop that keeps asking
+			// terminates instead of failing, and it is not counted against
+			// max_output_bytes because the decode is not producing anything.
+			if (_closed)
+			{
+				WriteBatchHeader(buf, WireFormat.FlagLast, 0u);
+				written = (ulong)WireFormat.BatchHeaderBytes;
+				done = 1;
+				return Result.Ok;
+			}
 
 			int payload = 0;
 			ulong ceiling = cap < (ulong)WireFormat.MaxBatchBytes
@@ -98,6 +123,7 @@ namespace Viprs.Wire
 			}
 
 			done = Finished ? (byte)1 : (byte)0;
+			_closed = Finished;
 			return Result.Ok;
 		}
 

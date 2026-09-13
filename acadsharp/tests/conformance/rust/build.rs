@@ -57,7 +57,9 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(viprs_test_exports)");
     println!("cargo:rerun-if-env-changed=VIPRS_ACAD_TEST_EXPORTS");
     if env::var("VIPRS_ACAD_TEST_EXPORTS").is_ok() {
-        out.push_str("\nextern \"C\" {\n    pub fn viprs_acad__test_throw(kind: u32) -> u32;\n}\n");
+        out.push_str(
+            "\nextern \"C\" {\n                 pub fn viprs_acad__test_throw(kind: u32) -> u32;\n                 pub fn viprs_acad__test_live_handles() -> u64;\n}\n",
+        );
         println!("cargo:rustc-cfg=viprs_test_exports");
     }
 

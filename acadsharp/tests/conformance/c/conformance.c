@@ -35,6 +35,7 @@
 /* Not in the published header on purpose: it is compiled only into the test
  * configuration of the shim, so a consumer that wants it declares it. */
 extern uint32_t viprs_acad__test_throw(uint32_t kind);
+extern uint64_t viprs_acad__test_live_handles(void);
 #endif
 
 static int g_checks;
@@ -364,6 +365,201 @@ static void test_open_by_path(void)
 	check(rc == VIPRS_ACAD_INVALID_ARGUMENT, "a path that names nothing is INVALID_ARGUMENT");
 }
 
+
+/* The batch header is written whatever else happens, so a buffer that cannot
+ * hold twelve bytes cannot be satisfied at all. This used to write those
+ * twelve bytes anyway and report OK, which is the one shape a caller cannot
+ * defend against: it has been told the call succeeded and that twelve bytes
+ * are there to read. The arena is filled with a byte nothing else writes so
+ * a single stray write shows up. */
+static void test_a_short_buffer_is_never_written_past(void)
+{
+	static const uint64_t tiny_caps[] = { 1, 4, 11 };
+	uint8_t synth[16];
+	uint8_t arena[64];
+	uint8_t *big;
+	viprs_cad_handle *doc = NULL;
+	viprs_decode_handle *dec = NULL;
+	vacb_reader reader;
+	vacb_record record;
+	uint64_t written = 0;
+	uint8_t done = 0;
+	size_t i;
+	size_t j;
+	int clean;
+
+	synthetic_input(synth, 1, 9);
+	if (viprs_acad_open_memory(synth, sizeof synth, NULL, &doc) != VIPRS_ACAD_OK) {
+		check(0, "open_memory for the short-buffer test");
+		return;
+	}
+	viprs_acad_decode_begin(doc, 0, NULL, &dec);
+
+	for (i = 0; i < sizeof tiny_caps / sizeof tiny_caps[0]; i++) {
+		char label[96];
+		memset(arena, 0xEE, sizeof arena);
+		written = 999;
+		done = 9;
+		uint32_t rc = viprs_acad_decode_next_batch(dec, arena, tiny_caps[i], &written,
+							   &done);
+		snprintf(label, sizeof label, "a cap of %llu is LIMIT_EXCEEDED, not a batch",
+			 (unsigned long long)tiny_caps[i]);
+		check(rc == VIPRS_ACAD_LIMIT_EXCEEDED, label);
+		check(written == (uint64_t)VACB_BATCH_HEADER_BYTES,
+		      "and it asks for the twelve bytes a batch header needs");
+		clean = 1;
+		for (j = 0; j < sizeof arena; j++) {
+			if (arena[j] != 0xEE) {
+				clean = 0;
+			}
+		}
+		check(clean, "and not one byte of the caller's buffer was touched");
+	}
+
+	/* Drain it, then keep asking. */
+	big = (uint8_t *)malloc(VACB_MAX_BATCH_BYTES);
+	done = 0;
+	while (!done) {
+		if (viprs_acad_decode_next_batch(dec, big, VACB_MAX_BATCH_BYTES, &written,
+						 &done) != VIPRS_ACAD_OK) {
+			break;
+		}
+	}
+	free(big);
+
+	for (i = 0; i < sizeof tiny_caps / sizeof tiny_caps[0]; i++) {
+		memset(arena, 0xEE, sizeof arena);
+		written = 999;
+		check(viprs_acad_decode_next_batch(dec, arena, tiny_caps[i], &written, &done) ==
+			      VIPRS_ACAD_LIMIT_EXCEEDED,
+		      "a short cap after the stream finished is still LIMIT_EXCEEDED");
+		clean = 1;
+		for (j = 0; j < sizeof arena; j++) {
+			if (arena[j] != 0xEE) {
+				clean = 0;
+			}
+		}
+		check(clean, "and still writes nothing");
+	}
+
+	/* A call after done is legal, and produces a batch a parser can read. */
+	memset(arena, 0xEE, sizeof arena);
+	written = 0;
+	done = 9;
+	check(viprs_acad_decode_next_batch(dec, arena, sizeof arena, &written, &done) ==
+		      VIPRS_ACAD_OK,
+	      "calling again after done is not an error");
+	check(done == 1, "and it still reports done");
+	check(written == (uint64_t)VACB_BATCH_HEADER_BYTES,
+	      "and writes exactly one empty batch, never zero bytes");
+	check(vacb_open(&reader, arena, written) == VIPRS_ACAD_OK,
+	      "and what it wrote parses");
+	check((reader.flags & VACB_FLAG_LAST) != 0, "carrying the last-batch flag");
+	check(vacb_next(&reader, &record) == 0, "and holding no records");
+	clean = 1;
+	for (j = (size_t)written; j < sizeof arena; j++) {
+		if (arena[j] != 0xEE) {
+			clean = 0;
+		}
+	}
+	check(clean, "and nothing past *written was touched");
+
+	viprs_acad_decode_close(dec);
+	viprs_acad_close(doc);
+}
+
+#ifdef VIPRS_WITH_TEST_EXPORTS
+/* Closing a handle with the other close function used to evict it from the
+ * table and then fail the cast, so the object was orphaned: nothing could
+ * reach it to release it and nothing could reach it to say it was still
+ * there. From out here that looked exactly like a close that worked. */
+static void test_closing_with_the_wrong_handle_type(void)
+{
+	uint8_t synth[16];
+	viprs_cad_handle *doc = NULL;
+	viprs_decode_handle *dec = NULL;
+	uint64_t before;
+
+	synthetic_input(synth, 1, 9);
+	before = viprs_acad__test_live_handles();
+
+	if (viprs_acad_open_memory(synth, sizeof synth, NULL, &doc) != VIPRS_ACAD_OK) {
+		check(0, "open_memory for the wrong-close test");
+		return;
+	}
+	viprs_acad_decode_begin(doc, 0, NULL, &dec);
+	check(viprs_acad__test_live_handles() == before + 2,
+	      "a document and a decode are two live handles");
+
+	viprs_acad_decode_close((viprs_decode_handle *)doc);
+	check(viprs_acad__test_live_handles() == before + 2,
+	      "decode_close on a document handle releases nothing");
+
+	viprs_acad_close((viprs_cad_handle *)dec);
+	check(viprs_acad__test_live_handles() == before + 2,
+	      "and close on a decode handle releases nothing either");
+
+	viprs_acad_decode_close(dec);
+	viprs_acad_close(doc);
+	check(viprs_acad__test_live_handles() == before,
+	      "and the right calls still release both, so nothing was orphaned");
+}
+#endif
+
+
+/* "Calling after done is legal" has to hold however tight max_output_bytes
+ * is, or it is not a rule, it is a rule with an expiry date. A decode that
+ * has nothing left to say is not producing output, so those empty batches are
+ * not charged against the limit. Without that, a caller whose loop asks a few
+ * hundred times too often gets LIMIT_EXCEEDED for bytes the decode did not
+ * produce. */
+static void test_calls_after_done_are_not_charged_to_the_output_limit(void)
+{
+	uint8_t synth[16];
+	uint8_t buf[8192];
+	struct viprs_acad_limits_v1 limits;
+	viprs_cad_handle *doc = NULL;
+	viprs_decode_handle *dec = NULL;
+	uint64_t written = 0;
+	uint8_t done = 0;
+	int i;
+	int all_ok = 1;
+
+	synthetic_input(synth, 1, 9);
+	memset(&limits, 0, sizeof limits);
+	limits.struct_size = (uint32_t)sizeof limits;
+	limits.struct_version = 1;
+	limits.max_output_bytes = 8192;
+
+	if (viprs_acad_open_memory(synth, sizeof synth, &limits, &doc) != VIPRS_ACAD_OK) {
+		check(0, "open_memory with a tight output limit");
+		return;
+	}
+	viprs_acad_decode_begin(doc, 0, NULL, &dec);
+
+	while (!done) {
+		if (viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done) !=
+		    VIPRS_ACAD_OK) {
+			break;
+		}
+	}
+	check(done == 1, "the whole stream fits inside an 8 KiB output limit");
+
+	for (i = 0; i < 1000; i++) {
+		if (viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done) !=
+		    VIPRS_ACAD_OK) {
+			all_ok = 0;
+			break;
+		}
+	}
+	check(all_ok,
+	      "and a thousand calls after done are all OK, because a decode with nothing "
+	      "left to say is not producing output");
+
+	viprs_acad_decode_close(dec);
+	viprs_acad_close(doc);
+}
+
 static void test_views(void)
 {
 	uint8_t synth[16];
@@ -456,6 +652,246 @@ static void test_small_buffer(void)
 	viprs_acad_close(doc);
 }
 
+
+/* --- payload field placement ---------------------------------------------
+ *
+ * Nothing here reads a scalar out of a record until this section existed, and
+ * that was the hole: swapping an arc's radius with its start angle in the
+ * encoder changed nothing any test could see. docs/WIRE.md is a field-layout
+ * document, and a field-layout document nobody reads a field out of drifts.
+ *
+ * The synthetic document makes this possible by carrying placement probes
+ * rather than geometry: the k-th double in a payload, after the prologue, is
+ * 100 * type + k + 0.25. So every field of a record holds a different number,
+ * none holds zero, and none holds a value that would look right one slot
+ * over. docs/ABI.md documents the rule; these are the offsets from WIRE.md,
+ * written out by hand on this side of the boundary.
+ * ------------------------------------------------------------------------- */
+
+static int payload_failures;
+static char payload_first[192];
+
+static void field_fail(const char *what, double got, double want)
+{
+	payload_failures++;
+	if (payload_first[0] == '\0') {
+		snprintf(payload_first, sizeof payload_first, "%s: got %.6f, wanted %.6f", what,
+			 got, want);
+	}
+}
+
+static void count_fail(const char *what, unsigned long long got, unsigned long long want)
+{
+	payload_failures++;
+	if (payload_first[0] == '\0') {
+		snprintf(payload_first, sizeof payload_first, "%s: got %llu, wanted %llu", what,
+			 got, want);
+	}
+}
+
+static double probe(uint16_t type, uint32_t k)
+{
+	return (100.0 * (double)type) + (double)k + 0.25;
+}
+
+static uint64_t probe_handle(uint16_t type)
+{
+	return 1000000ULL + (uint64_t)type;
+}
+
+static uint32_t pad4(uint32_t n)
+{
+	return (4u - (n % 4u)) % 4u;
+}
+
+static void want_f64(const uint8_t *p, uint32_t off, double want, const char *what)
+{
+	double got = vacb_f64(p + off);
+	if (got != want) {
+		field_fail(what, got, want);
+	}
+}
+
+static void want_u32(const uint8_t *p, uint32_t off, uint32_t want, const char *what)
+{
+	uint32_t got = vacb_u32(p + off);
+	if (got != want) {
+		count_fail(what, got, want);
+	}
+}
+
+static void want_u64(const uint8_t *p, uint32_t off, uint64_t want, const char *what)
+{
+	uint64_t got = vacb_u64(p + off);
+	if (got != want) {
+		count_fail(what, (unsigned long long)got, (unsigned long long)want);
+	}
+}
+
+static void want_len(uint32_t got, uint32_t want, const char *what)
+{
+	if (got != want) {
+		count_fail(what, got, want);
+	}
+}
+
+static void want_probes(const uint8_t *p, uint32_t off, uint16_t type, uint32_t first,
+			uint32_t count, const char *what)
+{
+	uint32_t k;
+	for (k = 0; k < count; k++) {
+		want_f64(p, off + (k * 8u), probe(type, first + k), what);
+	}
+}
+
+static void want_prologue(const vacb_record *r)
+{
+	want_u64(r->payload, 0, probe_handle(r->type), "prologue item_handle");
+	want_u32(r->payload, 8, 0, "prologue flags");
+	want_u32(r->payload, 12, 0, "prologue reserved0");
+}
+
+static void want_bytes(const uint8_t *p, uint32_t off, const char *want, const char *what)
+{
+	size_t n = strlen(want);
+	if (memcmp(p + off, want, n) != 0) {
+		payload_failures++;
+		if (payload_first[0] == '\0') {
+			snprintf(payload_first, sizeof payload_first, "%s: bytes differ", what);
+		}
+	}
+}
+
+/* `seen_records` and `seen_warnings` are the consumer's own tallies, compared
+ * against what the stream says about itself at the end. */
+static uint64_t seen_records;
+static uint64_t seen_warnings;
+static uint64_t view_records;
+
+static void verify_payload(const vacb_record *r)
+{
+	uint32_t len = r->payload_len + (uint32_t)VACB_RECORD_HEADER_BYTES;
+	uint32_t n;
+	uint32_t bytes;
+	uint32_t knots;
+	uint32_t controls;
+	uint32_t weights;
+
+	switch (r->type) {
+	case VACB_TYPE_DOCUMENT_BEGIN:
+		want_u32(r->payload, 4, 1032, "DocumentBegin drawing_version");
+		want_u64(r->payload, 8, 0, "DocumentBegin reserved0");
+		want_len(len, 24, "DocumentBegin length");
+		break;
+
+	case VACB_TYPE_VIEW_BEGIN:
+		want_u32(r->payload, 0, 0, "ViewBegin view_index");
+		want_u32(r->payload, 4, 0, "ViewBegin kind");
+		want_f64(r->payload, 8, -100.25, "ViewBegin min_x");
+		want_f64(r->payload, 16, -50.5, "ViewBegin min_y");
+		want_f64(r->payload, 24, 100.75, "ViewBegin max_x");
+		want_f64(r->payload, 32, 50.125, "ViewBegin max_y");
+		want_u32(r->payload, 52, 0, "ViewBegin reserved0");
+		n = vacb_u32(r->payload + 48);
+		want_len(len, 8u + 56u + n + pad4(n), "ViewBegin length");
+		break;
+
+	case VACB_TYPE_LINE:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_LINE, 0, 6, "Line");
+		want_len(len, 72, "Line length");
+		break;
+
+	case VACB_TYPE_POLYLINE:
+		want_prologue(r);
+		n = vacb_u32(r->payload + 16);
+		if (vacb_u32(r->payload + 20) > 1u) {
+			count_fail("Polyline closed", vacb_u32(r->payload + 20), 1);
+		}
+		want_probes(r->payload, 24, VACB_TYPE_POLYLINE, 0, n * 3u, "Polyline");
+		want_len(len, 8u + 16u + 8u + (24u * n), "Polyline length");
+		break;
+
+	case VACB_TYPE_ARC:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_ARC, 0, 9, "Arc");
+		want_len(len, 96, "Arc length");
+		break;
+
+	case VACB_TYPE_CIRCLE:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_CIRCLE, 0, 7, "Circle");
+		want_len(len, 80, "Circle length");
+		break;
+
+	case VACB_TYPE_ELLIPSE:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_ELLIPSE, 0, 12, "Ellipse");
+		want_len(len, 120, "Ellipse length");
+		break;
+
+	case VACB_TYPE_SPLINE:
+		want_prologue(r);
+		want_u32(r->payload, 16, 3, "Spline degree");
+		want_u32(r->payload, 20, 0, "Spline flags");
+		knots = vacb_u32(r->payload + 24);
+		controls = vacb_u32(r->payload + 28);
+		weights = vacb_u32(r->payload + 32);
+		want_u32(r->payload, 36, 0, "Spline reserved1");
+		if (weights != 0u && weights != controls) {
+			count_fail("Spline weight_count", weights, controls);
+		}
+		want_probes(r->payload, 40, VACB_TYPE_SPLINE, 0,
+			    knots + (controls * 3u) + weights, "Spline");
+		want_len(len, 8u + 16u + 24u + (8u * (knots + (controls * 3u) + weights)),
+			 "Spline length");
+		break;
+
+	case VACB_TYPE_POLYGON:
+		want_prologue(r);
+		n = vacb_u32(r->payload + 16);
+		want_u32(r->payload, 20, 0, "Polygon reserved1");
+		want_probes(r->payload, 24, VACB_TYPE_POLYGON, 0, n * 3u, "Polygon");
+		want_len(len, 8u + 16u + 8u + (24u * n), "Polygon length");
+		break;
+
+	case VACB_TYPE_TEXT:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_TEXT, 0, 5, "Text");
+		bytes = vacb_u32(r->payload + 56);
+		want_u32(r->payload, 60, 0, "Text reserved1");
+		want_bytes(r->payload, 64, "VIPRS-TEXT-PROBE-", "Text bytes");
+		want_len(len, 8u + 64u + bytes + pad4(bytes), "Text length");
+		break;
+
+	case VACB_TYPE_WARNING:
+		want_u32(r->payload, 0, 1100, "Warning code");
+		want_u32(r->payload, 4, 0, "Warning reserved0");
+		want_u64(r->payload, 8, probe_handle(VACB_TYPE_WARNING), "Warning item_handle");
+		bytes = vacb_u32(r->payload + 16);
+		want_u32(r->payload, 20, 0, "Warning reserved1");
+		want_bytes(r->payload, 24, "VIPRS-WARNING-PROBE", "Warning bytes");
+		want_len(len, 8u + 24u + bytes + pad4(bytes), "Warning length");
+		break;
+
+	case VACB_TYPE_VIEW_END:
+		want_u32(r->payload, 0, 0, "ViewEnd view_index");
+		want_u32(r->payload, 4, 0, "ViewEnd reserved0");
+		want_u64(r->payload, 8, view_records, "ViewEnd record_count");
+		want_len(len, 24, "ViewEnd length");
+		break;
+
+	case VACB_TYPE_DOCUMENT_END:
+		want_u64(r->payload, 0, seen_records, "DocumentEnd total_records");
+		want_u64(r->payload, 8, seen_warnings, "DocumentEnd warning_count");
+		want_len(len, 24, "DocumentEnd length");
+		break;
+
+	default:
+		break;
+	}
+}
+
 /* docs/WIRE.md's lengths for the records whose length never varies, as the
  * whole record including its eight-byte header. 0 means the record has a
  * variable-length payload and there is nothing to check. */
@@ -536,6 +972,21 @@ static void test_decode_and_parse(void)
 		}
 
 		while ((rc = vacb_next(&reader, &record)) == 1) {
+			/* The tallies go up first and count every record, the
+			 * forward probe included, because ViewEnd and DocumentEnd
+			 * count themselves and count it. Skipping a record for
+			 * being unknown is a decision about what to do with it,
+			 * not a licence to pretend it was not there. */
+			seen_records++;
+			if (record.type == VACB_TYPE_VIEW_BEGIN) {
+				view_records = 1;
+			} else if (view_records > 0) {
+				view_records++;
+			}
+			if (record.type == VACB_TYPE_WARNING) {
+				seen_warnings++;
+			}
+
 			if (record.type >= VACB_FORWARD_PROBE_FIRST) {
 				probes++;
 				expect_view_end = 1;
@@ -550,6 +1001,8 @@ static void test_decode_and_parse(void)
 			if (record.type < 16) {
 				seen[record.type] = 1;
 			}
+
+			verify_payload(&record);
 
 			/* The documented length of every record whose length does
 			 * not vary, checked against what the library actually
@@ -578,6 +1031,11 @@ static void test_decode_and_parse(void)
 	check(last_flag_seen == 1, "the final batch carries the last-batch flag");
 	check(fixed_size_wrong == 0,
 	      "every fixed-size record is the length docs/WIRE.md gives it");
+	if (payload_failures != 0) {
+		printf("      first mismatch: %s\n", payload_first);
+	}
+	check(payload_failures == 0,
+	      "every field of every record is at the offset docs/WIRE.md gives it");
 
 	viprs_acad_decode_close(dec);
 	viprs_acad_close(doc);
@@ -717,6 +1175,14 @@ int main(void)
 	test_cancel_before_the_first_batch();
 	printf("--- buffer sizing\n");
 	test_small_buffer();
+	test_a_short_buffer_is_never_written_past();
+	test_calls_after_done_are_not_charged_to_the_output_limit();
+	printf("--- handle lifetime\n");
+#ifdef VIPRS_WITH_TEST_EXPORTS
+	test_closing_with_the_wrong_handle_type();
+#else
+	printf("      skipped: built against a library without the test exports\n");
+#endif
 	printf("--- decode and parse\n");
 	test_decode_and_parse();
 	printf("--- malformed batches\n");

@@ -39,6 +39,16 @@ TEST_DEFINE = "VIPRS_ACAD_TEST_EXPORTS"
 TEST_CONFIGURATION = "AbiTest"
 TEST_EXPORT = "viprs_acad__test_throw"
 
+# Both test-only exports. The second one reports the live handle count,
+# because the interesting handle bugs are invisible from outside: a close
+# called with the wrong handle type used to orphan the object, and from the
+# caller's side that looked exactly like a close that worked.
+TEST_EXPORTS = (TEST_EXPORT, "viprs_acad__test_live_handles")
+
+# It answers a question rather than performing an operation, so it reports a
+# count and not a result code. The catch-all still applies.
+COUNTING_EXPORTS = ("viprs_acad__test_live_handles",)
+
 # G1.1's spike exports. They are not on the frozen ABI, the smoke programs
 # under tests/smoke/ still resolve them, and they go when the adapter lands.
 SPIKE_EXPORTS = ("viprs_acad_describe", "viprs_acad_entity_count")
@@ -107,7 +117,7 @@ class TestTheHeaderAndTheShimAgree:
     def test_the_shim_exports_nothing_the_epic_has_not_accounted_for(
         self, bodies, header_entry_points
     ):
-        allowed = set(header_entry_points) | set(SPIKE_EXPORTS) | {TEST_EXPORT}
+        allowed = set(header_entry_points) | set(SPIKE_EXPORTS) | set(TEST_EXPORTS)
         extra = sorted(set(bodies) - allowed)
         assert not extra, (
             f"{extra} is exported but is neither in the header nor one of the spike "
@@ -135,7 +145,12 @@ class TestNothingEscapes:
 
     def test_every_fallible_export_reports_internal_error(self, bodies):
         for name, body in bodies.items():
-            if name in INFALLIBLE or name in VOID_EXPORTS or name in OWN_ERROR_PROTOCOL:
+            if (
+                name in INFALLIBLE
+                or name in VOID_EXPORTS
+                or name in OWN_ERROR_PROTOCOL
+                or name in COUNTING_EXPORTS
+            ):
                 continue
             assert "InternalError" in body or "INTERNAL_ERROR" in body, (
                 f"{name} catches but does not return INTERNAL_ERROR, so the consumer "
@@ -171,7 +186,8 @@ class TestArgumentsAreValidated:
                 name in INFALLIBLE
                 or name in VOID_EXPORTS
                 or name in OWN_ERROR_PROTOCOL
-                or name == TEST_EXPORT
+                or name in COUNTING_EXPORTS
+                or name in TEST_EXPORTS
             ):
                 continue
             assert "InvalidArgument" in body or "INVALID_ARGUMENT" in body, (
@@ -210,13 +226,14 @@ class TestTheTestOnlyExport:
             "evidence that exceptions cannot escape is that none has escaped yet."
         )
 
-    def test_it_is_compiled_only_behind_the_define(self, code):
+    def test_every_test_export_is_compiled_only_behind_the_define(self, code):
         block = re.search(rf"#if {TEST_DEFINE}(.*?)#endif", code, re.S)
-        assert block, f"{TEST_EXPORT} is not inside an #if {TEST_DEFINE} block"
-        assert TEST_EXPORT in block.group(1), (
-            f"{TEST_EXPORT} is outside the guarded block, so a release build of the shim "
-            "ships an export whose whole job is to throw."
-        )
+        assert block, f"there is no #if {TEST_DEFINE} block"
+        for name in TEST_EXPORTS:
+            assert name in block.group(1), (
+                f"{name} is outside the guarded block, so a release build of the shim "
+                "ships an export that exists only to be tested against."
+            )
 
     def test_it_actually_throws(self, bodies):
         assert "throw" in bodies[TEST_EXPORT], (

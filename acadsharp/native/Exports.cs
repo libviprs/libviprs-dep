@@ -462,6 +462,26 @@ public static class Exports
 			return Result.InternalError;
 		}
 	}
+
+	// How many handles this library has issued and not released.
+	//
+	// It exists because the interesting handle bugs are invisible from
+	// outside: closing a document with the wrong close function used to
+	// orphan it and every decode it tracked, and from the caller's side that
+	// looked exactly like a close that worked. A count a consumer can read
+	// before and after makes it a test rather than an argument.
+	[UnmanagedCallersOnly(EntryPoint = "viprs_acad__test_live_handles")]
+	public static ulong TestLiveHandles()
+	{
+		try
+		{
+			return Handles.LiveCount;
+		}
+		catch (Exception)
+		{
+			return ulong.MaxValue;
+		}
+	}
 #endif
 
 	// ---------------------------------------------------------------------

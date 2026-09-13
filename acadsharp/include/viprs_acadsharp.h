@@ -261,7 +261,21 @@ uint32_t viprs_acad_decode_begin(viprs_cad_handle *h,
  * *written is the byte count produced, *done is 1 when the stream is complete.
  * A batch never spans two calls: if cap is too small for the next batch the
  * call returns VIPRS_ACAD_LIMIT_EXCEEDED and writes the needed size into
- * *written, so the caller can grow its buffer and retry. */
+ * *written, so the caller can grow its buffer and retry.
+ *
+ * cap must be at least 12, the size of a batch header. A successful call
+ * always writes one complete batch, and the header is part of every batch, so
+ * a cap below that cannot be satisfied at all: it returns
+ * VIPRS_ACAD_LIMIT_EXCEEDED with 12 in *written, having written nothing.
+ *
+ * Calling again after *done came back 1 is legal and is not an error. It
+ * writes an empty batch carrying the last-batch flag and reports *done 1
+ * again, so a caller whose loop asks one more time than it needed to
+ * terminates rather than failing. The alternative, succeeding with *written 0,
+ * was rejected: it would make a successful call sometimes produce bytes a
+ * parser can read and sometimes produce nothing, and a consumer that parses
+ * every successful batch would have to learn the difference. *written is
+ * therefore never 0 on success and never less than 12. */
 uint32_t viprs_acad_decode_next_batch(viprs_decode_handle *d,
                                       uint8_t *buf,
                                       uint64_t cap,

@@ -14,6 +14,7 @@
 use std::ffi::CStr;
 
 use viprs_conformance::abi::*;
+use viprs_conformance::payload::Verifier;
 use viprs_conformance::wire::{self, Reader};
 
 struct Tally {
@@ -319,6 +320,225 @@ fn arguments(t: &mut Tally) {
     }
 }
 
+
+/// The batch header is written whatever else happens, so a buffer that cannot
+/// hold twelve bytes cannot be satisfied at all. This used to write those
+/// twelve bytes anyway and report OK, which is the one shape a caller cannot
+/// defend against: it has been told the call succeeded and that twelve bytes
+/// are there to read. The arena is filled with a byte nothing else writes, so
+/// a single stray write shows up.
+fn short_buffer_is_never_written_past(t: &mut Tally) {
+    const TINY: [u64; 3] = [1, 4, 11];
+    let synth = synthetic_input(1, 9);
+    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut arena = [0xEEu8; 64];
+    let mut written: u64 = 0;
+    let mut done: u8 = 0;
+
+    unsafe {
+        if viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, std::ptr::null(), &mut doc)
+            != VIPRS_ACAD_OK
+        {
+            t.check(false, "open_memory for the short-buffer test");
+            return;
+        }
+        viprs_acad_decode_begin(doc, 0, std::ptr::null(), &mut dec);
+
+        for cap in TINY {
+            arena.fill(0xEE);
+            written = 999;
+            done = 9;
+            let rc =
+                viprs_acad_decode_next_batch(dec, arena.as_mut_ptr(), cap, &mut written, &mut done);
+            t.check(
+                rc == VIPRS_ACAD_LIMIT_EXCEEDED,
+                &format!("a cap of {cap} is LIMIT_EXCEEDED, not a batch"),
+            );
+            t.check(
+                written == wire::BATCH_HEADER_BYTES as u64,
+                "and it asks for the twelve bytes a batch header needs",
+            );
+            t.check(
+                arena.iter().all(|b| *b == 0xEE),
+                "and not one byte of the caller's buffer was touched",
+            );
+        }
+
+        // Drain it, then keep asking.
+        let mut big = vec![0u8; wire::MAX_BATCH_BYTES];
+        done = 0;
+        while done == 0 {
+            if viprs_acad_decode_next_batch(
+                dec,
+                big.as_mut_ptr(),
+                big.len() as u64,
+                &mut written,
+                &mut done,
+            ) != VIPRS_ACAD_OK
+            {
+                break;
+            }
+        }
+
+        for cap in TINY {
+            arena.fill(0xEE);
+            t.check(
+                viprs_acad_decode_next_batch(dec, arena.as_mut_ptr(), cap, &mut written, &mut done)
+                    == VIPRS_ACAD_LIMIT_EXCEEDED,
+                "a short cap after the stream finished is still LIMIT_EXCEEDED",
+            );
+            t.check(arena.iter().all(|b| *b == 0xEE), "and still writes nothing");
+        }
+
+        arena.fill(0xEE);
+        written = 0;
+        done = 9;
+        t.check(
+            viprs_acad_decode_next_batch(
+                dec,
+                arena.as_mut_ptr(),
+                arena.len() as u64,
+                &mut written,
+                &mut done,
+            ) == VIPRS_ACAD_OK,
+            "calling again after done is not an error",
+        );
+        t.check(done == 1, "and it still reports done");
+        t.check(
+            written == wire::BATCH_HEADER_BYTES as u64,
+            "and writes exactly one empty batch, never zero bytes",
+        );
+        match Reader::open(&arena[..written as usize]) {
+            Ok(mut reader) => {
+                t.check(reader.last_batch(), "what it wrote parses, with the last-batch flag");
+                t.check(reader.next().unwrap().is_none(), "and holds no records");
+            }
+            Err(_) => t.check(false, "what it wrote parses"),
+        }
+        t.check(
+            arena[written as usize..].iter().all(|b| *b == 0xEE),
+            "and nothing past *written was touched",
+        );
+
+        viprs_acad_decode_close(dec);
+        viprs_acad_close(doc);
+    }
+}
+
+/// Closing a handle with the other close function used to evict it from the
+/// table and then fail the cast, so the object was orphaned: nothing could
+/// reach it to release it and nothing could reach it to say it was still
+/// there. From out here that looked exactly like a close that worked.
+#[cfg(viprs_test_exports)]
+fn closing_with_the_wrong_handle_type(t: &mut Tally) {
+    let synth = synthetic_input(1, 9);
+    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+
+    unsafe {
+        let before = viprs_acad__test_live_handles();
+        if viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, std::ptr::null(), &mut doc)
+            != VIPRS_ACAD_OK
+        {
+            t.check(false, "open_memory for the wrong-close test");
+            return;
+        }
+        viprs_acad_decode_begin(doc, 0, std::ptr::null(), &mut dec);
+        t.check(
+            viprs_acad__test_live_handles() == before + 2,
+            "a document and a decode are two live handles",
+        );
+
+        viprs_acad_decode_close(doc as *mut viprs_decode_handle);
+        t.check(
+            viprs_acad__test_live_handles() == before + 2,
+            "decode_close on a document handle releases nothing",
+        );
+
+        viprs_acad_close(dec as *mut viprs_cad_handle);
+        t.check(
+            viprs_acad__test_live_handles() == before + 2,
+            "and close on a decode handle releases nothing either",
+        );
+
+        viprs_acad_decode_close(dec);
+        viprs_acad_close(doc);
+        t.check(
+            viprs_acad__test_live_handles() == before,
+            "and the right calls still release both, so nothing was orphaned",
+        );
+    }
+}
+
+
+/// "Calling after done is legal" has to hold however tight `max_output_bytes`
+/// is, or it is not a rule, it is a rule with an expiry date. A decode that
+/// has nothing left to say is not producing output, so those empty batches are
+/// not charged against the limit.
+fn calls_after_done_are_not_charged_to_the_output_limit(t: &mut Tally) {
+    let synth = synthetic_input(1, 9);
+    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut buf = vec![0u8; 8192];
+    let mut written: u64 = 0;
+    let mut done: u8 = 0;
+
+    let limits = viprs_acad_limits_v1 {
+        struct_size: std::mem::size_of::<viprs_acad_limits_v1>() as u32,
+        struct_version: 1,
+        max_output_bytes: 8192,
+        ..Default::default()
+    };
+
+    unsafe {
+        if viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, &limits, &mut doc)
+            != VIPRS_ACAD_OK
+        {
+            t.check(false, "open_memory with a tight output limit");
+            return;
+        }
+        viprs_acad_decode_begin(doc, 0, std::ptr::null(), &mut dec);
+
+        while done == 0 {
+            if viprs_acad_decode_next_batch(
+                dec,
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut written,
+                &mut done,
+            ) != VIPRS_ACAD_OK
+            {
+                break;
+            }
+        }
+        t.check(done == 1, "the whole stream fits inside an 8 KiB output limit");
+
+        let mut all_ok = true;
+        for _ in 0..1000 {
+            if viprs_acad_decode_next_batch(
+                dec,
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut written,
+                &mut done,
+            ) != VIPRS_ACAD_OK
+            {
+                all_ok = false;
+                break;
+            }
+        }
+        t.check(
+            all_ok,
+            "and a thousand calls after done are all OK, because a decode with nothing left \
+             to say is not producing output",
+        );
+
+        viprs_acad_decode_close(dec);
+        viprs_acad_close(doc);
+    }
+}
+
 fn views(t: &mut Tally) {
     let synth = synthetic_input(3, 9);
     let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
@@ -478,6 +698,7 @@ fn decode_and_parse(t: &mut Tally) {
     let mut expect_after_probe = false;
     let mut after_probe_was_view_end = false;
     let mut last_flag_seen = false;
+    let mut verifier = Verifier::new();
     let mut fixed_size_wrong = None;
 
     unsafe {
@@ -520,11 +741,13 @@ fn decode_and_parse(t: &mut Tally) {
             loop {
                 match reader.next() {
                     Ok(Some(record)) => {
+                        verifier.tally(&record);
                         if record.kind >= wire::FORWARD_PROBE_FIRST {
                             probes += 1;
                             expect_after_probe = true;
                             continue;
                         }
+                        verifier.verify(&record);
                         if expect_after_probe {
                             expect_after_probe = false;
                             after_probe_was_view_end = record.kind == wire::TYPE_VIEW_END;
@@ -569,6 +792,13 @@ fn decode_and_parse(t: &mut Tally) {
     t.check(
         fixed_size_wrong.is_none(),
         "every fixed-size record is the length docs/WIRE.md gives it",
+    );
+    if let Some(first) = &verifier.first {
+        println!("      first mismatch: {first}");
+    }
+    t.check(
+        verifier.failures == 0,
+        "every field of every record is at the offset docs/WIRE.md gives it",
     );
 }
 
@@ -735,6 +965,13 @@ fn main() {
     cancellation(&mut t);
     println!("--- buffer sizing");
     small_buffer(&mut t);
+    short_buffer_is_never_written_past(&mut t);
+    calls_after_done_are_not_charged_to_the_output_limit(&mut t);
+    println!("--- handle lifetime");
+    #[cfg(viprs_test_exports)]
+    closing_with_the_wrong_handle_type(&mut t);
+    #[cfg(not(viprs_test_exports))]
+    println!("      skipped: built against a library without the test exports");
     println!("--- decode and parse");
     decode_and_parse(&mut t);
     println!("--- malformed batches");
