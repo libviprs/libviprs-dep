@@ -19,6 +19,7 @@ import math
 import os
 import random
 import re
+import struct
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ACAD_ROOT = os.path.dirname(TESTS_DIR)
@@ -403,6 +404,82 @@ def bitflip(data, count=FLIP_COUNT, seed=FLIP_SEED):
         out[p] ^= 1 << rng.randrange(8)
         positions.append(p)
     return bytes(out), positions
+
+
+# The adversarial derivation: one four-byte field, rewritten in place.
+#
+# An AC18-family DWG carries its page map and its data section map behind
+# plain page headers, and the second field of each is the decompressed size of
+# what follows. `DwgReader` allocates that many bytes before it decompresses a
+# byte, so the field is an allocation request the file makes and nothing
+# checks. Both headers open with a magic the format fixes, which is what makes
+# this derivation a rewrite rather than a parse: the magic appears exactly once
+# in a fixture this generator wrote, and a count that is not one is a refusal
+# rather than a guess at which one was meant.
+#
+# g13_line.dwg is the source because it is the smallest thing in the corpus
+# that reaches the reader at all, so the ratio between what the file is and
+# what it asks for is the whole point.
+DECLARED_SIZE_SOURCE = "g13_line.dwg"
+
+# Section page type, read raw at offset 0 of each header.
+DECLARED_SIZE_HEADERS = (
+    ("page_map", 0x41630E3B),
+    ("section_map", 0x4163003B),
+)
+
+# What the field is rewritten to. The last one is the largest a signed 32-bit
+# field can hold, which is the real ceiling before this was bounded: not a
+# multiple of anything, just whatever fits in the field.
+DECLARED_SIZES = (
+    ("64MiB", 1 << 26),
+    ("256MiB", 1 << 28),
+    ("1GiB", 1 << 30),
+    ("int32_max", 0x7FFFFFFF),
+)
+
+
+def declared_size_offset(data, magic):
+    """Where one page header's declared decompressed size sits in `data`."""
+    pattern = struct.pack("<i", magic)
+    hits = data.count(pattern)
+    if hits != 1:
+        raise AssertionError(
+            f"the page header magic {magic:#x} appears {hits} times in this fixture, "
+            "not once. The derivation rewrites the field after it, and a second "
+            "match means it would be rewriting a field nobody identified."
+        )
+    return data.index(pattern) + 4
+
+
+def with_declared_size(data, magic, value):
+    """`data` with that header's declared decompressed size set to `value`."""
+    out = bytearray(data)
+    struct.pack_into("<i", out, declared_size_offset(data, magic), value)
+    return bytes(out)
+
+
+def declared_size_inputs():
+    """Every adversarial derivative, derived here from the committed fixture."""
+    with open(os.path.join(FIXTURES, DECLARED_SIZE_SOURCE), "rb") as f:
+        data = f.read()
+
+    out = []
+    for header, magic in DECLARED_SIZE_HEADERS:
+        for label, value in DECLARED_SIZES:
+            derived = with_declared_size(data, magic, value)
+            out.append(
+                {
+                    "name": f"{header}_{label}",
+                    "scenario": f"declared/{header}_{label}",
+                    "header": header,
+                    "declared": value,
+                    "source_bytes": len(data),
+                    "bytes": len(derived),
+                    "sha256": sha256_bytes(derived),
+                }
+            )
+    return out
 
 
 def derived_inputs():

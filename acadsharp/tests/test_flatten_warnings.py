@@ -28,6 +28,7 @@ CODE_FIXTURES = {
     "UNRESOLVED_BLOCK": "g13_xref.dwg",
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
+    "EMPTY_VIEW": "g13_empty_view.dwg",
 }
 
 
@@ -173,6 +174,57 @@ class TestEveryCodeHasAFixture:
         assert code in codes, (
             f"{fixture} was supposed to produce {code} and produced {sorted(codes)}"
         )
+
+
+class TestAnEmptyView:
+    """`min_x > max_x` says a view has no usable bounding box and cannot say
+    whether that is because it is empty or because it is damaged. This is the
+    half that can, and what tells the two apart is what sits beside it."""
+
+    def test_the_empty_drawing_produces_the_code(self):
+        found = [w for w in warnings("g13_empty_view.dwg") if w["code"] == "EMPTY_VIEW"]
+        assert len(found) == 1
+        assert found[0]["handle"] == "0", "it is about the view, not an entity"
+
+    def test_nothing_else_in_that_view_is_about_something_going_wrong(self):
+        # The distinction the code exists for, from the empty side. Every other
+        # warning in this stream is a reader notification about the document,
+        # which every view carries whether or not it holds anything.
+        codes = {w["code"] for w in warnings("g13_empty_view.dwg")}
+        assert codes == {"EMPTY_VIEW", "READER_NOTIFICATION"}
+        assert set(kinds("g13_empty_view.dwg")) == {"Warning"}
+
+    def test_a_view_with_geometry_does_not_produce_it(self):
+        # The control. A producer that fired on a short stream rather than on
+        # an empty one would fire here too: this fixture emits five records.
+        codes = {w["code"] for w in warnings("g13_line.dwg")}
+        assert "EMPTY_VIEW" not in codes
+        assert kinds("g13_line.dwg").get("Line", 0) == 1
+
+    def test_the_notifications_alone_do_not_count_as_geometry(self):
+        # Both files carry the same four reader notifications, so a producer
+        # that counted records rather than geometry would see this view as
+        # occupied and say nothing about it.
+        empty = warnings("g13_empty_view.dwg")
+        assert len([w for w in empty if w["code"] == "READER_NOTIFICATION"]) == 4
+        assert len([w for w in warnings("g13_line.dwg") if w["code"] == "READER_NOTIFICATION"]) == 4
+
+    @pytest.mark.parametrize(
+        "fixture,alongside",
+        [
+            ("g13_unsupported.dwg", "UNSUPPORTED_ENTITY"),
+            ("g13_xref.dwg", "UNRESOLVED_BLOCK"),
+            ("g13_nan_bulge.dwg", "NON_FINITE_GEOMETRY"),
+        ],
+    )
+    def test_a_damaged_view_carries_it_with_company(self, fixture, alongside):
+        # The other side of the distinction, and it was already in the corpus:
+        # three fixtures produce no geometry at all, each for a different
+        # reason, and each says what that reason was in the same stream. A
+        # consumer reads the pair, not the code on its own.
+        codes = {w["code"] for w in warnings(fixture)}
+        assert "EMPTY_VIEW" in codes
+        assert alongside in codes
 
 
 class TestNonFiniteGeometry:

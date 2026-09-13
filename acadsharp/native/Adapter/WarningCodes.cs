@@ -63,6 +63,13 @@ namespace Viprs.Cad
 		// entity so whoever owns the drawing can go and look.
 		public const uint NonFiniteGeometry = 107u;
 
+		// A view that emitted no geometry record at all. The inverted extents a
+		// view without a usable bounding box reports cannot say whether it is
+		// empty or damaged, and this is the half that can: it is about the view
+		// rather than an entity, so the handle is 0, and what tells the two cases
+		// apart is whether anything else in the same view's stream is a warning.
+		public const uint EmptyView = 108u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -75,6 +82,7 @@ namespace Viprs.Cad
 				case UnresolvedBlock: return "UNRESOLVED_BLOCK";
 				case NonUniformBlockScale: return "NON_UNIFORM_BLOCK_SCALE";
 				case NonFiniteGeometry: return "NON_FINITE_GEOMETRY";
+				case EmptyView: return "EMPTY_VIEW";
 				default: return "WARNING_" + code;
 			}
 		}

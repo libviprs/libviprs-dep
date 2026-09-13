@@ -126,6 +126,7 @@ public static class Corpus
 		yield return Pair("g13_ocs_skew.dwg", WriteOcsSkew);
 		yield return Pair("g13_nan_bulge.dwg", WriteNanBulge);
 		yield return Pair("g13_bad_extents.dwg", WriteBadExtents);
+		yield return Pair("g13_empty_view.dwg", WriteEmptyView);
 		yield return Pair("g13_wide_polyline.dwg", WriteWidePolyline);
 		yield return Pair("g13_long_text.dwg", WriteLongText);
 		yield return Pair("g13_scale_1x.dwg", p => WriteScale(p, 1));
@@ -838,6 +839,25 @@ public static class Corpus
 			l.MaxExtents = new XYZ(double.PositiveInfinity, double.NaN, 0.0);
 		}
 
+		Write(doc, path);
+	}
+
+	// A drawing with nothing in it.
+	//
+	// The corpus had no such file, and it could not have had one by accident:
+	// WriteBadExtents above adds a line on purpose so its view is not empty,
+	// because "no usable extents" and "nothing to have extents of" are two
+	// different statements and that fixture is the first. This is the second.
+	//
+	// Everything else here is the default document, which is the point. Model
+	// space holds no entity, the reader still has things to say about the file
+	// it read, and those notifications head every view's stream, so the stream
+	// this produces is warnings and no geometry. A producer that asked whether
+	// the view emitted any record at all would look at this one and decide it
+	// was fine.
+	public static void WriteEmptyView(string path)
+	{
+		CadDocument doc = NewDoc();
 		Write(doc, path);
 	}
 
