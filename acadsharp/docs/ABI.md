@@ -284,11 +284,28 @@ knowing the rest.
 | Field | Default | What hitting it looks like |
 | --- | --- | --- |
 | `max_input_bytes` | 536870912 (512 MiB) | Refused by the open call before the input is read. |
-| `max_entities` | 20000000 | Counted across the whole decode, expansion of nested insertions included. |
+| `max_entities` | 20000000 | Counted across the whole decode, expansion of nested insertions included. Both the entities the decoder walks and the records it emits are counted against it, and either one passing it is a refusal. |
 | `max_string_bytes` | 65536 (64 KiB) | The longest UTF-8 string a `Text` or `Warning` record may carry. |
-| `max_polyline_points` | 1000000 | Vertices in one `Polyline` record. |
-| `max_block_depth` | 64 | Nesting depth of insertions. The only reason this field exists is that the alternative to a bounded refusal here is a stack overflow. |
+| `max_polyline_points` | 1000000 | Points in one record: a `Polyline`'s vertices, a `Polygon`'s, and a `Spline`'s control points and knots. Counted before the points are gathered, so an oversized one is refused rather than allocated and then refused. |
+| `max_block_depth` | 64 | Nesting depth of an expansion: an insertion inside an insertion, and also a dimension's picture and a hatch's boundary, both of which are made of entities that can expand again. The only reason this field exists is that the alternative to a bounded refusal here is a stack overflow. |
 | `max_output_bytes` | 4294967296 (4 GiB) | Total bytes the decode may emit across every batch. |
+
+Two of those wordings are worth reading twice, because the obvious reading
+of each leaves a hole an untrusted file walks through.
+
+`max_entities` counts work, not only output. An insertion emits no record
+of its own, so a bound that only counted records would let a chain of block
+records each holding a few insertions of the next expand exponentially
+while emitting nothing: no records to count, no bytes to count, and a
+nesting depth that stays inside `max_block_depth` the whole way. Twenty-one
+block records and forty-one entities is a file of a few kilobytes and 2^21
+expansions. Counting what the decoder visits is what makes the bound bite.
+
+`max_block_depth` counts every kind of expansion. A `DIMENSION` carries a
+block of its own and that block can hold another dimension; a `HATCH`
+boundary expands into edge entities that expand again. A bound that counted
+only insertions would be a bound with a way round it, and the way round it
+ends in the stack overflow this field exists to prevent.
 
 Exceeding any of them is `VIPRS_ACAD_LIMIT_EXCEEDED`. It is never a crash
 and never a silently truncated stream, which matters more than it sounds:

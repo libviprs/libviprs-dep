@@ -18,7 +18,11 @@ namespace Viprs.Sources
 				return SyntheticSource.Open(data);
 			}
 
-			// The real adapter lands here (libviprs/libviprs-dep#47).
+			if (AcadSharpSource.Matches(data))
+			{
+				return AcadSharpSource.OpenMemory(data, limits);
+			}
+
 			throw new AbiException(
 				Result.UnsupportedFormat,
 				"no source in this build recognises these bytes"
@@ -27,21 +31,95 @@ namespace Viprs.Sources
 
 		public static IDocumentSource OpenPath(string path, ResolvedLimits limits)
 		{
+			// max_input_bytes first, before anything opens the file.
+			//
+			// The bound is about the size of the input, and the size of the
+			// input is a stat: deciding it needs no idea which source would
+			// have handled the bytes. Reading the head first would make the
+			// refusal cost an open, which is exactly what a host setting this
+			// bound is trying to avoid, and it would turn an unreadable file
+			// into an IO failure where the answer is "too big".
+			FileLength(path, limits ?? ResolvedLimits.Defaults);
+
 			byte[] head = ReadHead(path, SyntheticSource.MagicLength);
 			if (SyntheticSource.Matches(head))
 			{
 				return SyntheticSource.Open(File.ReadAllBytes(path));
 			}
 
-			// The real adapter lands here (libviprs/libviprs-dep#47), reading
-			// from the path rather than from a copy of the file.
+			// By path rather than from a copy of the file, which is the whole
+			// difference between this call and OpenMemory.
+			if (AcadSharpSource.Matches(ReadHead(path, AcadSharpSource.MagicLength)))
+			{
+				return AcadSharpSource.OpenPath(path, limits);
+			}
+
 			throw new AbiException(
 				Result.UnsupportedFormat,
 				"no source in this build recognises this file"
 			);
 		}
 
+		// The file's length, refusing before it is opened when the caller's
+		// max_input_bytes says so. A missing path is the caller's argument
+		// being wrong; a path that exists and cannot be stat'ed is the input's
+		// problem. Neither is an internal error, and both used to be one.
+		private static long FileLength(string path, ResolvedLimits limits)
+		{
+			long length;
+			try
+			{
+				FileInfo info = new FileInfo(path);
+				if (!info.Exists)
+				{
+					throw new AbiException(Result.InvalidArgument, "no file at the given path");
+				}
+
+				length = info.Length;
+			}
+			catch (AbiException)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				throw new AbiException(
+					Result.CorruptInput,
+					ex.GetType().Name + ": " + ex.Message
+				);
+			}
+
+			if ((ulong)length > limits.MaxInputBytes)
+			{
+				throw new AbiException(
+					Result.LimitExceeded,
+					"the file is " + length + " bytes and max_input_bytes is "
+						+ limits.MaxInputBytes
+				);
+			}
+
+			return length;
+		}
+
 		private static byte[] ReadHead(string path, int count)
+		{
+			try
+			{
+				return ReadHeadCore(path, count);
+			}
+			catch (Exception ex)
+			{
+				// An input this process cannot read is the input's problem,
+				// not a bug in this library, so it gets a code a caller can
+				// act on rather than INTERNAL_ERROR.
+				throw new AbiException(
+					Result.CorruptInput,
+					ex.GetType().Name + ": " + ex.Message
+				);
+			}
+		}
+
+		private static byte[] ReadHeadCore(string path, int count)
 		{
 			using (FileStream stream = File.OpenRead(path))
 			{

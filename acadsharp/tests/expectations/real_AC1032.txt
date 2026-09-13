@@ -1,0 +1,361 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBASSOCPERSSUBENTMANAGER has been read as an UnknownNonGraphicalObject"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBPERSSUBENTMANAGER has been read as an UnknownNonGraphicalObject"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name WIPEOUTVARIABLES has been read as an UnknownNonGraphicalObject"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBDETAILVIEWSTYLE has been read as an UnknownNonGraphicalObject"
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBDETAILVIEWSTYLE has been read as an UnknownNonGraphicalObject"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBSECTIONVIEWSTYLE has been read as an UnknownNonGraphicalObject"
+00006 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDBSECTIONVIEWSTYLE has been read as an UnknownNonGraphicalObject"
+00007 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDB_TEXTOBJECTCONTEXTDATA_CLASS has been read as an UnknownNonGraphicalObject"
+00008 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Unlisted object with DXF name ACDB_TEXTOBJECTCONTEXTDATA_CLASS has been read as an UnknownNonGraphicalObject"
+00009 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found ACAD_ASSOCPERSSUBENTMANAGER|3426 for dictionary |12"
+00010 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found ACAD_PERSUBENTMGR|3427 for dictionary |12"
+00011 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found ACAD_WIPEOUT_VARS|1102 for dictionary |12"
+00012 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found Imperial24|428 for dictionary ACAD_DETAILVIEWSTYLE|427"
+00013 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found Metric50|924 for dictionary ACAD_DETAILVIEWSTYLE|427"
+00014 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found Imperial24|426 for dictionary ACAD_SECTIONVIEWSTYLE|424"
+00015 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found Metric50|923 for dictionary ACAD_SECTIONVIEWSTYLE|424"
+00016 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found *A1|966 for dictionary ACDB_ANNOTATIONSCALES|965"
+00017 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: Entry not found *A1|1883 for dictionary ACDB_ANNOTATIONSCALES|1882"
+00018 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00019 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00020 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00021 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00022 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00023 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00024 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00025 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00026 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00027 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 360|1863"
+00028 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 361|1864"
+00029 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 360|3679"
+00030 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 361|3680"
+00031 Warning handle=28E flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00032 Warning handle=298 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00033 Warning handle=299 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00034 Warning handle=29A flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00035 Warning handle=29B flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00036 Warning handle=29C flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00037 Line handle=2C7 flags=0 pts=[(3.592534,1.477242,0.000000);(6.863547,1.477242,0.000000)]
+00038 Line handle=2CF flags=0 pts=[(3.592534,2.297710,0.000000);(6.863547,2.297710,0.000000)]
+00039 Polyline handle=2E2 flags=0 n=5 closed=0 pts=[(12.140516,1.379831,0.000000);(10.946378,4.053467,0.000000);(12.781813,5.047794,0.000000);(15.324886,3.258005,0.000000);(12.914495,2.771890,0.000000)]
+00040 Polyline handle=2E3 flags=0 n=7 closed=1 pts=[(19.365630,1.797416,0.000000);(17.631918,3.600463,0.000000);(20.639378,5.650988,0.000000);(22.797673,4.095418,0.000000);(21.523925,2.751971,0.000000);(22.939201,1.938832,0.000000);(21.559307,0.383262,0.000000)]
+00041 Polyline handle=2E4 flags=0 n=2 closed=0 pts=[(28.005637,0.361305,0.000000);(25.811785,1.792890,0.000000)]
+00042 Arc handle=2E4 flags=0 c=[(26.620731,3.032570,0.000000)] r=1.480270 a0=1.436338 a1=-2.148958 normal=[(0.000000,0.000000,1.000000)]
+00043 Arc handle=2E4 flags=0 c=[(27.016834,5.960717,0.000000)] r=1.474546 a0=-1.705254 a1=0.287219 normal=[(0.000000,0.000000,1.000000)]
+00044 Arc handle=2E4 flags=0 c=[(30.352909,6.946148,0.000000)] r=2.004027 a0=-1.502080 a1=-2.854374 normal=[(0.000000,0.000000,1.000000)]
+00045 Arc handle=2E4 flags=0 c=[(30.602724,3.316420,0.000000)] r=1.634286 a0=1.639513 a1=-2.150873 normal=[(0.000000,0.000000,1.000000)]
+00046 Arc handle=2E4 flags=0 c=[(29.706991,0.762573,0.000000)] r=1.186896 a0=1.570796 a1=2.639774 normal=[(0.000000,0.000000,1.000000)]
+00047 Arc handle=2E4 flags=0 c=[(23.242696,4.309311,0.000000)] r=6.186465 a0=-0.692117 a1=-0.501818 normal=[(0.000000,0.000000,1.000000)]
+00048 Arc handle=2E5 flags=0 c=[(37.476400,3.897415,0.000000)] r=2.825791 a0=2.449476 a1=0.692117 normal=[(0.000000,0.000000,1.000000)]
+00049 Arc handle=2E5 flags=0 c=[(35.032170,7.440676,0.000000)] r=4.936587 a0=-0.360194 a1=0.834691 normal=[(0.000000,0.000000,1.000000)]
+00050 Polyline handle=2E5 flags=0 n=3 closed=0 pts=[(38.346627,11.099127,0.000000);(35.663426,8.744129,0.000000);(38.046418,8.330067,0.000000)]
+00051 Circle handle=31F flags=0 c=[(46.872478,6.672964,0.000000)] r=3.682481 normal=[(0.000000,0.000000,1.000000)]
+00052 Arc handle=320 flags=0 c=[(56.351792,4.697602,0.000000)] r=3.044494 a0=5.952333 a1=2.810740 normal=[(0.000000,0.000000,1.000000)]
+00053 Ellipse handle=321 flags=0 c=[(68.000517,4.185210,0.000000)] major=[(-5.101255,0.000000,0.000000)] ratio=0.640373 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
+00054 Warning handle=322 flags=0 code=UNSUPPORTED_ENTITY message="3DFACE is not a primitive this version flattens"
+00055 Warning handle=343 flags=0 code=UNSUPPORTED_ENTITY message="MESH is not a primitive this version flattens"
+00056 Polyline handle=353 flags=0 n=4 closed=1 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)]
+00057 Polygon handle=35A flags=0 n=4 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)]
+00058 Polyline handle=35B flags=0 n=5 closed=0 pts=[(12.140516,7.499316,0.000000);(10.946378,10.172952,0.000000);(12.781813,11.167279,0.000000);(15.684477,8.916330,0.000000);(13.274086,8.430214,0.000000)]
+00059 Polyline handle=36C flags=0 n=4 closed=1 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)]
+00060 Polygon handle=36E flags=0 n=4 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)]
+00061 Polyline handle=36F flags=0 n=4 closed=1 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)]
+00062 Polygon handle=371 flags=0 n=4 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)]
+00063 Polyline handle=372 flags=0 n=4 closed=1 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)]
+00064 Polygon handle=376 flags=0 n=4 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)]
+00065 Warning handle=380 flags=0 code=UNSUPPORTED_ENTITY message="MESH is not a primitive this version flattens"
+00066 Warning handle=389 flags=0 code=UNSUPPORTED_ENTITY message="XLINE is not a primitive this version flattens"
+00067 Warning handle=38A flags=0 code=UNSUPPORTED_ENTITY message="RAY is not a primitive this version flattens"
+00068 Warning handle=38B flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00069 Warning handle=3A5 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00070 Warning handle=3A6 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00071 Text handle=3B9 flags=0 p=[(147.819447,2.854975,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00072 Text handle=3BA flags=0 p=[(147.819447,10.325741,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00073 Text handle=3CF flags=0 p=[(147.819447,17.278730,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00074 Text handle=3D0 flags=0 p=[(147.819447,24.749495,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00075 Text handle=3EC flags=0 p=[(183.588928,5.226371,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00076 Text handle=3F5 flags=0 p=[(183.588928,9.187556,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00077 Text handle=3F6 flags=0 p=[(199.330342,15.326102,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00078 Polyline handle=422 flags=0 n=5 closed=0 pts=[(213.692029,2.252867,0.000000);(222.457789,3.348587,0.000000);(215.603726,6.635747,0.000000);(215.944553,12.075878,0.000000);(211.562496,8.827187,0.000000)]
+00079 Polyline handle=42B flags=0 n=5 closed=0 pts=[(232.601721,0.892694,0.000000);(233.414990,3.348587,5.478600);(229.032110,4.736119,0.000000);(227.878838,8.433591,5.478600);(225.744949,9.922907,0.000000)]
+00080 Warning handle=432 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00081 Spline handle=433 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,1.157147,0.000000);(254.713771,11.986104,0.000000);(259.387964,1.234244,0.000000);(259.224551,11.018627,0.000000)] weights=[]
+00082 Spline handle=434 flags=0 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
+00083 Warning handle=44D flags=0 code=UNSUPPORTED_ENTITY message="WIPEOUT is not a primitive this version flattens"
+00084 Warning handle=512 flags=0 code=UNSUPPORTED_ENTITY message="LEADER is not a primitive this version flattens"
+00085 Text handle=513 flags=0 p=[(741.023750,14.696812,0.000000)] h=1.424925 rot=0.000000 value="Sample annotation"
+00086 Line handle=626 flags=1 pts=[(329.976559,3.482445,0.000000);(319.276189,22.016030,0.000000)]
+00087 Line handle=627 flags=1 pts=[(364.174764,37.680650,0.000000);(359.733100,45.373838,0.000000)]
+00088 Line handle=628 flags=1 pts=[(322.066253,22.183498,0.000000);(358.193037,43.041307,0.000000)]
+00089 Warning handle=629 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00090 Warning handle=62A flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00091 Text handle=62B flags=1 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
+00092 Warning handle=62C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00093 Warning handle=62D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00094 Warning handle=62E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00095 Line handle=62F flags=1 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
+00096 Line handle=630 flags=1 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
+00097 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
+00098 Warning handle=632 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00099 Warning handle=633 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00100 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00101 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00102 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00103 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00104 Warning handle=638 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00105 Line handle=639 flags=1 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
+00106 Line handle=63A flags=1 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
+00107 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
+00108 Warning handle=63C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00109 Warning handle=63D flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00110 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00111 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00112 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00113 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00114 Warning handle=642 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00115 Warning handle=643 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00116 Line handle=517 flags=0 pts=[(330.289059,2.941179,0.000000);(364.487264,37.139384,0.000000)]
+00117 Line handle=518 flags=0 pts=[(381.586367,8.640880,0.000000);(415.784572,42.839085,0.000000)]
+00118 Line handle=519 flags=0 pts=[(438.583375,14.340581,0.000000);(444.283076,37.139384,0.000000)]
+00119 Line handle=51A flags=0 pts=[(438.583375,14.340581,0.000000);(455.682478,8.640880,0.000000)]
+00120 Line handle=51B flags=0 pts=[(495.580383,14.340581,0.000000);(501.280084,37.139384,0.000000)]
+00121 Line handle=51C flags=0 pts=[(495.580383,14.340581,0.000000);(512.679486,8.640880,0.000000)]
+00122 Circle handle=51D flags=0 c=[(569.676494,25.739983,0.000000)] r=11.399402 normal=[(0.000000,0.000000,1.000000)]
+00123 Circle handle=51E flags=0 c=[(626.673502,25.739983,0.000000)] r=22.798803 normal=[(0.000000,0.000000,1.000000)]
+00124 Line handle=666 flags=1 pts=[(588.432922,44.496411,0.000000);(579.504855,35.568344,0.000000)]
+00125 Text handle=667 flags=1 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
+00126 Line handle=668 flags=1 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
+00127 Warning handle=669 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00128 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00129 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00130 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
+00131 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="∅45,6"
+00132 Warning handle=64C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00133 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00134 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00135 Line handle=64F flags=1 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
+00136 Line handle=650 flags=1 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
+00137 Line handle=651 flags=1 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
+00138 Text handle=652 flags=1 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
+00139 Warning handle=653 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00140 Warning handle=654 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00141 Warning handle=655 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00142 Line handle=656 flags=1 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
+00143 Line handle=657 flags=1 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
+00144 Line handle=658 flags=1 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
+00145 Text handle=659 flags=1 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
+00146 Warning handle=65A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00147 Warning handle=65B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00148 Warning handle=65C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00149 Line handle=65D flags=1 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
+00150 Line handle=65E flags=1 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
+00151 Line handle=65F flags=1 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
+00152 Text handle=662 flags=1 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
+00153 Warning handle=663 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00154 Warning handle=664 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00155 Warning handle=665 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00156 Warning handle=571 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00157 Text handle=572 flags=1 p=[(826.163031,44.793268,0.000000)] h=4.000000 rot=0.000000 value="Table sample"
+00158 Text handle=573 flags=1 p=[(791.964826,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00159 Text handle=574 flags=1 p=[(826.163031,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00160 Text handle=575 flags=1 p=[(860.361236,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00161 Text handle=576 flags=1 p=[(826.163031,15.582302,0.000000)] h=4.000000 rot=0.000000 value="This table will be imported as an           Insert entity"
+00162 Text handle=577 flags=1 p=[(791.964826,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00163 Text handle=578 flags=1 p=[(826.163031,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00164 Text handle=579 flags=1 p=[(860.361236,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00165 Line handle=57A flags=1 pts=[(774.865724,48.538786,0.000000);(877.460338,48.538786,0.000000)]
+00166 Line handle=57B flags=1 pts=[(774.865724,41.047751,0.000000);(877.460338,41.047751,0.000000)]
+00167 Line handle=57C flags=1 pts=[(774.865724,34.696655,0.000000);(877.460338,34.696655,0.000000)]
+00168 Line handle=57D flags=1 pts=[(774.865724,28.345560,0.000000);(877.460338,28.345560,0.000000)]
+00169 Line handle=57E flags=1 pts=[(774.865724,21.994465,0.000000);(877.460338,21.994465,0.000000)]
+00170 Line handle=57F flags=1 pts=[(774.865724,9.170138,0.000000);(809.063929,9.170138,0.000000)]
+00171 Line handle=580 flags=1 pts=[(809.063929,9.170138,0.000000);(877.460338,9.170138,0.000000)]
+00172 Line handle=581 flags=1 pts=[(774.865724,2.819043,0.000000);(877.460338,2.819043,0.000000)]
+00173 Line handle=582 flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,21.994465,0.000000)]
+00174 Line handle=583 flags=1 pts=[(774.865724,21.994465,0.000000);(774.865724,9.170138,0.000000)]
+00175 Line handle=584 flags=1 pts=[(774.865724,9.170138,0.000000);(774.865724,2.819043,0.000000)]
+00176 Line handle=585 flags=1 pts=[(809.063929,41.047751,0.000000);(809.063929,21.994465,0.000000)]
+00177 Line handle=586 flags=1 pts=[(809.063929,9.170138,0.000000);(809.063929,2.819043,0.000000)]
+00178 Line handle=587 flags=1 pts=[(843.262134,41.047751,0.000000);(843.262134,21.994465,0.000000)]
+00179 Line handle=588 flags=1 pts=[(843.262134,9.170138,0.000000);(843.262134,2.819043,0.000000)]
+00180 Line handle=589 flags=1 pts=[(877.460338,48.538786,0.000000);(877.460338,21.994465,0.000000)]
+00181 Line handle=58A flags=1 pts=[(877.460338,21.994465,0.000000);(877.460338,9.170138,0.000000)]
+00182 Line handle=58B flags=1 pts=[(877.460338,9.170138,0.000000);(877.460338,2.819043,0.000000)]
+00183 Line handle=58C flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,48.538786,0.000000)]
+00184 Line handle=694 flags=0 pts=[(3.592534,3.275013,0.000000);(6.863547,3.275013,0.000000)]
+00185 Line handle=695 flags=0 pts=[(3.592534,4.095481,0.000000);(6.863547,4.095481,0.000000)]
+00186 Line handle=696 flags=0 pts=[(3.592534,5.160479,0.000000);(6.863547,5.160479,0.000000)]
+00187 Line handle=697 flags=0 pts=[(3.592534,6.215892,0.000000);(6.863547,6.215892,0.000000)]
+00188 Line handle=698 flags=0 pts=[(3.592534,-7.795317,0.000000);(6.863547,-7.795317,0.000000)]
+00189 Line handle=699 flags=0 pts=[(3.592534,-6.974849,0.000000);(6.863547,-6.974849,0.000000)]
+00190 Line handle=69A flags=0 pts=[(3.592534,-5.997546,0.000000);(6.863547,-5.997546,0.000000)]
+00191 Line handle=69B flags=0 pts=[(3.592534,-5.177078,0.000000);(6.863547,-5.177078,0.000000)]
+00192 Line handle=69C flags=0 pts=[(3.592534,-4.112080,0.000000);(6.863547,-4.112080,0.000000)]
+00193 Line handle=69D flags=0 pts=[(3.592534,-3.291612,0.000000);(6.863547,-3.291612,0.000000)]
+00194 Line handle=69F flags=0 pts=[(3.592534,-14.625529,0.000000);(6.863547,-14.625529,0.000000)]
+00195 Line handle=6A0 flags=0 pts=[(3.592534,-13.805061,0.000000);(6.863547,-13.805061,0.000000)]
+00196 Line handle=6A1 flags=0 pts=[(3.592534,-12.827758,0.000000);(6.863547,-12.827758,0.000000)]
+00197 Line handle=6A2 flags=0 pts=[(3.592534,-12.007290,0.000000);(6.863547,-12.007290,0.000000)]
+00198 Line handle=6A3 flags=0 pts=[(3.592534,-10.942292,0.000000);(6.863547,-10.942292,0.000000)]
+00199 Line handle=6A4 flags=0 pts=[(3.592534,-10.121824,0.000000);(6.863547,-10.121824,0.000000)]
+00200 Text handle=705 flags=0 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="17"
+00201 Line handle=6F5 flags=1 pts=[(906.144679,1.817906,0.000000);(935.214574,30.887802,0.000000)]
+00202 Line handle=6F6 flags=1 pts=[(906.144679,30.887802,0.000000);(935.214574,1.817906,0.000000)]
+00203 Circle handle=6F7 flags=1 c=[(920.679627,16.352854,0.000000)] r=10.901211 normal=[(0.000000,0.000000,1.000000)]
+00204 Text handle=6F8 flags=1 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="1"
+00205 Text handle=756 flags=0 p=[(147.589773,32.348189,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00206 Text handle=757 flags=0 p=[(147.589773,39.818954,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00207 Text handle=75C flags=0 p=[(147.589773,46.771944,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00208 Text handle=75D flags=0 p=[(147.589773,54.242709,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00209 Text handle=779 flags=0 p=[(183.588928,-1.386376,0.000000)] h=1.000000 rot=0.000000 value="this is a really long Mtext\nbla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla"
+00210 Polyline handle=782 flags=1 n=2 closed=0 pts=[(963.947711,9.430154,0.000000);(961.275842,11.173665,0.000000)]
+00211 Arc handle=782 flags=1 c=[(962.261049,12.683459,0.000000)] r=1.802806 a0=1.436338 a1=-2.148958 normal=[(0.000000,0.000000,1.000000)]
+00212 Arc handle=782 flags=1 c=[(962.743458,16.249617,0.000000)] r=1.795834 a0=-1.705254 a1=0.287219 normal=[(0.000000,0.000000,1.000000)]
+00213 Arc handle=782 flags=1 c=[(966.806428,17.449763,0.000000)] r=2.440683 a0=-1.502080 a1=-2.854374 normal=[(0.000000,0.000000,1.000000)]
+00214 Arc handle=782 flags=1 c=[(967.110675,13.029157,0.000000)] r=1.990380 a0=1.639513 a1=-2.150873 normal=[(0.000000,0.000000,1.000000)]
+00215 Arc handle=782 flags=1 c=[(966.019772,9.918854,0.000000)] r=1.445508 a0=1.570796 a1=2.639774 normal=[(0.000000,0.000000,1.000000)]
+00216 Arc handle=782 flags=1 c=[(958.146977,14.238388,0.000000)] r=7.534430 a0=-0.692117 a1=-0.501818 normal=[(0.000000,0.000000,1.000000)]
+00217 Text handle=796 flags=1 p=[(954.700244,16.277818,0.000000)] h=0.500000 rot=0.000000 value=""
+00218 Text handle=797 flags=1 p=[(959.720662,20.543441,0.000000)] h=0.500000 rot=0.000000 value=""
+00219 Text handle=798 flags=1 p=[(954.450345,11.855903,0.000000)] h=0.500000 rot=0.000000 value=""
+00220 Text handle=799 flags=1 p=[(957.433728,8.874910,0.000000)] h=0.500000 rot=0.000000 value=""
+00221 Text handle=79D flags=0 p=[(977.281484,27.030160,0.000000)] h=1.720654 rot=0.000000 value=""
+00222 Text handle=79F flags=0 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value="hello"
+00223 Text handle=7A0 flags=0 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value="bla bla"
+00224 Polyline handle=782 flags=1 n=2 closed=0 pts=[(1009.104872,3.465230,0.000000);(999.910147,9.465193,0.000000)]
+00225 Arc handle=782 flags=1 c=[(1003.300547,14.660858,0.000000)] r=6.204011 a0=1.436338 a1=-2.148958 normal=[(0.000000,0.000000,1.000000)]
+00226 Arc handle=782 flags=1 c=[(1004.960666,26.933111,0.000000)] r=6.180018 a0=-1.705254 a1=0.287219 normal=[(0.000000,0.000000,1.000000)]
+00227 Arc handle=782 flags=1 c=[(1018.942601,31.063184,0.000000)] r=8.399145 a0=-1.502080 a1=-2.854374 normal=[(0.000000,0.000000,1.000000)]
+00228 Arc handle=782 flags=1 c=[(1019.989610,15.850514,0.000000)] r=6.849512 a0=1.639513 a1=-2.150873 normal=[(0.000000,0.000000,1.000000)]
+00229 Arc handle=782 flags=1 c=[(1016.235476,5.147000,0.000000)] r=4.974439 a0=1.570796 a1=2.639774 normal=[(0.000000,0.000000,1.000000)]
+00230 Arc handle=782 flags=1 c=[(989.142754,20.011850,0.000000)] r=25.928301 a0=-0.692117 a1=-0.501818 normal=[(0.000000,0.000000,1.000000)]
+00231 Text handle=796 flags=1 p=[(977.281484,27.030160,0.000000)] h=1.720654 rot=0.000000 value=""
+00232 Text handle=797 flags=1 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value=""
+00233 Text handle=798 flags=1 p=[(976.421501,11.812983,0.000000)] h=1.720654 rot=0.000000 value=""
+00234 Text handle=799 flags=1 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value=""
+00235 Warning handle=7B8 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00236 Warning handle=822 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00237 Warning handle=823 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00238 Warning handle=824 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00239 Warning handle=889 flags=0 code=UNSUPPORTED_ENTITY message="SHAPE is not a primitive this version flattens"
+00240 Warning handle=8C6 flags=0 code=UNSUPPORTED_ENTITY message="IMAGE is not a primitive this version flattens"
+00241 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
+00242 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
+00243 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
+00244 Text handle=918 flags=0 p=[(43.114061,-67.789053,0.000000)] h=1.000000 rot=0.000000 value="XData Dist"
+00245 Text handle=919 flags=0 p=[(51.735014,-72.544611,0.000000)] h=1.000000 rot=0.000000 value="XData Hand"
+00246 Text handle=91A flags=0 p=[(58.417607,-68.473283,0.000000)] h=1.000000 rot=0.000000 value="XData Int"
+00247 Text handle=91B flags=0 p=[(66.004472,-72.707045,0.000000)] h=1.000000 rot=0.000000 value="XData Layer"
+00248 Text handle=91C flags=0 p=[(77.360318,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Long"
+00249 Text handle=91D flags=0 p=[(83.289476,-73.409835,0.000000)] h=1.000000 rot=0.000000 value="XData Pos"
+00250 Text handle=91E flags=0 p=[(92.534944,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Real"
+00251 Text handle=91F flags=0 p=[(101.478928,-74.614616,0.000000)] h=1.000000 rot=0.000000 value="XData Scale"
+00252 Text handle=920 flags=0 p=[(112.453428,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Str"
+00253 Text handle=921 flags=0 p=[(118.675155,-75.214026,0.000000)] h=1.000000 rot=0.000000 value="XData All"
+00254 Polyline handle=923 flags=0 n=4 closed=1 pts=[(13.653829,-55.544191,0.000000);(13.653829,-84.056227,0.000000);(134.926240,-84.056227,0.000000);(134.926240,-55.544191,0.000000)]
+00255 Text handle=924 flags=0 p=[(14.361669,-53.455675,0.000000)] h=1.000000 rot=0.000000 value="XDATA sample"
+00256 Polyline handle=993 flags=0 n=4 closed=1 pts=[(13.653829,-113.085058,0.000000);(13.653829,-128.633243,0.000000);(134.926240,-128.633243,0.000000);(134.926240,-113.085058,0.000000)]
+00257 Line handle=99E flags=0 pts=[(18.961305,-124.774938,0.000000);(23.961305,-119.774938,0.000000)]
+00258 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
+00259 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
+00260 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
+00261 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
+00262 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
+00263 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
+00264 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
+00265 Warning handle=9D8 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00266 Warning handle=9D9 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00267 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
+00268 Warning handle=9DB flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00269 Warning handle=9DC flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00270 Warning handle=9DD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00271 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
+00272 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
+00273 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
+00274 Text handle=A3A flags=1 p=[(24.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="CELL FORMAT 1"
+00275 Text handle=A3B flags=1 p=[(19.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.500000"
+00276 Text handle=A3C flags=1 p=[(22.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="60"
+00277 Text handle=A3D flags=1 p=[(24.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.000000, 0.000000, 0.000000"
+00278 Text handle=A3E flags=1 p=[(27.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="11/15/2024"
+00279 Text handle=A3F flags=1 p=[(29.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="5"
+00280 Text handle=A40 flags=1 p=[(19.640582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="35.00%"
+00281 Text handle=A41 flags=1 p=[(22.140582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="$100.00"
+00282 Circle handle=A0F flags=1 c=[(26.193958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00283 Text handle=E5C flags=1 p=[(29.784088,-141.217663,0.000000)] h=0.180000 rot=0.000000 value="Cell with 2 blocks"
+00284 Circle handle=A0F flags=1 c=[(28.693958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00285 Circle handle=A0F flags=1 c=[(29.360711,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00286 Line handle=A46 flags=1 pts=[(18.390582,-140.704330,0.000000);(30.890582,-140.704330,0.000000)]
+00287 Line handle=A47 flags=1 pts=[(18.390582,-141.157663,0.000000);(30.890582,-141.157663,0.000000)]
+00288 Line handle=A48 flags=1 pts=[(18.390582,-141.764416,0.000000);(30.890582,-141.764416,0.000000)]
+00289 Line handle=A49 flags=1 pts=[(18.390582,-142.368959,0.000000);(30.890582,-142.368959,0.000000)]
+00290 Line handle=A4A flags=1 pts=[(18.390582,-142.973502,0.000000);(30.890582,-142.973502,0.000000)]
+00291 Line handle=A4B flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-142.973502,0.000000)]
+00292 Line handle=A4C flags=1 pts=[(20.890582,-141.157663,0.000000);(20.890582,-142.973502,0.000000)]
+00293 Line handle=A4D flags=1 pts=[(23.390582,-141.157663,0.000000);(23.390582,-142.973502,0.000000)]
+00294 Line handle=A4E flags=1 pts=[(25.890582,-141.157663,0.000000);(25.890582,-142.973502,0.000000)]
+00295 Line handle=A4F flags=1 pts=[(28.390582,-141.157663,0.000000);(28.390582,-142.973502,0.000000)]
+00296 Line handle=A50 flags=1 pts=[(30.890582,-140.704330,0.000000);(30.890582,-142.973502,0.000000)]
+00297 Line handle=A51 flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-140.704330,0.000000)]
+00298 Polyline handle=A54 flags=0 n=4 closed=1 pts=[(13.653829,-137.480597,0.000000);(13.653829,-147.523764,0.000000);(37.822369,-147.523764,0.000000);(37.822369,-137.480597,0.000000)]
+00299 Text handle=A55 flags=0 p=[(14.361669,-135.392081,0.000000)] h=1.000000 rot=0.000000 value="Table sample"
+00300 Polyline handle=A7A flags=0 n=4 closed=1 pts=[(13.653829,-155.952248,0.000000);(13.653829,-174.563083,0.000000);(41.305651,-174.563083,0.000000);(41.305651,-155.952248,0.000000)]
+00301 Text handle=A7B flags=0 p=[(14.361669,-153.863732,0.000000)] h=1.000000 rot=0.000000 value="Dynamic blocks sample"
+00302 Circle handle=A94 flags=1 c=[(19.024708,-165.549631,0.000000)] r=0.999900 normal=[(0.000000,0.000000,1.000000)]
+00303 Circle handle=A99 flags=1 c=[(29.736907,-165.369992,0.000000)] r=7.349900 normal=[(0.000000,0.000000,1.000000)]
+00304 Warning handle=B1A flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00305 Warning handle=B1B flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00306 Warning handle=B1C flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00307 Warning handle=B1D flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00308 Warning handle=B1E flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00309 Warning handle=B1F flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00310 Warning handle=B20 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00311 Warning handle=B21 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00312 Warning handle=B22 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00313 Warning handle=B23 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00314 Warning handle=B24 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00315 Warning handle=B25 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00316 Warning handle=B26 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00317 Warning handle=B27 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00318 Polyline handle=B28 flags=0 n=4 closed=1 pts=[(52.691496,-312.361608,0.000000);(52.691496,-566.168582,0.000000);(1852.185634,-566.168582,0.000000);(1852.185634,-312.361608,0.000000)]
+00319 Text handle=B29 flags=0 p=[(53.399335,-310.273092,0.000000)] h=1.000000 rot=0.000000 value="Multileader sample"
+00320 Polygon handle=BBB flags=0 n=4 pts=[(18.382606,-191.583790,0.000000);(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000)]
+00321 Polyline handle=BBF flags=0 n=4 closed=1 pts=[(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000);(18.382606,-191.583790,0.000000)]
+00322 Polygon handle=BC0 flags=0 n=4 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)]
+00323 Polyline handle=BC1 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)]
+00324 Polygon handle=BC2 flags=0 n=4 pts=[(28.382606,-191.583790,0.000000);(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000)]
+00325 Polyline handle=BC3 flags=0 n=4 closed=1 pts=[(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000);(28.382606,-191.583790,0.000000)]
+00326 Polygon handle=BC4 flags=0 n=4 pts=[(33.382606,-191.583790,0.000000);(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000)]
+00327 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)]
+00328 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)]
+00329 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
+00330 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
+00331 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
+00332 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
+00333 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
+00334 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
+00335 Warning handle=CA1 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00336 Warning handle=CA2 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00337 Warning handle=CA3 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00338 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
+00339 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
+00340 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
+00341 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
+00342 Warning handle=CDA flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00343 Warning handle=CDB flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00344 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
+00345 Warning handle=CDD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00346 Warning handle=CDE flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00347 Warning handle=CDF flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00348 Warning handle=D07 flags=0 code=UNSUPPORTED_ENTITY message="PDFUNDERLAY is not a primitive this version flattens"
+00349 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
+00350 Warning handle=D65 flags=0 code=UNSUPPORTED_ENTITY message="3DSOLID is not a primitive this version flattens"
+00351 Warning handle=D69 flags=0 code=UNSUPPORTED_ENTITY message="REGION is not a primitive this version flattens"
+00352 Warning handle=D6A flags=0 code=UNSUPPORTED_ENTITY message="3DSOLID is not a primitive this version flattens"
+00353 Polyline handle=D70 flags=0 n=4 closed=1 pts=[(10.160533,-211.015865,0.000000);(10.160533,-229.626700,0.000000);(37.812355,-229.626700,0.000000);(37.812355,-211.015865,0.000000)]
+00354 Text handle=D71 flags=0 p=[(10.868373,-208.927349,0.000000)] h=1.000000 rot=0.000000 value="3D Solid region and body"
+00355 Polyline handle=DFC flags=0 n=4 closed=1 pts=[(10.160533,-236.841524,0.000000);(10.160533,-255.452359,0.000000);(37.812355,-255.452359,0.000000);(37.812355,-236.841524,0.000000)]
+00356 Text handle=DFD flags=0 p=[(10.868373,-234.753008,0.000000)] h=1.000000 rot=0.000000 value="Materials"
+00357 Circle handle=E00 flags=0 c=[(15.269596,-241.455888,0.000000)] r=2.586142 normal=[(0.000000,0.000000,1.000000)]
+00358 Circle handle=E01 flags=0 c=[(17.625983,-248.517347,0.000000)] r=4.143953 normal=[(0.000000,0.000000,1.000000)]
+00359 Circle handle=E02 flags=0 c=[(26.199179,-241.956699,0.000000)] r=4.742908 normal=[(0.000000,0.000000,1.000000)]
+00360 Circle handle=E03 flags=0 c=[(28.104337,-250.170028,0.000000)] r=2.989063 normal=[(0.000000,0.000000,1.000000)]

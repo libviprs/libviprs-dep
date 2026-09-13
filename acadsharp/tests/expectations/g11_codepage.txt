@@ -1,0 +1,9 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Line handle=4D flags=0 pts=[(1.500000,2.500000,0.000000);(41.500000,62.500000,0.000000)]
+00004 Circle handle=4E flags=0 c=[(10.250000,20.500000,0.000000)] r=5.750000 normal=[(0.000000,0.000000,1.000000)]
+00005 Arc handle=4F flags=0 c=[(30.250000,40.500000,0.000000)] r=8.125000 a0=0.250000 a1=2.750000 normal=[(0.000000,0.000000,1.000000)]
+00006 Text handle=50 flags=0 p=[(2.500000,3.500000,0.000000)] h=4.500000 rot=0.000000 value="VIPRS-G11-TEXT"
+00007 Line handle=4C flags=1 pts=[(60.500000,70.500000,0.000000);(61.500000,71.500000,0.000000)]
+00008 Text handle=52 flags=0 p=[(80.500000,90.500000,0.000000)] h=3.250000 rot=0.000000 value="ÄÖÜ-O-??"

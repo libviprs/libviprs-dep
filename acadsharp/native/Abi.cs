@@ -100,10 +100,11 @@ namespace Viprs.Abi
 		public const uint DwgVersionMin = 1014u;
 		public const uint DwgVersionMax = 1032u;
 
-		// 0 until the adapter lands. It is a statement about this build, not
-		// an aspiration, so it stays 0 while the only source that can answer
-		// the question does not exist.
-		public const byte SupportsBlockExpansion = 0;
+		// 1 now that the ACadSharp adapter lands (libviprs/libviprs-dep#47)
+		// and expands a nested INSERT into transformed primitives, bounded by
+		// max_block_depth. It is a statement about this build, so it moved
+		// with the build rather than ahead of it.
+		public const byte SupportsBlockExpansion = 1;
 		public const byte SupportsWarnings = 1;
 
 		public const uint ViewKindModel = 0u;
