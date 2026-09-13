@@ -124,6 +124,23 @@ MATCHED_HOST_VERIFIER = "acadsharp/scripts/verify_archive_matched_host.sh"
 VERIFIER_FOR = {"build-linux": MATCHED_HOST_VERIFIER, "build-mac": VERIFIER}
 DRIVER = "acadsharp/build_acadsharp.py"
 
+# The two conformance consumers. The C one compiles against the header the
+# archive ships and links the library beside it; the Rust one is generated
+# from that same header by its build script. Between them they are the only
+# thing in this repository that asks a published library to answer.
+C_RUNNER = "acadsharp/tests/conformance/c/run.sh"
+RUST_RUNNER = "acadsharp/tests/conformance/rust/run.sh"
+CONSUMERS = (C_RUNNER, RUST_RUNNER)
+
+# The guard that says the library about to be run asks for the libc this
+# cell is about. A script rather than a block of shell inside a workflow,
+# because a guard nobody can run is a guard nobody has watched fail.
+LIBC_CONTROL = "acadsharp/tests/conformance/expect_libc.sh"
+
+# The conformance runners' own fallback, which is an image name that exists
+# on one developer's machine and no registry serves.
+LOCAL_ONLY_IMAGE = "viprs-rust:arm64"
+
 
 def expected_archive(platform, cpu):
     return f"{TAG_PREFIX}{platform}-{cpu}.tgz"
@@ -623,6 +640,215 @@ class TestBuildJobsVerifyBeforeTheyUpload:
         assert self.wf["jobs"][name]["strategy"]["fail-fast"] is False, (
             f"{name}: fail-fast would throw away archives that built fine because "
             "another cell flaked"
+        )
+
+
+class TestEveryContainerCellIsRunAndNotOnlyLinked:
+    """#75 asked a musl library to answer for itself. On one architecture.
+
+    That lane put both conformance consumers in front of an unpacked musl
+    archive in `acadsharp-conformance.yml`, which runs arm64 and nothing else
+    on purpose, so musl/x64 came out of it exactly where it went in: it links,
+    `verify_archive.sh` runs a static probe against it through the matched-host
+    wrapper, and no consumer has ever loaded the shared library it ships.
+
+    musl/x64 is built here, so it gets covered here. And once the steps are in
+    this job they cost nothing extra to apply to every cell, which is the
+    reason there is no `if:` on them: linux/x64 had the same gap and nobody had
+    named it, the two arm64 cells re-ask the question against the archive that
+    is about to be uploaded rather than against a branch build, and a rule with
+    no exception is a rule that cannot be got wrong by editing the matrix.
+
+    The consumers run between Verify and Upload, so a library that loads and
+    then refuses the ABI handshake keeps its archive off the release page.
+    """
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        self.job = self.wf["jobs"]["build-linux"]
+        self.steps = self.job.get("steps", [])
+
+    def job_env(self, key):
+        return str(self.job.get("env", {}).get(key, ""))
+
+    def consumer_indices(self, runner=None):
+        wanted = (runner,) if runner else CONSUMERS
+        return [
+            i for i, step in enumerate(self.steps) if any(r in step.get("run", "") for r in wanted)
+        ]
+
+    def test_both_consumers_run_in_the_job_that_builds_the_archives(self):
+        for runner in CONSUMERS:
+            assert self.consumer_indices(runner), (
+                f"build-linux never runs {runner}, so every archive it publishes has "
+                "been linked and never loaded. musl/x64 is the cell that has nowhere "
+                "else to be covered"
+            )
+
+    def test_nothing_conditions_the_consumers_onto_a_subset_of_the_matrix(self):
+        for i in self.consumer_indices():
+            step = self.steps[i]
+            assert "if" not in step, (
+                f"{step.get('name')} carries an `if:`, so which cells get run rather "
+                "than only linked is a second copy of the matrix that can drift from "
+                "the matrix"
+            )
+
+    def test_the_musl_x64_cell_exists_to_be_covered(self):
+        cells = {(c["platform"], c["cpu"]) for c in matrix_cells(self.job)}
+        assert ("musl", "x64") in cells, (
+            f"build-linux builds {sorted(cells)}. The gap this class is about is "
+            "musl/x64, and it has to be in this matrix for the steps above to reach it"
+        )
+
+    def test_the_consumers_are_pointed_at_the_archive_the_cell_unpacked(self):
+        lib_dir = self.job_env("VIPRS_LIB_DIR")
+        assert lib_dir, (
+            "build-linux names no VIPRS_LIB_DIR, so the consumers fall back to a "
+            "publish directory this job never wrote"
+        )
+        assert "unpacked" in lib_dir, (
+            f"VIPRS_LIB_DIR is {lib_dir!r}, which is not an unpacked archive. The "
+            "premise is that a consumer links what we publish"
+        )
+        for key in ("${{ matrix.platform }}", "${{ matrix.cpu }}"):
+            assert key in lib_dir, (
+                f"VIPRS_LIB_DIR is {lib_dir!r} and does not carry {key}, so one cell "
+                "could run its consumers against another cell's archive"
+            )
+
+    def test_the_archive_is_unpacked_before_a_consumer_looks_for_it(self):
+        unpack = step_index(self.job, "Unpack")
+        assert unpack >= 0, "build-linux never unpacks the archive it just verified"
+        first = min(self.consumer_indices())
+        assert unpack < first, "the consumers run before anything unpacked an archive for them"
+
+    def test_verify_runs_before_the_consumers_and_upload_after_them(self):
+        verify = step_index(self.job, "Verify")
+        upload = step_index(self.job, "Upload release")
+        for i in self.consumer_indices():
+            assert verify < i < upload, (
+                f"{self.steps[i].get('name')} sits outside Verify..Upload. A consumer "
+                "run after the upload reports on an archive that is already published, "
+                "and one before Verify runs against an archive nothing has checked"
+            )
+
+    def test_every_cell_names_a_container_whose_libc_is_the_cell_s(self):
+        for cell in matrix_cells(self.job):
+            image = cell.get("image", "")
+            assert image, (
+                f"{cell} names no image, so its consumers fall back to "
+                f"{LOCAL_ONLY_IMAGE}, which exists on one developer's machine"
+            )
+            assert image.endswith("-alpine") == (cell["platform"] == "musl"), (
+                f"{cell} runs its consumers in {image!r}. A musl library asks for "
+                "/lib/ld-musl-*.so.1 and a glibc container has no such loader, so this "
+                "is the difference between running the library and failing to"
+            )
+
+    def test_the_job_takes_that_image_from_the_cell(self):
+        assert self.job_env("VIPRS_CONFORMANCE_IMAGE") == "${{ matrix.image }}", (
+            "build-linux does not read the image out of its matrix cell, so the key "
+            "the assertion above reads is decorative"
+        )
+
+    def test_both_libcs_run_the_same_toolchain(self):
+        # Same argument acadsharp-conformance.yml makes one job over: if the
+        # two containers differ by compiler version as well as by libc, a check
+        # that passes on one side and fails on the other stops saying which of
+        # the two it was.
+        images = {c.get("image", "") for c in matrix_cells(self.job)}
+        musl = {i for i in images if i.endswith("-alpine")}
+        glibc = images - musl
+        assert musl and glibc, f"the cells name {sorted(images)}, which is not two libcs"
+        assert {f"{i}-alpine" for i in glibc} == musl, (
+            f"{sorted(glibc)} and {sorted(musl)} are not one image in two libcs"
+        )
+
+    def test_the_image_is_pinned_and_is_not_the_local_default(self):
+        for cell in matrix_cells(self.job):
+            image = cell.get("image", "")
+            assert image != LOCAL_ONLY_IMAGE, (
+                f"{LOCAL_ONLY_IMAGE} is the runners' local fallback and no registry "
+                "serves it, so every consumer step would fail on the pull"
+            )
+            tag = image.rsplit(":", 1)[-1] if ":" in image else ""
+            assert tag and tag != "latest", (
+                f"{image} floats, so a cell that passed today and fails tomorrow says "
+                "nothing about the change that was pushed"
+            )
+
+    def test_the_container_architecture_follows_the_cell(self):
+        # `--platform` is not optional and it is not guessable: the runners
+        # here are two architectures and an unpinned run on the wrong one
+        # either emulates or fails at the load. matrix.arch already speaks
+        # docker's vocabulary, so it is read rather than restated.
+        assert self.job_env("VIPRS_CONFORMANCE_PLATFORM") == "linux/${{ matrix.arch }}", (
+            "build-linux does not take the container architecture from the cell it is "
+            "building, so an arm64 cell can run its consumers on an x64 image"
+        )
+
+
+class TestTheLibcOfTheLibraryUnderTestIsProved:
+    """A green consumer run does not say which library it ran against.
+
+    A musl .so and a glibc .so are both ELF, `find_shim.sh` finds either, and
+    a consumer linked against either reports the same passes. So before the
+    consumers there is a step that reads the library's own NEEDED entries,
+    which is the linker's statement about its libc, and refuses anything that
+    is not the libc this cell is about.
+
+    The decision lives in a script rather than in the workflow, so the guard
+    can be run, and `test_conformance_workflow.py` runs it both ways.
+    """
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        self.job = self.wf["jobs"]["build-linux"]
+
+    def control_index(self):
+        for i, step in enumerate(self.job.get("steps", [])):
+            if LIBC_CONTROL in step.get("run", ""):
+                return i
+        return -1
+
+    def test_the_control_is_there(self):
+        assert self.control_index() >= 0, (
+            f"nothing in build-linux calls {LIBC_CONTROL}, so a cell that silently ran "
+            "a library of the other libc would look exactly like one that did not"
+        )
+
+    def test_it_runs_before_the_consumers_it_is_vouching_for(self):
+        control = self.control_index()
+        steps = self.job.get("steps", [])
+        consumers = [
+            i for i, step in enumerate(steps) if any(r in step.get("run", "") for r in CONSUMERS)
+        ]
+        assert consumers, "there are no consumer runs for the control to vouch for"
+        assert 0 <= control < min(consumers), (
+            "the libc control runs after the consumers, so it reports on a run that "
+            "has already happened"
+        )
+
+    def test_it_reads_the_library_the_consumers_will_load(self):
+        step = self.job["steps"][self.control_index()]
+        body = step.get("run", "")
+        assert "find_shim.sh" in body, (
+            "the control picks the library by hand rather than through find_shim.sh, "
+            "so it can vouch for a file the consumers do not load"
+        )
+        assert "readelf" in body, (
+            "the control does not read the library's own NEEDED entries, which is the "
+            "only statement about its libc that the linker wrote"
+        )
+
+    def test_it_asks_about_the_cell_it_is_in(self):
+        body = self.job["steps"][self.control_index()].get("run", "")
+        assert "${{ matrix.platform }}" in body or "matrix.platform" in str(
+            self.job["steps"][self.control_index()].get("env", {})
+        ), (
+            "the control does not take the platform from the cell, so it asks the same "
+            "question of every cell and two of them are a different libc"
         )
 
 
