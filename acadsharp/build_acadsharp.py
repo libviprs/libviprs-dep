@@ -58,6 +58,7 @@ VERSION_FILE = os.path.join(HERE, "VERSION")
 NATIVE_DIR = os.path.join(HERE, "native")
 INCLUDE_DIR = os.path.join(HERE, "include")
 HEADER_PATH = os.path.join(INCLUDE_DIR, "viprs_acadsharp.h")
+DOCS_DIR = os.path.join(HERE, "docs")
 SCRIPTS_DIR = os.path.join(HERE, "scripts")
 VERIFY_ARCHIVE_SCRIPT = os.path.join(SCRIPTS_DIR, "verify_archive.sh")
 PROJECT = os.path.join(NATIVE_DIR, "Viprs.ACadSharp.Native.csproj")
@@ -235,6 +236,23 @@ BUILDINFO_FIELDS = (
 )
 
 LINKINFO_SCHEMA_VERSION = 1
+
+# The frozen contracts, shipped inside the archive next to the header.
+#
+# The premise of this whole directory is that a consumer can be built from
+# what we publish, without the producer's source. The header alone does
+# not get anyone there: it says what the calls are and nothing about what
+# the batch stream holds or how to put the library on a link line, and
+# both of those were written down in files that stayed in the repository.
+# Anyone writing a consumer then read `build_acadsharp.py` instead, which
+# is the coupling freezing the ABI was supposed to remove.
+#
+# Every *.md directly under `acadsharp/docs/` ships, and
+# `test_build_manifests.py` holds this tuple to exactly that set, so a
+# fourth contract document ships the day it lands rather than the day
+# somebody remembers this line. `docs/adr/` stays behind on purpose: a
+# decision record is the producer's history, not the consumer's contract.
+PUBLISHED_DOCS = ("ABI.md", "LINKINFO.md", "WIRE.md")
 
 # The flag ADR 0001 measured out of existence, in both spellings. A
 # manifest carrying either would break the consumer's link rather than
@@ -718,6 +736,37 @@ def make_buildinfo(
         "built_utc": stamp,
     }
     return {k: info[k] for k in BUILDINFO_FIELDS}
+
+
+def stage_docs(root, docs_dir=DOCS_DIR):
+    """Copy the frozen contract documents into ``docs/`` in a staged tree.
+
+    Done here rather than in the staging script because none of these is
+    a build input. The header goes through the container because the
+    smoke programs compile against it; the documents are only ever read
+    by a human or by whoever is writing the consumer, so they are staged
+    on the host from the same checkout the header came from and the
+    Docker context stays the size it was.
+
+    Returns the archive-relative paths written, so a caller can say what
+    it staged. `write_checksums` picks them up by walking the tree, the
+    same way it picks up everything else.
+    """
+    dest = os.path.join(root, "docs")
+    os.makedirs(dest, exist_ok=True)
+    staged = []
+    for name in PUBLISHED_DOCS:
+        source = os.path.join(docs_dir, name)
+        if not os.path.isfile(source):
+            raise ValueError(
+                f"{source} is missing, so the archive would ship a README pointing at "
+                "a contract that is not in it. The documents are the half of the "
+                "publish a consumer author actually reads; shipping the binaries "
+                "without them is what sends them to the build driver's source."
+            )
+        shutil.copy2(source, os.path.join(dest, name))
+        staged.append(f"docs/{name}")
+    return staged
 
 
 def write_checksums(root):
@@ -1364,8 +1413,17 @@ ACadSharp {split_version(version)[0]} behind the VIPRS CAD C ABI, built with
 
     lib/       the shared library, and the static archive where one certified
     include/   viprs_acadsharp.h, the frozen ABI this library implements
+    docs/      ABI.md, WIRE.md and LINKINFO.md, the three frozen contracts
     metadata/  LINKINFO.json, BUILDINFO.json, CHECKSUMS.txt
     LICENSES/  ACadSharp's MIT licence and the third-party notices
+
+Everything needed to write a consumer is in here. `docs/ABI.md` is the
+prose half of the header: ownership, threading, the error model and the
+fingerprint handshake. `docs/WIRE.md` is the complete definition of the
+batch stream the decode calls emit, which is not visible in the header at
+all. `docs/LINKINFO.md` defines every field of `metadata/LINKINFO.json`,
+and carries the static linking recipe, which is the part that is subtle
+enough to get wrong twice.
 
 Read `metadata/LINKINFO.json` rather than guessing: it carries the Rust
 target triple, the ABI and wire versions, the header's sha256 and
@@ -1433,6 +1491,8 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
 
     with open(os.path.join(staging_root, "README.md"), "w") as f:
         f.write(archive_readme(plat, arch, version))
+
+    stage_docs(staging_root)
 
     # An uncertified target must not ship either static archive. Shared-only
     # is a recorded outcome; a `.a` nobody has linked is an invitation.
@@ -1739,6 +1799,9 @@ def release_notes(version):
         "- `lib/libacadsharp_native.a` and `lib/libacadsharp_native_init.a`, the "
         "static archives, where the static smoke certified them\n"
         "- `include/viprs_acadsharp.h`, the frozen C ABI\n"
+        "- `docs/ABI.md`, `docs/WIRE.md` and `docs/LINKINFO.md`, the three frozen "
+        "contracts: what the calls mean, what the batch stream holds, and how to link "
+        "this\n"
         "- `metadata/LINKINFO.json`: Rust triple, ABI fields and the measured link facts\n"
         "- `metadata/BUILDINFO.json`: what produced the binaries\n"
         "- `metadata/CHECKSUMS.txt`: sha256 of every other file\n"

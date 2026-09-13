@@ -17,6 +17,7 @@ workspace, and one of them puts the broken recipe back to show it fails.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -93,6 +94,60 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         # It may say the words, at length, in the panic explaining why.
         # What it must never do is emit one.
         assert 'println!("cargo:rustc-link-arg' not in source
+
+    def _manual_build_script(self):
+        """The worked `build.rs` out of MANUAL.md, code only.
+
+        Scoped to the fenced block on purpose. The prose around it names
+        `cargo:rustc-link-arg` repeatedly, at length, explaining why the
+        script must never emit one, so a whole-file search fires on the
+        explanation exactly as readily as on a violation.
+        """
+        blocks = [
+            block
+            for block in re.findall(r"```rust\n(.*?)```", read(MANUAL), re.S)
+            if "cargo:rustc-link" in block
+        ]
+        assert len(blocks) == 1, (
+            f"MANUAL.md has {len(blocks)} rust blocks emitting link directives; the "
+            "checks below assume the acadsharp build script is the only one"
+        )
+        return blocks[0]
+
+    def test_the_manual_works_the_recipe_through_a_build_script(self):
+        # Four directives in a list are not a worked example. The thing a
+        # consumer author copies is a build script, and the parts that go
+        # wrong (the schema check, the certified gate, the radix parse)
+        # only exist in one.
+        source = self._manual_build_script()
+        init = "cargo:rustc-link-lib=static:-bundle,+whole-archive={}"
+        main = 'cargo:rustc-link-lib=static:-bundle={}", stem('
+        assert init in source and main in source
+        assert source.index(init) < source.index(main)
+
+    def test_the_manual_build_script_emits_no_link_argument(self):
+        source = self._manual_build_script()
+        assert 'println!("cargo:rustc-link-arg' not in source, (
+            "the worked example is what gets copied, and a link argument in it "
+            "reaches the -sys crate's own targets and no dependent's"
+        )
+
+    def test_the_manual_build_script_gates_on_the_measured_facts(self):
+        source = self._manual_build_script()
+        assert "static_certified" in source, (
+            "an archive that certified nothing ships no .a at all, so the static "
+            "path has to be refused rather than attempted"
+        )
+        assert "static_link_args" in source and "is_empty()" in source
+        assert "schema_version" in source, (
+            "a manifest from a later schema is refused, which is the forward rule "
+            "docs/LINKINFO.md states"
+        )
+        assert "from_str_radix" in source, (
+            "abi_fingerprint is 16 hex digits meaning a 64-bit number, and a string "
+            "comparison against a formatted runtime value disagrees over a leading "
+            "zero and over case"
+        )
 
     def test_manual_documents_the_same_recipe(self):
         # Two places to write it down is one place to get it wrong, so
