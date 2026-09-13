@@ -1522,7 +1522,7 @@ def build_for_job(version, plat, arch, output_dir, keep_going=False):
                 f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} "
                 f"(FAILED: {type(exc).__name__}: {exc})\n"
             )
-            print(f"\n[{job}] build failed — full log: {log_path}", file=sys.stderr, flush=True)
+            print(f"\n[{job}] build failed, full log: {log_path}", file=sys.stderr, flush=True)
             if not keep_going:
                 raise
             return None
@@ -1597,7 +1597,7 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
 
 
 def _build_mac_native(version, arch, output_dir, log_file, job):
-    """Build on the macOS host with the SDK — no container involved.
+    """Build on the macOS host with the SDK, with no container involved.
 
     NativeAOT does not support cross-OS compilation, so there is no way
     to produce this from a Linux container and no way to test it from
@@ -1735,14 +1735,14 @@ def release_notes(version):
         f"ACadSharp {upstream} behind the VIPRS CAD C ABI, built with .NET NativeAOT "
         f"(shim revision {shim}). No .NET runtime is needed to use these.\n\n"
         "Each archive contains:\n"
-        "- `lib/libacadsharp_native.so` (`.dylib` on mac) — the shared library\n"
-        "- `lib/libacadsharp_native.a` and `lib/libacadsharp_native_init.a` — the "
+        "- `lib/libacadsharp_native.so` (`.dylib` on mac), the shared library\n"
+        "- `lib/libacadsharp_native.a` and `lib/libacadsharp_native_init.a`, the "
         "static archives, where the static smoke certified them\n"
-        "- `include/viprs_acadsharp.h` — the frozen C ABI\n"
-        "- `metadata/LINKINFO.json` — Rust triple, ABI fields and the measured link facts\n"
-        "- `metadata/BUILDINFO.json` — what produced the binaries\n"
-        "- `metadata/CHECKSUMS.txt` — sha256 of every other file\n"
-        "- `LICENSES/` — ACadSharp's MIT licence and the third-party notices\n\n"
+        "- `include/viprs_acadsharp.h`, the frozen C ABI\n"
+        "- `metadata/LINKINFO.json`: Rust triple, ABI fields and the measured link facts\n"
+        "- `metadata/BUILDINFO.json`: what produced the binaries\n"
+        "- `metadata/CHECKSUMS.txt`: sha256 of every other file\n"
+        "- `LICENSES/`: ACadSharp's MIT licence and the third-party notices\n\n"
         f"Source: {source_url(upstream)}\n"
         f"sha256: `{source_sha256(upstream)}`\n"
         f"Upstream commit: `{source_commit(upstream)}`\n"
@@ -1941,7 +1941,7 @@ def main(argv=None):
         if args.upload and built_files:
             upload_release(version, built_files)
         elif args.upload:
-            print("\nNo archives built — skipping upload.", file=sys.stderr)
+            print("\nNo archives built, so nothing to upload.", file=sys.stderr)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130

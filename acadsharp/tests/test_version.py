@@ -48,7 +48,7 @@ class TestTheUpstreamHalfIsPinned:
     def test_it_has_a_source_sha256(self):
         upstream, _ = ba.split_version(ba.read_version())
         assert upstream in ba.SOURCE_SHA256, (
-            f"acadsharp/VERSION says {upstream} but SOURCE_SHA256 has no entry for it — "
+            f"acadsharp/VERSION says {upstream} but SOURCE_SHA256 has no entry for it: "
             "record the tarball digest before building against it"
         )
 

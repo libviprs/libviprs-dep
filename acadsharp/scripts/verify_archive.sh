@@ -666,7 +666,7 @@ if [ -f "$SHARED_LIB" ]; then
   SHARED_SIZE=$(wc -c < "$SHARED_LIB" | tr -d ' ')
   echo "  size: $SHARED_SIZE bytes"
   if [ "$SHARED_SIZE" -lt "$MIN_SHARED_BYTES" ]; then
-    fail "$SHARED_NAME is only $SHARED_SIZE bytes — expected at least $MIN_SHARED_BYTES"
+    fail "$SHARED_NAME is only $SHARED_SIZE bytes, expected at least $MIN_SHARED_BYTES"
   fi
 
   SHARED_MAGIC=$(read_bytes "$SHARED_LIB" 0 4)
@@ -748,7 +748,7 @@ walk_archive() {
       echo "  fat-archive magic ok"
       ;;
     '!<thin>')
-      fail "$label is a GNU thin archive — it only references the build sandbox's objects"
+      fail "$label is a GNU thin archive, so it only references the build sandbox's objects"
       return 1
       ;;
     *)
@@ -853,7 +853,7 @@ walk_archive() {
   fi
 
   if [ ! -s "$index_out" ]; then
-    fail "$label has no symbol index — consumers would need a manual ranlib"
+    fail "$label has no symbol index, so consumers would need a manual ranlib"
     return 1
   fi
   return 0
@@ -863,7 +863,7 @@ if [ -f "$STATIC_LIB" ]; then
   echo "---- $EXPECTED_DIR/lib/$STATIC_NAME ----"
   STATIC_SIZE=$(wc -c < "$STATIC_LIB" | tr -d ' ')
   if [ "$STATIC_SIZE" -lt "$MIN_STATIC_BYTES" ]; then
-    fail "$STATIC_NAME is only $STATIC_SIZE bytes — expected at least $MIN_STATIC_BYTES"
+    fail "$STATIC_NAME is only $STATIC_SIZE bytes, expected at least $MIN_STATIC_BYTES"
   fi
   if walk_archive "$STATIC_LIB" "$STATIC_NAME" 1 "$WORK/static-index.txt"; then
     if require_symbols "$WORK/static-index.txt" "$STATIC_NAME's symbol index"; then
@@ -901,8 +901,8 @@ fi
 
 # ---------------------------------------------------------------------------
 # `static_certified: true` is a claim that the static smoke linked and
-# ran. When this host can build for this target, hold the claim to it —
-# and to running, not only linking. An archive without the forced
+# ran. When this host can build for this target, hold the claim to it,
+# and to running rather than only linking. An archive without the forced
 # initialiser links perfectly and aborts on the first managed call, so a
 # link-only check cannot tell a working archive from a broken one.
 # ---------------------------------------------------------------------------

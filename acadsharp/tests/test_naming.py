@@ -47,7 +47,7 @@ class TestArchiveName:
             assert name.count("-") == 2
 
     def test_no_version_in_the_archive_name(self):
-        # The version lives in the release tag, not the filename — the
+        # The version lives in the release tag, not the filename. The
         # same split pdfium and zstd use, so a consumer's URL template
         # works across all three.
         version = ba.read_version()
