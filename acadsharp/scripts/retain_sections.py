@@ -32,8 +32,18 @@ A section named on the command line and not found in the file is an error.
 The names come from what ILC emits, so a rename upstream should stop the
 build rather than quietly produce an archive that only links on some
 platforms.
+
+`--check` reads a finished `ar` archive, or a bare object, and reports
+whether every section it finds by those names is retained. That is the
+half that verifies the artifact rather than the recipe, and it is the half
+that works everywhere: reading an ELF section header needs no linker and
+no matching architecture, so an x64 archive can be checked from an arm64
+box and a musl archive from a glibc one. The consumer link test cannot say
+that, because it only runs when the host can build for the target, so the
+two musl archives shipped a static recipe nothing had ever linked.
 """
 
+import os
 import struct
 import sys
 
@@ -95,7 +105,128 @@ def retain(path, wanted):
     return changed
 
 
+AR_MAGIC = b"!<arch>\n"
+
+
+def ar_members(data):
+    """Yield (name, offset, size) for every member of an `ar` archive.
+
+    Both long-name conventions are handled, because a Linux archive uses
+    the GNU `//` table and a mac archive uses BSD's `#1/<len>`, and a
+    reader that knows only one sees garbage names in the other.
+    """
+    if data[: len(AR_MAGIC)] != AR_MAGIC:
+        raise ValueError("not an ar archive")
+    at = len(AR_MAGIC)
+    longnames = b""
+    while at + 60 <= len(data):
+        header = data[at : at + 60]
+        if header[58:60] != b"`\n":
+            raise ValueError(f"member header at offset {at} has bad magic")
+        name = header[0:16].decode("ascii", "replace").rstrip()
+        size = int(header[48:58].decode("ascii").strip())
+        body = at + 60
+        if name == "//":
+            longnames = data[body : body + size]
+        elif name.startswith("#1/"):
+            length = int(name[3:])
+            name = data[body : body + length].split(b"\0")[0].decode("ascii", "replace")
+            body += length
+            size -= length
+        elif name.startswith("/") and name[1:].isdigit():
+            start = int(name[1:])
+            name = longnames[start : longnames.index(b"/\n", start)].decode()
+        yield name.rstrip("/"), body, size
+        at = body + size
+        if at % 2:
+            at += 1
+
+
+def sections_of(blob, wanted):
+    """{name: sh_flags} for the wanted sections of the ELF64 LE object in `blob`.
+
+    Returns None when `blob` is not an ELF64 little-endian object, which is
+    how the index members and any foreign object in an archive get skipped
+    rather than misread.
+    """
+    if len(blob) < 64 or blob[:4] != b"\x7fELF" or blob[4] != 2 or blob[5] != 1:
+        return None
+    (e_shoff,) = struct.unpack_from("<Q", blob, E_SHOFF)
+    e_shentsize, e_shnum, e_shstrndx = struct.unpack_from("<HHH", blob, E_SHPARAMS)
+    if e_shnum == 0 or e_shoff + e_shnum * e_shentsize > len(blob):
+        return {}
+    (strtab_offset,) = struct.unpack_from("<Q", blob, e_shoff + e_shstrndx * e_shentsize + 24)
+
+    found = {}
+    for index in range(e_shnum):
+        at = e_shoff + index * e_shentsize
+        name_index, _sh_type, flags = struct.unpack_from("<IIQ", blob, at)
+        start = strtab_offset + name_index
+        name = blob[start : blob.index(b"\0", start)].decode("ascii", "replace")
+        if name in wanted:
+            found[name] = flags
+    return found
+
+
+def check(path, wanted):
+    """Report every wanted section in `path` and whether it is retained.
+
+    `path` is an `ar` archive or a bare object. Returns a list of
+    (member, section, flags, retained) and raises when the file carries no
+    such section at all, because "I found nothing to check" and "everything
+    I checked was fine" must not both look like success.
+    """
+    with open(path, "rb") as handle:
+        data = handle.read()
+
+    if data[: len(AR_MAGIC)] == AR_MAGIC:
+        members = [(name, data[at : at + size]) for name, at, size in ar_members(data)]
+    else:
+        members = [(os.path.basename(path), data)]
+
+    found = []
+    for name, blob in members:
+        sections = sections_of(blob, wanted)
+        if not sections:
+            continue
+        for section, flags in sorted(sections.items()):
+            found.append((name, section, flags, bool(flags & SHF_GNU_RETAIN)))
+
+    if not found:
+        raise ValueError(
+            f"{path} carries no section named {', '.join(sorted(wanted))}, so there was "
+            "nothing to check. Either this is the wrong file or the runtime renamed a "
+            "section, and both mean the flag this looks for is not being set."
+        )
+    return found
+
+
 def main(argv):
+    if len(argv) >= 2 and argv[1] == "--check":
+        if len(argv) < 4:
+            print(__doc__.splitlines()[3].strip(), file=sys.stderr)
+            return 2
+        path, wanted = argv[2], argv[3:]
+        try:
+            found = check(path, wanted)
+        except (ValueError, OSError) as problem:
+            print(f"retain_sections.py: {problem}", file=sys.stderr)
+            return 1
+        bad = 0
+        for member, section, flags, retained in found:
+            state = "retained" if retained else "NOT RETAINED"
+            print(f"{path}({member}): {section} sh_flags {flags:#x} {state}")
+            bad += not retained
+        if bad:
+            print(
+                f"retain_sections.py: {bad} section(s) are not retained, so a linker with "
+                "-z start-stop-gc will collect them and the encapsulation symbols will be "
+                "undefined",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+
     if len(argv) < 3:
         print(__doc__.splitlines()[2], file=sys.stderr)
         return 2

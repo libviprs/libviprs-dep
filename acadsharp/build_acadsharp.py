@@ -1284,7 +1284,7 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                 readelf -S -W "$OBJ" 2>/dev/null \
                     | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\) .*/\1/p' \
                     | grep -qx __modules || continue
-                if python3 /work/retain_sections.py "$OBJ" __modules; then
+                if python3 "$WORK/retain_sections.py" "$OBJ" __modules; then
                     RETAINED=$((RETAINED + 1))
                 else
                     MERGE_OK=0
@@ -1715,6 +1715,31 @@ def build_for_job(version, plat, arch, output_dir):
                     f"the ABI smoke failed against the staged library: {detail}. "
                     f"The archive is at {path} for inspection; it is not shippable."
                 )
+
+            # A target that is supposed to carry a static half and does not.
+            #
+            # Every step in the static branch of the staging script
+            # degrades the same way: it drops the two archives and lets
+            # the cell finish, so `static_certified` comes out false, the
+            # manifest legally omits the static fields, the verifier is
+            # happy because shipping shared-only is a recorded outcome,
+            # and the release page shows `false` in a column nobody reads.
+            # That is the right behaviour for a target that was never
+            # meant to have one and the wrong behaviour for these four,
+            # and there was nothing holding them to it.
+            #
+            # It matters more now than it did. Retaining `__modules` is a
+            # new way for the static branch to give up, and it can give up
+            # on every ELF target at once (no python3 in the image, a
+            # section ILC renamed, an object that will not rewrite).
+            # Before, a failure there reddened the cell.
+            if rid_for(plat, arch) in STATIC_TARGETS and facts.get("static_ok") != "1":
+                raise RuntimeError(
+                    f"{job} is a static target and the static half did not certify, so this "
+                    f"archive would have published shared-only and green. The build log says "
+                    f"why; the archive is at {path} for inspection."
+                )
+
             verify_archive(path, log_file, job)
             log_file.write(f"\n# finished: {time.strftime('%Y-%m-%d %H:%M:%S %z')} (success)\n")
             return path

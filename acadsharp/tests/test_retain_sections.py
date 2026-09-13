@@ -299,3 +299,159 @@ class TestTheBuildActuallyRunsIt:
         after = stage[stage.index("retain_sections.py") :]
 
         assert "MERGE_OK=0" in after[:400]
+
+
+def make_archive(members):
+    """A GNU `ar` archive of (name, bytes) pairs, short names only."""
+    out = bytearray(b"!<arch>\n")
+    for name, blob in members:
+        header = f"{name:<16}{'0':<12}{'0':<6}{'0':<6}{'100644':<8}{len(blob):<10}".encode()
+        out += header + b"`\n" + blob
+        if len(blob) % 2:
+            out += b"\n"
+    return bytes(out)
+
+
+class TestReadingAnArchive:
+    """The check has to read a finished archive, not the loose objects.
+
+    What ships is the archive, and the one thing that mattered here was
+    whether the flag survived into it.
+    """
+
+    def test_it_finds_the_member_carrying_the_section(self, tmp_path):
+        good = make_object(["__modules"], {"__modules": SHF_ALLOC | SHF_GNU_RETAIN})
+        path = tmp_path / "lib.a"
+        path.write_bytes(make_archive([("other.o", make_object([".text"])), ("mod.o", good)]))
+
+        found = retain_sections.check(str(path), ["__modules"])
+
+        assert found == [("mod.o", "__modules", SHF_ALLOC | SHF_GNU_RETAIN, True)]
+
+    def test_an_unretained_section_is_reported_as_such(self, tmp_path):
+        path = tmp_path / "lib.a"
+        path.write_bytes(make_archive([("mod.o", make_object(["__modules"]))]))
+
+        found = retain_sections.check(str(path), ["__modules"])
+
+        assert [entry[3] for entry in found] == [False]
+
+    def test_a_bare_object_works_too(self, tmp_path):
+        path = write_object(tmp_path, ["__modules"])
+
+        found = retain_sections.check(path, ["__modules"])
+
+        assert found[0][1] == "__modules"
+
+    def test_members_that_are_not_elf64_are_skipped_rather_than_misread(self, tmp_path):
+        """An archive's symbol index is not an object and must not be parsed as one."""
+        path = tmp_path / "lib.a"
+        path.write_bytes(
+            make_archive(
+                [
+                    ("/", b"\x00" * 64),
+                    ("junk.o", b"nothing like an ELF file at all, but long enough" * 4),
+                    ("mod.o", make_object(["__modules"], {"__modules": SHF_GNU_RETAIN})),
+                ]
+            )
+        )
+
+        found = retain_sections.check(str(path), ["__modules"])
+
+        assert [entry[0] for entry in found] == ["mod.o"]
+
+    def test_finding_nothing_is_an_error_not_a_pass(self, tmp_path):
+        """`nothing to check` and `everything checked was fine` must differ.
+
+        This is the whole reason the check exists. A verifier that reports
+        green because it found nothing to look at is what shipped four
+        archives with an unlinkable static half.
+        """
+        path = tmp_path / "lib.a"
+        path.write_bytes(make_archive([("plain.o", make_object([".text"]))]))
+
+        with pytest.raises(ValueError) as problem:
+            retain_sections.check(str(path), ["__modules"])
+
+        assert "nothing to check" in str(problem.value)
+
+
+class TestCheckOnTheCommandLine:
+    def _run(self, *args):
+        return subprocess.run(
+            [sys.executable, SCRIPT, "--check", *args], capture_output=True, text=True, check=False
+        )
+
+    def test_a_retained_section_exits_zero(self, tmp_path):
+        path = tmp_path / "lib.a"
+        path.write_bytes(
+            make_archive([("mod.o", make_object(["__modules"], {"__modules": SHF_GNU_RETAIN}))])
+        )
+
+        result = self._run(str(path), "__modules")
+
+        assert result.returncode == 0
+        assert "retained" in result.stdout
+
+    def test_an_unretained_section_exits_non_zero_and_says_why(self, tmp_path):
+        path = tmp_path / "lib.a"
+        path.write_bytes(make_archive([("mod.o", make_object(["__modules"]))]))
+
+        result = self._run(str(path), "__modules")
+
+        assert result.returncode == 1
+        assert "NOT RETAINED" in result.stdout
+        assert "start-stop-gc" in result.stderr
+
+    def test_it_round_trips_with_the_setter(self, tmp_path):
+        """Set the flag, then check it, through the two public entry points."""
+        obj = write_object(tmp_path, ["__modules"])
+        assert self._run(obj, "__modules").returncode == 1
+
+        retain_sections.retain(obj, ["__modules"])
+
+        assert self._run(obj, "__modules").returncode == 0
+
+
+class TestAStaticTargetCannotShipSharedOnly:
+    """The degradation path that would have published this silently.
+
+    Every failure in the staging script's static branch drops the two
+    archives and lets the cell finish, so the manifest says
+    `static_certified: false`, the verifier accepts it because shared-only
+    is a legal outcome, and the release page shows `false` in a column.
+    Retaining `__modules` adds a new way to reach that state, and one that
+    can hit every ELF target at once, so the driver now refuses it.
+    """
+
+    def test_every_static_target_must_certify(self):
+        import build_acadsharp as ba
+
+        driver = open(ba.__file__).read()
+        at = driver.index('in STATIC_TARGETS and facts.get("static_ok")')
+
+        assert "raise RuntimeError" in driver[at : at + 400]
+
+    def test_it_is_checked_before_the_archive_is_verified(self):
+        """Verifying first would report the shared-only archive as fine."""
+        import build_acadsharp as ba
+
+        driver = open(ba.__file__).read()
+
+        assert driver.index('in STATIC_TARGETS and facts.get("static_ok")') < driver.index(
+            "verify_archive(path, log_file, job)"
+        )
+
+    def test_the_four_linux_rids_are_the_static_targets(self):
+        """The mac cell has never built a static half, and cannot: NativeAOT
+        emits Mach-O there and the driver sets WANT_STATIC=0 for it. So
+        `static_ok 0` on mac is the configuration, not a regression."""
+        import build_acadsharp as ba
+
+        assert ba.STATIC_TARGETS == (
+            "linux-x64",
+            "linux-arm64",
+            "linux-musl-x64",
+            "linux-musl-arm64",
+        )
+        assert not any("osx" in rid for rid in ba.STATIC_TARGETS)

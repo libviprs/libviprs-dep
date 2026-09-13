@@ -1138,3 +1138,47 @@ class TestSymbolForcingArgumentsAreRefused:
         )
         result = _verify(_repack(root))
         assert result.returncode == 1
+
+
+class TestTheModuleSectionIsRetained:
+    """The check that reads the artifact instead of the recipe.
+
+    Issue #67 shipped four archives and failed the fifth, and the reason
+    the fifth was the only one to say anything is that it was the only
+    target whose linker was lld. The two musl archives carry the same
+    defect and published green, because the consumer link only runs when
+    the host can build for the target and no host could build for either
+    of them. Reading a section header needs no linker and no matching
+    architecture, so this check runs everywhere the others cannot.
+    """
+
+    def _clear_the_flag(self, root):
+        """Undo exactly what the build does, on the packed archive."""
+        lib = os.path.join(root, "lib", ba.STATIC_LIBRARY_NAME)
+        with open(lib, "rb") as handle:
+            data = bytearray(handle.read())
+        needle = struct.pack("<Q", 0x200000 | 0x2 | 0x1)
+        replacement = struct.pack("<Q", 0x2 | 0x1)
+        assert data.count(needle) == 1, (
+            f"expected one retained section in {lib}, found {data.count(needle)}"
+        )
+        data[data.index(needle) : data.index(needle) + 8] = replacement
+        with open(lib, "wb") as handle:
+            handle.write(data)
+
+    def test_a_good_archive_says_the_section_is_retained(self, tmp_path, good_tree):
+        result = _verify(_pack(_clone(good_tree, tmp_path)))
+
+        assert result.returncode == 0, _output(result)
+        assert "__modules is retained" in result.stdout
+
+    def test_an_archive_without_the_flag_is_refused(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        self._clear_the_flag(root)
+
+        result = _verify(_repack(root))
+
+        assert result.returncode == 1
+        out = _output(result)
+        assert "NOT RETAINED" in out, out
+        assert "start-stop-gc" in out, out

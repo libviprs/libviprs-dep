@@ -89,7 +89,7 @@ and they appear together or not at all.
 | `platform` | string | always | `linux`, `musl` or `mac`. The same fact as `target`, in this repo's own vocabulary. | Usually nothing; `target` is the precise one. |
 | `cpu` | string | always | `x64` or `arm64`. | Usually nothing, same reason. |
 | `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `1` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
-| `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `1` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
+| `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `2` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
 | `abi_header_sha256` | string | always | 64 lowercase hex characters: the sha256 of `include/viprs_acadsharp.h` as shipped in this same archive. | Verify the shipped header is the one this manifest describes, before generating bindings from it. |
 | `abi_fingerprint` | string | always | 16 lowercase hex characters. See below: this one has a format, and the format is load-bearing. | Parse as a base-16 integer and compare against `viprs_acad_abi_fingerprint()` at run time. |
 | `shared_library` | string | always | Archive-relative path to the shared library, `lib/libacadsharp_native.so` or `lib/libacadsharp_native.dylib`. | For a dynamic link: a link-search directive for its directory and `cargo:rustc-link-lib=acadsharp_native`. For `dlopen`, the path itself. |
@@ -245,6 +245,40 @@ one, the link fails on `RhRegisterOSModule`.
 **Order**, init archive before main archive, for the same left-to-right reason.
 Swapping the two lines fails the same way.
 
+### The module table, `--gc-sections`, and why you need no flag for it
+
+The runtime finds its module headers in a section called `__modules`, and it
+finds that section through `__start___modules` and `__stop___modules`, the two
+symbols a linker synthesises around any section whose name is a C identifier.
+Nothing relocates against the section itself, so those two symbols are its only
+references.
+
+Since version 13, lld defaults to `-z start-stop-gc`, which says a reference
+through an encapsulation symbol is not a reason to keep a section alive. rustc
+passes `--gc-sections`, and it links with lld on `x86_64-unknown-linux-gnu`. So
+on that target the linker collects `__modules`, then has nothing left for
+`__start___modules` to point at, and the link ends with:
+
+```
+rust-lld: error: undefined symbol: __start___modules
+>>> referenced by bootstrapperdll.o:(InitializeRuntime()) in archive libacadsharp_native_init.a
+```
+
+GNU ld keeps the section, which is why the same archive links on aarch64 and
+why a `cc` link of it succeeds anywhere.
+
+**You need no flag for this.** The producer sets `SHF_GNU_RETAIN` on the
+section, so the archive carries the requirement itself, and `verify_archive.sh`
+refuses an archive whose `__modules` lacks it. That is deliberate rather than
+tidy: the flag cannot be left to the consumer, because the only way to express
+it on a link line is `-z nostart-stop-gc`, and the next section explains why an
+argument cannot reach the binary from here.
+
+**If you do see that error**, you are holding an archive built before this was
+fixed. Take a newer one. If you cannot, `-Wl,-z,nostart-stop-gc` on your own
+final binary is the workaround, and it has to go on the binary rather than on
+any crate between you and this library.
+
 ### Do not express any of this as a link argument
 
 `cargo:rustc-link-arg` does **not** propagate from a dependency's build script
@@ -292,7 +326,7 @@ a consumer checks. A certified Linux x86-64 target:
   "platform": "linux",
   "cpu": "x64",
   "abi_version": 1,
-  "wire_version": 1,
+  "wire_version": 2,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.so",
@@ -319,7 +353,7 @@ And an uncertified one, which is the same file with five differences and no
   "platform": "mac",
   "cpu": "arm64",
   "abi_version": 1,
-  "wire_version": 1,
+  "wire_version": 2,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.dylib",

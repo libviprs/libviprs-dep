@@ -408,6 +408,40 @@ class TestTheManifestSpecIsEnoughToLinkFrom:
             "only in the general section"
         )
 
+    def test_it_explains_why_no_gc_flag_is_needed_and_what_to_do_if_it_is(self, linkinfo):
+        """The failure a reader arrives at this page holding.
+
+        Four archives are downloadable whose `__modules` has no retain
+        flag, so someone will hit `undefined symbol: __start___modules`
+        and come looking. Saying only "we set a flag for you" leaves that
+        reader with nothing, so the paragraph has to name the error text
+        and the escape hatch as well as the mechanism.
+        """
+        para = self._paragraph(linkinfo, "start-stop-gc")
+        assert "__start___modules" in para, (
+            "the symbol in the error message is the only string the reader has to "
+            "search for, so it has to appear here"
+        )
+        assert "SHF_GNU_RETAIN" in para or "SHF_GNU_RETAIN" in linkinfo, (
+            "the mechanism has to be named, or nobody can check the claim against "
+            "an archive they are holding"
+        )
+        escape = self._paragraph(linkinfo, "If you do see that error")
+        assert re.search(r"older|before this|newer", escape, re.I), (
+            "a reader with an old archive needs to be told that is what they have, "
+            "and that the flag is the workaround rather than the recipe"
+        )
+
+    def test_it_does_not_tell_a_consumer_to_pass_a_gc_flag_as_the_recipe(self, linkinfo_flat):
+        """The whole point of the fix is that the recipe did not change.
+
+        A document that lists `-z nostart-stop-gc` beside the two
+        `rustc-link-lib` lines would be telling consumers to carry a
+        requirement the archive already carries, and one that cannot
+        travel from a dependency's build script anyway.
+        """
+        assert "cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc" not in linkinfo_flat
+
     def test_it_says_the_initialiser_archive_comes_first_and_what_happens_otherwise(
         self, linkinfo, linkinfo_flat
     ):
