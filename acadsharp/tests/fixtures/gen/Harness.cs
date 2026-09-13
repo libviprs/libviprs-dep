@@ -371,6 +371,7 @@ namespace Viprs.Cad.Fixtures
 			MemoryStream raw = o.RawPath == null ? null : new MemoryStream();
 			uint decodeCode = Result.Ok;
 			string decodeDetail = null;
+			bool framedAfterRefusal = false;
 
 			// Settle the heap before the baseline, so "RSS after decode_begin"
 			// is a number about the document and not about whatever the read
@@ -382,8 +383,41 @@ namespace Viprs.Cad.Fixtures
 			long rssAfterBegin = Rss();
 			bool peakReset = ResetPeak();
 
+			// What the decode asks the allocator for, which is a different
+			// question from what it keeps and from what the process commits.
+			//
+			// The open has been bracketed this way since the corpus was first
+			// recorded, two lines up, and the decode never was: it had
+			// retention, which is near zero by construction because the stream
+			// is an iterator, and peak RSS, which moves with the collector's
+			// mood. Neither of those measures churn, and churn is exactly what
+			// "three bytes of garbage per byte of output" is a claim about. So
+			// the decode gets the same exact, deterministic instrument, and
+			// test_adapter_benchmarks.py puts a ceiling on the ratio.
+			long allocDecodeBefore = GC.GetAllocatedBytesForCurrentThread();
+
+			// Wall time, reported and never asserted on. A container's clock is
+			// not a budget: it is here so a change that claims to make the
+			// encode faster has a number beside it in the capture rather than
+			// an argument.
+			Stopwatch decodeClock = Stopwatch.StartNew();
+
 			while (true)
 			{
+				// The batch header is cleared before every call, so afterwards
+				// the magic in the first four bytes can only have been written
+				// by the call that just returned.
+				//
+				// That is what makes "did this call frame a batch" a question
+				// the harness can answer, and it is the one thing a refusal
+				// must never have done: a framed batch in the caller's buffer
+				// beside a result code and *written of zero is a stream the
+				// caller has been told is not there.
+				for (int i = 0; i < WireFormat.BatchHeaderBytes; i++)
+				{
+					buf[i] = 0;
+				}
+
 				ulong written;
 				byte done;
 				uint r;
@@ -398,12 +432,14 @@ namespace Viprs.Cad.Fixtures
 				{
 					decodeCode = ex.Code;
 					decodeDetail = ex.Message;
+					framedAfterRefusal = LooksFramed(buf);
 					break;
 				}
 				catch (Exception ex)
 				{
 					decodeCode = Result.InternalError;
 					decodeDetail = ex.GetType().FullName + ": " + ex.Message;
+					framedAfterRefusal = LooksFramed(buf);
 					break;
 				}
 
@@ -424,6 +460,7 @@ namespace Viprs.Cad.Fixtures
 				{
 					decodeCode = r;
 					decodeDetail = "decode_next_batch returned " + Name(r);
+					framedAfterRefusal = LooksFramed(buf);
 					break;
 				}
 
@@ -447,6 +484,8 @@ namespace Viprs.Cad.Fixtures
 				}
 			}
 
+			decodeClock.Stop();
+			long allocDecode = GC.GetAllocatedBytesForCurrentThread() - allocDecodeBefore;
 			long peakDuringDecode = PeakRss();
 			long managedAfterDecode = GC.GetTotalMemory(true) / 1024;
 			long rssAfterCollect = Rss();
@@ -455,6 +494,9 @@ namespace Viprs.Cad.Fixtures
 			json.Str("decode_detail", decodeDetail);
 			json.UNum("batches", batches);
 			json.UNum("output_bytes", bytes);
+			json.Bool("framed_batch_after_refusal", framedAfterRefusal);
+			json.Num("alloc_decode_bytes", allocDecode);
+			json.Num("decode_micros", decodeClock.ElapsedTicks / (Stopwatch.Frequency / 1000000L));
 			json.Num("grown_batch_bytes", grownTo);
 			json.Num("rss_after_begin_kb", rssAfterBegin);
 			json.Bool("peak_reset", peakReset);
@@ -546,11 +588,7 @@ namespace Viprs.Cad.Fixtures
 				}
 			}
 
-			ResolvedLimits limits = new ResolvedLimits();
-			if (maxEntities != 0ul)
-			{
-				limits.MaxEntities = maxEntities;
-			}
+			ResolvedLimits limits = new ResolvedLimits(maxEntities: maxEntities);
 
 			CadDocument doc = Corpus.BuildFanout(depth, width);
 			List<Entity> roots = new List<Entity>();
@@ -616,46 +654,47 @@ namespace Viprs.Cad.Fixtures
 			}
 		}
 
+		// Whether the bytes at the front of the caller's buffer are a batch
+		// header. Only ever asked after a call that did not return OK, and only
+		// with the header cleared beforehand, so a true answer means the
+		// refusing call framed a batch and then said nothing was written.
+		private static bool LooksFramed(byte[] buf)
+		{
+			if (buf.Length < WireFormat.BatchHeaderBytes)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < WireFormat.Magic.Length; i++)
+			{
+				if (buf[i] != WireFormat.Magic[i])
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
 		private static void Emit(Json json)
 		{
 			Console.Out.Write(json.ToString());
 			Console.Out.Write("\n");
 		}
 
+		// Zero means "the caller said nothing", which is what an absent flag
+		// leaves in Options and what ResolvedLimits reads as the default. The
+		// six ifs this used to be were that rule written a second time.
 		private static ResolvedLimits Limits(Options o)
 		{
-			ResolvedLimits l = new ResolvedLimits();
-			if (o.MaxInput != 0ul)
-			{
-				l.MaxInputBytes = o.MaxInput;
-			}
-
-			if (o.MaxEntities != 0ul)
-			{
-				l.MaxEntities = o.MaxEntities;
-			}
-
-			if (o.MaxString != 0ul)
-			{
-				l.MaxStringBytes = o.MaxString;
-			}
-
-			if (o.MaxPolyline != 0ul)
-			{
-				l.MaxPolylinePoints = o.MaxPolyline;
-			}
-
-			if (o.MaxDepth != 0u)
-			{
-				l.MaxBlockDepth = o.MaxDepth;
-			}
-
-			if (o.MaxOutput != 0ul)
-			{
-				l.MaxOutputBytes = o.MaxOutput;
-			}
-
-			return l;
+			return new ResolvedLimits(
+				o.MaxInput,
+				o.MaxEntities,
+				o.MaxString,
+				o.MaxPolyline,
+				o.MaxDepth,
+				o.MaxOutput
+			);
 		}
 
 		private static string Name(uint code)

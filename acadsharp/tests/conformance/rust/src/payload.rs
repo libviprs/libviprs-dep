@@ -19,6 +19,12 @@
 
 use crate::wire::{self, f64_at, u32_at, u64_at, Record};
 
+/// What a checked read reports when the record is shorter than the offset the
+/// layout puts a field at. It is a failed check, not a panic, because a
+/// consumer that aborts on a malformed batch is a consumer that can be taken
+/// down by one.
+const SHORT: &str = "a record too short to hold it";
+
 const PROBE_TEXT: &[u8] = b"VIPRS-TEXT-PROBE-";
 const PROBE_WARNING: &[u8] = b"VIPRS-WARNING-PROBE";
 const PROBE_WARNING_CODE: u32 = 1100;
@@ -58,23 +64,39 @@ impl Verifier {
     }
 
     fn f64_at(&mut self, p: &[u8], off: usize, want: f64, what: &str) {
-        let got = f64_at(p, off);
-        if got != want {
-            self.fail(what, format!("{got}"), format!("{want}"));
+        match f64_at(p, off) {
+            Some(got) if got == want => {}
+            Some(got) => self.fail(what, format!("{got}"), format!("{want}")),
+            None => self.fail(what, SHORT.into(), format!("{want}")),
         }
     }
 
     fn u32_at(&mut self, p: &[u8], off: usize, want: u32, what: &str) {
-        let got = u32_at(p, off);
-        if got != want {
-            self.fail(what, format!("{got}"), format!("{want}"));
+        match u32_at(p, off) {
+            Some(got) if got == want => {}
+            Some(got) => self.fail(what, format!("{got}"), format!("{want}")),
+            None => self.fail(what, SHORT.into(), format!("{want}")),
         }
     }
 
     fn u64_at(&mut self, p: &[u8], off: usize, want: u64, what: &str) {
-        let got = u64_at(p, off);
-        if got != want {
-            self.fail(what, format!("{got}"), format!("{want}"));
+        match u64_at(p, off) {
+            Some(got) if got == want => {}
+            Some(got) => self.fail(what, format!("{got}"), format!("{want}")),
+            None => self.fail(what, SHORT.into(), format!("{want}")),
+        }
+    }
+
+    /// A count field the layout below then multiplies out. A record too short
+    /// to carry it reads as zero with the failure recorded, so the checks that
+    /// follow run against nothing rather than against a number nobody read.
+    fn count(&mut self, p: &[u8], off: usize, what: &str) -> u32 {
+        match u32_at(p, off) {
+            Some(got) => got,
+            None => {
+                self.fail(what, SHORT.into(), "a count".into());
+                0
+            }
         }
     }
 
@@ -166,7 +188,7 @@ impl Verifier {
                 self.f64_at(p, 24, 100.75, "ViewBegin max_x");
                 self.f64_at(p, 32, 50.125, "ViewBegin max_y");
                 self.u32_at(p, 52, 0, "ViewBegin reserved0");
-                let name_len = u32_at(p, 48) as usize;
+                let name_len = self.count(p, 48, "ViewBegin name_bytes") as usize;
                 self.len_is(r, 8 + 56 + name_len + pad4(name_len), "ViewBegin length");
             }
             wire::TYPE_LINE => {
@@ -194,9 +216,9 @@ impl Verifier {
                 self.prologue(r);
                 self.u32_at(p, 16, PROBE_SPLINE_DEGREE, "Spline degree");
                 self.u32_at(p, 20, 0, "Spline flags");
-                let knots = u32_at(p, 24) as usize;
-                let controls = u32_at(p, 28) as usize;
-                let weights = u32_at(p, 32) as usize;
+                let knots = self.count(p, 24, "Spline knot_count") as usize;
+                let controls = self.count(p, 28, "Spline control_count") as usize;
+                let weights = self.count(p, 32, "Spline weight_count") as usize;
                 self.u32_at(p, 36, 0, "Spline reserved1");
                 if weights != 0 && weights != controls {
                     self.fail("Spline weight_count", format!("{weights}"), format!("{controls}"));
@@ -208,7 +230,7 @@ impl Verifier {
             wire::TYPE_TEXT => {
                 self.prologue(r);
                 self.probes(p, 16, wire::TYPE_TEXT, 5, "Text");
-                let bytes = u32_at(p, 56) as usize;
+                let bytes = self.count(p, 56, "Text text_bytes") as usize;
                 self.u32_at(p, 60, 0, "Text reserved1");
                 self.bytes_at(p, 64, PROBE_TEXT, "Text bytes");
                 self.len_is(r, 8 + 64 + bytes + pad4(bytes), "Text length");
@@ -217,7 +239,7 @@ impl Verifier {
                 self.u32_at(p, 0, PROBE_WARNING_CODE, "Warning code");
                 self.u32_at(p, 4, 0, "Warning reserved0");
                 self.u64_at(p, 8, probe_handle(wire::TYPE_WARNING), "Warning item_handle");
-                let bytes = u32_at(p, 16) as usize;
+                let bytes = self.count(p, 16, "Warning message_bytes") as usize;
                 self.u32_at(p, 20, 0, "Warning reserved1");
                 self.bytes_at(p, 24, PROBE_WARNING, "Warning bytes");
                 self.len_is(r, 8 + 24 + bytes + pad4(bytes), "Warning length");

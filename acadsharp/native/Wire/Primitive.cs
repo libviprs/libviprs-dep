@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 // One record's worth of data, before it becomes bytes.
 //
@@ -280,12 +279,23 @@ namespace Viprs.Wire
 				throw new ArgumentException("weights are either absent or one per control point");
 			}
 
-			List<double> values = new List<double>(
+			// One array of the exact size, filled in place, the way Vertices
+			// above builds its own. It used to be a List built to that same
+			// size, appended to three times and then copied out with ToArray,
+			// which is a second array and a second pass over every control
+			// point the caller just transformed.
+			double[] values = new double[
 				knots.Length + controlPoints.Length + weights.Length
+			];
+			Array.Copy(knots, 0, values, 0, knots.Length);
+			Array.Copy(controlPoints, 0, values, knots.Length, controlPoints.Length);
+			Array.Copy(
+				weights,
+				0,
+				values,
+				knots.Length + controlPoints.Length,
+				weights.Length
 			);
-			values.AddRange(knots);
-			values.AddRange(controlPoints);
-			values.AddRange(weights);
 
 			return new Primitive
 			{
@@ -301,7 +311,7 @@ namespace Viprs.Wire
 					(uint)weights.Length,
 					0u,
 				},
-				Values = values.ToArray(),
+				Values = values,
 			};
 		}
 

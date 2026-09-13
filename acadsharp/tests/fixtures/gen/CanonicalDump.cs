@@ -6,6 +6,12 @@ using Viprs.Wire;
 // The canonical text form of one primitive, and the diff that names the first
 // record two streams disagree about.
 //
+// It lives with the fixture generator rather than in native/, because it is
+// test infrastructure and nothing the published library does needs it. Under
+// native/Adapter it was compiled into every shipped shim: a formatter, a
+// StringBuilder and a diff, trimmed or not, inside a binary whose entire
+// boundary is bytes and result codes.
+//
 // Fixed precision on purpose. A round trip through "R" or "0.############"
 // makes the expectation a record of the last machine that wrote it, and the
 // first cross-architecture rerun turns a committed file into a diff nobody can
@@ -73,27 +79,6 @@ namespace Viprs.Cad
 			return sb.ToString();
 		}
 
-		public static string TypeName(ushort type)
-		{
-			switch (type)
-			{
-				case WireFormat.TypeDocumentBegin: return "DocumentBegin";
-				case WireFormat.TypeViewBegin: return "ViewBegin";
-				case WireFormat.TypeLine: return "Line";
-				case WireFormat.TypePolyline: return "Polyline";
-				case WireFormat.TypeArc: return "Arc";
-				case WireFormat.TypeCircle: return "Circle";
-				case WireFormat.TypeEllipse: return "Ellipse";
-				case WireFormat.TypeSpline: return "Spline";
-				case WireFormat.TypePolygon: return "Polygon";
-				case WireFormat.TypeText: return "Text";
-				case WireFormat.TypeWarning: return "Warning";
-				case WireFormat.TypeViewEnd: return "ViewEnd";
-				case WireFormat.TypeDocumentEnd: return "DocumentEnd";
-				default: return "Type" + type.ToString(CultureInfo.InvariantCulture);
-			}
-		}
-
 		private static void Values(StringBuilder sb, string name, double[] v, int from, int count)
 		{
 			sb.Append(' ').Append(name).Append("=[");
@@ -134,7 +119,7 @@ namespace Viprs.Cad
 		{
 			StringBuilder sb = new StringBuilder();
 			sb.Append(index.ToString("00000", CultureInfo.InvariantCulture));
-			sb.Append(' ').Append(TypeName(p.Type));
+			sb.Append(' ').Append(RecordName.Of(p.Type));
 			sb.Append(" handle=").Append(p.ItemHandle.ToString("X", CultureInfo.InvariantCulture));
 			sb.Append(" flags=").Append(p.Flags.ToString(CultureInfo.InvariantCulture));
 
