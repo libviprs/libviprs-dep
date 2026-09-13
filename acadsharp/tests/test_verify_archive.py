@@ -56,6 +56,15 @@ def _require_toolchain():
 # ---------------------------------------------------------------------------
 
 
+# What the stub answers when it is asked what it reads. The real library
+# answers out of AbiConstants; this pair is the fixture's own, so a test
+# that edits the manifest is putting the manifest at odds with a library
+# that has not moved. _finish records the same numbers as facts, which is
+# the path a real build takes from the smoke's output to LINKINFO.json.
+STUB_DWG_MIN = 1014
+STUB_DWG_MAX = 1032
+
+
 def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
     """A stand-in library. `guarded` makes it need its initialiser.
 
@@ -64,6 +73,13 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
     fixture reproduces that with a flag the init object's constructor
     sets, so a probe that only links and never runs cannot tell a good
     archive from a broken one here either.
+
+    `viprs_acad_capabilities_v1` is not here: the verifier now asks the
+    library what AC10xx range it reads and holds the manifest to the
+    answer, and a `return 0u` stub would make that check pass over
+    anything. It is written out properly in `CAPABILITIES_SOURCE`, which
+    is a translation unit of its own because it includes the real header
+    and every other stub here has a signature the header contradicts.
     """
     fingerprint = int(ba.abi_fingerprint(), 16)
     body = [
@@ -84,9 +100,48 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
         elif name == "viprs_acad_abi_version":
             tail = f" + {undefined}()" if undefined else ""
             body.append(f"uint32_t {name}(void) {{{guard}\n\treturn 1u{tail};\n}}")
+        elif name == "viprs_acad_capabilities_v1":
+            continue  # CAPABILITIES_SOURCE, compiled separately
         else:
             body.append(f"uint32_t {name}(void) {{ return 0u; }}")
     return "\n".join(body) + "\n"
+
+
+# Enough of the real call for the verifier's probe, in a translation unit
+# of its own so it can include the header the archive ships. Every other
+# stub above is `uint32_t name(void)`, which the header's real prototypes
+# contradict, so one file cannot hold both.
+#
+# It fills the struct the header declares and writes the pinned version
+# string out, so a sizing call and a fetching call each behave the way
+# ABI.md says they do.
+CAPABILITIES_SOURCE = """\
+#include <stdint.h>
+#include <string.h>
+
+#include "viprs_acadsharp.h"
+
+uint32_t viprs_acad_capabilities_v1(struct viprs_acad_capabilities_v1 *caps, uint8_t *out,
+\tuint64_t cap, uint64_t *required)
+{
+\tstatic const char VERSION[] = "3.7.1";
+\tif (!caps || !required) {
+\t\treturn 1u;
+\t}
+\tif (caps->struct_size != (uint32_t)sizeof *caps) {
+\t\treturn 1u;
+\t}
+\tcaps->abi_version = 1u;
+\tcaps->wire_version = 2u;
+\tcaps->dwg_version_min = %du;
+\tcaps->dwg_version_max = %du;
+\t*required = (uint64_t)(sizeof VERSION - 1);
+\tif (out && cap >= *required) {
+\t\tmemcpy(out, VERSION, (size_t)*required);
+\t}
+\treturn 0u;
+}
+"""
 
 
 # The initialiser object, in the shape the real one has: a constructor
@@ -182,6 +237,11 @@ def _finish(root, plat, arch, *, static_certified):
         "static_ok": "1" if static_certified else "0",
         "static_system_libraries": "",
         "static_link_args": "",
+        # What the shared smoke printed when it asked the library what it
+        # reads. The stub library below answers with the same pair, so a
+        # test that breaks one side is breaking it against the other.
+        "dwg_version_min": str(STUB_DWG_MIN),
+        "dwg_version_max": str(STUB_DWG_MAX),
     }
     ba.finish_archive(root, plat, arch, facts, builder_image="debian:bookworm-slim")
     return root
@@ -195,6 +255,21 @@ def _build_linux_tree(
     lib = os.path.join(root, "lib")
     os.makedirs(lib)
 
+    caps_src = os.path.join(work, "caps.c")
+    with open(caps_src, "w") as f:
+        f.write(CAPABILITIES_SOURCE % (STUB_DWG_MIN, STUB_DWG_MAX))
+    include = os.path.join(ACAD_DIR, "include")
+
+    def with_caps(names, *sources):
+        """The capabilities unit joins the link only when it is wanted.
+
+        A fixture that drops an entry point has to drop it from both
+        libraries, so the test that removes one sees it removed.
+        """
+        if "viprs_acad_capabilities_v1" in names:
+            return list(sources) + [caps_src]
+        return list(sources)
+
     shared_src = os.path.join(work, "shared.c")
     with open(shared_src, "w") as f:
         f.write(_stub_source(symbols))
@@ -203,10 +278,12 @@ def _build_linux_tree(
             "cc",
             "-shared",
             "-fPIC",
+            "-I",
+            include,
             "-o",
             os.path.join(lib, ba.shared_library_name("linux")),
-            shared_src,
-        ],
+        ]
+        + with_caps(symbols, shared_src),
         check=True,
     )
 
@@ -219,6 +296,13 @@ def _build_linux_tree(
         )
     obj = os.path.join(work, "static.o")
     subprocess.run(["cc", "-fPIC", "-c", static_src, "-o", obj], check=True)
+
+    static_names = static_symbols or symbols
+    caps_objs = []
+    if "viprs_acad_capabilities_v1" in static_names:
+        caps_obj = os.path.join(work, "caps.o")
+        subprocess.run(["cc", "-fPIC", "-I", include, "-c", caps_src, "-o", caps_obj], check=True)
+        caps_objs = [caps_obj]
 
     register_src = os.path.join(work, "register.c")
     with open(register_src, "w") as f:
@@ -234,7 +318,8 @@ def _build_linux_tree(
     subprocess.run([sys.executable, RETAIN_SECTIONS, register_obj, "__modules"], check=True)
 
     subprocess.run(
-        ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj, register_obj], check=True
+        ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj, register_obj] + caps_objs,
+        check=True,
     )
     _build_init_archive(work, lib, effective=init_effective)
 
@@ -457,6 +542,62 @@ class TestScriptShape:
         # release workflow will do the same, so the CLI must not drift.
         with open(SCRIPT_PATH) as f:
             assert "<tgz-path> [platform] [cpu]" in f.read()
+
+
+class TestTheProbeAsksForTheNameTheHeaderDeclares:
+    """The probe links the library, so the capabilities call is resolved
+    when it compiles. A literal there stops compiling the day that call is
+    renamed, and the verifier then refuses every archive with "the static
+    smoke cannot link the archive", which says nothing about what is
+    wrong. The name comes off the shipped header's own declarations and
+    reaches the compiler as a macro."""
+
+    def _script(self):
+        with open(SCRIPT_PATH) as f:
+            return f.read()
+
+    def test_the_probe_does_not_name_the_call(self):
+        script = self._script()
+        assert "VIPRS_CAPS_CALL(&caps" in script
+        assert "-DVIPRS_CAPS_CALL=$CAPS_CALL" in script
+        assert "viprs_acad_capabilities_v1(&caps" not in script, (
+            "the probe calls the capabilities export by a name typed here, so it "
+            "stops compiling the day the header renames it"
+        )
+
+    def test_the_struct_is_still_named_directly(self):
+        # Only the call is renamed. The struct keeps its name, and the
+        # probe has to declare one to pass in.
+        assert "struct viprs_acad_capabilities_v1 caps;" in self._script()
+
+    def test_a_header_with_no_capabilities_call_does_not_abort_the_run(self, tmp_path):
+        # The script runs under `set -euo pipefail`, so an unguarded
+        # `grep | head` over a header that declares no such call exits 1
+        # and takes the whole verification with it, before the refusal
+        # that explains why. The line is pulled out of the script and run
+        # under the same options rather than restated.
+        line = [ln for ln in self._script().splitlines() if ln.strip().startswith("CAPS_CALL=$(")]
+        assert len(line) == 1, "the extraction moved, so this is testing nothing"
+        entry_points = tmp_path / "entry-points.txt"
+        entry_points.write_text("viprs_acad_abi_version\nviprs_acad_close\n")
+        done = subprocess.run(
+            [
+                "bash",
+                "-c",
+                "set -euo pipefail\n"
+                f'ENTRY_POINTS="{entry_points}"\n'
+                f"{line[0].strip()}\n"
+                'printf "survived:%s\\n" "${CAPS_CALL:-<empty>}"',
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode == 0, (
+            f"the lookup aborts a strict-mode script when the header declares no "
+            f"capabilities call:\n{done.stdout}{done.stderr}"
+        )
+        assert "survived:<empty>" in done.stdout
 
 
 class TestArguments:
@@ -872,6 +1013,56 @@ class TestManifestIntegrity:
             link = json.load(f)
         versions = dict(zip(("abi_version", "wire_version"), ba.header_versions()))
         assert link[field] == versions[field]
+
+    def test_a_read_range_that_is_not_an_ac10xx_code_is_rejected(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.update(dwg_version_min="1014"))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "dwg_version_min" in _output(result)
+
+    def test_an_inverted_read_range_is_rejected(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(dwg_version_min=1032, dwg_version_max=1014),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "dwg_version_min" in _output(result)
+
+    def test_a_read_range_the_library_does_not_report_is_rejected(self, tmp_path, good_tree):
+        # The manifest says this build reads up to AC1035 and the library
+        # in the same archive answers AC1032. Nothing in the bytes can
+        # catch that: the field is well-formed, the header does not state
+        # the range, and the number a consumer would act on is the wrong
+        # one. So the verifier asks the library, in the block that already
+        # links it to check the fingerprint.
+        root = _clone(good_tree, tmp_path)
+        _edit_json(root, "LINKINFO.json", lambda doc: doc.update(dwg_version_max=1035))
+        result = _verify(_repack(root))
+        out = _output(result)
+        assert result.returncode == 1, out
+        assert "dwg_version_max" in out, out
+        assert "1035" in out and str(STUB_DWG_MAX) in out, (
+            f"the refusal has to name both what was claimed and what was answered:\n{out}"
+        )
+
+    def test_the_good_archive_states_what_the_library_answers(self, tmp_path, good_tree):
+        # The control for the case above. A check that only ever fires on
+        # a number somebody broke could be firing on every number, and
+        # this is also what proves the probe reached the library at all.
+        with open(os.path.join(good_tree, "metadata", "LINKINFO.json")) as f:
+            link = json.load(f)
+        assert (link["dwg_version_min"], link["dwg_version_max"]) == (STUB_DWG_MIN, STUB_DWG_MAX)
+        result = _verify(_pack(good_tree))
+        out = _output(result)
+        assert result.returncode == 0, out
+        assert f"AC{STUB_DWG_MIN} to AC{STUB_DWG_MAX}" in out, (
+            f"the verifier never reports the range it checked, so a run in which the "
+            f"probe never happened reads exactly like one where it passed:\n{out}"
+        )
 
     def test_a_header_without_the_version_defines_is_rejected(self, tmp_path, good_tree):
         # The other half: the check has to fail loudly when it cannot read

@@ -48,7 +48,11 @@ archive was unpacked.
 ### `schema_version` and what to do when it moves
 
 `schema_version` is `1` and describes this file's shape, not the library's.
-It moves when a field is added, removed, renamed or has its meaning changed.
+It moves when a field is removed, renamed or has its meaning changed. Adding
+one does not move it, which is the other half of the rule below: an archive
+may carry a key a consumer has never heard of, and that consumer skips it and
+keeps working. A version that moved every time a field was added would refuse
+every older consumer for a field none of them read.
 The three versions in the file are different numbers with different jobs:
 `schema_version` is about the manifest, `abi_version` is about the header, and
 `wire_version` is about the batch stream.
@@ -90,6 +94,8 @@ and they appear together or not at all.
 | `cpu` | string | always | `x64` or `arm64`. | Usually nothing, same reason. |
 | `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `1` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
 | `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `2` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
+| `dwg_version_min` | integer | always | The lowest DWG format this build reads, as the four digits behind the `AC` in a drawing's first six bytes. Measured: the build asks the library it is about to pack, through `viprs_acad_capabilities_v1`, and records the answer. The header never states it, because the range is a fact about the backing reader rather than part of the ABI, and it can move without `abi_version` moving. | Refuse a drawing whose signature is below it, or report the range. Read it from the archive rather than pinning the number: a consumer that hardcodes it refuses a format the next archive reads. |
+| `dwg_version_max` | integer | always | The highest, in the same form and measured the same way. Never below `dwg_version_min`. | The same, at the other end. |
 | `abi_header_sha256` | string | always | 64 lowercase hex characters: the sha256 of `include/viprs_acadsharp.h` as shipped in this same archive. | Verify the shipped header is the one this manifest describes, before generating bindings from it. |
 | `abi_fingerprint` | string | always | 16 lowercase hex characters. See below: this one has a format, and the format is load-bearing. | Parse as a base-16 integer and compare against `viprs_acad_abi_fingerprint()` at run time. |
 | `shared_library` | string | always | Archive-relative path to the shared library, `lib/libacadsharp_native.so` or `lib/libacadsharp_native.dylib`. | For a dynamic link: a link-search directive for its directory and `cargo:rustc-link-lib=acadsharp_native`. For `dlopen`, the path itself. |
@@ -378,7 +384,9 @@ a consumer checks. A certified Linux x86-64 target:
   "static_init_library": "lib/libacadsharp_native_init.a",
   "static_certified": true,
   "static_system_libraries": ["m", "rt", "dl", "pthread", "stdc++"],
-  "static_link_args": []
+  "static_link_args": [],
+  "dwg_version_min": 1014,
+  "dwg_version_max": 1032
 }
 ```
 
@@ -401,7 +409,9 @@ And an uncertified one, which is the same file with five differences and no
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.dylib",
   "shared_system_libraries": [],
-  "static_certified": false
+  "static_certified": false,
+  "dwg_version_min": 1014,
+  "dwg_version_max": 1032
 }
 ```
 
@@ -437,5 +447,6 @@ arrived without anyone measuring it.
 `acadsharp/scripts/verify_archive.sh <tgz>` in this repository checks all of
 that plus the layout, both manifests, the architecture and kind of every object,
 the export table against the shipped header, and, where the host can build for
-the target, that the recipe above links and runs. The build driver runs it on
+the target, that the recipe above links and runs and that the library answers
+with the read range this manifest states. The build driver runs it on
 every archive it produces before calling one done.
