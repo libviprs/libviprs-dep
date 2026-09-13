@@ -119,14 +119,45 @@ class TestTheLayoutRules:
 
     def test_every_struct_opens_with_size_and_version(self, code):
         for name in STRUCTS:
-            m = re.search(rf"typedef struct {name} \{{(.*?)\}} {name};", code, re.S)
-            assert m, f"{name} is not defined as a typedef struct"
+            m = re.search(rf"struct {name} \{{(.*?)\n\}};", code, re.S)
+            assert m, f"{name} is not defined as a struct"
             body = m.group(1).strip()
             first_two = [ln.strip() for ln in body.splitlines() if ln.strip()][:2]
             assert first_two == ["uint32_t struct_size;", "uint32_t struct_version;"], (
                 f"{name} opens with {first_two}. Without both, a callee cannot tell which "
                 "version of the struct it was handed and reads past what was allocated."
             )
+
+    def test_no_struct_shares_a_name_with_a_call(self, code):
+        # This one cost a compile to find. `viprs_acad_capabilities_v1` is both
+        # a struct and an entry point, and in C a typedef name and a function
+        # name are the same kind of identifier, so a header that typedef'd the
+        # struct to its own name does not compile as C at all. It compiles as
+        # C++, where the function hides the class name, which is how a header
+        # ships broken: every reader who tried it tried it the wrong way.
+        tags = set(re.findall(r"struct (viprs_[a-z0-9_]+) \{", code))
+        calls = set(re.findall(r"\b(viprs_[a-z0-9_]+)\s*\(", code))
+        for name in sorted(tags & calls):
+            assert not re.search(rf"\}}\s*{name};", code), (
+                f"{name} is both a struct and a call, and the struct is typedef'd to "
+                "that name. A C compiler rejects the pair outright."
+            )
+
+    def test_no_abi_struct_is_typedefed_to_its_own_name(self, code):
+        # Uniformly, rather than only the one that collides: a contract where
+        # you have to remember which struct needs the keyword is a contract
+        # somebody gets wrong.
+        for name in STRUCTS:
+            assert f"typedef struct {name}" not in code, (
+                f"{name} is typedef'd. Structs on this boundary are tags, so a future "
+                "entry point cannot collide with one the way capabilities already did."
+            )
+
+    def test_the_opaque_handles_are_still_typedefed(self, code):
+        # They have no fields and no call shares their name, so the idiomatic
+        # opaque-pointer typedef costs nothing and saves every consumer a word.
+        for name in ("viprs_cad_handle", "viprs_decode_handle"):
+            assert f"typedef struct {name} {name};" in code
 
     def test_no_enum_is_used_as_abi(self, code):
         assert "enum" not in code, (

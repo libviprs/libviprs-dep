@@ -54,8 +54,8 @@ def strip_comments(text):
 def header_fields(name):
     """[(ctype, field), ...] in declaration order."""
     code = strip_comments(header_text())
-    m = re.search(rf"typedef struct {name} \{{(.*?)\}} {name};", code, re.S)
-    assert m, f"{name} is not a typedef struct in the header"
+    m = re.search(rf"struct {name} \{{(.*?)\n\}};", code, re.S)
+    assert m, f"{name} is not declared as a struct in the header"
     fields = []
     for line in m.group(1).splitlines():
         line = line.strip()

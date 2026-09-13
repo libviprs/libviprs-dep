@@ -1,0 +1,21 @@
+# No dependencies, deliberately.
+#
+# This consumer builds in an offline container against one header. A package
+# from an index would turn a conformance run into a network test, and the one
+# thing it would buy (a hash implementation and a binding generator) is a
+# hundred lines in build.rs that nobody has to audit a supply chain for.
+[package]
+name = "viprs-conformance"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "viprs_conformance"
+path = "src/lib.rs"
+
+[[bin]]
+name = "conformance"
+path = "src/main.rs"
+
+[dependencies]

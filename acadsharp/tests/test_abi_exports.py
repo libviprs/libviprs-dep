@@ -31,6 +31,12 @@ CSPROJ = os.path.join(NATIVE, "Viprs.ACadSharp.Native.csproj")
 HEADER = os.path.join(ACADSHARP, "include", "viprs_acadsharp.h")
 
 TEST_DEFINE = "VIPRS_ACAD_TEST_EXPORTS"
+
+# Not "Test". The SDK turns the configuration name into a preprocessor symbol,
+# and the vendored upstream source carries `#if TEST` regions that do not
+# compile on their own, so building this project with -c Test fails inside a
+# dependency with an error that says nothing about configurations.
+TEST_CONFIGURATION = "AbiTest"
 TEST_EXPORT = "viprs_acad__test_throw"
 
 # G1.1's spike exports. They are not on the frozen ABI, the smoke programs
@@ -40,6 +46,11 @@ SPIKE_EXPORTS = ("viprs_acad_describe", "viprs_acad_entity_count")
 # Exports that cannot fail and so return void or a plain value.
 INFALLIBLE = ("viprs_acad_abi_version", "viprs_acad_abi_fingerprint")
 VOID_EXPORTS = ("viprs_acad_decode_close", "viprs_acad_close")
+
+# The spike exports predate the frozen ABI and report through negative int
+# codes of their own. They are held to the catch-all and to nothing else,
+# because the result-code contract is not theirs.
+OWN_ERROR_PROTOCOL = SPIKE_EXPORTS
 
 
 def _bodies(code):
@@ -124,7 +135,7 @@ class TestNothingEscapes:
 
     def test_every_fallible_export_reports_internal_error(self, bodies):
         for name, body in bodies.items():
-            if name in INFALLIBLE or name in VOID_EXPORTS:
+            if name in INFALLIBLE or name in VOID_EXPORTS or name in OWN_ERROR_PROTOCOL:
                 continue
             assert "InternalError" in body or "INTERNAL_ERROR" in body, (
                 f"{name} catches but does not return INTERNAL_ERROR, so the consumer "
@@ -141,7 +152,9 @@ class TestNothingEscapes:
 
     def test_no_export_returns_a_managed_reference(self, code):
         decls = re.findall(
-            r'\[UnmanagedCallersOnly\(EntryPoint = "\w+"\)\]\s*\n\s*public static (\S+)', code
+            r'\[UnmanagedCallersOnly\(EntryPoint = "\w+"\)\]\s*\n\s*'
+            r"public static (?:unsafe )?(\S+)",
+            code,
         )
         assert decls
         for ret in decls:
@@ -154,7 +167,12 @@ class TestNothingEscapes:
 class TestArgumentsAreValidated:
     def test_every_fallible_export_can_return_invalid_argument(self, bodies):
         for name, body in bodies.items():
-            if name in INFALLIBLE or name in VOID_EXPORTS or name == TEST_EXPORT:
+            if (
+                name in INFALLIBLE
+                or name in VOID_EXPORTS
+                or name in OWN_ERROR_PROTOCOL
+                or name == TEST_EXPORT
+            ):
                 continue
             assert "InvalidArgument" in body or "INVALID_ARGUMENT" in body, (
                 f"{name} never returns INVALID_ARGUMENT. Every export on this boundary "
@@ -178,7 +196,11 @@ class TestArgumentsAreValidated:
     def test_the_header_promises_the_defaults_a_null_limits_pointer_means(self):
         with open(HEADER) as f:
             header = f.read()
-        assert "null pointer to either open call means the documented defaults" in header
+        # Two short phrases rather than one long one: the header is wrapped to
+        # fit a terminal and a comment continuation sits in the middle of the
+        # sentence, so matching the whole thing tests the wrapping.
+        assert "null pointer to either open call" in header
+        assert "documented defaults" in header
 
 
 class TestTheTestOnlyExport:
@@ -205,16 +227,31 @@ class TestTheTestOnlyExport:
     def test_the_define_comes_only_from_the_test_configuration(self):
         with open(CSPROJ) as f:
             csproj = f.read()
-        assert "<Configurations>" in csproj and "Test" in csproj
+        assert "<Configurations>" in csproj and TEST_CONFIGURATION in csproj
         m = re.search(
-            r"<PropertyGroup Condition=\"'\$\(Configuration\)' == 'Test'\">(.*?)</PropertyGroup>",
+            rf"<PropertyGroup Condition=\"'\$\(Configuration\)' == '{TEST_CONFIGURATION}'\">"
+            r"(.*?)</PropertyGroup>",
             csproj,
             re.S,
         )
-        assert m, "the project has no Test configuration property group"
+        assert m, f"the project has no {TEST_CONFIGURATION} configuration property group"
         assert TEST_DEFINE in m.group(1)
         outside = csproj.replace(m.group(0), "")
         assert TEST_DEFINE not in outside, (
-            f"{TEST_DEFINE} is defined outside the Test configuration, which is the one "
-            "way a release build quietly grows the throwing export back"
+            f"{TEST_DEFINE} is defined outside the {TEST_CONFIGURATION} configuration, "
+            "which is the one way a release build quietly grows the throwing export back"
         )
+
+    def test_the_configuration_is_not_called_test(self):
+        with open(CSPROJ) as f:
+            csproj = f.read()
+        m = re.search(r"<Configurations>([^<]*)</Configurations>", csproj)
+        assert m, "the project declares no configurations"
+        names = [n.strip() for n in m.group(1).split(";")]
+        assert "Test" not in names, (
+            "a configuration called Test makes the SDK define TEST, which switches on "
+            "`#if TEST` regions inside the vendored upstream source that do not compile. "
+            "The build then fails in a dependency with an error that never mentions "
+            "configurations, which took a build to work out once already."
+        )
+        assert TEST_CONFIGURATION in names

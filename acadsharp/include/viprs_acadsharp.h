@@ -21,6 +21,12 @@
  * The rules, and each one exists because its absence has broken a C ABI
  * somewhere before:
  *
+ *   - No struct on this boundary is typedef'd to its own name. In C a
+ *     typedef name and a function name are the same kind of identifier, and
+ *     viprs_acad_capabilities_v1 is both a struct and a call, so a header
+ *     that typedef'd it would not compile as C at all. It compiled as C++,
+ *     which is how a header ships broken. The two opaque handles below are
+ *     typedef'd, because they have no fields and no call shares their name.
  *   - Every struct opens with `uint32_t struct_size; uint32_t struct_version;`
  *     and otherwise holds only fixed-width scalars. The caller sets both; a
  *     callee that receives a struct_size it does not recognise returns
@@ -112,7 +118,7 @@ typedef struct viprs_decode_handle viprs_decode_handle;
  * a silently truncated stream.
  * ------------------------------------------------------------------------- */
 
-typedef struct viprs_acad_limits_v1 {
+struct viprs_acad_limits_v1 {
 	uint32_t struct_size;
 	uint32_t struct_version;
 
@@ -130,7 +136,7 @@ typedef struct viprs_acad_limits_v1 {
 	uint32_t reserved0;
 	/* Total bytes the decode may emit across every batch. */
 	uint64_t max_output_bytes;
-} viprs_acad_limits_v1;
+};
 
 /* -------------------------------------------------------------------------
  * Capabilities
@@ -140,7 +146,7 @@ typedef struct viprs_acad_limits_v1 {
  * the numeric AC10xx codes, so 1014 and 1032 for ACadSharp 3.7.1.
  * ------------------------------------------------------------------------- */
 
-typedef struct viprs_acad_capabilities_v1 {
+struct viprs_acad_capabilities_v1 {
 	uint32_t struct_size;
 	uint32_t struct_version;
 
@@ -156,7 +162,7 @@ typedef struct viprs_acad_capabilities_v1 {
 	uint8_t  reserved0;
 	uint8_t  reserved1;
 	uint32_t reserved2;
-} viprs_acad_capabilities_v1;
+};
 
 /* -------------------------------------------------------------------------
  * View info
@@ -166,7 +172,7 @@ typedef struct viprs_acad_capabilities_v1 {
  * outlives the call.
  * ------------------------------------------------------------------------- */
 
-typedef struct viprs_view_info_v1 {
+struct viprs_view_info_v1 {
 	uint32_t struct_size;
 	uint32_t struct_version;
 
@@ -181,7 +187,7 @@ typedef struct viprs_view_info_v1 {
 	/* Entities before block expansion, for progress reporting only. Never
 	 * relied on as an exact count of the records a decode will emit. */
 	uint64_t entity_count;
-} viprs_view_info_v1;
+};
 
 /* -------------------------------------------------------------------------
  * Entry points
@@ -203,7 +209,7 @@ uint64_t viprs_acad_abi_fingerprint(void);
  * Call with cap 0 and a null buffer to learn the required length through
  * *required. out->struct_size and out->struct_version must be set by the caller
  * before the call. */
-uint32_t viprs_acad_capabilities_v1(viprs_acad_capabilities_v1 *out,
+uint32_t viprs_acad_capabilities_v1(struct viprs_acad_capabilities_v1 *out,
                                     uint8_t *acadsharp_version_utf8,
                                     uint64_t cap,
                                     uint64_t *required);
@@ -215,14 +221,14 @@ uint32_t viprs_acad_capabilities_v1(viprs_acad_capabilities_v1 *out,
  * limits may be null for the defaults. */
 uint32_t viprs_acad_open_path_utf8(const uint8_t *path,
                                    uint64_t path_len,
-                                   const viprs_acad_limits_v1 *limits,
+                                   const struct viprs_acad_limits_v1 *limits,
                                    viprs_cad_handle **out);
 
 /* Opens a document from caller-owned bytes. The caller owns data for the
  * duration of this call only. */
 uint32_t viprs_acad_open_memory(const uint8_t *data,
                                 uint64_t data_len,
-                                const viprs_acad_limits_v1 *limits,
+                                const struct viprs_acad_limits_v1 *limits,
                                 viprs_cad_handle **out);
 
 /* Number of views in the document. */
@@ -234,7 +240,7 @@ uint32_t viprs_acad_view_count(viprs_cad_handle *h, uint32_t *out_count);
  * required length through *name_required. */
 uint32_t viprs_acad_view_info_v1(viprs_cad_handle *h,
                                  uint32_t index,
-                                 viprs_view_info_v1 *out,
+                                 struct viprs_view_info_v1 *out,
                                  uint8_t *name_utf8,
                                  uint64_t name_cap,
                                  uint64_t *name_required);
