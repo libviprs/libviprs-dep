@@ -13,6 +13,18 @@ namespace Viprs.Sources
 	{
 		public static IDocumentSource OpenMemory(byte[] data, ResolvedLimits limits)
 		{
+			// Same bound, same code, same sentence as the path route, and for
+			// the same reason: deciding it needs no idea which source would
+			// have handled the bytes.
+			if (data != null)
+			{
+				CheckInputBytes(
+					(ulong)data.LongLength,
+					limits ?? ResolvedLimits.Defaults,
+					"buffer"
+				);
+			}
+
 			if (SyntheticSource.Matches(data))
 			{
 				return SyntheticSource.Open(data);
@@ -60,6 +72,27 @@ namespace Viprs.Sources
 			);
 		}
 
+		// The one place that decides what max_input_bytes means.
+		//
+		// It used to be three, with three mappings for the same failure:
+		// this one called a failed stat CORRUPT_INPUT, AcadSharpSource.OpenPath
+		// and Exports.OpenPathUtf8 each called it INVALID_ARGUMENT, and which
+		// one a caller saw depended on which layer noticed first. A caller
+		// cannot write a branch for a code that depends on a race, so the
+		// copies are gone and everything that needs the bound calls here.
+		public static void CheckInputBytes(ulong length, ResolvedLimits limits, string what)
+		{
+			ResolvedLimits bounds = limits ?? ResolvedLimits.Defaults;
+			if (length > bounds.MaxInputBytes)
+			{
+				throw new AbiException(
+					Result.LimitExceeded,
+					"the " + what + " is " + length + " bytes and max_input_bytes is "
+						+ bounds.MaxInputBytes
+				);
+			}
+		}
+
 		// The file's length, refusing before it is opened when the caller's
 		// max_input_bytes says so. A missing path is the caller's argument
 		// being wrong; a path that exists and cannot be stat'ed is the input's
@@ -89,15 +122,7 @@ namespace Viprs.Sources
 				);
 			}
 
-			if ((ulong)length > limits.MaxInputBytes)
-			{
-				throw new AbiException(
-					Result.LimitExceeded,
-					"the file is " + length + " bytes and max_input_bytes is "
-						+ limits.MaxInputBytes
-				);
-			}
-
+			CheckInputBytes((ulong)length, limits, "file");
 			return length;
 		}
 

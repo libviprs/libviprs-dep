@@ -30,7 +30,11 @@
 #      and `abi_fingerprint` is that hash's first eight bytes, which is
 #      what `viprs_acad_abi_fingerprint()` is defined to return. The live
 #      call is the build's smoke; this is the half that can be checked
-#      from the bytes alone.
+#      from the bytes alone. `abi_version` and `wire_version` are the
+#      numbers the shipped header defines, not whatever the manifest
+#      happens to say: a consumer refuses a library whose `abi_version`
+#      it does not know, so a manifest that disagrees with the header
+#      beside it is a consumer making that decision on a wrong number.
 #   5. Every library is the architecture the filename claims, is the
 #      right kind of object, is not truncated, and exports every entry
 #      point the shipped header declares.
@@ -391,6 +395,7 @@ if ! python3 - "$ROOT" "$PLATFORM" "$CPU" "$FACTS" <<'PYEOF' >"$WORK/py.out" 2>&
 import hashlib
 import json
 import os
+import re
 import sys
 
 root, want_platform, want_cpu, facts_path = sys.argv[1:5]
@@ -546,7 +551,8 @@ if link is not None:
     header = os.path.join(root, "include", "viprs_acadsharp.h")
     if os.path.isfile(header):
         with open(header, "rb") as f:
-            digest = hashlib.sha256(f.read()).hexdigest()
+            header_bytes = f.read()
+        digest = hashlib.sha256(header_bytes).hexdigest()
         if link.get("abi_header_sha256") != digest:
             problems.append(
                 f"LINKINFO.json abi_header_sha256 is {link.get('abi_header_sha256')!r} "
@@ -558,6 +564,31 @@ if link is not None:
                 f"but viprs_acad_abi_fingerprint() is defined as the first eight bytes "
                 f"of the header hash, {digest[:16]}"
             )
+
+        # The two version fields, against the header they are shipped
+        # beside. They were listed as required and never compared, so a
+        # manifest claiming abi_version 7 next to a version-1 header passed
+        # every check here, and abi_version is a field a consumer acts on:
+        # it is the coarse half of the handshake, and a consumer built for
+        # version 1 is supposed to refuse a library reporting 2.
+        text = header_bytes.decode("utf-8", "replace")
+        for field, macro in (
+            ("abi_version", "VIPRS_ACAD_ABI_VERSION"),
+            ("wire_version", "VIPRS_ACAD_WIRE_VERSION"),
+        ):
+            found = re.search(rf"^#define\s+{macro}\s+(\d+)u?\s*$", text, re.M)
+            if not found:
+                problems.append(
+                    f"the shipped header does not define {macro}, so LINKINFO.json's "
+                    f"{field} cannot be checked against anything"
+                )
+                continue
+            stated = int(found.group(1))
+            if link.get(field) != stated:
+                problems.append(
+                    f"LINKINFO.json {field} is {link.get(field)!r} but the shipped "
+                    f"header defines {macro} as {stated}"
+                )
 
     facts["shared_library"] = str(link.get("shared_library", ""))
     facts["static_library"] = str(static_library or "")
