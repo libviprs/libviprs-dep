@@ -266,6 +266,19 @@ namespace Viprs.Cad
 			private Basis _basis;
 			private bool _measured;
 
+			// The last plane WithOcs was asked for, and what it gave back.
+			//
+			// One entry, not a dictionary. Entities that share an extrusion
+			// arrive together far more often than not (a block drawn in one
+			// plane, a drawing mirrored in one pass), and a run of them shares
+			// the composition and the basis measured from it the way a run of
+			// +Z entities shares this placement itself. A run that alternates
+			// planes pays one comparison per entity for nothing, which is
+			// cheaper than the 4x4 multiply it is deciding about.
+			private XYZ _ocsNormal;
+			private double _ocsElevation;
+			private Placement _ocs;
+
 			public Placement(Matrix4 matrix)
 			{
 				Matrix = matrix;
@@ -298,6 +311,11 @@ namespace Viprs.Cad
 					return this;
 				}
 
+				if (_ocs != null && _ocsElevation == elevation && _ocsNormal == normal)
+				{
+					return _ocs;
+				}
+
 				Matrix4 ocs = ObjectToWorld(normal);
 				if (elevation != 0.0)
 				{
@@ -307,7 +325,10 @@ namespace Viprs.Cad
 					);
 				}
 
-				return new Placement(Compose(Matrix, ocs));
+				_ocsNormal = normal;
+				_ocsElevation = elevation;
+				_ocs = new Placement(Compose(Matrix, ocs));
+				return _ocs;
 			}
 
 			public Basis Basis
