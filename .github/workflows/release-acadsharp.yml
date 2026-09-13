@@ -253,19 +253,48 @@ jobs:
     # host arch differs, and GitHub hosts arm64 runners for public
     # repositories, which this is. fail-fast is off so one cell flaking
     # does not discard three good archives.
+    #
+    # Each cell also carries the image its conformance consumers run in,
+    # which is the same toolchain in the libc that cell builds for. The
+    # pin is beside the cell rather than in one place above it because
+    # the two are the same decision: a musl archive asks for
+    # /lib/ld-musl-*.so.1 and a glibc container has no such loader, so a
+    # cell whose image does not match its platform is a cell whose
+    # consumers cannot load the library at all.
     needs: [resolve-version, create-release]
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { platform: linux, cpu: x64, arch: amd64, runner: ubuntu-latest }
-          - { platform: linux, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm }
-          - { platform: musl, cpu: x64, arch: amd64, runner: ubuntu-latest }
-          - { platform: musl, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm }
+          - { platform: linux, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.98.1 }
+          - { platform: linux, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.98.1 }
+          - { platform: musl, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.98.1-alpine }
+          - { platform: musl, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.98.1-alpine }
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # 60 was the size of a job that built and verified. It now also runs
+    # two consumers against what it built, so the ceiling moves with it
+    # rather than staying where it was and turning a slow build into a
+    # cancelled release.
+    timeout-minutes: 75
     permissions:
       contents: write
+    env:
+      # The three the conformance runners read, and all three are
+      # properties of the cell rather than of the job, so they are taken
+      # from the matrix and not spelled out. Declared here rather than on
+      # each of the three steps that needs them, because a copy per step
+      # is three places for one cell's answer to drift.
+      #
+      # linux/${{ matrix.arch }} is not a third vocabulary: --arch already
+      # speaks amd64|arm64 to the driver, which is what docker's
+      # --platform takes, so the cell that decides what is built decides
+      # what runs it. --platform is never left off, in this repository
+      # least of all: a developer's DOCKER_DEFAULT_PLATFORM has been both
+      # values, and an architecture result from an unpinned run means
+      # nothing.
+      VIPRS_CONFORMANCE_IMAGE: ${{ matrix.image }}
+      VIPRS_CONFORMANCE_PLATFORM: linux/${{ matrix.arch }}
+      VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -314,6 +343,73 @@ jobs:
           bash acadsharp/scripts/verify_archive_matched_host.sh \
             "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
             ${{ matrix.platform }} ${{ matrix.cpu }}
+
+      - name: Unpack it the way a consumer would
+        # Everything below runs against the tarball that is about to be
+        # uploaded rather than against the build tree beside it, because
+        # the premise of the epic is that a consumer links what we
+        # publish and the build tree is not what anybody downloads.
+        run: |
+          set -eu
+          mkdir -p bin/unpacked
+          tar -xzf "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
+            -C bin/unpacked
+          find bin/unpacked -maxdepth 2
+
+      - name: Name the libc the library asks for
+        # The positive control for the two runs below, and they need one.
+        # A musl .so and a glibc .so are both ELF, find_shim.sh finds
+        # either, and a consumer linked against either reports the same
+        # passes, so a green run underneath this does not say which
+        # library it ran against. NEEDED does: it is the library's own
+        # statement about its libc, written by the linker that built it.
+        #
+        # readelf comes out of the cell's own image, because the readelf
+        # that can read this library is the one of this architecture. The
+        # decision is in expect_libc.sh rather than here, so it can be run
+        # both ways by a test rather than only by a release.
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -eu
+          library=$(acadsharp/tests/conformance/find_shim.sh "$VIPRS_LIB_DIR")
+          echo "library: $library"
+          needed=$(docker run --rm --platform "$VIPRS_CONFORMANCE_PLATFORM" \
+            -v "$PWD":"$PWD" "$VIPRS_CONFORMANCE_IMAGE" \
+            readelf -d "$library" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')
+          printf '%s\n' "$needed" \
+            | acadsharp/tests/conformance/expect_libc.sh "$PLATFORM"
+
+      - name: Run the C consumer against the unpacked archive
+        # #75 put both consumers in front of a musl library, in
+        # acadsharp-conformance.yml, which runs arm64 and nothing else on
+        # purpose. musl/x64 is built here and nowhere else, so it came out
+        # of that lane exactly as it went in: linked, statically probed by
+        # the verifier through the matched-host wrapper, and never once
+        # loaded as a shared library by anything that asks it a question.
+        #
+        # No `if:` narrowing this to that one cell. Once the steps are in
+        # the job they cost a container start each, linux/x64 had the same
+        # gap and nobody had named it, the two arm64 cells re-ask the
+        # question against the archive that is about to be uploaded rather
+        # than against a branch build, and a rule with no exception cannot
+        # be got wrong by editing the matrix.
+        #
+        # Between Verify and Upload on purpose: a library that loads and
+        # then refuses the ABI handshake keeps its archive off the release
+        # page instead of explaining itself afterwards.
+        run: acadsharp/tests/conformance/c/run.sh
+
+      - name: Run the generated Rust consumer against the unpacked archive
+        # The exception and handle-leak cases need viprs_acad__test_throw
+        # and viprs_acad__test_live_handles, which only the AbiTest
+        # configuration exports. Nothing publishes that configuration
+        # here and nothing should: it is a second NativeAOT build per
+        # cell for cases that exercise managed logic, and the runners see
+        # the exports are absent and skip those sections. What this cell
+        # is for is the part that is not managed logic, which is whether
+        # the library this archive ships loads and answers at all.
+        run: acadsharp/tests/conformance/rust/run.sh
 
       - name: Upload release asset ${{ matrix.platform }}/${{ matrix.cpu }}
         env:

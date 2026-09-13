@@ -249,25 +249,23 @@ jobs:
         # library it ran against. This does: NEEDED is the library's own
         # statement about its libc, written by the linker that built it, and a
         # glibc build of the same shim says libc.so.6 here.
+        #
+        # The decision moved into expect_libc.sh when #74 needed the same
+        # control in release-acadsharp.yml. Two copies of a guard drift, and
+        # the copy that lives inside a workflow is the one no test can run:
+        # this one was correct and had never been shown to refuse anything.
+        # test_conformance_workflow.py now runs it both ways.
         env:
           VIPRS_LIB_DIR: ${{ github.workspace }}/bin/unpacked-musl/acadsharp-musl-arm64
         run: |
           set -eu
           library=$(acadsharp/tests/conformance/find_shim.sh "$VIPRS_LIB_DIR")
+          echo "library: $library"
           needed=$(docker run --rm --platform "$VIPRS_CONFORMANCE_PLATFORM" \
             -v "$PWD":"$PWD" "$VIPRS_CONFORMANCE_IMAGE" \
             readelf -d "$library" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p')
-          echo "$library needs:"
-          echo "$needed" | sed 's/^/  /'
-          if ! echo "$needed" | grep -q '^libc\.musl-'; then
-            echo "the library about to be run does not ask for a musl libc," >&2
-            echo "so the runs below would prove nothing about musl" >&2
-            exit 1
-          fi
-          if echo "$needed" | grep -q '^libc\.so\.6$'; then
-            echo "the library about to be run asks for glibc" >&2
-            exit 1
-          fi
+          printf '%s\n' "$needed" \
+            | acadsharp/tests/conformance/expect_libc.sh musl
 
       - name: Run the C consumer against the unpacked musl archive
         # One run per consumer on this side, against the archive, and no
