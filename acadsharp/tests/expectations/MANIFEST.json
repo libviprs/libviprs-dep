@@ -1,0 +1,362 @@
+{
+  "batch_bytes": 65536,
+  "fixtures": {
+    "g11_codepage.dwg": {
+      "batches": 1,
+      "bytes": 9643,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Circle": 1,
+        "Line": 2,
+        "Text": 2,
+        "Warning": 3
+      },
+      "live_handles": 0,
+      "notification_count": 3,
+      "output_bytes": 1152,
+      "records": 9,
+      "sha256": "04ae1bca9e384c9604aff632b838a3497236daf9d79be7b073148a696d12b089",
+      "view_count": 2
+    },
+    "g11_shapes.dwg": {
+      "batches": 1,
+      "bytes": 10891,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Circle": 1,
+        "Line": 2,
+        "Text": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1228,
+      "records": 9,
+      "sha256": "e54abbe4b4b24499783edc1d5c7251db66fa1683fb0197f2f3704b3eeee45813",
+      "view_count": 2
+    },
+    "g13_arc.dwg": {
+      "batches": 1,
+      "bytes": 10539,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 916,
+      "records": 5,
+      "sha256": "df3e472bef51cd4ceae3bde9297d674173ef2eb9ef006d01859e4182c0ad484e",
+      "view_count": 2
+    },
+    "g13_circle.dwg": {
+      "batches": 1,
+      "bytes": 10539,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 900,
+      "records": 5,
+      "sha256": "09489d5c2d91eb7f0d71ef99a5e5ad926fef5f02e6f83b75505aeb978f5a3e8d",
+      "view_count": 2
+    },
+    "g13_deep_blocks.dwg": {
+      "batches": 1,
+      "bytes": 11051,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 892,
+      "records": 5,
+      "sha256": "b6cc1596101d2a1395eb734b780525b17d2b3843383185a0bcfa6b1cd1c1e564",
+      "view_count": 2
+    },
+    "g13_dimension.dwg": {
+      "batches": 1,
+      "bytes": 11019,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 3,
+        "Text": 1,
+        "Warning": 10
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1592,
+      "records": 14,
+      "sha256": "18bccc3672409d6d976edeee43f8199c56bdb408a159dc0abb3f67a0e5af9f2e",
+      "view_count": 2
+    },
+    "g13_ellipse.dwg": {
+      "batches": 1,
+      "bytes": 10539,
+      "decode_code": "OK",
+      "kinds": {
+        "Ellipse": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 940,
+      "records": 5,
+      "sha256": "50dfc3a7936dab60d033b420c08767c3a014d136e20dc37f6a92ffe828330cc4",
+      "view_count": 2
+    },
+    "g13_hatch.dwg": {
+      "batches": 1,
+      "bytes": 10731,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Line": 3,
+        "Polygon": 1,
+        "Spline": 1,
+        "Warning": 7
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1860,
+      "records": 13,
+      "sha256": "7fc8f78d914b7245863f63eeec90d0258c7282969cff659c90b0a6bb2aa2d6fd",
+      "view_count": 2
+    },
+    "g13_insert.dwg": {
+      "batches": 1,
+      "bytes": 10795,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 1,
+        "Line": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 972,
+      "records": 6,
+      "sha256": "68e912765e1c7ccef106fe6bd136d6fdd4fd779d959f127d1773399cc0ac7fac",
+      "view_count": 2
+    },
+    "g13_line.dwg": {
+      "batches": 1,
+      "bytes": 10539,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 892,
+      "records": 5,
+      "sha256": "7f813d1853d0abe63654b168a7daacad34214432afc157589271c7ca2a825ce0",
+      "view_count": 2
+    },
+    "g13_long_text.dwg": {
+      "batches": 1,
+      "bytes": 10571,
+      "decode_code": "OK",
+      "kinds": {
+        "Text": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 9084,
+      "records": 5,
+      "sha256": "7f45af814c71c87d7360b54ea36a20a971be1e9e8fdeda8736ae8988bfe2d2c5",
+      "view_count": 2
+    },
+    "g13_nonuniform.dwg": {
+      "batches": 1,
+      "bytes": 10699,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 1,
+        "Warning": 5
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1064,
+      "records": 6,
+      "sha256": "32e5583a9e78d6d29bccc1e2d150708c110248b741e9a71f42e02560759e05b5",
+      "view_count": 2
+    },
+    "g13_polyline.dwg": {
+      "batches": 1,
+      "bytes": 10731,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 1,
+        "Polyline": 3,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1204,
+      "records": 8,
+      "sha256": "3bfb5f11bc681c15d4829a2ede8923936210da16c3a054a1fcaa4a614058f0b8",
+      "view_count": 2
+    },
+    "g13_scale_1x.dwg": {
+      "batches": 1,
+      "bytes": 12235,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 64,
+        "Line": 64,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 10548,
+      "records": 132,
+      "sha256": "40a0a8c92c8c731a72748c9f3685c5a14b3f6e2a8ab832c1aeb2d25c481c7cdf",
+      "view_count": 2
+    },
+    "g13_spline.dwg": {
+      "batches": 1,
+      "bytes": 10571,
+      "decode_code": "OK",
+      "kinds": {
+        "Spline": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1028,
+      "records": 5,
+      "sha256": "7cbd150685a1ac657db15a053a86471497170e0948cc9b2611be8b25fff1f4d6",
+      "view_count": 2
+    },
+    "g13_text.dwg": {
+      "batches": 1,
+      "bytes": 10699,
+      "decode_code": "OK",
+      "kinds": {
+        "Text": 2,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 996,
+      "records": 6,
+      "sha256": "1e7d3881498763aebfef3aa90d3ceb2c70786ab993d009f68a1458ac2346b530",
+      "view_count": 2
+    },
+    "g13_two_entities.dwg": {
+      "batches": 1,
+      "bytes": 10571,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 2,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 964,
+      "records": 6,
+      "sha256": "7fa13b20d5d3f0f748e62e1f3345163f155de19d5f4379ad4942f62942b72645",
+      "view_count": 2
+    },
+    "g13_unsupported.dwg": {
+      "batches": 1,
+      "bytes": 10539,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 6
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 980,
+      "records": 6,
+      "sha256": "fda0963b0ecaab011a1d309bfd78e9e1e5b898dd10a4f2cd097fdd0f9a59dd7b",
+      "view_count": 2
+    },
+    "g13_wide_polyline.dwg": {
+      "batches": 3,
+      "bytes": 23320,
+      "decode_code": "OK",
+      "kinds": {
+        "Polyline": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 99180,
+      "records": 5,
+      "sha256": "1240e92c3a3ff26c68381b7f7b25bda46f3d756d8be5283a881ea74c3220b4b4",
+      "view_count": 2
+    },
+    "g13_xref.dwg": {
+      "batches": 1,
+      "bytes": 10667,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 5
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 952,
+      "records": 5,
+      "sha256": "2824107829ce93938479662f0e3126397ea756cea384ea062d5a892ec4f70f57",
+      "view_count": 2
+    },
+    "real_AC1018.dwg": {
+      "batches": 1,
+      "bytes": 1097214,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 23,
+        "Circle": 15,
+        "Ellipse": 1,
+        "Line": 90,
+        "Polygon": 8,
+        "Polyline": 25,
+        "Spline": 2,
+        "Text": 78,
+        "Warning": 112
+      },
+      "live_handles": 0,
+      "notification_count": 24,
+      "output_bytes": 34784,
+      "records": 354,
+      "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
+      "view_count": 4
+    },
+    "real_AC1032.dwg": {
+      "batches": 1,
+      "bytes": 1081979,
+      "decode_code": "OK",
+      "kinds": {
+        "Arc": 23,
+        "Circle": 15,
+        "Ellipse": 1,
+        "Line": 90,
+        "Polygon": 8,
+        "Polyline": 25,
+        "Spline": 2,
+        "Text": 78,
+        "Warning": 119
+      },
+      "live_handles": 0,
+      "notification_count": 31,
+      "output_bytes": 35964,
+      "records": 361,
+      "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
+      "view_count": 4
+    }
+  },
+  "recorded": "2026-09-12",
+  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64"
+}

@@ -1,11 +1,13 @@
 """Shared readers for the G1.3 artefacts, and the malformed derivation.
 
-pytest here has no .NET and is not getting one (ADR 0001), so what these
-tests read is what a container recorded: the canonical record dumps under
-``tests/expectations`` and the scenario and benchmark captures beside the
-fixtures. That only means something if the capture is provably a run of the
-file in the tree, so every capture carries the sha256 of its fixture and every
-test that uses one checks it.
+pytest here has no .NET and is not getting one (ADR 0001), so what these tests
+read is what a container recorded: the canonical record dumps under
+``tests/expectations``, the scenario capture beside them and the benchmark
+under ``tests/benchmarks``. That only means something if a capture is provably
+a run of the file in the tree, so every capture carries the sha256 of its
+fixture and every test that uses one checks it.
+
+Regenerating all of it is ``tests/fixtures/gen/regenerate.py``.
 """
 
 import hashlib
@@ -17,15 +19,15 @@ import re
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(TESTS_DIR, "fixtures")
 EXPECTATIONS = os.path.join(TESTS_DIR, "expectations")
-CAPTURES = os.path.join(FIXTURES, "captures")
 BENCHMARKS = os.path.join(TESTS_DIR, "benchmarks")
 
 MANIFEST = os.path.join(EXPECTATIONS, "MANIFEST.json")
-SCENARIOS = os.path.join(CAPTURES, "g13_scenarios.json")
+SCENARIOS = os.path.join(EXPECTATIONS, "g13_scenarios.json")
 AMPLIFICATION = os.path.join(BENCHMARKS, "amplification.json")
 DECISION = os.path.join(BENCHMARKS, "DECISION.md")
 
-# The nine record kinds. Four of them are curves and stay curves.
+# The record types docs/WIRE.md names, as the dump spells them. Four of them
+# are curves and stay curves.
 RECORD_KINDS = (
     "Line",
     "Polyline",
@@ -46,8 +48,7 @@ TRUNCATIONS = (25, 50, 90)
 FLIP_COUNT = 64
 FLIP_SEED = 4713
 
-LINE_RE = re.compile(r"^(\d{5}) ([A-Za-z]+) handle=([0-9A-F]+) layer=\"((?:[^\"\\]|\\.)*)\"(.*)$")
-FLOAT_RE = re.compile(r"-?\d+\.\d+")
+LINE_RE = re.compile(r"^(\d{5}) ([A-Za-z0-9]+) handle=([0-9A-F]+) flags=(\d+)(.*)$")
 
 
 def sha256_file(path):
@@ -104,7 +105,7 @@ def parse(line):
         "index": int(m.group(1)),
         "kind": m.group(2),
         "handle": m.group(3),
-        "layer": m.group(4),
+        "flags": int(m.group(4)),
         "rest": m.group(5),
     }
 
@@ -130,7 +131,7 @@ def warnings(fixture):
     for r in records(fixture):
         if r["kind"] != "Warning":
             continue
-        m = re.search(r" code=(\S+) message=\"((?:[^\"\\]|\\.)*)\"", r["rest"])
+        m = re.search(r' code=(\S+) message="((?:[^"\\]|\\.)*)"', r["rest"])
         assert m, f"{fixture}: a Warning record with no code and message: {r['rest']!r}"
         out.append({"code": m.group(1), "message": m.group(2), "handle": r["handle"]})
     return out
@@ -140,15 +141,13 @@ def first_difference(expected, actual):
     """The first record two dumps disagree about, or None.
 
     The same rule the C# side applies, written twice on purpose: this is what
-    turns "the expectation is stale" into a line number rather than into a
-    wall of diff.
+    turns "the expectation is stale" into a line number rather than into a wall
+    of diff.
     """
     n = min(len(expected), len(actual))
     for i in range(n):
         if expected[i] != actual[i]:
-            return (
-                f"record {i} differs\n  expected: {expected[i]}\n  actual:   {actual[i]}"
-            )
+            return f"record {i} differs\n  expected: {expected[i]}\n  actual:   {actual[i]}"
     if len(expected) != len(actual):
         i = n
         if len(expected) > len(actual):
@@ -169,9 +168,9 @@ def truncate(data, percent):
 def bitflip(data, count=FLIP_COUNT, seed=FLIP_SEED):
     """`count` bytes flipped where a fixed seed puts them.
 
-    Returns the bytes and the positions, because a flip landing inside the
-    six-byte version signature is a different refusal from one in the body and
-    a test that cannot tell them apart is asserting on luck.
+    The positions come back too, because a flip inside the six-byte version
+    signature is a different refusal from one in the body, and a test that
+    cannot tell them apart is asserting on luck.
     """
     rng = random.Random(seed)
     out = bytearray(data)
@@ -191,13 +190,21 @@ def derived_inputs():
     out = []
     for pct in TRUNCATIONS:
         d = truncate(data, pct)
-        out.append({"name": f"truncated_{pct}", "bytes": d, "sha256": sha256_bytes(d)})
+        out.append(
+            {
+                "name": f"truncated_{pct}",
+                "scenario": f"malformed/truncated_{pct}",
+                "bytes": len(d),
+                "sha256": sha256_bytes(d),
+            }
+        )
 
     flipped, positions = bitflip(data)
     out.append(
         {
             "name": "bitflip_64",
-            "bytes": flipped,
+            "scenario": "malformed/bitflip_64",
+            "bytes": len(flipped),
             "sha256": sha256_bytes(flipped),
             "positions": positions,
             "touches_signature": any(p < 6 for p in positions),

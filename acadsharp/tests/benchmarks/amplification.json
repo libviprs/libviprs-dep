@@ -1,0 +1,158 @@
+{
+  "amplification": {
+    "batches": 38,
+    "file_bytes": 179150,
+    "fixture": "g13_many_inserts.dwg",
+    "fixture_sha256": "dc7e02a78708663a139a58b176a68b053ee94ac802a10ffb2631ac9bc32e1af1",
+    "managed_retained_kb": 1,
+    "output_bytes": 2481264,
+    "peak_rss_kb": 94036,
+    "rss_after_begin_kb": 93692,
+    "rss_peak_during_decode_kb": 94036,
+    "single_instance": {
+      "fixture": "g13_insert.dwg",
+      "output_bytes": 972
+    }
+  },
+  "batch_bytes": 65536,
+  "host": "Apple Silicon, arm64 containers, one scenario per process",
+  "path_versus_memory": {
+    "file_bytes": 179150,
+    "fixture": "g13_many_inserts.dwg",
+    "fixture_sha256": "dc7e02a78708663a139a58b176a68b053ee94ac802a10ffb2631ac9bc32e1af1",
+    "median_alloc_delta_bytes": 161512,
+    "median_peak_delta_kb": 272,
+    "min_alloc_delta_bytes": 124696,
+    "min_peak_delta_kb": 88,
+    "padded": {
+      "file_bytes": 33733582,
+      "file_kb": 32942,
+      "input": "g13_many_inserts.dwg with 32 MiB of pseudorandom bytes appended, built at measurement time and not committed",
+      "median_alloc_delta_bytes": 33723536,
+      "median_peak_delta_kb": 32688,
+      "min_peak_delta_kb": 32524,
+      "runs": [
+        {
+          "alloc_delta_bytes": 33723688,
+          "memory_alloc_open_bytes": 103020176,
+          "memory_output_bytes": 2481264,
+          "memory_peak_rss_kb": 127056,
+          "path_alloc_open_bytes": 69296488,
+          "path_output_bytes": 2481264,
+          "path_peak_rss_kb": 94368,
+          "peak_delta_kb": 32688
+        },
+        {
+          "alloc_delta_bytes": 33723536,
+          "memory_alloc_open_bytes": 103019240,
+          "memory_output_bytes": 2481264,
+          "memory_peak_rss_kb": 126660,
+          "path_alloc_open_bytes": 69295704,
+          "path_output_bytes": 2481264,
+          "path_peak_rss_kb": 94136,
+          "peak_delta_kb": 32524
+        },
+        {
+          "alloc_delta_bytes": 33723496,
+          "memory_alloc_open_bytes": 103019256,
+          "memory_output_bytes": 2481264,
+          "memory_peak_rss_kb": 126960,
+          "path_alloc_open_bytes": 69295760,
+          "path_output_bytes": 2481264,
+          "path_peak_rss_kb": 93832,
+          "peak_delta_kb": 33128
+        }
+      ],
+      "unpadded_output_bytes": 2481264
+    },
+    "runs": [
+      {
+        "alloc_delta_bytes": 161416,
+        "memory_alloc_open_bytes": 69457136,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94324,
+        "path_alloc_open_bytes": 69295720,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94036,
+        "peak_delta_kb": 288
+      },
+      {
+        "alloc_delta_bytes": 161968,
+        "memory_alloc_open_bytes": 69458168,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94176,
+        "path_alloc_open_bytes": 69296200,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 93904,
+        "peak_delta_kb": 272
+      },
+      {
+        "alloc_delta_bytes": 162208,
+        "memory_alloc_open_bytes": 69457592,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94196,
+        "path_alloc_open_bytes": 69295384,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94028,
+        "peak_delta_kb": 168
+      },
+      {
+        "alloc_delta_bytes": 161512,
+        "memory_alloc_open_bytes": 69457784,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94336,
+        "path_alloc_open_bytes": 69296272,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94028,
+        "peak_delta_kb": 308
+      },
+      {
+        "alloc_delta_bytes": 124696,
+        "memory_alloc_open_bytes": 69457528,
+        "memory_caller_copy_bytes": 179150,
+        "memory_peak_rss_kb": 94360,
+        "path_alloc_open_bytes": 69332832,
+        "path_caller_copy_bytes": 0,
+        "path_peak_rss_kb": 94272,
+        "peak_delta_kb": 88
+      }
+    ]
+  },
+  "recorded": "2026-09-12",
+  "runner": "fixturegen decode, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
+  "streaming": [
+    {
+      "batches": 1,
+      "fixture": "g13_scale_1x.dwg",
+      "managed_after_begin_kb": 1175,
+      "managed_after_decode_kb": 1176,
+      "managed_retained_kb": 1,
+      "output_bytes": 10548,
+      "rss_after_begin_kb": 53524,
+      "rss_decode_growth_kb": 656,
+      "rss_peak_during_decode_kb": 54180
+    },
+    {
+      "batches": 1,
+      "fixture": "g13_scale_4x.dwg",
+      "managed_after_begin_kb": 1436,
+      "managed_after_decode_kb": 1437,
+      "managed_retained_kb": 1,
+      "output_bytes": 39732,
+      "rss_after_begin_kb": 53468,
+      "rss_decode_growth_kb": 1452,
+      "rss_peak_during_decode_kb": 54920
+    },
+    {
+      "batches": 3,
+      "fixture": "g13_scale_16x.dwg",
+      "managed_after_begin_kb": 2519,
+      "managed_after_decode_kb": 2520,
+      "managed_retained_kb": 1,
+      "output_bytes": 156492,
+      "rss_after_begin_kb": 58668,
+      "rss_decode_growth_kb": 2700,
+      "rss_peak_during_decode_kb": 61368
+    }
+  ]
+}

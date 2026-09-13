@@ -267,6 +267,14 @@ namespace Viprs.Cad.Fixtures
 			uint openCode = Result.Ok;
 			string openDetail = null;
 
+			// Managed bytes allocated across the open, on this thread. Peak
+			// RSS is the number the issue asks for, and on a 175 KB fixture it
+			// sits well inside the run-to-run spread of a managed runtime, so
+			// it cannot carry the path-versus-memory claim on its own. This
+			// one can: it is exact, it is deterministic, and the difference
+			// between the two modes is the caller's copy and nothing else.
+			long allocBefore = GC.GetAllocatedBytesForCurrentThread();
+
 			try
 			{
 				if (o.Memory)
@@ -292,6 +300,9 @@ namespace Viprs.Cad.Fixtures
 				openDetail = ex.GetType().FullName + ": " + ex.Message;
 			}
 
+			long allocOpen = GC.GetAllocatedBytesForCurrentThread() - allocBefore;
+			json.Num("alloc_open_bytes", allocOpen);
+			json.Num("caller_copy_bytes", buffer == null ? 0 : buffer.Length);
 			json.Str("open_code", Name(openCode));
 			json.Str("open_detail", openDetail);
 			json.Num("rss_start_kb", rssStart);
