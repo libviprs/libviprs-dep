@@ -33,6 +33,7 @@ own libc is musl. A count would let any two of those stand in for the third.
 import inspect
 import os
 import re
+import subprocess
 
 import build_acadsharp as ba
 import pytest
@@ -338,6 +339,105 @@ class TestTheMuslLibraryIsRunAndNotOnlyLinked:
             "the musl job publishes an AbiTest build. The cases that build "
             "unlocks are managed logic that cannot differ by libc, so it costs "
             "a second NativeAOT publish for no musl-specific answer"
+        )
+
+
+class TestTheLibcControlCanFail:
+    """The positive control #75 added, pulled out where it can be watched.
+
+    That control was a block of shell inside one step of one job: it read the
+    library's NEEDED entries and refused anything that did not ask for a musl
+    libc. It was right, and nothing ever ran it with a glibc library to find
+    out, because the only way to run it was to run the job. Meanwhile #74 put
+    the same question to release-acadsharp.yml, which would have meant a second
+    copy of it in a second file.
+
+    So the decision is `expect_libc.sh`, both workflows call it, and these
+    cases are the ones a copy inside a workflow could never have.
+    """
+
+    CONTROL = os.path.join(REPO_ROOT, "acadsharp", "tests", "conformance", "expect_libc.sh")
+
+    # What `readelf -d` reports for each of the two archives this repo ships
+    # for the same architecture, reduced to the NEEDED sonames.
+    MUSL_NEEDED = "libc.musl-aarch64.so.1"
+    GLIBC_NEEDED = "libm.so.6\nlibc.so.6\nld-linux-aarch64.so.1"
+
+    def run(self, platform, needed):
+        return subprocess.run(
+            ["bash", self.CONTROL, platform],
+            input=needed + "\n",
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_the_script_is_there_and_executable(self):
+        assert os.path.isfile(self.CONTROL)
+        assert os.access(self.CONTROL, os.X_OK), (
+            "the workflows call it directly, so a non-executable file fails the step"
+        )
+
+    def test_a_musl_library_satisfies_a_musl_cell(self):
+        done = self.run("musl", self.MUSL_NEEDED)
+        assert done.returncode == 0, done.stdout + done.stderr
+
+    def test_a_glibc_library_satisfies_a_glibc_cell(self):
+        done = self.run("linux", self.GLIBC_NEEDED)
+        assert done.returncode == 0, done.stdout + done.stderr
+
+    def test_a_glibc_library_does_not_satisfy_a_musl_cell(self):
+        # The case the whole control exists for. Both archives are built from
+        # the same tree by the same driver and both are found by find_shim.sh,
+        # so this is the substitution a green run cannot rule out by itself.
+        done = self.run("musl", self.GLIBC_NEEDED)
+        assert done.returncode != 0, (
+            "a glibc library passed a musl cell's control, so the consumer runs "
+            "underneath it prove nothing about musl"
+        )
+        assert "musl" in (done.stdout + done.stderr)
+
+    def test_a_musl_library_does_not_satisfy_a_glibc_cell(self):
+        done = self.run("linux", self.MUSL_NEEDED)
+        assert done.returncode != 0, (
+            "the control only looks one way, so the glibc cells it now guards are "
+            "guarded by nothing"
+        )
+
+    def test_a_library_that_names_no_libc_is_refused(self):
+        # A statically linked .so, or a readelf that printed nothing because
+        # the pipeline in front of it failed. Either way there is no evidence,
+        # and "no evidence" is not "the right libc".
+        done = self.run("musl", "")
+        assert done.returncode != 0, (
+            "an empty NEEDED list passed. A readelf that produced nothing looks "
+            "exactly like this, and that is a broken step reporting a pass"
+        )
+
+    def test_a_platform_it_has_no_expectation_for_is_refused(self):
+        done = self.run("mac", self.GLIBC_NEEDED)
+        assert done.returncode != 0, (
+            "a platform the script knows nothing about came back green, so a new "
+            "cell would be waved through by a control that never looked at it"
+        )
+
+    def test_the_musl_job_uses_it_rather_than_its_own_copy(self):
+        _name, _job, job_steps = TestTheMuslLibraryIsRunAndNotOnlyLinked().musl_job()
+        bodies = " ".join(s.get("run", "") for s in job_steps)
+        assert "expect_libc.sh" in bodies, (
+            "the musl job carries its own libc check again. Two copies of a guard "
+            "drift, and the copy inside a workflow is the one no test can run"
+        )
+
+    def test_the_control_runs_before_the_consumers_it_vouches_for(self):
+        _name, _job, job_steps = TestTheMuslLibraryIsRunAndNotOnlyLinked().musl_job()
+        bodies = [s.get("run", "") for s in job_steps]
+        control = [i for i, b in enumerate(bodies) if "expect_libc.sh" in b]
+        consumers = [i for i, b in enumerate(bodies) if "/run.sh" in b]
+        assert control and consumers
+        assert min(control) < min(consumers), (
+            "the libc control runs after the consumers, so it reports on a run that "
+            "has already happened"
         )
 
 

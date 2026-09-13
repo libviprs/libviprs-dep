@@ -114,6 +114,22 @@ docker run --rm --platform "$platform" \
         # the consumer then NEEDs libc.musl-<arch>.so.1, the same libc as the
         # shim it is testing. Appended rather than assigned so RUSTFLAGS set
         # by a caller survives.
+        #
+        # x86_64 fails differently, which is worth knowing before somebody
+        # spends an afternoon on it. #74 took this case back out and ran the
+        # consumer against the musl/x64 archive on a native x86_64 host: it
+        # linked, it executed, `cargo test --tests` passed all four layout
+        # cases, and then it died on the first call into the library:
+        #
+        #   VIPRS CAD ABI conformance, generated consumer
+        #   --- handshake
+        #   Segmentation fault (core dumped)
+        #
+        # So on this architecture the binary starts, and what starts is a
+        # program holding two libcs: the static one rustc linked into it and
+        # the dynamic one the shim asks for. Same missing flag, and nothing
+        # about the symptom points at it. With the flag, 145 checks, no
+        # failures.
         case "$(rustc -vV | sed -n "s/^host: //p")" in
             *-musl)
                 RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static"
