@@ -493,7 +493,9 @@ dependency's flake should not colour another's release run red.
   `actions/setup-dotnet` reading the same file. A bad pin of any of
   those three kinds dies in this one job rather than on five claimed
   runners.
-- `create-release` creates `acadsharp-<VERSION>` as a pre-release, with
+- `create-release` creates `acadsharp-<VERSION>`, not marked as a
+  pre-release, so `gh release view` without a tag still resolves it the
+  way it does for pdfium and zstd. It carries
   a notes preamble generated from `acadsharp/VERSION`,
   `acadsharp/native/global.json`, `acadsharp/include/viprs_acadsharp.h`
   and `acadsharp/build_acadsharp.py`. Nothing version-bearing is typed
