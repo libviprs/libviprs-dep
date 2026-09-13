@@ -378,6 +378,16 @@ tell a complete decode from a truncated one will render a drawing with pieces
 missing and no indication that anything went wrong. The terminal rule under
 Decoding is the other half of that promise, and for a while it was missing.
 
+There is one exception, and it is `max_string_bytes`. A `Warning` message past
+that bound is shortened and marked rather than refused, because that message
+is the decoder's own sentence about the drawing and refusing it would cost
+every record after it, which is a bad trade for a string the drawing only
+decided the length of. A `Text` record and a view's name are still refused
+under the same bound, because a consumer cannot tell a label the file carries
+from one that was shortened. [WIRE.md](WIRE.md) has the rule and the marker.
+Nothing about that weakens the sentence above: the stream is complete and the
+message says it was cut, which is the opposite of a silent truncation.
+
 `struct_size` is checked. A `viprs_acad_limits_v1` whose `struct_size` is
 not a size this build knows returns `VIPRS_ACAD_INVALID_ARGUMENT`, and so
 does a `struct_version` it does not recognise.

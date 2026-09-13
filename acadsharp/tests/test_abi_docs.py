@@ -279,6 +279,45 @@ class TestTheTwoRefusalsAreToldApart:
         ), "nothing says a breached bound ends the decode rather than pausing it"
 
 
+class TestTheOneLimitThatDoesNotRefuse:
+    """`max_string_bytes` stopped being a plain refusal and the document said it was.
+
+    A `Warning` message is the decoder's own sentence about the drawing, and
+    the drawing usually decided its length: the reader's "unlisted object with
+    DXF name ..." notification carries a name the file chose. Refusing it cost
+    every record after it, so a message past the bound is shortened and marked
+    instead. A `Text` record and a view's name are still refused, because a
+    consumer cannot tell a label the file carries from one that was cut.
+
+    The sentence after the limits table said "exceeding any of them is
+    VIPRS_ACAD_LIMIT_EXCEEDED", full stop, which is the kind of blanket claim a
+    second implementation would follow exactly.
+    """
+
+    def test_the_exception_is_stated(self, abi_flat):
+        assert re.search(
+            r"exception[^.]{0,120}max_string_bytes|max_string_bytes[^.]{0,120}exception",
+            abi_flat,
+            re.I,
+        ), (
+            "ABI.md still says every bound refuses, which is no longer true of a "
+            "Warning past max_string_bytes"
+        )
+
+    def test_it_says_which_strings_still_refuse(self, abi_flat):
+        assert re.search(r"`Text`.{0,200}(refus|reject)", abi_flat, re.I), (
+            "the exception is about one record type, and a document that states only "
+            "the exception reads as if every string is now shortened"
+        )
+
+    def test_it_does_not_weaken_the_no_silent_truncation_promise(self, abi_flat):
+        assert re.search(r"never a silently truncated stream", abi_flat), (
+            "the limits section has to keep promising it, because a shortened message "
+            "that says it was shortened is not a silent truncation and the two must "
+            "not be confused"
+        )
+
+
 class TestARefusalEndsTheDecode:
     """The silent truncation, written down.
 
