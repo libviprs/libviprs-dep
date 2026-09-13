@@ -375,6 +375,20 @@ def support():
     return g13_support
 
 
+def ac21_forge():
+    """`tests/ac21_forge.py`, which writes the AC1021 inputs from nothing.
+
+    Imported for the same reason `support()` imports the derivation rather
+    than restating it: the bytes this records a run of and the bytes the test
+    rebuilds have to come from one place, or the two ends drift and the
+    capture stops being evidence.
+    """
+    sys.path.insert(0, os.path.join(ACAD_ROOT, "tests"))
+    import ac21_forge
+
+    return ac21_forge
+
+
 def shim_block():
     """The shim these captures are a run of, as digests.
 
@@ -1045,6 +1059,91 @@ def scenarios(scratch):
     print(
         f"declared/unmodified_control: open={control['result'].get('open_code')} "
         f"alloc_open={control['result'].get('alloc_open_bytes')}"
+    )
+
+    # The four AC21 sites, and the reason these inputs are written rather than
+    # derived. `readFileHeader` sends AC1024, AC1027 and AC1032 to the AC18
+    # reader, so the one real 2018 drawing in the corpus never touches
+    # getPageBuffer or getSectionBuffer21, and upstream's DwgWriter refuses to
+    # write AC1021, so the generator that produced every g13_*.dwg cannot make
+    # a file that does. The fields that drive these allocations are not in
+    # plaintext either: they sit inside an LZ77 stream inside the interleave at
+    # offset 0x80, so the four-byte rewrite above reaches none of them.
+    #
+    # tests/ac21_forge.py builds them instead, which works because upstream's
+    # "Reed-Solomon" decode is a stride gather that verifies nothing and the
+    # AC21 LZ77 has a literal run. Both transforms are invertible, so the file
+    # is a function of the numbers it is supposed to declare.
+    forge = ac21_forge()
+    for case in forge.inputs():
+        name = case["name"]
+        path = os.path.join(derived, f"{name}.dwg")
+        with open(path, "wb") as f:
+            f.write(case["blob"])
+        entry = record(
+            f"declared/{name}",
+            f"/scratch/derived/{name}.dwg",
+            [],
+            f"a forged AC1021 file declaring {case['declared']} bytes for its "
+            f"{case['site']}, from {case['field']}",
+        )
+        entry["derived"] = {
+            "kind": "ac21_declared_size",
+            "site": case["site"],
+            "field": case["field"],
+            "declared": case["declared"],
+            "source": "tests/ac21_forge.py",
+            "sha256": case["sha256"],
+            "bytes": case["bytes"],
+        }
+        result = entry["result"]
+        print(
+            f"declared/{name}: open={result.get('open_code')} "
+            f"alloc_open={result.get('alloc_open_bytes')}"
+        )
+
+    # The AC21 control, and it is what the four above need: the same forge with
+    # nothing inflated gets past all four ceilings, the section buffer is built
+    # out of a real page, and the refusal comes from the header parser instead.
+    # A ceiling that simply refused every AC1021 file would look identical
+    # without it.
+    ac21_control = forge.control_case()
+    path = os.path.join(derived, "ac21_control.dwg")
+    with open(path, "wb") as f:
+        f.write(ac21_control["blob"])
+    entry = record(
+        "declared/ac21_control",
+        "/scratch/derived/ac21_control.dwg",
+        [],
+        "the same forge with every declared size inside the ceiling",
+    )
+    entry["derived"] = {
+        "kind": "ac21_declared_size",
+        "site": None,
+        "field": "page DecompressedSize",
+        "declared": ac21_control["declared"],
+        "source": "tests/ac21_forge.py",
+        "sha256": ac21_control["sha256"],
+        "bytes": ac21_control["bytes"],
+    }
+    print(
+        f"declared/ac21_control: open={entry['result'].get('open_code')} "
+        f"alloc_open={entry['result'].get('alloc_open_bytes')}"
+    )
+
+    # The real 2018 drawing, unmodified. It was taken for this corpus's AC21
+    # fixture and it is not one: it goes through readFileHeaderAC18 like every
+    # other AC1024 and later file. Recorded here so that is a capture rather
+    # than a reading of a switch statement.
+    real = record(
+        "declared/real_ac1032_control",
+        fixture_arg("real_AC1032.dwg"),
+        [],
+        "a drawing AutoCAD wrote, on the AC18 path, with the ceiling in place",
+    )
+    print(
+        f"declared/real_ac1032_control: open={real['result'].get('open_code')} "
+        f"alloc_open={real['result'].get('alloc_open_bytes')}"
     )
 
     # Malformed derivatives, derived here and written to the scratch directory
