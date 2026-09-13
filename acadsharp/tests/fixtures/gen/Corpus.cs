@@ -409,6 +409,53 @@ public static class Corpus
 	// the rule the g13_ocs_* files already state: a fixture built out of fixed
 	// points passes whether the code is right or wrong, and is worse than no
 	// fixture because it converts "untested" into "covered".
+	//
+	// Each one has two halves. The top-level entities produce records with
+	// `flags` 0, and the block below produces records with bit 0 set, which
+	// docs/WIRE.md defines as "came from expanding a nested insertion". A
+	// fixture with only the first half lets through the defect that actually
+	// ships: the kind is implemented, the top-level case works, the fixture is
+	// green, and instances inside an INSERT are dropped or emitted
+	// untransformed.
+
+	// The second half every refused-kind fixture carries.
+	//
+	// Two insertions of one block, and neither is the identity. The first is
+	// non-uniform, which is the only thing in these files that reaches the
+	// flattener's NonUniform warning path. The second is mirrored, because a
+	// mirror reverses what counter-clockwise means, and that is what decides a
+	// mesh's face winding and a solid's corner order. A uniform upright insert
+	// would exercise the flags bit and nothing else.
+	private static void AddBlockInstances(CadDocument doc, string blockName, params Entity[] members)
+	{
+		BlockRecord block = new BlockRecord(blockName);
+		foreach (Entity e in members)
+		{
+			block.Entities.Add(e);
+		}
+		doc.BlockRecords.Add(block);
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(40, 0, 0),
+			XScale = 3.0,
+			YScale = 1.5,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(80, 0, 0),
+			XScale = -2.0,
+			YScale = 2.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+	}
+
+	// The extrusion the non-Z cases are built on. Not axis-aligned, and not a
+	// unit vector as written, so an implementation that forgets to normalise
+	// it is visible in the record rather than only in the geometry.
+	private static readonly XYZ SkewNormal = new XYZ(1, 2, 2);
 
 	// POINT, which is 40 of the 88 entities refused on real_AC1032.dwg.
 	//
@@ -426,9 +473,12 @@ public static class Corpus
 		doc.Entities.Add(new Point
 		{
 			Location = new XYZ(2, 3, 5),
-			Normal = new XYZ(1, 2, 2),
+			Normal = SkewNormal,
 			Layer = L(doc)
 		});
+		AddBlockInstances(doc, "VIPRS_G13_POINT_BLK",
+			new Point { Location = new XYZ(1, 2, 0) },
+			new Point { Location = new XYZ(2, 3, 5), Normal = SkewNormal });
 		Write(doc, path);
 	}
 
@@ -442,7 +492,9 @@ public static class Corpus
 	// and an expectation has to compare the emitted point ORDER.
 	//
 	// The second is the triangle case (fourth corner equal to the third). The
-	// third carries a non-Z normal so the lift is exercised too.
+	// third carries a non-Z normal. The block copy is asymmetric too, because
+	// the mirrored insertion is exactly where a corner-order defect and a
+	// winding defect compound, and a symmetric quad would hide both at once.
 	public static void WriteSolidQuad(string path)
 	{
 		CadDocument doc = NewDoc();
@@ -468,9 +520,17 @@ public static class Corpus
 			SecondCorner = new XYZ(4, 0, 0),
 			ThirdCorner = new XYZ(0, 3, 0),
 			FourthCorner = new XYZ(4, 3, 0),
-			Normal = new XYZ(1, 2, 2),
+			Normal = SkewNormal,
 			Layer = L(doc)
 		});
+		AddBlockInstances(doc, "VIPRS_G13_SOLID_BLK",
+			new Solid
+			{
+				FirstCorner = new XYZ(0, 0, 0),
+				SecondCorner = new XYZ(6, 1, 0),
+				ThirdCorner = new XYZ(1, 4, 0),
+				FourthCorner = new XYZ(7, 5, 0),
+			});
 		Write(doc, path);
 	}
 
@@ -484,7 +544,9 @@ public static class Corpus
 	// Neither direction is axis-aligned, for the same reason: an axis-aligned
 	// construction line clipped against an axis-aligned extents box lands on the
 	// box corners, which are fixed points, so a clipper that transposed X and Y
-	// would still look right.
+	// would still look right. The mirrored insertion matters more here than
+	// anywhere else in this corpus, because mirroring a RAY reverses the half
+	// line it covers, and a ray pointing the wrong way is still a ray.
 	public static void WriteRayXline(string path)
 	{
 		CadDocument doc = NewDoc();
@@ -501,6 +563,9 @@ public static class Corpus
 			Direction = new XYZ(1, 4, 0),
 			Layer = L(doc)
 		});
+		AddBlockInstances(doc, "VIPRS_G13_RAY_BLK",
+			new Ray { StartPoint = new XYZ(0, 1, 0), Direction = new XYZ(2, 1, 0) },
+			new XLine { FirstPoint = new XYZ(0, -1, 0), Direction = new XYZ(1, 3, 0) });
 		Write(doc, path);
 	}
 
@@ -516,7 +581,19 @@ public static class Corpus
 	public static void WritePolyfaceMesh(string path)
 	{
 		CadDocument doc = NewDoc();
-		PolyfaceMesh mesh = new PolyfaceMesh { Layer = L(doc) };
+		doc.Entities.Add(NewPolyfaceMesh(L(doc), XYZ.AxisZ));
+		doc.Entities.Add(NewPolyfaceMesh(L(doc), SkewNormal));
+		AddBlockInstances(doc, "VIPRS_G13_PFACE_BLK", NewPolyfaceMesh(null, XYZ.AxisZ));
+		Write(doc, path);
+	}
+
+	private static PolyfaceMesh NewPolyfaceMesh(Layer layer, XYZ normal)
+	{
+		PolyfaceMesh mesh = new PolyfaceMesh { Normal = normal };
+		if (layer != null)
+		{
+			mesh.Layer = layer;
+		}
 		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 0, 0) });
 		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(10, 0, 0) });
 		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(0, 10, 0) });
@@ -525,8 +602,7 @@ public static class Corpus
 		mesh.Vertices.Add(new VertexFaceMesh { Location = new XYZ(20, 10, 0) });
 		mesh.Faces.Add(new VertexFaceRecord { Index1 = 1, Index2 = 2, Index3 = 4, Index4 = 3 });
 		mesh.Faces.Add(new VertexFaceRecord { Index1 = 2, Index2 = 5, Index3 = 6, Index4 = 4 });
-		doc.Entities.Add(mesh);
-		Write(doc, path);
+		return mesh;
 	}
 
 	// POLYGON_MESH, the other kind the IPolyline arm catches.
@@ -537,7 +613,19 @@ public static class Corpus
 	public static void WritePolygonMesh(string path)
 	{
 		CadDocument doc = NewDoc();
-		PolygonMesh mesh = new PolygonMesh { Layer = L(doc), MVertexCount = 3, NVertexCount = 4 };
+		doc.Entities.Add(NewPolygonMesh(L(doc), XYZ.AxisZ));
+		doc.Entities.Add(NewPolygonMesh(L(doc), SkewNormal));
+		AddBlockInstances(doc, "VIPRS_G13_PMESH_BLK", NewPolygonMesh(null, XYZ.AxisZ));
+		Write(doc, path);
+	}
+
+	private static PolygonMesh NewPolygonMesh(Layer layer, XYZ normal)
+	{
+		PolygonMesh mesh = new PolygonMesh { MVertexCount = 3, NVertexCount = 4, Normal = normal };
+		if (layer != null)
+		{
+			mesh.Layer = layer;
+		}
 		for (int m = 0; m < 3; m++)
 		{
 			for (int n = 0; n < 4; n++)
@@ -548,8 +636,7 @@ public static class Corpus
 				});
 			}
 		}
-		doc.Entities.Add(mesh);
-		Write(doc, path);
+		return mesh;
 	}
 
 	// MESH: an explicit vertex list and face indices, no proprietary format
@@ -560,18 +647,32 @@ public static class Corpus
 	// subdivision level is deliberately non-zero for the same class of reason:
 	// the proposal is to emit the base mesh and ignore the level, and a fixture
 	// at level zero cannot show that anything was ignored.
+	//
+	// The mirrored insertion is what makes face winding testable: a mirror
+	// reverses it, and a mesh whose faces face the wrong way renders inside out
+	// rather than obviously wrong.
 	public static void WriteMesh(string path)
 	{
 		CadDocument doc = NewDoc();
-		Mesh mesh = new Mesh { Layer = L(doc), SubdivisionLevel = 2 };
+		doc.Entities.Add(NewMesh(L(doc)));
+		AddBlockInstances(doc, "VIPRS_G13_MESH_BLK", NewMesh(null));
+		Write(doc, path);
+	}
+
+	private static Mesh NewMesh(Layer layer)
+	{
+		Mesh mesh = new Mesh { SubdivisionLevel = 2 };
+		if (layer != null)
+		{
+			mesh.Layer = layer;
+		}
 		mesh.Vertices.Add(new XYZ(0, 0, 0));
 		mesh.Vertices.Add(new XYZ(10, 0, 0));
 		mesh.Vertices.Add(new XYZ(10, 10, 0));
 		mesh.Vertices.Add(new XYZ(0, 10, 4));
 		mesh.Faces.Add(new int[] { 0, 1, 2 });
 		mesh.Faces.Add(new int[] { 0, 2, 3 });
-		doc.Entities.Add(mesh);
-		Write(doc, path);
+		return mesh;
 	}
 
 	// TOLERANCE: a feature-control frame, whose geometry is computed from the
@@ -579,18 +680,32 @@ public static class Corpus
 	// refused kind most likely to disagree with what AutoCAD draws.
 	//
 	// Two stacked rows, because a single-row frame does not exercise the
-	// vertical stacking that is the part most likely to be wrong.
+	// vertical stacking that is the part most likely to be wrong. The non-Z
+	// copy is here for the same reason the other files carry one: at +Z the
+	// arbitrary axis algorithm is exactly the identity.
 	public static void WriteTolerance(string path)
 	{
 		CadDocument doc = NewDoc();
-		doc.Entities.Add(new Tolerance
+		doc.Entities.Add(NewTolerance(L(doc), XYZ.AxisZ));
+		doc.Entities.Add(NewTolerance(L(doc), SkewNormal));
+		AddBlockInstances(doc, "VIPRS_G13_TOL_BLK", NewTolerance(null, XYZ.AxisZ));
+		Write(doc, path);
+	}
+
+	private static Tolerance NewTolerance(Layer layer, XYZ normal)
+	{
+		Tolerance tol = new Tolerance
 		{
 			InsertionPoint = new XYZ(4, 6, 0),
 			Direction = new XYZ(1, 0, 0),
+			Normal = normal,
 			Text = "{\\Fgdt;j}%%v{\\Fgdt;n}0.25{\\Fgdt;m}%%vA%%v%%v%%v\\P{\\Fgdt;b}%%v0.5%%vB",
-			Layer = L(doc)
-		});
-		Write(doc, path);
+		};
+		if (layer != null)
+		{
+			tol.Layer = layer;
+		}
+		return tol;
 	}
 
 	public static void WriteXref(string path)

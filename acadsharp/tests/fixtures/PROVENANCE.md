@@ -26,6 +26,19 @@ Each is shaped so the plausible wrong implementation fails it. A file that merel
 the entity would be satisfied by any output at all, which is the defect the `g13_ocs_*`
 files were added to stop being possible.
 
+Every one has two halves. The top-level entities produce records with `flags` 0, and the
+block in each file produces records with bit 0 set, which `docs/WIRE.md` defines as "came
+from expanding a nested insertion". A fixture with only the first half lets through the
+defect that actually ships: the kind is implemented, the top-level case works, the fixture
+is green, and instances inside an INSERT are dropped or emitted untransformed. Both
+insertions are deliberately not the identity, one non-uniform and one mirrored, because a
+uniform upright insert exercises the flags bit and nothing else.
+
+What these deliberately do NOT vary is layer, colour, linetype, lineweight or thickness.
+The wire carries only `handle` and `flags` from the common entity fields, and the
+flattener reads `Thickness` nowhere, so there is no field in any record for those to be
+wrong in. Setting them would grow the corpus and assert nothing.
+
 Six refused kinds are absent here and stay on the real drawing, because ACadSharp's
 `DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
 MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
@@ -34,13 +47,13 @@ Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
 | File | sha256 | What it holds |
 | --- | --- | --- |
-| `g13_point.dwg` | `1ad252dbaac1a298448551874ccddc8cb52e095267eac74b9c43b67420b708e1` | AC1032. Four POINTs, one at the origin, one off it, one with a Z, one with a non-Z normal so the arbitrary-axis lift is exercised. |
-| `g13_solid.dwg` | `8c277765bcec7d21ff2c41519fd0992fb929bb619077fc6fb82b25982bce79b9` | AC1032. Three SOLIDs: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one with a non-Z normal. |
-| `g13_ray_xline.dwg` | `3ddfb4fa3c1ba40368207d0631d6370a646ad6b9bce07bb494c208bc50033910` | AC1032. A RAY and an XLINE with non-axis-aligned directions, plus a bounded LINE that gives the drawing finite extents. |
-| `g13_polyface_mesh.dwg` | `7528fb81462fd4764bd69292234bc50f2afeced1b387491acce1a960252a3651` | AC1032. A POLYFACE_MESH of six vertices and two non-coplanar faces, vertices ordered so a line threaded through them in storage order self-intersects. |
-| `g13_polygon_mesh.dwg` | `eba255f5f084a8f5adcca003cea666fe9a1ef13e332dbf7cfac1e265c9f3e77c` | AC1032. A 3x4 POLYGON_MESH with alternating elevation, so an M/N transposition changes the record. |
-| `g13_mesh.dwg` | `4fc873fcbf40f24932e9a44baf3ea05e77de4c2ed521bf89deae9a58b86a0d0c` | AC1032. A MESH of two non-coplanar faces at subdivision level 2. |
-| `g13_tolerance.dwg` | `19cba079c557c4c83c35a60d95d625fc56e9a287526a6521f4ef7e89834f00a6` | AC1032. One TOLERANCE feature-control frame with two stacked rows. |
+| `g13_point.dwg` | `80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e` | AC1032. Four POINTs at top level, one at the origin, one off it, one with a Z, one on a non-Z extrusion; then two more inside a block, inserted non-uniformly and mirrored. |
+| `g13_solid.dwg` | `dea64a63b283585bb38b4d5a311ff1aadb9eb57cb399380e180294fe7ceafca1` | AC1032. Three SOLIDs at top level: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one on a non-Z extrusion. A fourth, also asymmetric, inside a block. |
+| `g13_ray_xline.dwg` | `332411ca8ee2e05fce04520594ac87952ff7c36d18c3c279ff5abda03a49cdae` | AC1032. A RAY and an XLINE with non-axis-aligned directions plus a bounded LINE that gives the drawing finite extents, then one of each inside a block. The mirrored insertion reverses the half line a RAY covers. |
+| `g13_polyface_mesh.dwg` | `ccd27150f2a135ded937e02b2ca10a04c58ce250850267e8537839026e1d3c8e` | AC1032. Two POLYFACE_MESHes of six vertices and two non-coplanar faces, one on +Z and one on a non-Z extrusion, vertices ordered so a line threaded through them in storage order self-intersects. A third inside a block. |
+| `g13_polygon_mesh.dwg` | `de3286f404c9a39f707a33b4294f0bdbd433ebdc8f821c3a93afa6535170f322` | AC1032. Two 3x4 POLYGON_MESHes with alternating elevation, one on +Z and one on a non-Z extrusion, so an M/N transposition changes the record. A third inside a block. |
+| `g13_mesh.dwg` | `962b4ecde6653787467fc4467e2eb7b08a60027f20a85141c1e6f829e1f12517` | AC1032. A MESH of two non-coplanar faces at subdivision level 2, and a second inside a block. The mirrored insertion is what makes face winding testable. |
+| `g13_tolerance.dwg` | `28f3d76765aaf05bac62a0cb7d5fbd9652756fa1caed0506211d3c8a4918f799` | AC1032. Two TOLERANCE feature-control frames with two stacked rows, one on +Z and one on a non-Z extrusion, and a third inside a block. |
 
 ## From upstream
 
