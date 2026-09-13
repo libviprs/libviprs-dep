@@ -210,6 +210,30 @@ the record is.
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
 counter-clockwise, measured in the plane the normal defines. 96 bytes.
 
+That fixes which way the angles run and not where they start from, and a
+consumer needs both or it cannot draw the arc. Zero is along the x axis the
+arbitrary axis algorithm gives for this record's own normal, which is the rule
+DXF states and which is written out here so this document stays sufficient on
+its own:
+
+    if |nx| < 1/64 and |ny| < 1/64:   ax = (0, 1, 0) × n
+    otherwise:                        ax = (0, 0, 1) × n
+    ax = normalize(ax)
+    ay = n × ax
+
+A point on the arc at angle `t` is then
+`centre + radius · (cos t · ax + sin t · ay)`. For a normal of `(0, 0, 1)`,
+which is what almost every drawing carries, zero is world `+X`. For a normal of
+`(0, 1, 0)` it is `(-1, 0, 0)`, which nobody guesses, and that is the whole
+reason this paragraph exists.
+
+`1/64` is a real number. Written as an integer division it is zero, the first
+branch never fires, and a normal just off the world z axis gets an x axis about
+ninety degrees from the one this defines: the cross product with `(0, 0, 1)`
+shrinks towards nothing there and what direction is left is decided by the last
+few bits of the normal. The band is what stops that, so an implementation that
+rounds it away is wrong in exactly the region it was written for.
+
 **6 `Circle`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64 nx, ny,
 nz`. 80 bytes.
 
@@ -287,6 +311,18 @@ bounding box the producer reports rather than a shape anybody draws, and a
 view holding nothing has no finite one; promising a number there would mean
 inventing one.
 
+That is not a licence to emit a `NaN` there either. `ViewBegin`'s extents are
+never `NaN` and never infinite. A view whose extents the source cannot give
+reports the inverted box instead, `min_x` and `min_y` at `1e20` and `max_x` and
+`max_y` at `-1e20`, which is the pair AutoCAD writes into its own `EXTMIN` and
+`EXTMAX` for a drawing with nothing in it. A consumer reads `min_x > max_x` as
+"this view has no usable extents", which is a comparison it can actually make,
+and `1e20` is not to be read as an extent.
+
+The box does not say why. A view that is empty and a view whose extents the
+drawing has damaged report the same box, and nothing else on this wire tells
+them apart.
+
 A consumer should still refuse a non-finite `f64` in a geometry record rather
 than trust the guarantee, because the bytes may not have come from this
 producer. Trusting it is how a single `NaN` coordinate becomes a bounding box
@@ -312,7 +348,7 @@ and 105 with these meanings, whatever it is built on.
 | 103 | `HATCH_PATTERN_ONLY` | A hatch with no boundary loop that could become a `Polygon`. |
 | 104 | `HATCH_LOOP_NOT_POLYGON` | A boundary loop carrying an elliptical or spline edge, which a closed polygon cannot express. The edges follow as their own records, so nothing is lost and nothing is approximated. |
 | 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
-| 106 | `NON_UNIFORM_BLOCK_SCALE` | An insertion scale that is not a similarity, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. |
+| 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 
 ### Reserved ranges
