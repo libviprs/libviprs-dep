@@ -245,7 +245,35 @@ record_count`, the number of records emitted for the view, its own
 `ViewBegin` and `ViewEnd` included. 24 bytes.
 
 **13 `DocumentEnd`**: `uint64 total_records`, `uint64 warning_count`. 24
-bytes.
+bytes. `total_records` counts every record in the stream, `DocumentBegin` and
+this record included, so it is `ViewEnd`'s `record_count` plus two.
+
+### Ceilings the counts cannot exceed
+
+Every count above is a `uint32` and a record's `length` is a `uint32` in the
+frame, but a producer writes that length from a signed 32-bit position, so no
+record longer than 2^31 - 1 bytes is ever emitted. Every count inherits a
+ceiling from that, and none of them reaches the top of its own field:
+
+| Field | Largest value a record can carry | Where it comes from |
+| --- | --- | --- |
+| `point_count` in records 4 and 9, `bulge_count` 0 | 89,478,482 | `64 + 24n` at most 2^31 - 1 |
+| `point_count` in records 4 and 9, one bulge per vertex | 67,108,861 | `64 + 32n` at most 2^31 - 1 |
+| `name_len` in record 2 | 2,147,483,580 | 2^31 - 1 less the record's fixed 64 bytes |
+| `byte_len` in record 10 | 2,147,483,572 | less its fixed 72 bytes |
+| `message_len` in record 11 | 2,147,483,612 | less its fixed 32 bytes |
+
+The three string ceilings are not simply 2^31 - 1 less the prefix: the padding
+to a multiple of four comes out of the same budget as the bytes, so each is
+that subtraction rounded down to where the padded record still fits. Record 8
+has no single ceiling because its three arrays share one, and
+`8 + 16 + 24 + 8·(knots + 3·controls + weights)` is the whole of it.
+
+A limit set above a ceiling is a limit the wire cannot carry. Nothing refuses
+such a limit when it is set, because a bound is about a drawing and a ceiling
+is about one record, and most drawings never build a record anywhere near one;
+a record that does reach a ceiling is refused with `VIPRS_ACAD_LIMIT_EXCEEDED`
+rather than emitted with a length that has wrapped.
 
 ## Every number in a geometry record is finite
 
@@ -311,6 +339,24 @@ and reading it produces numbers rather than an error. An unknown warning
 code means a record whose layout is fully known is saying something this
 consumer has no branch for, and the record after it is still exactly where
 the length says it is.
+
+### A message that did not fit
+
+`max_string_bytes` bounds every string on this wire, and a `Warning`'s message
+is the one string a producer may shorten rather than refuse. That message is
+the producer's own sentence about the file, and it often carries a name the
+file chose the length of, so ending a decode over it costs every record after
+it to protect a sentence nothing branches on.
+
+Record 10's bytes and record 2's name are never shortened. Those are the
+drawing's own text, a consumer has no way to tell one the file carries from one
+a producer cut, and a string past the bound there is refused.
+
+A shortened message is cut at a character boundary, so `message_len` always
+describes valid UTF-8, and it ends with the twelve bytes ` [truncated]`
+whenever those twelve fit inside the bound. A consumer needs no branch for it:
+`message_len` is the length of what is there, and the marker is for whoever
+reads the log.
 
 ## Curves keep their parameters
 
