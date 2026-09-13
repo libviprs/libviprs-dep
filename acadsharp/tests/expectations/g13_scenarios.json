@@ -32,9 +32,9 @@
         "memory": false,
         "open_code": "UNSUPPORTED_FORMAT",
         "open_detail": "AC1009 is outside AC1014 to AC1032, which is what this build reads",
-        "peak_rss_kb": 30176,
-        "rss_after_open_kb": 29812,
-        "rss_start_kb": 25308
+        "peak_rss_kb": 30208,
+        "rss_after_open_kb": 29840,
+        "rss_start_kb": 25332
       }
     },
     {
@@ -55,9 +55,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "System.ArgumentOutOfRangeException: Non-negative number required. (Parameter 'value')",
-        "peak_rss_kb": 35952,
-        "rss_after_open_kb": 35808,
-        "rss_start_kb": 25228
+        "peak_rss_kb": 36100,
+        "rss_after_open_kb": 35948,
+        "rss_start_kb": 25212
       }
     },
     {
@@ -71,13 +71,15 @@
       "note": "two entities, one allowed",
       "result": {
         "alloc_decode_bytes": 1576,
-        "alloc_open_bytes": 3802952,
+        "alloc_open_bytes": 3803400,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "this view holds more items than max_entities allows",
-        "decode_micros": 1695,
+        "decode_micros": 1617,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 10571,
         "fixture": "g13_two_entities.dwg",
@@ -86,8 +88,8 @@
         "limits": "input=536870912 entities=1 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
         "managed_after_begin_kb": 1086,
-        "managed_after_decode_kb": 1087,
-        "managed_retained_kb": 1,
+        "managed_after_decode_kb": 1086,
+        "managed_retained_kb": 0,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -100,19 +102,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 53024,
-        "rss_after_begin_kb": 51936,
-        "rss_after_collect_kb": 52932,
-        "rss_after_open_kb": 50456,
+        "peak_rss_kb": 53052,
+        "rss_after_begin_kb": 51956,
+        "rss_after_collect_kb": 52952,
+        "rss_after_open_kb": 50484,
         "rss_decode_growth_kb": 980,
-        "rss_peak_during_decode_kb": 52916,
-        "rss_start_kb": 28424,
+        "rss_peak_during_decode_kb": 52936,
+        "rss_start_kb": 28536,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -123,13 +126,15 @@
       "note": "the same fixture with the default bound",
       "result": {
         "alloc_decode_bytes": 5248,
-        "alloc_open_bytes": 3803592,
+        "alloc_open_bytes": 3803656,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 4692,
+        "decode_micros": 4516,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10571,
         "fixture": "g13_two_entities.dwg",
@@ -152,19 +157,20 @@
         "open_detail": null,
         "output_bytes": 964,
         "peak_reset": true,
-        "peak_rss_kb": 52888,
-        "rss_after_begin_kb": 52016,
-        "rss_after_collect_kb": 52804,
-        "rss_after_open_kb": 50532,
-        "rss_decode_growth_kb": 776,
-        "rss_peak_during_decode_kb": 52792,
-        "rss_start_kb": 25196,
+        "peak_rss_kb": 53036,
+        "rss_after_begin_kb": 52160,
+        "rss_after_collect_kb": 52940,
+        "rss_after_open_kb": 50684,
+        "rss_decode_growth_kb": 772,
+        "rss_peak_during_decode_kb": 52932,
+        "rss_start_kb": 25204,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -178,13 +184,15 @@
       "note": "a 4096-vertex polyline, 2048 allowed",
       "result": {
         "alloc_decode_bytes": 4400,
-        "alloc_open_bytes": 5592264,
+        "alloc_open_bytes": 5556096,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "a Polyline record carries 4096 points and max_polyline_points is 2048",
-        "decode_micros": 4513,
+        "decode_micros": 3742,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 23320,
         "fixture": "g13_wide_polyline.dwg",
@@ -193,8 +201,8 @@
         "limits": "input=536870912 entities=20000000 string=65536 polyline=2048 depth=64 output=4294967296",
         "live_handles": 0,
         "managed_after_begin_kb": 1405,
-        "managed_after_decode_kb": 1406,
-        "managed_retained_kb": 1,
+        "managed_after_decode_kb": 1407,
+        "managed_retained_kb": 2,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -207,19 +215,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 54100,
-        "rss_after_begin_kb": 53416,
-        "rss_after_collect_kb": 53872,
-        "rss_after_open_kb": 52340,
-        "rss_decode_growth_kb": 1136,
-        "rss_peak_during_decode_kb": 54552,
-        "rss_start_kb": 28424,
+        "peak_rss_kb": 54016,
+        "rss_after_begin_kb": 53276,
+        "rss_after_collect_kb": 53712,
+        "rss_after_open_kb": 52196,
+        "rss_decode_growth_kb": 1132,
+        "rss_peak_during_decode_kb": 54408,
+        "rss_start_kb": 28540,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -233,19 +242,79 @@
       "note": "four vertices and four bulges, four allowed",
       "result": {
         "alloc_decode_bytes": 5280,
-        "alloc_open_bytes": 3800264,
+        "alloc_open_bytes": 3800296,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 5342,
+        "decode_micros": 5094,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10539,
         "fixture": "g13_slot.dwg",
         "framed_batch_after_refusal": false,
         "grown_batch_bytes": 65536,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=4 depth=64 output=4294967296",
+        "live_handles": 0,
+        "managed_after_begin_kb": 1087,
+        "managed_after_decode_kb": 1087,
+        "managed_retained_kb": 0,
+        "memory": false,
+        "notification_count": 4,
+        "notifications": [
+          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
+          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
+          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
+          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+        ],
+        "open_code": "OK",
+        "open_detail": null,
+        "output_bytes": 1012,
+        "peak_reset": true,
+        "peak_rss_kb": 52892,
+        "rss_after_begin_kb": 52008,
+        "rss_after_collect_kb": 52860,
+        "rss_after_open_kb": 50472,
+        "rss_decode_growth_kb": 848,
+        "rss_peak_during_decode_kb": 52856,
+        "rss_start_kb": 28696,
+        "view_count": 2,
+        "view_extents": [
+          "25.7,19.5,231.3,175.5",
+          "25.7,19.5,231.3,175.5"
+        ],
+        "views_without_extents": 0,
+        "written_after_refusal": 12
+      }
+    },
+    {
+      "args": [
+        "--max-polyline",
+        "3"
+      ],
+      "fixture_sha256": "db6c6facccbce67169329528279cba795d4ddb0aaec26bbb8fe04f6475c68ee6",
+      "input": "/work/acadsharp/tests/fixtures/g13_slot.dwg",
+      "name": "limits/bulged_polyline_past_the_bound",
+      "note": "the control: the same file one vertex over the bound",
+      "result": {
+        "alloc_decode_bytes": 4328,
+        "alloc_open_bytes": 3800520,
+        "batch_bytes": 65536,
+        "batches": 0,
+        "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
+        "decode_code": "LIMIT_EXCEEDED",
+        "decode_detail": "a Polyline record carries 4 points and max_polyline_points is 3",
+        "decode_micros": 3825,
+        "done_after_refusal": 0,
+        "exit_code": 0,
+        "file_bytes": 10539,
+        "fixture": "g13_slot.dwg",
+        "framed_batch_after_refusal": false,
+        "grown_batch_bytes": 65536,
+        "limits": "input=536870912 entities=20000000 string=65536 polyline=3 depth=64 output=4294967296",
         "live_handles": 0,
         "managed_after_begin_kb": 1087,
         "managed_after_decode_kb": 1088,
@@ -260,76 +329,22 @@
         ],
         "open_code": "OK",
         "open_detail": null,
-        "output_bytes": 1012,
-        "peak_reset": true,
-        "peak_rss_kb": 53092,
-        "rss_after_begin_kb": 52208,
-        "rss_after_collect_kb": 53060,
-        "rss_after_open_kb": 50672,
-        "rss_decode_growth_kb": 844,
-        "rss_peak_during_decode_kb": 53052,
-        "rss_start_kb": 28620,
-        "view_count": 2,
-        "view_extents": [
-          "25.7,19.5,231.3,175.5",
-          "25.7,19.5,231.3,175.5"
-        ],
-        "views_without_extents": 0
-      }
-    },
-    {
-      "args": [
-        "--max-polyline",
-        "3"
-      ],
-      "fixture_sha256": "db6c6facccbce67169329528279cba795d4ddb0aaec26bbb8fe04f6475c68ee6",
-      "input": "/work/acadsharp/tests/fixtures/g13_slot.dwg",
-      "name": "limits/bulged_polyline_past_the_bound",
-      "note": "the control: the same file one vertex over the bound",
-      "result": {
-        "alloc_decode_bytes": 4328,
-        "alloc_open_bytes": 3800592,
-        "batch_bytes": 65536,
-        "batches": 0,
-        "caller_copy_bytes": 0,
-        "decode_code": "LIMIT_EXCEEDED",
-        "decode_detail": "a Polyline record carries 4 points and max_polyline_points is 3",
-        "decode_micros": 4134,
-        "exit_code": 0,
-        "file_bytes": 10539,
-        "fixture": "g13_slot.dwg",
-        "framed_batch_after_refusal": false,
-        "grown_batch_bytes": 65536,
-        "limits": "input=536870912 entities=20000000 string=65536 polyline=3 depth=64 output=4294967296",
-        "live_handles": 0,
-        "managed_after_begin_kb": 1087,
-        "managed_after_decode_kb": 1089,
-        "managed_retained_kb": 2,
-        "memory": false,
-        "notification_count": 4,
-        "notifications": [
-          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
-          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
-          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle",
-          "Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-        ],
-        "open_code": "OK",
-        "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 53288,
-        "rss_after_begin_kb": 52124,
-        "rss_after_collect_kb": 53268,
-        "rss_after_open_kb": 50588,
-        "rss_decode_growth_kb": 1132,
-        "rss_peak_during_decode_kb": 53256,
-        "rss_start_kb": 28520,
+        "peak_rss_kb": 53324,
+        "rss_after_begin_kb": 52164,
+        "rss_after_collect_kb": 53300,
+        "rss_after_open_kb": 50636,
+        "rss_decode_growth_kb": 1128,
+        "rss_peak_during_decode_kb": 53292,
+        "rss_start_kb": 28684,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -343,13 +358,15 @@
       "note": "the same fixture with the bound above its width",
       "result": {
         "alloc_decode_bytes": 1085680,
-        "alloc_open_bytes": 5554944,
+        "alloc_open_bytes": 5555328,
         "batch_bytes": 65536,
         "batches": 3,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 7167,
+        "decode_micros": 7086,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 23320,
         "fixture": "g13_wide_polyline.dwg",
@@ -372,19 +389,20 @@
         "open_detail": null,
         "output_bytes": 99212,
         "peak_reset": true,
-        "peak_rss_kb": 55344,
-        "rss_after_begin_kb": 53460,
-        "rss_after_collect_kb": 54580,
-        "rss_after_open_kb": 52384,
-        "rss_decode_growth_kb": 1820,
-        "rss_peak_during_decode_kb": 55280,
-        "rss_start_kb": 28528,
+        "peak_rss_kb": 55180,
+        "rss_after_begin_kb": 53600,
+        "rss_after_collect_kb": 54728,
+        "rss_after_open_kb": 52528,
+        "rss_decode_growth_kb": 1812,
+        "rss_peak_during_decode_kb": 55412,
+        "rss_start_kb": 28616,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -398,13 +416,15 @@
       "note": "an 8192-byte string, 4096 allowed",
       "result": {
         "alloc_decode_bytes": 4704,
-        "alloc_open_bytes": 3824400,
+        "alloc_open_bytes": 3825392,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "a string in this record is longer than max_string_bytes allows",
-        "decode_micros": 5188,
+        "decode_micros": 4676,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 10571,
         "fixture": "g13_long_text.dwg",
@@ -427,19 +447,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 53504,
-        "rss_after_begin_kb": 52056,
-        "rss_after_collect_kb": 53412,
-        "rss_after_open_kb": 50564,
-        "rss_decode_growth_kb": 1348,
-        "rss_peak_during_decode_kb": 53404,
-        "rss_start_kb": 28456,
+        "peak_rss_kb": 53388,
+        "rss_after_begin_kb": 52072,
+        "rss_after_collect_kb": 53300,
+        "rss_after_open_kb": 50576,
+        "rss_decode_growth_kb": 1220,
+        "rss_peak_during_decode_kb": 53292,
+        "rss_start_kb": 28688,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -453,13 +474,15 @@
       "note": "the same fixture with the bound above its length",
       "result": {
         "alloc_decode_bytes": 4296,
-        "alloc_open_bytes": 3861640,
+        "alloc_open_bytes": 3824592,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 5173,
+        "decode_micros": 4862,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10571,
         "fixture": "g13_long_text.dwg",
@@ -482,19 +505,20 @@
         "open_detail": null,
         "output_bytes": 9084,
         "peak_reset": true,
-        "peak_rss_kb": 53196,
-        "rss_after_begin_kb": 52264,
-        "rss_after_collect_kb": 53100,
-        "rss_after_open_kb": 50764,
+        "peak_rss_kb": 53004,
+        "rss_after_begin_kb": 52064,
+        "rss_after_collect_kb": 52908,
+        "rss_after_open_kb": 50568,
         "rss_decode_growth_kb": 832,
-        "rss_peak_during_decode_kb": 53096,
-        "rss_start_kb": 28460,
+        "rss_peak_during_decode_kb": 52896,
+        "rss_start_kb": 28696,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -508,13 +532,15 @@
       "note": "ten thousand insertions, 2 KiB of output allowed",
       "result": {
         "alloc_decode_bytes": 76664,
-        "alloc_open_bytes": 69296376,
+        "alloc_open_bytes": 69295304,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "decode_next_batch returned LIMIT_EXCEEDED",
-        "decode_micros": 7837,
+        "decode_micros": 7310,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 179150,
         "fixture": "g13_many_inserts.dwg",
@@ -537,19 +563,20 @@
         "open_detail": null,
         "output_bytes": 1988,
         "peak_reset": true,
-        "peak_rss_kb": 94664,
-        "rss_after_begin_kb": 93668,
-        "rss_after_collect_kb": 94592,
-        "rss_after_open_kb": 99436,
-        "rss_decode_growth_kb": 924,
-        "rss_peak_during_decode_kb": 94592,
-        "rss_start_kb": 28560,
+        "peak_rss_kb": 94632,
+        "rss_after_begin_kb": 93636,
+        "rss_after_collect_kb": 94564,
+        "rss_after_open_kb": 99400,
+        "rss_decode_growth_kb": 928,
+        "rss_peak_during_decode_kb": 94564,
+        "rss_start_kb": 28632,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -563,13 +590,15 @@
       "note": "blocks nested six deep, five allowed",
       "result": {
         "alloc_decode_bytes": 43280,
-        "alloc_open_bytes": 3971416,
+        "alloc_open_bytes": 3970792,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "INSERT 50 (block VIPRS_G13_DEPTH_0) is at expansion depth 6 and max_block_depth is 5",
-        "decode_micros": 5773,
+        "decode_micros": 5387,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 11051,
         "fixture": "g13_deep_blocks.dwg",
@@ -592,19 +621,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 53208,
-        "rss_after_begin_kb": 52324,
-        "rss_after_collect_kb": 49752,
-        "rss_after_open_kb": 50816,
-        "rss_decode_growth_kb": 1308,
-        "rss_peak_during_decode_kb": 53632,
-        "rss_start_kb": 28584,
+        "peak_rss_kb": 52796,
+        "rss_after_begin_kb": 52184,
+        "rss_after_collect_kb": 49612,
+        "rss_after_open_kb": 50680,
+        "rss_decode_growth_kb": 1312,
+        "rss_peak_during_decode_kb": 53496,
+        "rss_start_kb": 28600,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -618,13 +648,15 @@
       "note": "the same fixture with the bound past its depth, which is what proves the refusal is the bound and not a crash",
       "result": {
         "alloc_decode_bytes": 51296,
-        "alloc_open_bytes": 3970632,
+        "alloc_open_bytes": 3970912,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 7895,
+        "decode_micros": 6985,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 11051,
         "fixture": "g13_deep_blocks.dwg",
@@ -632,9 +664,9 @@
         "grown_batch_bytes": 65536,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=7 output=4294967296",
         "live_handles": 0,
-        "managed_after_begin_kb": 1111,
+        "managed_after_begin_kb": 1112,
         "managed_after_decode_kb": 1112,
-        "managed_retained_kb": 1,
+        "managed_retained_kb": 0,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -647,19 +679,20 @@
         "open_detail": null,
         "output_bytes": 892,
         "peak_reset": true,
-        "peak_rss_kb": 52744,
-        "rss_after_begin_kb": 52144,
-        "rss_after_collect_kb": 49260,
-        "rss_after_open_kb": 50636,
-        "rss_decode_growth_kb": 996,
-        "rss_peak_during_decode_kb": 53140,
-        "rss_start_kb": 28488,
+        "peak_rss_kb": 52968,
+        "rss_after_begin_kb": 52380,
+        "rss_after_collect_kb": 49516,
+        "rss_after_open_kb": 50868,
+        "rss_decode_growth_kb": 1012,
+        "rss_peak_during_decode_kb": 53392,
+        "rss_start_kb": 28620,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -684,9 +717,9 @@
         "memory": false,
         "open_code": "LIMIT_EXCEEDED",
         "open_detail": "the file is 10539 bytes and max_input_bytes is 1024",
-        "peak_rss_kb": 30008,
-        "rss_after_open_kb": 29648,
-        "rss_start_kb": 28564
+        "peak_rss_kb": 30148,
+        "rss_after_open_kb": 29788,
+        "rss_start_kb": 28684
       }
     },
     {
@@ -697,13 +730,15 @@
       "note": "the same file with the default bound",
       "result": {
         "alloc_decode_bytes": 3664,
-        "alloc_open_bytes": 3799320,
+        "alloc_open_bytes": 3799808,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 5088,
+        "decode_micros": 4341,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10539,
         "fixture": "g13_line.dwg",
@@ -726,19 +761,20 @@
         "open_detail": null,
         "output_bytes": 892,
         "peak_reset": true,
-        "peak_rss_kb": 52844,
-        "rss_after_begin_kb": 52036,
-        "rss_after_collect_kb": 52824,
-        "rss_after_open_kb": 50496,
-        "rss_decode_growth_kb": 772,
-        "rss_peak_during_decode_kb": 52808,
-        "rss_start_kb": 25176,
+        "peak_rss_kb": 52884,
+        "rss_after_begin_kb": 52088,
+        "rss_after_collect_kb": 52864,
+        "rss_after_open_kb": 50540,
+        "rss_decode_growth_kb": 768,
+        "rss_peak_during_decode_kb": 52856,
+        "rss_start_kb": 25272,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -764,9 +800,9 @@
         "memory": false,
         "open_code": "LIMIT_EXCEEDED",
         "open_detail": "the file is 10539 bytes and max_input_bytes is 1024",
-        "peak_rss_kb": 30000,
-        "rss_after_open_kb": 29640,
-        "rss_start_kb": 28560
+        "peak_rss_kb": 30016,
+        "rss_after_open_kb": 29656,
+        "rss_start_kb": 28572
       }
     },
     {
@@ -789,9 +825,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "UnauthorizedAccessException: Access to the path '/tmp/sealed.dwg' is denied.",
-        "peak_rss_kb": 31464,
-        "rss_after_open_kb": 31164,
-        "rss_start_kb": 25160
+        "peak_rss_kb": 31564,
+        "rss_after_open_kb": 31264,
+        "rss_start_kb": 25248
       }
     },
     {
@@ -802,13 +838,15 @@
       "note": "three thousand dimensions nested one inside the next, at default limits",
       "result": {
         "alloc_decode_bytes": 912472,
-        "alloc_open_bytes": 231283248,
+        "alloc_open_bytes": 231283128,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "DIMENSION 3CA (DIMENSION) is at expansion depth 65 and max_block_depth is 64",
-        "decode_micros": 6219,
+        "decode_micros": 6052,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 991240,
         "fixture": "g13_dimension_deep.dwg",
@@ -816,8 +854,8 @@
         "grown_batch_bytes": 65536,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
-        "managed_after_begin_kb": 31066,
-        "managed_after_decode_kb": 31067,
+        "managed_after_begin_kb": 31067,
+        "managed_after_decode_kb": 31068,
         "managed_retained_kb": 1,
         "memory": false,
         "notification_count": 4,
@@ -831,19 +869,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 165912,
-        "rss_after_begin_kb": 165052,
-        "rss_after_collect_kb": 165756,
-        "rss_after_open_kb": 194636,
-        "rss_decode_growth_kb": 704,
-        "rss_peak_during_decode_kb": 165756,
-        "rss_start_kb": 25200,
+        "peak_rss_kb": 189912,
+        "rss_after_begin_kb": 189096,
+        "rss_after_collect_kb": 189840,
+        "rss_after_open_kb": 193832,
+        "rss_decode_growth_kb": 744,
+        "rss_peak_during_decode_kb": 189840,
+        "rss_start_kb": 25244,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -854,13 +893,15 @@
       "note": "the same shape four deep, which is inside every bound and decodes",
       "result": {
         "alloc_decode_bytes": 59664,
-        "alloc_open_bytes": 4088000,
+        "alloc_open_bytes": 4087488,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 6062,
+        "decode_micros": 4968,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 11979,
         "fixture": "g13_dimension_shallow.dwg",
@@ -883,19 +924,20 @@
         "open_detail": null,
         "output_bytes": 3908,
         "peak_reset": true,
-        "peak_rss_kb": 52784,
-        "rss_after_begin_kb": 52444,
-        "rss_after_collect_kb": 49388,
-        "rss_after_open_kb": 50872,
-        "rss_decode_growth_kb": 884,
-        "rss_peak_during_decode_kb": 53328,
-        "rss_start_kb": 25348,
+        "peak_rss_kb": 52932,
+        "rss_after_begin_kb": 52424,
+        "rss_after_collect_kb": 49376,
+        "rss_after_open_kb": 50856,
+        "rss_decode_growth_kb": 892,
+        "rss_peak_during_decode_kb": 53316,
+        "rss_start_kb": 25364,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -914,13 +956,13 @@
         "code": "LIMIT_EXCEEDED",
         "depth": 24,
         "detail": "the decode reached entity 100001 and max_entities is 100000, counted across the whole decode with block expansion included",
-        "elapsed_ms": 2025,
+        "elapsed_ms": 2007,
         "entities_in_document": 49,
         "entities_walked": 100001,
         "exit_code": 0,
         "max_block_depth": 64,
         "max_entities": 100000,
-        "peak_rss_kb": 52072,
+        "peak_rss_kb": 52164,
         "records": 0,
         "width": 2
       }
@@ -938,13 +980,13 @@
         "code": "OK",
         "depth": 8,
         "detail": null,
-        "elapsed_ms": 17,
+        "elapsed_ms": 16,
         "entities_in_document": 17,
         "entities_walked": 511,
         "exit_code": 0,
         "max_block_depth": 64,
         "max_entities": 20000000,
-        "peak_rss_kb": 47436,
+        "peak_rss_kb": 47508,
         "records": 0,
         "width": 2
       }
@@ -964,13 +1006,13 @@
         "code": "CANCELED",
         "depth": 24,
         "detail": "the caller set cancel_flag while the decode was walking the document",
-        "elapsed_ms": 17,
+        "elapsed_ms": 16,
         "entities_in_document": 49,
         "entities_walked": 524,
         "exit_code": 0,
         "max_block_depth": 64,
         "max_entities": 20000000,
-        "peak_rss_kb": 48008,
+        "peak_rss_kb": 48020,
         "records": 0,
         "width": 2
       }
@@ -985,13 +1027,15 @@
       "note": "every batch the decode produced, scanned for the exponent pattern of a non-finite double, with a two-double control that carries one of each",
       "result": {
         "alloc_decode_bytes": 9208,
-        "alloc_open_bytes": 3804016,
+        "alloc_open_bytes": 3804032,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 5309,
+        "decode_micros": 5028,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10604,
         "fixture": "g13_nan_bulge.dwg",
@@ -1016,21 +1060,22 @@
         "open_detail": null,
         "output_bytes": 1160,
         "peak_reset": true,
-        "peak_rss_kb": 53132,
+        "peak_rss_kb": 52996,
         "raw_bytes": 1160,
-        "rss_after_begin_kb": 52188,
-        "rss_after_collect_kb": 53044,
-        "rss_after_open_kb": 50712,
-        "rss_decode_growth_kb": 832,
-        "rss_peak_during_decode_kb": 53020,
-        "rss_start_kb": 28512,
+        "rss_after_begin_kb": 52032,
+        "rss_after_collect_kb": 52896,
+        "rss_after_open_kb": 50556,
+        "rss_decode_growth_kb": 844,
+        "rss_peak_during_decode_kb": 52876,
+        "rss_start_kb": 28608,
         "scanned_bytes": 1160,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1044,13 +1089,15 @@
       "note": "twenty thousand control points, four thousand allowed",
       "result": {
         "alloc_decode_bytes": 4432,
-        "alloc_open_bytes": 11491736,
+        "alloc_open_bytes": 11492112,
         "batch_bytes": 65536,
         "batches": 0,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "LIMIT_EXCEEDED",
         "decode_code": "LIMIT_EXCEEDED",
         "decode_detail": "a Spline record's control points carries 20000 points and max_polyline_points is 4096",
-        "decode_micros": 4082,
+        "decode_micros": 3837,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 208892,
         "fixture": "g13_wide_spline.dwg",
@@ -1073,19 +1120,20 @@
         "open_detail": null,
         "output_bytes": 0,
         "peak_reset": true,
-        "peak_rss_kb": 56656,
-        "rss_after_begin_kb": 56160,
-        "rss_after_collect_kb": 56396,
-        "rss_after_open_kb": 55096,
-        "rss_decode_growth_kb": 1120,
-        "rss_peak_during_decode_kb": 57280,
-        "rss_start_kb": 28572,
+        "peak_rss_kb": 56636,
+        "rss_after_begin_kb": 56188,
+        "rss_after_collect_kb": 56376,
+        "rss_after_open_kb": 55100,
+        "rss_decode_growth_kb": 1104,
+        "rss_peak_during_decode_kb": 57292,
+        "rss_start_kb": 28656,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -1099,13 +1147,15 @@
       "note": "the same fixture with the bound above its width",
       "result": {
         "alloc_decode_bytes": 5603528,
-        "alloc_open_bytes": 11492584,
+        "alloc_open_bytes": 11491440,
         "batch_bytes": 65536,
         "batches": 3,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 13408,
+        "decode_micros": 12813,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 208892,
         "fixture": "g13_wide_spline.dwg",
@@ -1128,19 +1178,20 @@
         "open_detail": null,
         "output_bytes": 640924,
         "peak_reset": true,
-        "peak_rss_kb": 60368,
-        "rss_after_begin_kb": 56084,
-        "rss_after_collect_kb": 59916,
-        "rss_after_open_kb": 55008,
-        "rss_decode_growth_kb": 4760,
-        "rss_peak_during_decode_kb": 60844,
-        "rss_start_kb": 28640,
+        "peak_rss_kb": 60460,
+        "rss_after_begin_kb": 56168,
+        "rss_after_collect_kb": 59972,
+        "rss_after_open_kb": 55080,
+        "rss_decode_growth_kb": 4732,
+        "rss_peak_during_decode_kb": 60900,
+        "rss_start_kb": 28564,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1156,13 +1207,15 @@
       "note": "the flag goes up after the first batch returns",
       "result": {
         "alloc_decode_bytes": 182992,
-        "alloc_open_bytes": 69295408,
+        "alloc_open_bytes": 69295768,
         "batch_bytes": 4096,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "CANCELED",
         "decode_code": "CANCELED",
         "decode_detail": "decode_next_batch returned CANCELED",
-        "decode_micros": 7942,
+        "decode_micros": 7751,
+        "done_after_refusal": 0,
         "exit_code": 0,
         "file_bytes": 179150,
         "fixture": "g13_many_inserts.dwg",
@@ -1170,9 +1223,9 @@
         "grown_batch_bytes": 4096,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
-        "managed_after_begin_kb": 23480,
+        "managed_after_begin_kb": 23481,
         "managed_after_decode_kb": 23484,
-        "managed_retained_kb": 4,
+        "managed_retained_kb": 3,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -1185,19 +1238,20 @@
         "open_detail": null,
         "output_bytes": 4044,
         "peak_reset": true,
-        "peak_rss_kb": 94788,
-        "rss_after_begin_kb": 93792,
-        "rss_after_collect_kb": 94716,
-        "rss_after_open_kb": 99616,
-        "rss_decode_growth_kb": 924,
-        "rss_peak_during_decode_kb": 94716,
-        "rss_start_kb": 28616,
+        "peak_rss_kb": 94656,
+        "rss_after_begin_kb": 93660,
+        "rss_after_collect_kb": 94588,
+        "rss_after_open_kb": 99488,
+        "rss_decode_growth_kb": 928,
+        "rss_peak_during_decode_kb": 94588,
+        "rss_start_kb": 28740,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 0
       }
     },
     {
@@ -1211,13 +1265,15 @@
       "note": "the same decode with the flag left alone",
       "result": {
         "alloc_decode_bytes": 130242344,
-        "alloc_open_bytes": 69295648,
+        "alloc_open_bytes": 69295632,
         "batch_bytes": 4096,
         "batches": 613,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 273275,
+        "decode_micros": 259311,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 179150,
         "fixture": "g13_many_inserts.dwg",
@@ -1225,9 +1281,9 @@
         "grown_batch_bytes": 4096,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
-        "managed_after_begin_kb": 23480,
+        "managed_after_begin_kb": 23481,
         "managed_after_decode_kb": 23481,
-        "managed_retained_kb": 1,
+        "managed_retained_kb": 0,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -1240,19 +1296,20 @@
         "open_detail": null,
         "output_bytes": 2488164,
         "peak_reset": true,
-        "peak_rss_kb": 94360,
-        "rss_after_begin_kb": 93692,
-        "rss_after_collect_kb": 85116,
-        "rss_after_open_kb": 99520,
-        "rss_decode_growth_kb": 668,
-        "rss_peak_during_decode_kb": 94360,
-        "rss_start_kb": 28620,
+        "peak_rss_kb": 94768,
+        "rss_after_begin_kb": 93752,
+        "rss_after_collect_kb": 85176,
+        "rss_after_open_kb": 99576,
+        "rss_decode_growth_kb": 1016,
+        "rss_peak_during_decode_kb": 94768,
+        "rss_start_kb": 28708,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1263,13 +1320,15 @@
       "note": "a POINT and a SOLID, neither of which this version flattens",
       "result": {
         "alloc_decode_bytes": 4672,
-        "alloc_open_bytes": 3804080,
+        "alloc_open_bytes": 3802512,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 4324,
+        "decode_micros": 3928,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10571,
         "fixture": "g13_unsupported.dwg",
@@ -1292,19 +1351,20 @@
         "open_detail": null,
         "output_bytes": 980,
         "peak_reset": true,
-        "peak_rss_kb": 52820,
-        "rss_after_begin_kb": 51960,
-        "rss_after_collect_kb": 52736,
-        "rss_after_open_kb": 50484,
-        "rss_decode_growth_kb": 756,
-        "rss_peak_during_decode_kb": 52716,
-        "rss_start_kb": 25168,
+        "peak_rss_kb": 52900,
+        "rss_after_begin_kb": 52032,
+        "rss_after_collect_kb": 52804,
+        "rss_after_open_kb": 50568,
+        "rss_decode_growth_kb": 764,
+        "rss_peak_during_decode_kb": 52796,
+        "rss_start_kb": 25284,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1315,13 +1375,15 @@
       "note": "a drawing AutoCAD produced, carrying objects ACadSharp's reader cannot name and reports",
       "result": {
         "alloc_decode_bytes": 587656,
-        "alloc_open_bytes": 14108264,
+        "alloc_open_bytes": 14108408,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 7443,
+        "decode_micros": 7162,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 1081979,
         "fixture": "real_AC1032.dwg",
@@ -1371,13 +1433,13 @@
         "open_detail": null,
         "output_bytes": 35716,
         "peak_reset": true,
-        "peak_rss_kb": 60728,
-        "rss_after_begin_kb": 60340,
-        "rss_after_collect_kb": 56328,
-        "rss_after_open_kb": 60500,
-        "rss_decode_growth_kb": 668,
-        "rss_peak_during_decode_kb": 61008,
-        "rss_start_kb": 25240,
+        "peak_rss_kb": 60400,
+        "rss_after_begin_kb": 60140,
+        "rss_after_collect_kb": 56140,
+        "rss_after_open_kb": 60304,
+        "rss_decode_growth_kb": 676,
+        "rss_peak_during_decode_kb": 60816,
+        "rss_start_kb": 25248,
         "view_count": 4,
         "view_extents": [
           "0,0,0,0",
@@ -1385,7 +1447,8 @@
           "1.0499999523162842,0.7999999523162842,9.44999957084656,7.1999995708465585",
           "1.1359999048428264,0.793333355836042,10.223999143585445,7.140000202524382"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1396,13 +1459,15 @@
       "note": "an INSERT of an external reference",
       "result": {
         "alloc_decode_bytes": 2512,
-        "alloc_open_bytes": 3819952,
+        "alloc_open_bytes": 3819792,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 2756,
+        "decode_micros": 2529,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10667,
         "fixture": "g13_xref.dwg",
@@ -1426,18 +1491,19 @@
         "output_bytes": 952,
         "peak_reset": true,
         "peak_rss_kb": 52932,
-        "rss_after_begin_kb": 52204,
-        "rss_after_collect_kb": 52904,
-        "rss_after_open_kb": 50664,
-        "rss_decode_growth_kb": 684,
-        "rss_peak_during_decode_kb": 52888,
-        "rss_start_kb": 25148,
+        "rss_after_begin_kb": 52220,
+        "rss_after_collect_kb": 52908,
+        "rss_after_open_kb": 50676,
+        "rss_decode_growth_kb": 672,
+        "rss_peak_during_decode_kb": 52892,
+        "rss_start_kb": 25228,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1454,15 +1520,17 @@
       "result": {
         "after_longest_filler_run": "205b7472756e63617465645d00007f00",
         "alloc_decode_bytes": 32280,
-        "alloc_open_bytes": 3836624,
+        "alloc_open_bytes": 3836432,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "dangling_lead_bytes": 0,
         "dangling_lead_bytes_in_control": 1,
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 2821,
+        "decode_micros": 2623,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10699,
         "fixture": "g13_xref_long.dwg",
@@ -1487,14 +1555,14 @@
         "open_detail": null,
         "output_bytes": 4948,
         "peak_reset": true,
-        "peak_rss_kb": 53064,
+        "peak_rss_kb": 52340,
         "raw_bytes": 4948,
-        "rss_after_begin_kb": 52232,
-        "rss_after_collect_kb": 52964,
-        "rss_after_open_kb": 50760,
-        "rss_decode_growth_kb": 724,
-        "rss_peak_during_decode_kb": 52956,
-        "rss_start_kb": 28488,
+        "rss_after_begin_kb": 52164,
+        "rss_after_collect_kb": 49128,
+        "rss_after_open_kb": 50684,
+        "rss_decode_growth_kb": 704,
+        "rss_peak_during_decode_kb": 52868,
+        "rss_start_kb": 28644,
         "scanned_bytes": 4948,
         "truncation_markers": 1,
         "truncation_markers_in_control": 2,
@@ -1503,7 +1571,8 @@
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1520,15 +1589,17 @@
       "result": {
         "after_longest_filler_run": "2e647767206973206e6f74207265736f",
         "alloc_decode_bytes": 19824,
-        "alloc_open_bytes": 3836384,
+        "alloc_open_bytes": 3836704,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "dangling_lead_bytes": 0,
         "dangling_lead_bytes_in_control": 1,
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 2714,
+        "decode_micros": 2543,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10699,
         "fixture": "g13_xref_long.dwg",
@@ -1553,14 +1624,14 @@
         "open_detail": null,
         "output_bytes": 9116,
         "peak_reset": true,
-        "peak_rss_kb": 52932,
+        "peak_rss_kb": 52912,
         "raw_bytes": 9116,
-        "rss_after_begin_kb": 52100,
-        "rss_after_collect_kb": 52828,
-        "rss_after_open_kb": 50628,
-        "rss_decode_growth_kb": 712,
-        "rss_peak_during_decode_kb": 52812,
-        "rss_start_kb": 28512,
+        "rss_after_begin_kb": 52104,
+        "rss_after_collect_kb": 52824,
+        "rss_after_open_kb": 50624,
+        "rss_decode_growth_kb": 692,
+        "rss_peak_during_decode_kb": 52796,
+        "rss_start_kb": 28588,
         "scanned_bytes": 9116,
         "truncation_markers": 0,
         "truncation_markers_in_control": 2,
@@ -1569,7 +1640,8 @@
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1580,13 +1652,15 @@
       "note": "a circle under a block transform that squashes one axis",
       "result": {
         "alloc_decode_bytes": 12976,
-        "alloc_open_bytes": 3823496,
+        "alloc_open_bytes": 3823160,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 7460,
+        "decode_micros": 7116,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10699,
         "fixture": "g13_nonuniform.dwg",
@@ -1594,9 +1668,9 @@
         "grown_batch_bytes": 65536,
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
-        "managed_after_begin_kb": 1089,
+        "managed_after_begin_kb": 1088,
         "managed_after_decode_kb": 1089,
-        "managed_retained_kb": 0,
+        "managed_retained_kb": 1,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -1609,19 +1683,20 @@
         "open_detail": null,
         "output_bytes": 1172,
         "peak_reset": true,
-        "peak_rss_kb": 52968,
-        "rss_after_begin_kb": 51904,
-        "rss_after_collect_kb": 52880,
-        "rss_after_open_kb": 50424,
-        "rss_decode_growth_kb": 968,
-        "rss_peak_during_decode_kb": 52872,
-        "rss_start_kb": 25048,
+        "peak_rss_kb": 53324,
+        "rss_after_begin_kb": 52236,
+        "rss_after_collect_kb": 53228,
+        "rss_after_open_kb": 50764,
+        "rss_decode_growth_kb": 984,
+        "rss_peak_during_decode_kb": 53220,
+        "rss_start_kb": 25296,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1632,13 +1707,15 @@
       "note": "a dimension whose block carries the lines and the text",
       "result": {
         "alloc_decode_bytes": 17072,
-        "alloc_open_bytes": 3863016,
+        "alloc_open_bytes": 3864136,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 5521,
+        "decode_micros": 5337,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 11019,
         "fixture": "g13_dimension.dwg",
@@ -1647,8 +1724,8 @@
         "limits": "input=536870912 entities=20000000 string=65536 polyline=1000000 depth=64 output=4294967296",
         "live_handles": 0,
         "managed_after_begin_kb": 1094,
-        "managed_after_decode_kb": 1095,
-        "managed_retained_kb": 1,
+        "managed_after_decode_kb": 1094,
+        "managed_retained_kb": 0,
         "memory": false,
         "notification_count": 4,
         "notifications": [
@@ -1661,19 +1738,20 @@
         "open_detail": null,
         "output_bytes": 1592,
         "peak_reset": true,
-        "peak_rss_kb": 53096,
-        "rss_after_begin_kb": 52140,
-        "rss_after_collect_kb": 53004,
-        "rss_after_open_kb": 50656,
-        "rss_decode_growth_kb": 848,
-        "rss_peak_during_decode_kb": 52988,
-        "rss_start_kb": 25100,
+        "peak_rss_kb": 53204,
+        "rss_after_begin_kb": 52244,
+        "rss_after_collect_kb": 53112,
+        "rss_after_open_kb": 50760,
+        "rss_decode_growth_kb": 852,
+        "rss_peak_during_decode_kb": 53096,
+        "rss_start_kb": 25288,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1684,13 +1762,15 @@
       "note": "no network, and the repository mounted read-only",
       "result": {
         "alloc_decode_bytes": 2512,
-        "alloc_open_bytes": 3820472,
+        "alloc_open_bytes": 3819112,
         "batch_bytes": 65536,
         "batches": 1,
         "caller_copy_bytes": 0,
+        "code_after_refusal": "OK",
         "decode_code": "OK",
         "decode_detail": null,
-        "decode_micros": 2751,
+        "decode_micros": 2667,
+        "done_after_refusal": 1,
         "exit_code": 0,
         "file_bytes": 10667,
         "fixture": "g13_xref.dwg",
@@ -1713,19 +1793,20 @@
         "open_detail": null,
         "output_bytes": 952,
         "peak_reset": true,
-        "peak_rss_kb": 52920,
-        "rss_after_begin_kb": 52204,
-        "rss_after_collect_kb": 52896,
-        "rss_after_open_kb": 50664,
-        "rss_decode_growth_kb": 672,
-        "rss_peak_during_decode_kb": 52876,
-        "rss_start_kb": 25220,
+        "peak_rss_kb": 52788,
+        "rss_after_begin_kb": 52068,
+        "rss_after_collect_kb": 52768,
+        "rss_after_open_kb": 50532,
+        "rss_decode_growth_kb": 680,
+        "rss_peak_during_decode_kb": 52748,
+        "rss_start_kb": 25248,
         "view_count": 2,
         "view_extents": [
           "25.7,19.5,231.3,175.5",
           "25.7,19.5,231.3,175.5"
         ],
-        "views_without_extents": 0
+        "views_without_extents": 0,
+        "written_after_refusal": 12
       }
     },
     {
@@ -1752,9 +1833,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "System.IO.EndOfStreamException: Attempted to read past the end of the stream.",
-        "peak_rss_kb": 36088,
-        "rss_after_open_kb": 35944,
-        "rss_start_kb": 25264
+        "peak_rss_kb": 36052,
+        "rss_after_open_kb": 35908,
+        "rss_start_kb": 25248
       }
     },
     {
@@ -1781,9 +1862,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "System.IO.EndOfStreamException: Attempted to read past the end of the stream.",
-        "peak_rss_kb": 36112,
-        "rss_after_open_kb": 35968,
-        "rss_start_kb": 25236
+        "peak_rss_kb": 36032,
+        "rss_after_open_kb": 35888,
+        "rss_start_kb": 25228
       }
     },
     {
@@ -1810,9 +1891,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "System.IO.EndOfStreamException: Attempted to read past the end of the stream.",
-        "peak_rss_kb": 36128,
-        "rss_after_open_kb": 35984,
-        "rss_start_kb": 25244
+        "peak_rss_kb": 36040,
+        "rss_after_open_kb": 35896,
+        "rss_start_kb": 25228
       }
     },
     {
@@ -1907,9 +1988,9 @@
         "memory": false,
         "open_code": "CORRUPT_INPUT",
         "open_detail": "System.IO.EndOfStreamException: Attempted to read past the end of the stream.",
-        "peak_rss_kb": 36436,
-        "rss_after_open_kb": 36288,
-        "rss_start_kb": 25304
+        "peak_rss_kb": 36496,
+        "rss_after_open_kb": 36348,
+        "rss_start_kb": 25296
       }
     }
   ]

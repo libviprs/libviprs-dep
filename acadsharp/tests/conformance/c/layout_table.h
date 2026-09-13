@@ -61,15 +61,15 @@ VIPRS_LAYOUT_FIELD(viprs_acad_capabilities_v1, reserved0, 26, 1);
 VIPRS_LAYOUT_FIELD(viprs_acad_capabilities_v1, reserved1, 27, 1);
 VIPRS_LAYOUT_FIELD(viprs_acad_capabilities_v1, reserved2, 28, 4);
 
-VIPRS_LAYOUT_STRUCT(viprs_view_info_v1, 56, 8);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, struct_size, 0, 4);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, struct_version, 4, 4);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, index, 8, 4);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, kind, 12, 4);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, min_x, 16, 8);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, min_y, 24, 8);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, max_x, 32, 8);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, max_y, 40, 8);
-VIPRS_LAYOUT_FIELD(viprs_view_info_v1, entity_count, 48, 8);
+VIPRS_LAYOUT_STRUCT(viprs_acad_view_info_v1, 56, 8);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, struct_size, 0, 4);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, struct_version, 4, 4);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, index, 8, 4);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, kind, 12, 4);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, min_x, 16, 8);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, min_y, 24, 8);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, max_x, 32, 8);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, max_y, 40, 8);
+VIPRS_LAYOUT_FIELD(viprs_acad_view_info_v1, entity_count, 48, 8);
 
 #endif /* VIPRS_CONFORMANCE_LAYOUT_TABLE_H */

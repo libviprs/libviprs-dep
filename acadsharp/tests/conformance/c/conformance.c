@@ -165,12 +165,12 @@ static void test_capabilities(void)
 	caps.struct_size = (uint32_t)sizeof caps;
 	caps.struct_version = 1;
 
-	rc = viprs_acad_capabilities_v1(&caps, NULL, 0, &required);
+	rc = viprs_acad_get_capabilities_v1(&caps, NULL, 0, &required);
 	check(rc == VIPRS_ACAD_OK, "a sizing call with a capacity of zero is not a failure");
 	check(required > 0, "the sizing call reports a required length");
 
 	text = (char *)malloc((size_t)required + 1);
-	rc = viprs_acad_capabilities_v1(&caps, (uint8_t *)text, required, &required);
+	rc = viprs_acad_get_capabilities_v1(&caps, (uint8_t *)text, required, &required);
 	check(rc == VIPRS_ACAD_OK, "capabilities fills the struct and the buffer");
 	text[required] = '\0';
 	printf("      backing version=\"%s\" abi=%u wire=%u dwg=%u..%u\n", text, caps.abi_version,
@@ -198,15 +198,18 @@ static void test_capabilities(void)
 	/* A buffer smaller than the string writes nothing and says so. */
 	text = (char *)malloc(4);
 	memset(text, 'Z', 4);
-	rc = viprs_acad_capabilities_v1(&caps, (uint8_t *)text, 1, &required);
-	check(rc == VIPRS_ACAD_LIMIT_EXCEEDED, "a buffer too small is LIMIT_EXCEEDED");
+	rc = viprs_acad_get_capabilities_v1(&caps, (uint8_t *)text, 1, &required);
+	check(rc == VIPRS_ACAD_BUFFER_TOO_SMALL,
+	      "a buffer too small is BUFFER_TOO_SMALL, not LIMIT_EXCEEDED");
+	check(rc != VIPRS_ACAD_LIMIT_EXCEEDED,
+	      "and specifically not the code a bound in the limits struct reports");
 	check(text[0] == 'Z', "and nothing was written into it, not even a prefix");
 	free(text);
 
 	memset(&wrong, 0, sizeof wrong);
 	wrong.struct_size = 8;
 	wrong.struct_version = 1;
-	rc = viprs_acad_capabilities_v1(&wrong, NULL, 0, &required);
+	rc = viprs_acad_get_capabilities_v1(&wrong, NULL, 0, &required);
 	check(rc == VIPRS_ACAD_INVALID_ARGUMENT,
 	      "a struct_size this build does not know is INVALID_ARGUMENT");
 }
@@ -222,9 +225,9 @@ static void test_null_arguments(void)
 {
 	uint8_t synth[16];
 	uint8_t buf[4096];
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
-	struct viprs_view_info_v1 info;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
+	struct viprs_acad_view_info_v1 info;
 	struct viprs_acad_limits_v1 limits;
 	uint64_t required = 0;
 	uint64_t written = 0;
@@ -234,7 +237,7 @@ static void test_null_arguments(void)
 
 	synthetic_input(synth, 2, 9);
 
-	check(viprs_acad_capabilities_v1(NULL, NULL, 0, &required) == VIPRS_ACAD_INVALID_ARGUMENT,
+	check(viprs_acad_get_capabilities_v1(NULL, NULL, 0, &required) == VIPRS_ACAD_INVALID_ARGUMENT,
 	      "capabilities with a null out struct");
 	memset(&info, 0, sizeof info);
 	info.struct_size = (uint32_t)sizeof info;
@@ -271,11 +274,11 @@ static void test_null_arguments(void)
 
 	/* A number this library never issued. A shim that treated a handle as an
 	 * address would dereference this and take the process with it. */
-	check(viprs_acad_view_count((viprs_cad_handle *)(size_t)0xDEAD, &count) ==
+	check(viprs_acad_view_count((viprs_acad_handle *)(size_t)0xDEAD, &count) ==
 		      VIPRS_ACAD_INVALID_ARGUMENT,
 	      "view_count with a handle this library never issued");
 
-	check(viprs_acad_view_info_v1(NULL, 0, &info, NULL, 0, &required) ==
+	check(viprs_acad_get_view_info_v1(NULL, 0, &info, NULL, 0, &required) ==
 		      VIPRS_ACAD_INVALID_ARGUMENT,
 	      "view_info with a null handle");
 	check(viprs_acad_decode_begin(NULL, 0, NULL, &dec) == VIPRS_ACAD_INVALID_ARGUMENT,
@@ -295,9 +298,9 @@ static void test_null_arguments_on_a_live_handle(void)
 {
 	uint8_t synth[16];
 	uint8_t buf[4096];
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
-	struct viprs_view_info_v1 info;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
+	struct viprs_acad_view_info_v1 info;
 	uint64_t required = 0;
 	uint64_t written = 0;
 	uint8_t done = 0;
@@ -316,12 +319,12 @@ static void test_null_arguments_on_a_live_handle(void)
 	memset(&info, 0, sizeof info);
 	info.struct_size = (uint32_t)sizeof info;
 	info.struct_version = 1;
-	check(viprs_acad_view_info_v1(doc, 0, NULL, NULL, 0, &required) ==
+	check(viprs_acad_get_view_info_v1(doc, 0, NULL, NULL, 0, &required) ==
 		      VIPRS_ACAD_INVALID_ARGUMENT,
 	      "view_info with a null out struct");
-	check(viprs_acad_view_info_v1(doc, 0, &info, NULL, 0, NULL) == VIPRS_ACAD_INVALID_ARGUMENT,
+	check(viprs_acad_get_view_info_v1(doc, 0, &info, NULL, 0, NULL) == VIPRS_ACAD_INVALID_ARGUMENT,
 	      "view_info with a null required pointer");
-	check(viprs_acad_view_info_v1(doc, 4000000, &info, NULL, 0, &required) ==
+	check(viprs_acad_get_view_info_v1(doc, 4000000, &info, NULL, 0, &required) ==
 		      VIPRS_ACAD_INVALID_ARGUMENT,
 	      "view_info with an index past the end");
 	check(viprs_acad_decode_begin(doc, 0, NULL, NULL) == VIPRS_ACAD_INVALID_ARGUMENT,
@@ -355,7 +358,7 @@ static void test_open_by_path(void)
 {
 	const char *path = "/tmp/viprs-synthetic.bin";
 	uint8_t synth[16];
-	viprs_cad_handle *doc = NULL;
+	viprs_acad_handle *doc = NULL;
 	FILE *f;
 	uint32_t count = 0;
 	uint32_t rc;
@@ -411,8 +414,8 @@ static void test_the_input_bound_agrees_across_both_opens(void)
 	uint8_t synth[16];
 	struct viprs_acad_limits_v1 tight;
 	struct viprs_acad_limits_v1 loose;
-	viprs_cad_handle *from_memory = NULL;
-	viprs_cad_handle *from_path = NULL;
+	viprs_acad_handle *from_memory = NULL;
+	viprs_acad_handle *from_path = NULL;
 	uint32_t memory_rc;
 	uint32_t path_rc;
 	FILE *f;
@@ -471,8 +474,8 @@ static void test_a_short_buffer_is_never_written_past(void)
 	uint8_t synth[16];
 	uint8_t arena[64];
 	uint8_t *big;
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	vacb_reader reader;
 	vacb_record record;
 	uint64_t written = 0;
@@ -495,9 +498,9 @@ static void test_a_short_buffer_is_never_written_past(void)
 		done = 9;
 		uint32_t rc = viprs_acad_decode_next_batch(dec, arena, tiny_caps[i], &written,
 							   &done);
-		snprintf(label, sizeof label, "a cap of %llu is LIMIT_EXCEEDED, not a batch",
+		snprintf(label, sizeof label, "a cap of %llu is BUFFER_TOO_SMALL, not a batch",
 			 (unsigned long long)tiny_caps[i]);
-		check(rc == VIPRS_ACAD_LIMIT_EXCEEDED, label);
+		check(rc == VIPRS_ACAD_BUFFER_TOO_SMALL, label);
 		check(written == (uint64_t)VACB_BATCH_HEADER_BYTES,
 		      "and it asks for the twelve bytes a batch header needs");
 		clean = 1;
@@ -524,8 +527,8 @@ static void test_a_short_buffer_is_never_written_past(void)
 		memset(arena, 0xEE, sizeof arena);
 		written = 999;
 		check(viprs_acad_decode_next_batch(dec, arena, tiny_caps[i], &written, &done) ==
-			      VIPRS_ACAD_LIMIT_EXCEEDED,
-		      "a short cap after the stream finished is still LIMIT_EXCEEDED");
+			      VIPRS_ACAD_BUFFER_TOO_SMALL,
+		      "a short cap after the stream finished is still BUFFER_TOO_SMALL");
 		clean = 1;
 		for (j = 0; j < sizeof arena; j++) {
 			if (arena[j] != 0xEE) {
@@ -570,8 +573,8 @@ static void test_closing_with_the_wrong_handle_type(void)
 {
 	uint8_t synth[16];
 	uint8_t buf[8192];
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	uint64_t before;
 	uint64_t written = 0;
 	uint32_t count = 0;
@@ -595,14 +598,14 @@ static void test_closing_with_the_wrong_handle_type(void)
 	 * orphaned. What tells the two apart is whether the handle still works
 	 * afterwards, because a close that did nothing must have left it
 	 * alone. */
-	viprs_acad_decode_close((viprs_decode_handle *)doc);
+	viprs_acad_decode_close((viprs_acad_decode_handle *)doc);
 	check(viprs_acad__test_live_handles() == before + 2,
 	      "decode_close on a document handle releases nothing");
 	check(viprs_acad_view_count(doc, &count) == VIPRS_ACAD_OK,
 	      "and leaves the document handle usable, rather than evicting it and dropping "
 	      "the document on the floor");
 
-	viprs_acad_close((viprs_cad_handle *)dec);
+	viprs_acad_close((viprs_acad_handle *)dec);
 	check(viprs_acad__test_live_handles() == before + 2,
 	      "and close on a decode handle releases nothing either");
 	check(viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done) ==
@@ -628,8 +631,8 @@ static void test_calls_after_done_are_not_charged_to_the_output_limit(void)
 	uint8_t synth[16];
 	uint8_t buf[8192];
 	struct viprs_acad_limits_v1 limits;
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	uint64_t written = 0;
 	uint8_t done = 0;
 	int i;
@@ -673,8 +676,8 @@ static void test_calls_after_done_are_not_charged_to_the_output_limit(void)
 static void test_views(void)
 {
 	uint8_t synth[16];
-	viprs_cad_handle *doc = NULL;
-	struct viprs_view_info_v1 info;
+	viprs_acad_handle *doc = NULL;
+	struct viprs_acad_view_info_v1 info;
 	uint64_t required = 0;
 	uint32_t count = 0;
 	char *name;
@@ -691,10 +694,10 @@ static void test_views(void)
 	memset(&info, 0, sizeof info);
 	info.struct_size = (uint32_t)sizeof info;
 	info.struct_version = 1;
-	check(viprs_acad_view_info_v1(doc, 0, &info, NULL, 0, &required) == VIPRS_ACAD_OK,
+	check(viprs_acad_get_view_info_v1(doc, 0, &info, NULL, 0, &required) == VIPRS_ACAD_OK,
 	      "view_info sizing call");
 	name = (char *)malloc((size_t)required + 1);
-	check(viprs_acad_view_info_v1(doc, 0, &info, (uint8_t *)name, required, &required) ==
+	check(viprs_acad_get_view_info_v1(doc, 0, &info, (uint8_t *)name, required, &required) ==
 		      VIPRS_ACAD_OK,
 	      "view_info with a buffer");
 	name[required] = '\0';
@@ -712,8 +715,8 @@ static void test_cancel_before_the_first_batch(void)
 {
 	uint8_t synth[16];
 	uint8_t buf[65536];
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	uint32_t cancel_flag = 1;
 	uint64_t written = 123;
 	uint8_t done = 9;
@@ -732,6 +735,100 @@ static void test_cancel_before_the_first_batch(void)
 	      "a cancel flag set before the first batch is CANCELED, not a batch");
 	check(written == 0, "and nothing was written");
 
+	/* And it stays cancelled. A caller that clears its own flag and asks
+	 * again must not get the rest of a drawing it already abandoned. */
+	cancel_flag = 0;
+	written = 123;
+	done = 9;
+	rc = viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done);
+	check(rc == VIPRS_ACAD_CANCELED, "and a later call is still CANCELED");
+	check(written == 0 && done == 0,
+	      "writing nothing and reporting done 0, so a loop cannot read it as the end");
+
+	viprs_acad_decode_close(dec);
+	viprs_acad_close(doc);
+}
+
+/* A refused decode is over, and every later call says the same thing.
+ *
+ * This is the one that was silently wrong. The record stream behind a decode
+ * is produced lazily and a producer that has already failed is finished, so
+ * the call after a breached bound used to frame an empty batch carrying the
+ * last-batch flag, report done 1 and return OK. A caller doing exactly what
+ * the header tells it to do, growing its buffer and retrying, got a
+ * well-formed complete-looking stream with the records after the bound
+ * missing.
+ *
+ * max_entities of 1 against the synthetic document is the cheapest way to
+ * reach it: the document emits far more than one primitive, so the bound bites
+ * partway through and the stream behind it is dead from then on. */
+static void test_a_refused_decode_stays_refused(void)
+{
+	uint8_t synth[16];
+	uint8_t buf[65536];
+	struct viprs_acad_limits_v1 limits;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
+	uint64_t written = 0;
+	uint8_t done = 0;
+	uint32_t first;
+	int i;
+	int all_same = 1;
+	int wrote_nothing = 1;
+	int never_done = 1;
+
+	synthetic_input(synth, 1, 64);
+	memset(&limits, 0, sizeof limits);
+	limits.struct_size = (uint32_t)sizeof limits;
+	limits.struct_version = 1;
+	limits.max_entities = 1;
+
+	if (viprs_acad_open_memory(synth, sizeof synth, &limits, &doc) != VIPRS_ACAD_OK) {
+		check(0, "open_memory with max_entities at one");
+		return;
+	}
+	if (viprs_acad_decode_begin(doc, 0, NULL, &dec) != VIPRS_ACAD_OK) {
+		check(0, "decode_begin for the latch test");
+		viprs_acad_close(doc);
+		return;
+	}
+
+	/* Drain until something refuses. The bound is not reached on the first
+	 * call: DocumentBegin and ViewBegin come out first. */
+	first = VIPRS_ACAD_OK;
+	for (i = 0; i < 64; i++) {
+		written = 0;
+		done = 0;
+		first = viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done);
+		if (first != VIPRS_ACAD_OK || done != 0) {
+			break;
+		}
+	}
+
+	check(first == VIPRS_ACAD_LIMIT_EXCEEDED,
+	      "max_entities at one refuses with LIMIT_EXCEEDED before the stream ends");
+	check(done == 0, "and does not claim the stream finished");
+
+	for (i = 0; i < 8; i++) {
+		written = 777;
+		done = 9;
+		if (viprs_acad_decode_next_batch(dec, buf, sizeof buf, &written, &done) != first) {
+			all_same = 0;
+		}
+		if (written != 0) {
+			wrote_nothing = 0;
+		}
+		if (done != 0) {
+			never_done = 0;
+		}
+	}
+
+	check(all_same, "and every later call returns the same code");
+	check(wrote_nothing, "and writes nothing, so there is no batch to parse");
+	check(never_done,
+	      "and never reports done, which is what stopped a truncated stream looking "
+	      "complete");
+
 	viprs_acad_decode_close(dec);
 	viprs_acad_close(doc);
 }
@@ -740,8 +837,8 @@ static void test_small_buffer(void)
 {
 	uint8_t synth[16];
 	uint8_t tiny[16];
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	uint64_t written = 0;
 	uint8_t done = 0;
 	uint32_t rc;
@@ -754,7 +851,8 @@ static void test_small_buffer(void)
 
 	viprs_acad_decode_begin(doc, 0, NULL, &dec);
 	rc = viprs_acad_decode_next_batch(dec, tiny, sizeof tiny, &written, &done);
-	check(rc == VIPRS_ACAD_LIMIT_EXCEEDED, "a buffer too small for one batch is LIMIT_EXCEEDED");
+	check(rc == VIPRS_ACAD_BUFFER_TOO_SMALL,
+	      "a buffer too small for one batch is BUFFER_TOO_SMALL");
 	check(written > sizeof tiny, "and the size it needs comes back through written");
 	printf("      needed %llu bytes for the first batch\n", (unsigned long long)written);
 
@@ -1041,8 +1139,8 @@ static void test_decode_and_parse(void)
 	uint8_t synth[16];
 	uint8_t *buf;
 	const size_t cap = VACB_MAX_BATCH_BYTES;
-	viprs_cad_handle *doc = NULL;
-	viprs_decode_handle *dec = NULL;
+	viprs_acad_handle *doc = NULL;
+	viprs_acad_decode_handle *dec = NULL;
 	uint64_t written = 0;
 	uint8_t done = 0;
 	int seen[16];
@@ -1404,6 +1502,8 @@ int main(void)
 	test_views();
 	printf("--- cancellation\n");
 	test_cancel_before_the_first_batch();
+	printf("--- a refusal is terminal\n");
+	test_a_refused_decode_stays_refused();
 	printf("--- buffer sizing\n");
 	test_small_buffer();
 	test_a_short_buffer_is_never_written_past();

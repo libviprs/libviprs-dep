@@ -140,7 +140,7 @@ fn capabilities(t: &mut Tally) {
     let mut required: u64 = 0;
 
     let rc = unsafe {
-        viprs_acad_capabilities_v1(&mut caps, std::ptr::null_mut(), 0, &mut required)
+        viprs_acad_get_capabilities_v1(&mut caps, std::ptr::null_mut(), 0, &mut required)
     };
     t.check(
         rc == VIPRS_ACAD_OK,
@@ -150,7 +150,7 @@ fn capabilities(t: &mut Tally) {
 
     let mut buffer = vec![0u8; required as usize + 1];
     let rc = unsafe {
-        viprs_acad_capabilities_v1(&mut caps, buffer.as_mut_ptr(), required, &mut required)
+        viprs_acad_get_capabilities_v1(&mut caps, buffer.as_mut_ptr(), required, &mut required)
     };
     t.check(rc == VIPRS_ACAD_OK, "capabilities fills the struct and the buffer");
     let text = CStr::from_bytes_until_nul(&buffer)
@@ -195,9 +195,16 @@ fn capabilities(t: &mut Tally) {
 
     let mut small = [b'Z'; 4];
     let rc = unsafe {
-        viprs_acad_capabilities_v1(&mut caps, small.as_mut_ptr(), 1, &mut required)
+        viprs_acad_get_capabilities_v1(&mut caps, small.as_mut_ptr(), 1, &mut required)
     };
-    t.check(rc == VIPRS_ACAD_LIMIT_EXCEEDED, "a buffer too small is LIMIT_EXCEEDED");
+    t.check(
+        rc == VIPRS_ACAD_BUFFER_TOO_SMALL,
+        "a buffer too small is BUFFER_TOO_SMALL, not LIMIT_EXCEEDED",
+    );
+    t.check(
+        rc != VIPRS_ACAD_LIMIT_EXCEEDED,
+        "and specifically not the code a bound in the limits struct reports",
+    );
     t.check(
         small[0] == b'Z',
         "and nothing was written into it, not even a prefix",
@@ -209,7 +216,7 @@ fn capabilities(t: &mut Tally) {
         ..Default::default()
     };
     let rc = unsafe {
-        viprs_acad_capabilities_v1(&mut wrong, std::ptr::null_mut(), 0, &mut required)
+        viprs_acad_get_capabilities_v1(&mut wrong, std::ptr::null_mut(), 0, &mut required)
     };
     t.check(
         rc == VIPRS_ACAD_INVALID_ARGUMENT,
@@ -219,8 +226,8 @@ fn capabilities(t: &mut Tally) {
 
 fn arguments(t: &mut Tally) {
     let synth = synthetic_input(2, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut required: u64 = 0;
     let mut written: u64 = 0;
     let mut done: u8 = 0;
@@ -230,7 +237,7 @@ fn arguments(t: &mut Tally) {
 
     unsafe {
         t.check(
-            viprs_acad_capabilities_v1(std::ptr::null_mut(), std::ptr::null_mut(), 0, &mut required)
+            viprs_acad_get_capabilities_v1(std::ptr::null_mut(), std::ptr::null_mut(), 0, &mut required)
                 == VIPRS_ACAD_INVALID_ARGUMENT,
             "capabilities with a null out struct",
         );
@@ -305,7 +312,7 @@ fn arguments(t: &mut Tally) {
         // A number this library never issued. A shim that treated a handle as
         // an address would dereference this and take the process with it.
         t.check(
-            viprs_acad_view_count(0xDEAD as *mut viprs_cad_handle, &mut count)
+            viprs_acad_view_count(0xDEAD as *mut viprs_acad_handle, &mut count)
                 == VIPRS_ACAD_INVALID_ARGUMENT,
             "view_count with a handle this library never issued",
         );
@@ -333,23 +340,23 @@ fn arguments(t: &mut Tally) {
             "view_count with a null out pointer",
         );
 
-        let mut info = viprs_view_info_v1 {
-            struct_size: std::mem::size_of::<viprs_view_info_v1>() as u32,
+        let mut info = viprs_acad_view_info_v1 {
+            struct_size: std::mem::size_of::<viprs_acad_view_info_v1>() as u32,
             struct_version: 1,
             ..Default::default()
         };
         t.check(
-            viprs_acad_view_info_v1(doc, 0, std::ptr::null_mut(), std::ptr::null_mut(), 0, &mut required)
+            viprs_acad_get_view_info_v1(doc, 0, std::ptr::null_mut(), std::ptr::null_mut(), 0, &mut required)
                 == VIPRS_ACAD_INVALID_ARGUMENT,
             "view_info with a null out struct",
         );
         t.check(
-            viprs_acad_view_info_v1(doc, 0, &mut info, std::ptr::null_mut(), 0, std::ptr::null_mut())
+            viprs_acad_get_view_info_v1(doc, 0, &mut info, std::ptr::null_mut(), 0, std::ptr::null_mut())
                 == VIPRS_ACAD_INVALID_ARGUMENT,
             "view_info with a null required pointer",
         );
         t.check(
-            viprs_acad_view_info_v1(doc, 4_000_000, &mut info, std::ptr::null_mut(), 0, &mut required)
+            viprs_acad_get_view_info_v1(doc, 4_000_000, &mut info, std::ptr::null_mut(), 0, &mut required)
                 == VIPRS_ACAD_INVALID_ARGUMENT,
             "view_info with an index past the end",
         );
@@ -446,7 +453,7 @@ fn the_input_bound_agrees_across_both_opens(t: &mut Tally) {
     // input's problem, and it stays INVALID_ARGUMENT rather than becoming
     // whatever the platform throws when asked to stat it.
     let holed = b"/tmp/vip\0rs.dwg";
-    let mut nowhere: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut nowhere: *mut viprs_acad_handle = std::ptr::null_mut();
     t.check(
         unsafe {
             viprs_acad_open_path_utf8(
@@ -459,8 +466,8 @@ fn the_input_bound_agrees_across_both_opens(t: &mut Tally) {
         "a path with a NUL inside it is INVALID_ARGUMENT, not a parse failure",
     );
 
-    let mut from_memory: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut from_path: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut from_memory: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut from_path: *mut viprs_acad_handle = std::ptr::null_mut();
     let (memory_rc, path_rc) = unsafe {
         (
             viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, &tight, &mut from_memory),
@@ -512,10 +519,14 @@ fn the_input_bound_agrees_across_both_opens(t: &mut Tally) {
 fn short_buffer_is_never_written_past(t: &mut Tally) {
     const TINY: [u64; 3] = [1, 4, 11];
     let synth = synthetic_input(1, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut arena = [0xEEu8; 64];
-    let mut written: u64 = 0;
+    // `written` is poisoned before every call below, because a check reads it
+    // afterwards and has to be reading what the callee wrote. `done` is not:
+    // nothing here asserts on it, so a sentinel would be a value nobody looks
+    // at, which is the warning the compiler was giving.
+    let mut written: u64 = 999;
     let mut done: u8 = 0;
 
     unsafe {
@@ -530,12 +541,11 @@ fn short_buffer_is_never_written_past(t: &mut Tally) {
         for cap in TINY {
             arena.fill(0xEE);
             written = 999;
-            done = 9;
             let rc =
                 viprs_acad_decode_next_batch(dec, arena.as_mut_ptr(), cap, &mut written, &mut done);
             t.check(
-                rc == VIPRS_ACAD_LIMIT_EXCEEDED,
-                &format!("a cap of {cap} is LIMIT_EXCEEDED, not a batch"),
+                rc == VIPRS_ACAD_BUFFER_TOO_SMALL,
+                &format!("a cap of {cap} is BUFFER_TOO_SMALL, not a batch"),
             );
             t.check(
                 written == wire::BATCH_HEADER_BYTES as u64,
@@ -567,8 +577,8 @@ fn short_buffer_is_never_written_past(t: &mut Tally) {
             arena.fill(0xEE);
             t.check(
                 viprs_acad_decode_next_batch(dec, arena.as_mut_ptr(), cap, &mut written, &mut done)
-                    == VIPRS_ACAD_LIMIT_EXCEEDED,
-                "a short cap after the stream finished is still LIMIT_EXCEEDED",
+                    == VIPRS_ACAD_BUFFER_TOO_SMALL,
+                "a short cap after the stream finished is still BUFFER_TOO_SMALL",
             );
             t.check(arena.iter().all(|b| *b == 0xEE), "and still writes nothing");
         }
@@ -615,8 +625,8 @@ fn short_buffer_is_never_written_past(t: &mut Tally) {
 #[cfg(viprs_test_exports)]
 fn closing_with_the_wrong_handle_type(t: &mut Tally) {
     let synth = synthetic_input(1, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
 
     unsafe {
         let before = viprs_acad__test_live_handles();
@@ -644,7 +654,7 @@ fn closing_with_the_wrong_handle_type(t: &mut Tally) {
         let mut done: u8 = 0;
         let mut buf = vec![0u8; 8192];
 
-        viprs_acad_decode_close(doc as *mut viprs_decode_handle);
+        viprs_acad_decode_close(doc as *mut viprs_acad_decode_handle);
         t.check(
             viprs_acad__test_live_handles() == before + 2,
             "decode_close on a document handle releases nothing",
@@ -655,7 +665,7 @@ fn closing_with_the_wrong_handle_type(t: &mut Tally) {
              the document on the floor",
         );
 
-        viprs_acad_close(dec as *mut viprs_cad_handle);
+        viprs_acad_close(dec as *mut viprs_acad_handle);
         t.check(
             viprs_acad__test_live_handles() == before + 2,
             "and close on a decode handle releases nothing either",
@@ -687,8 +697,8 @@ fn closing_with_the_wrong_handle_type(t: &mut Tally) {
 /// not charged against the limit.
 fn calls_after_done_are_not_charged_to_the_output_limit(t: &mut Tally) {
     let synth = synthetic_input(1, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut buf = vec![0u8; 8192];
     let mut written: u64 = 0;
     let mut done: u8 = 0;
@@ -750,7 +760,7 @@ fn calls_after_done_are_not_charged_to_the_output_limit(t: &mut Tally) {
 
 fn views(t: &mut Tally) {
     let synth = synthetic_input(3, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
     let mut count: u32 = 0;
     let mut required: u64 = 0;
 
@@ -765,19 +775,19 @@ fn views(t: &mut Tally) {
         t.check(viprs_acad_view_count(doc, &mut count) == VIPRS_ACAD_OK, "view_count");
         t.check(count == 3, "view_count reports what the input asked for");
 
-        let mut info = viprs_view_info_v1 {
-            struct_size: std::mem::size_of::<viprs_view_info_v1>() as u32,
+        let mut info = viprs_acad_view_info_v1 {
+            struct_size: std::mem::size_of::<viprs_acad_view_info_v1>() as u32,
             struct_version: 1,
             ..Default::default()
         };
         t.check(
-            viprs_acad_view_info_v1(doc, 0, &mut info, std::ptr::null_mut(), 0, &mut required)
+            viprs_acad_get_view_info_v1(doc, 0, &mut info, std::ptr::null_mut(), 0, &mut required)
                 == VIPRS_ACAD_OK,
             "view_info sizing call",
         );
         let mut name = vec![0u8; required as usize];
         t.check(
-            viprs_acad_view_info_v1(doc, 0, &mut info, name.as_mut_ptr(), required, &mut required)
+            viprs_acad_get_view_info_v1(doc, 0, &mut info, name.as_mut_ptr(), required, &mut required)
                 == VIPRS_ACAD_OK,
             "view_info with a buffer",
         );
@@ -800,9 +810,9 @@ fn views(t: &mut Tally) {
 
 fn cancellation(t: &mut Tally) {
     let synth = synthetic_input(1, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
-    let cancel_flag: u32 = 1;
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
+    let mut cancel_flag: u32 = 1;
     let mut written: u64 = 123;
     let mut done: u8 = 9;
     let mut buf = vec![0u8; wire::TARGET_BATCH_BYTES];
@@ -831,6 +841,126 @@ fn cancellation(t: &mut Tally) {
         );
         t.check(written == 0, "and nothing was written");
 
+        // And it stays cancelled. A caller that clears its own flag and asks
+        // again must not get the rest of a drawing it already abandoned.
+        //
+        // Written through a pointer because the library holds one: assigning
+        // the local looks like a dead store to the compiler, and is not.
+        std::ptr::write_volatile(&mut cancel_flag as *mut u32, 0);
+        written = 123;
+        done = 9;
+        let again = viprs_acad_decode_next_batch(
+            dec,
+            buf.as_mut_ptr(),
+            buf.len() as u64,
+            &mut written,
+            &mut done,
+        );
+        t.check(again == VIPRS_ACAD_CANCELED, "and a later call is still CANCELED");
+        t.check(
+            written == 0 && done == 0,
+            "writing nothing and reporting done 0, so a loop cannot read it as the end",
+        );
+
+        viprs_acad_decode_close(dec);
+        viprs_acad_close(doc);
+    }
+}
+
+/// A refused decode is over, and every later call says the same thing.
+///
+/// This is the one that was silently wrong. The record stream behind a decode
+/// is produced lazily and a producer that has already failed is finished, so
+/// the call after a breached bound used to frame an empty batch carrying the
+/// last-batch flag, report `done` 1 and return OK. A caller doing exactly what
+/// the header tells it to do, growing its buffer and retrying, got a
+/// well-formed complete-looking stream with the records after the bound
+/// missing and no code to look at.
+///
+/// `max_entities` of 1 against the synthetic document is the cheapest way to
+/// reach it: the document emits far more than one primitive, so the bound
+/// bites partway through and the stream behind it is dead from then on.
+fn a_refused_decode_stays_refused(t: &mut Tally) {
+    let synth = synthetic_input(1, 64);
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
+    let mut buf = vec![0u8; wire::TARGET_BATCH_BYTES];
+    let mut written: u64 = 999;
+    let mut done: u8 = 9;
+
+    let limits = viprs_acad_limits_v1 {
+        struct_size: std::mem::size_of::<viprs_acad_limits_v1>() as u32,
+        struct_version: 1,
+        max_entities: 1,
+        ..Default::default()
+    };
+
+    unsafe {
+        if viprs_acad_open_memory(synth.as_ptr(), synth.len() as u64, &limits, &mut doc)
+            != VIPRS_ACAD_OK
+        {
+            t.check(false, "open_memory with max_entities at one");
+            return;
+        }
+        if viprs_acad_decode_begin(doc, 0, std::ptr::null(), &mut dec) != VIPRS_ACAD_OK {
+            t.check(false, "decode_begin for the latch test");
+            viprs_acad_close(doc);
+            return;
+        }
+
+        // Drain until something refuses. The bound is not reached on the first
+        // call: DocumentBegin and ViewBegin come out ahead of any item.
+        let mut first = VIPRS_ACAD_OK;
+        for _ in 0..64 {
+            first = viprs_acad_decode_next_batch(
+                dec,
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut written,
+                &mut done,
+            );
+            if first != VIPRS_ACAD_OK || done != 0 {
+                break;
+            }
+        }
+
+        t.check(
+            first == VIPRS_ACAD_LIMIT_EXCEEDED,
+            "max_entities at one refuses with LIMIT_EXCEEDED before the stream ends",
+        );
+        t.check(done == 0, "and does not claim the stream finished");
+
+        let mut all_same = true;
+        let mut wrote_nothing = true;
+        let mut never_done = true;
+        for _ in 0..8 {
+            written = 777;
+            done = 9;
+            if viprs_acad_decode_next_batch(
+                dec,
+                buf.as_mut_ptr(),
+                buf.len() as u64,
+                &mut written,
+                &mut done,
+            ) != first
+            {
+                all_same = false;
+            }
+            if written != 0 {
+                wrote_nothing = false;
+            }
+            if done != 0 {
+                never_done = false;
+            }
+        }
+
+        t.check(all_same, "and every later call returns the same code");
+        t.check(wrote_nothing, "and writes nothing, so there is no batch to parse");
+        t.check(
+            never_done,
+            "and never reports done, which is what stopped a truncated stream looking complete",
+        );
+
         viprs_acad_decode_close(dec);
         viprs_acad_close(doc);
     }
@@ -838,8 +968,8 @@ fn cancellation(t: &mut Tally) {
 
 fn small_buffer(t: &mut Tally) {
     let synth = synthetic_input(1, 9);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut written: u64 = 0;
     let mut done: u8 = 0;
     let mut tiny = [0u8; 16];
@@ -860,8 +990,8 @@ fn small_buffer(t: &mut Tally) {
             &mut done,
         );
         t.check(
-            rc == VIPRS_ACAD_LIMIT_EXCEEDED,
-            "a buffer too small for one batch is LIMIT_EXCEEDED",
+            rc == VIPRS_ACAD_BUFFER_TOO_SMALL,
+            "a buffer too small for one batch is BUFFER_TOO_SMALL",
         );
         t.check(
             written > tiny.len() as u64,
@@ -895,8 +1025,8 @@ fn decode_and_parse(t: &mut Tally) {
     // that always fits in the first call never exercises the loop, and the
     // loop is where a producer gets the framing wrong.
     let synth = synthetic_input(1, 2000);
-    let mut doc: *mut viprs_cad_handle = std::ptr::null_mut();
-    let mut dec: *mut viprs_decode_handle = std::ptr::null_mut();
+    let mut doc: *mut viprs_acad_handle = std::ptr::null_mut();
+    let mut dec: *mut viprs_acad_decode_handle = std::ptr::null_mut();
     let mut written: u64 = 0;
     let mut done: u8 = 0;
     let mut buf = vec![0u8; wire::MAX_BATCH_BYTES];
@@ -1184,6 +1314,8 @@ fn main() {
     views(&mut t);
     println!("--- cancellation");
     cancellation(&mut t);
+    println!("--- a refusal is terminal");
+    a_refused_decode_stays_refused(&mut t);
     println!("--- buffer sizing");
     small_buffer(&mut t);
     short_buffer_is_never_written_past(&mut t);

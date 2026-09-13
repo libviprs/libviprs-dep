@@ -1182,7 +1182,7 @@ PROBE
     if [ -z "$CAPS_CALL" ]; then
       fail "the shipped header declares no capabilities call, so the probe cannot ask
     the library what it reads"
-      CAPS_CALL=viprs_acad_capabilities_v1
+      CAPS_CALL=viprs_acad_get_capabilities_v1
     fi
 
     SYSLIB_FLAGS=""

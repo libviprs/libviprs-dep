@@ -127,7 +127,7 @@ class TestReleaseNotes:
 
 
 class TestBothFrozenSurfacesAnswerTheSameQuestion:
-    """`viprs_acad_capabilities_v1` writes what the header calls "the pinned
+    """`viprs_acad_get_capabilities_v1` writes what the header calls "the pinned
     ACadSharp version", and `LINKINFO.json` records `acadsharp_version`. They
     are the same question asked at run time and at link time, and for a while
     they gave different answers: the MSBuild target read `VERSION` verbatim, so

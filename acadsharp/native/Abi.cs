@@ -29,6 +29,14 @@ namespace Viprs.Abi
 		public const uint InternalError = 7u;
 		public const uint AbiMismatch = 8u;
 		public const uint LimitExceeded = 9u;
+
+		// Ten, and not a second spelling of nine. A bound in
+		// viprs_acad_limits_v1 was reached, which ends the decode, and the
+		// caller's buffer will not hold what this call would write, which
+		// ends nothing. Those were one code until ABI v2, told apart by
+		// whether the callee wrote a number larger than the cap it was
+		// handed, which no document ever said.
+		public const uint BufferTooSmall = 10u;
 	}
 
 	// A failure with a code the caller should see, as opposed to a bug, which
@@ -76,7 +84,7 @@ namespace Viprs.Abi
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	public struct viprs_view_info_v1
+	public struct viprs_acad_view_info_v1
 	{
 		public uint struct_size;
 		public uint struct_version;
@@ -91,7 +99,7 @@ namespace Viprs.Abi
 
 	internal static class AbiConstants
 	{
-		public const uint AbiVersion = 1u;
+		public const uint AbiVersion = 2u;
 		public const uint WireVersion = 2u;
 		public const uint StructVersion = 1u;
 
@@ -306,7 +314,12 @@ namespace Viprs.Abi
 
 			if (cap < (ulong)bytes.Length)
 			{
-				return Result.LimitExceeded;
+				// Not LimitExceeded. Nothing about this is a bound the caller
+				// set: the buffer is short and the call can be made again
+				// with a longer one, which is the whole distinction ABI v2
+				// draws. *required already holds the length to come back
+				// with.
+				return Result.BufferTooSmall;
 			}
 
 			for (int i = 0; i < bytes.Length; i++)

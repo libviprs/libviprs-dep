@@ -211,6 +211,73 @@ class TestTheBoundIsTheLimitAndNotACrash:
         assert a["fixture_sha256"] == b["fixture_sha256"]
 
 
+class TestARefusalEndsTheDecode:
+    """The silent truncation, recorded.
+
+    The stream behind a decode is an iterator, and a C# iterator that threw
+    returns false on every later MoveNext. So the documented grow-and-retry
+    after a breached bound used to hand the caller a well-framed batch with
+    the last-batch flag set, `done` 1 and `OK`, carrying none of the records
+    after the breach. A consumer following the header exactly could not tell
+    that from a complete drawing.
+
+    The harness therefore calls `decode_next_batch` once more after every
+    refusal and records what came back. Without the latch in `DecodeSession`,
+    `limits/max_entities_1` records `OK`, `done` 1 and a twelve-byte batch
+    here.
+    """
+
+    REFUSALS = sorted(
+        name
+        for name, (open_code, decode_code, _) in EXPECTED.items()
+        if open_code == "OK" and decode_code not in ("OK", "NOT_REACHED")
+    )
+
+    def test_there_are_refusals_to_check(self):
+        # The positive control. A filter that selected nothing would make
+        # every parametrised case below pass by never running.
+        assert len(self.REFUSALS) >= 6, (
+            f"only {self.REFUSALS} reach the decode and refuse, so this class is "
+            "measuring almost nothing"
+        )
+
+    @pytest.mark.parametrize("name", REFUSALS)
+    def test_the_next_call_repeats_the_same_code(self, name):
+        result = scenario(name)["result"]
+        assert "code_after_refusal" in result, (
+            "the capture predates the follow-up call, so nothing here knows whether a "
+            "refused decode can be asked again. Rerun tests/fixtures/gen/regenerate.py"
+        )
+        assert result["code_after_refusal"] == result["decode_code"], (
+            f"{name} refused with {result['decode_code']} and the next call returned "
+            f"{result['code_after_refusal']}. A decode that refuses is over, and a "
+            "caller that asks again has to be told the same thing rather than handed "
+            "a stream."
+        )
+
+    @pytest.mark.parametrize("name", REFUSALS)
+    def test_the_next_call_writes_nothing_and_is_not_done(self, name):
+        result = scenario(name)["result"]
+        assert result["written_after_refusal"] == 0, (
+            f"{name} wrote {result['written_after_refusal']} bytes on the call after "
+            "the refusal. Those bytes frame a batch, and a batch after a refusal is a "
+            "stream the caller has been told is not there."
+        )
+        assert result["done_after_refusal"] == 0, (
+            f"{name} reported done 1 after refusing, so a caller's loop reads the "
+            "refusal as the end of a complete drawing. That is the silent truncation."
+        )
+
+    def test_a_clean_decode_can_still_be_asked_again(self):
+        # The other half, and the reason the latch cannot simply be "any
+        # second call fails". A finished stream answers a further call with an
+        # empty last batch, which is what makes a caller's loop terminate.
+        result = scenario("limits/max_entities_default")["result"]
+        assert result["code_after_refusal"] == "OK"
+        assert result["done_after_refusal"] == 1
+        assert result["written_after_refusal"] == 12
+
+
 class TestCancellation:
     def test_the_flag_stops_the_decode_on_the_next_call(self):
         result = scenario("cancel/after_one_batch")["result"]

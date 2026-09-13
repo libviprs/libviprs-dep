@@ -922,7 +922,7 @@ def archive_smoke_source(entry_points=None):
     fingerprint check; the verifier does the static half from the bytes.
 
     Then it asks the library what it is. `ABI.md` says
-    `viprs_acad_capabilities_v1` answers with "the pinned version of the
+    `viprs_acad_get_capabilities_v1` answers with "the pinned version of the
     backing reader", and every archive published before this check answered
     with nothing: the build staged `native/` and `include/` and never
     `VERSION`, msbuild's `ReadLinesFromFile` returns nothing for a file that
@@ -1421,7 +1421,7 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
     shared_system_libraries = facts.get("shared_needed", "").split()
 
     # The read range as the staged library answered it, not as the shim
-    # was compiled. The smoke calls viprs_acad_capabilities_v1 against the
+    # was compiled. The smoke calls viprs_acad_get_capabilities_v1 against the
     # library that is about to be packed and prints what came back; this
     # is that answer on its way into the manifest. A fact that cannot be
     # parsed is passed through as None so make_linkinfo refuses it by
@@ -1519,7 +1519,7 @@ def _write_build_context(ctx):
     os.makedirs(os.path.join(ctx, "include"), exist_ok=True)
     shutil.copy2(HEADER_PATH, os.path.join(ctx, "include", "viprs_acadsharp.h"))
     # The csproj reads ../VERSION during the build and generates the string
-    # viprs_acad_capabilities_v1 reports. Without the file here, msbuild's
+    # viprs_acad_get_capabilities_v1 reports. Without the file here, msbuild's
     # ReadLinesFromFile returns nothing rather than failing, the generated
     # constant comes out as "", and every archive published so far shipped a
     # library that answers the version question with an empty string.
@@ -1577,7 +1577,7 @@ def build_for_job(version, plat, arch, output_dir):
                 elif not facts.get("backing_version"):
                     detail = (
                         "the library reports an empty backing version, so "
-                        "viprs_acad_capabilities_v1 cannot answer what it is"
+                        "viprs_acad_get_capabilities_v1 cannot answer what it is"
                     )
                 else:
                     detail = "see the smoke output in the log"

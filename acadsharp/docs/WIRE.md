@@ -56,7 +56,7 @@ default `max_polyline_points`, carrying a bulge per vertex, is 32 MB on its
 own, so this is not a corner nobody reaches.
 
 A batch never spans two calls. A caller that hands over a buffer too small for
-the next batch gets `VIPRS_ACAD_LIMIT_EXCEEDED` with the size it needs, which
+the next batch gets `VIPRS_ACAD_BUFFER_TOO_SMALL` with the size it needs, which
 is the only thing a caller has to handle to be correct at any buffer size.
 
 An empty batch, `payload_length` zero, is legal. It is what a decode with

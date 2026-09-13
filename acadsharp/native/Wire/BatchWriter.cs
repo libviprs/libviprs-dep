@@ -50,10 +50,15 @@ namespace Viprs.Wire
 			// the call still reports OK with *written 12, which is the one
 			// shape a caller cannot defend against: it has been told the call
 			// succeeded and that twelve bytes are there to read.
+			//
+			// BufferTooSmall, not LimitExceeded. Nothing has been consumed
+			// and no bound was reached: this is the caller being told to come
+			// back with twelve bytes, and it is the only refusal on this call
+			// that can be retried.
 			if (cap < (ulong)WireFormat.BatchHeaderBytes)
 			{
 				written = (ulong)WireFormat.BatchHeaderBytes;
-				return Result.LimitExceeded;
+				return Result.BufferTooSmall;
 			}
 
 			// Everything was said on an earlier call. Another call is legal
@@ -100,8 +105,15 @@ namespace Viprs.Wire
 						// stream that cannot carry a drawing the limits allow.
 						// Nothing was written, and the caller is told the size
 						// to come back with.
+						//
+						// The room this was measured against is the caller's
+						// whole cap, because payload is zero, so the only way
+						// to be here is a buffer too small for one record.
+						// That is BufferTooSmall and it is retryable; the two
+						// max_output_bytes refusals below are the bound and
+						// are not.
 						written = committed + (ulong)length;
-						return Result.LimitExceeded;
+						return Result.BufferTooSmall;
 					}
 
 					// It does not fit beside what is already here. It stays

@@ -30,7 +30,7 @@ ABI_CS = os.path.join(ACADSHARP, "native", "Abi.cs")
 C_TABLE = os.path.join(ACADSHARP, "tests", "conformance", "c", "layout_table.h")
 RUST_TABLE = os.path.join(ACADSHARP, "tests", "conformance", "rust", "tests", "layout.rs")
 
-STRUCTS = ("viprs_acad_limits_v1", "viprs_acad_capabilities_v1", "viprs_view_info_v1")
+STRUCTS = ("viprs_acad_limits_v1", "viprs_acad_capabilities_v1", "viprs_acad_view_info_v1")
 
 # Width and alignment of every scalar the header is allowed to use. There are
 # only four, which is the point of the fixed-width rule.
