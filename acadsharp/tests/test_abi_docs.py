@@ -255,6 +255,25 @@ class TestTheSyntheticBackingIsDocumented:
             "sequence, and a consumer cannot exercise the decode path without it."
         )
 
+    def test_both_open_calls_are_named_as_selecting_it(self, abi):
+        # The document named open_memory only, and SourceFactory has always
+        # sniffed the magic on the path route too. A second implementation
+        # built from this file would have got that wrong in the direction
+        # hardest to notice: it would work on every real drawing.
+        #
+        # The section, not the whole file: both names appear elsewhere in
+        # ABI.md, so a check over the document would pass whatever this
+        # paragraph said.
+        section = re.search(r"^## The synthetic document$(.*?)(?=^## |\Z)", abi, re.S | re.M)
+        assert section, "ABI.md no longer has a synthetic-document section"
+        body = re.sub(r"\s+", " ", section.group(1))
+        for call in ("viprs_acad_open_memory", "viprs_acad_open_path_utf8"):
+            assert call in body, (
+                f"the synthetic-document section never names {call}. Both open calls "
+                "recognise the magic, and a document that names one of them describes "
+                "half the behaviour as if it were all of it."
+            )
+
     def test_the_header_and_the_document_point_at_each_other(self, abi):
         with open(HEADER) as f:
             header = f.read()
