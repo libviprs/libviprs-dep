@@ -117,7 +117,7 @@ void _GLOBAL__sub_I_fixture(void) __attribute__((constructor));
 void _GLOBAL__sub_I_fixture(void)
 {
 	/* volatile so the inert variant keeps the reference: written as a
-	plain `%d * (count)`, gcc folds the zero away and the inert object ends
+	plain multiply by the literal, gcc folds the zero away and the inert object ends
 	up with no undefined __start___modules at all, which quietly makes it a
 	fixture for a different bug than the one it names. */
 	volatile int modules = (int)(__stop___modules - __start___modules);

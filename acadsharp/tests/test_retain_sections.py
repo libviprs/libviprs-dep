@@ -637,3 +637,23 @@ class TestAllThreeEncapsulationSectionsAreRetained:
 
         assert '"$RETAINED" -lt 1' in stage
         assert '"$RETAINED" -ne 1' not in stage
+
+
+class TestTheFixtureSourcesStillFormat:
+    """`INIT_SOURCE` is a %-formatted template, and a comment broke it.
+
+    I wrote a comment containing a literal `%d` inside that template, so
+    `INIT_SOURCE % value` raised `TypeError: not enough arguments`. Every
+    test that builds a compiled fixture died, and none of them run on a
+    host without a C compiler, so my local run was green and CI was not.
+    """
+
+    def test_both_variants_render_with_no_specifier_left(self):
+        import test_verify_archive as fixtures
+
+        for value in (0, 1):
+            rendered = fixtures.INIT_SOURCE % value
+            assert "%" not in rendered, (
+                "a stray format specifier survives, so the next one takes an argument "
+                "that is not there"
+            )
