@@ -30,6 +30,7 @@ import pytest
 
 ACAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCRIPT_PATH = os.path.join(ACAD_DIR, "scripts", "verify_archive.sh")
+RETAIN_SECTIONS = os.path.join(ACAD_DIR, "scripts", "retain_sections.py")
 HEADER = os.path.join(ACAD_DIR, "include", "viprs_acadsharp.h")
 
 HOST_CPU = "arm64" if platform.machine() in ("arm64", "aarch64") else "x64"
@@ -99,22 +100,41 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False):
 # is only pulled once the bootstrapper is on the link line. An
 # initialiser that only touched symbols the entry points already drag in
 # would link under any ordering and the fixture would prove nothing.
+# The initialiser walks the module table the way the real bootstrapper
+# does, through the symbols a linker synthesises around a section whose
+# name is a C identifier. That reference is the whole of issue #67: it is
+# not a relocation against the section, so lld's default
+# `-z start-stop-gc` does not count it as a reason to keep `__modules`
+# alive, `--gc-sections` collects the section, and `__start___modules`
+# has nothing left to point at. GNU ld keeps it, which is why the recipe
+# passed on every arm64 job and failed on the one x64 job.
 INIT_SOURCE = """\
 extern int viprs_test_initialised;
 extern void viprs_test_register(void);
+extern const void *const __start___modules[];
+extern const void *const __stop___modules[];
 void _GLOBAL__sub_I_fixture(void) __attribute__((constructor));
 void _GLOBAL__sub_I_fixture(void)
 {
 	viprs_test_register();
-	viprs_test_initialised = %d;
+	viprs_test_initialised = %d * (int)(__stop___modules - __start___modules);
 }
 """
 
 # Nothing but the initialiser wants this, which is the point of it being
 # its own object in the main archive.
+#
+# It also carries the module table, in a section named exactly as ILC
+# names it, holding a pointer so the section cannot be empty, and with
+# nothing relocating against it. `used` stops the compiler discarding it
+# and says nothing to the linker, which is the shape that broke.
 REGISTER_SOURCE = """\
 void viprs_test_register(void);
 void viprs_test_register(void) { }
+
+static const int viprs_test_module_header = 1;
+__attribute__((used, section("__modules")))
+static const void *const viprs_test_modules[1] = { &viprs_test_module_header };
 """
 
 
@@ -197,6 +217,13 @@ def _build_linux_tree(
         f.write(REGISTER_SOURCE)
     register_obj = os.path.join(work, "register.o")
     subprocess.run(["cc", "-fPIC", "-c", register_src, "-o", register_obj], check=True)
+
+    # The one step stage.sh does to the object ILC produces. Without it
+    # this archive links under GNU ld and fails under lld, so taking this
+    # line out is the mutation that reproduces #67: the consumer link in
+    # test_build_link_consumer.py goes red on an x64 host and stays green
+    # on an arm64 one, which is exactly how the release behaved.
+    subprocess.run([sys.executable, RETAIN_SECTIONS, register_obj, "__modules"], check=True)
 
     subprocess.run(
         ["ar", "rcs", os.path.join(lib, ba.STATIC_LIBRARY_NAME), obj, register_obj], check=True
