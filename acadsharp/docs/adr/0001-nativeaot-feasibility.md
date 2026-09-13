@@ -74,8 +74,11 @@ and the AOT process still finishes inside it.
 
 Startup on its own, measured separately because the numbers above bury it: opening
 the library and calling the cheapest export takes 4.8 ms on arm64, averaged over 100
-runs, with a peak RSS of 6.1 MB. That is the whole runtime coming up. The JIT's
-`dotnet` host takes roughly ten times that before it runs a line of ACadSharp.
+runs, with a peak RSS of 6.1 MB. That is the whole runtime coming up. The nearest JIT
+comparison, running the generator with no arguments so it starts the host, loads the
+assembly and returns, averages 10.2 ms over 20 runs. So the AOT library is about
+twice as quick to be ready, not the order of magnitude the marketing suggests,
+because the reader work dwarfs both.
 
 ### The controls
 
@@ -369,11 +372,19 @@ root and 16 after, because rooting the assembly makes the trimmer analyse all of
 
 ## What this adds to CI
 
-The SDK image is 917 MB. The publish itself is 9 s on arm64 and 21 s on x64 under
-Rosetta, with ACadSharp already compiled; the restore plus the ACadSharp build adds
-roughly 40 s from cold, and the `clang` and `zlib1g-dev` install another 20 s on a
-base that lacks them. None of that lands on this repo's CI today, because of the C#
-coverage decision above.
+| | |
+| --- | --- |
+| SDK image | 974 MB |
+| NuGet packages the publish pulls | 133 MB per architecture (91 MB NativeAOT runtime pack, 42 MB ILCompiler) |
+| Restore, warm cache | 1 s |
+| Publish from a clean tree, native arm64 | 8 s |
+| Publish from a clean tree, x64 under Rosetta | 21 s |
+| Extra apt packages the SDK image lacks | `clang` and `zlib1g-dev`, which ILC needs to link |
+
+None of that lands on this repo's CI today, because of the C# coverage decision
+above. When the packaging issue brings it in, the number to watch is the 133 MB of
+packages rather than the image, because that is the part a cache actually has to
+carry per architecture.
 
 ## Decision
 
