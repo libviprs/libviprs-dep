@@ -35,6 +35,8 @@ sys.path.insert(0, SCRIPTS)
 import retain_sections  # noqa: E402
 
 SHF_GNU_RETAIN = 0x200000
+EI_OSABI = 7
+ELFOSABI_GNU = 3
 SHF_ALLOC = 0x2
 SHF_WRITE = 0x1
 
@@ -42,7 +44,7 @@ EHDR_SIZE = 64
 SHDR_SIZE = 64
 
 
-def make_object(names, flags=None, *, elf_class=2, endianness=1):
+def make_object(names, flags=None, *, elf_class=2, endianness=1, osabi=0):
     """A minimal ELF64 with one section header per name, plus the string table.
 
     Section 0 is the null entry a real object always has, so the indices
@@ -66,17 +68,28 @@ def make_object(names, flags=None, *, elf_class=2, endianness=1):
     header[4] = elf_class
     header[5] = endianness
     header[6] = 1  # EV_CURRENT
+    header[EI_OSABI] = osabi
     struct.pack_into("<HH", header, 16, 1, 62)  # ET_REL, EM_X86_64
     struct.pack_into("<Q", header, 0x28, shoff)
     struct.pack_into("<HHH", header, 0x3A, SHDR_SIZE, count, count - 1)
 
     sections = bytearray()
     sections += bytes(SHDR_SIZE)  # SHN_UNDEF
-    for name in names:
+    # sh_offset, sh_size and sh_addralign are filled in with plausible
+    # values rather than left zero. A section header of zeros makes the
+    # "nothing else changed" test hollow: the setter can clobber any of
+    # those fields and the bytes it destroyed were already zero, so the
+    # comparison passes. Measured on the real ILC object, `__modules` has
+    # sh_offset 8503624, sh_size 8 and sh_addralign 8.
+    for index, name in enumerate(names, start=1):
         entry = bytearray(SHDR_SIZE)
         struct.pack_into("<I", entry, 0, offsets[name])
         struct.pack_into("<I", entry, 4, 1)  # SHT_PROGBITS
         struct.pack_into("<Q", entry, 8, flags.get(name, SHF_ALLOC | SHF_WRITE))
+        struct.pack_into("<Q", entry, 16, 0x1000 * index)  # sh_addr
+        struct.pack_into("<Q", entry, 24, 0x2000 * index)  # sh_offset
+        struct.pack_into("<Q", entry, 32, 8 * index)  # sh_size
+        struct.pack_into("<Q", entry, 48, 8)  # sh_addralign
         sections += entry
 
     strtab = bytearray(SHDR_SIZE)
@@ -112,6 +125,13 @@ def write_object(tmp_path, names, flags=None, **kwargs):
 
 class TestSettingTheFlag:
     def test_the_retain_bit_goes_on_and_nothing_else_changes(self, tmp_path):
+        """Two bytes move, and no others.
+
+        Counting the differing bytes is what makes this a real check
+        rather than a restatement: a setter that also clobbered
+        sh_addralign, or wrote the whole header back in a different
+        layout, passes a flags-only comparison and fails this.
+        """
         path = write_object(tmp_path, ["__managedcode", "__modules", ".text"])
         before = open(path, "rb").read()
 
@@ -119,10 +139,36 @@ class TestSettingTheFlag:
 
         after = open(path, "rb").read()
         assert len(after) == len(before)
+
+        differing = [i for i, (a, b) in enumerate(zip(before, after)) if a != b]
+        assert len(differing) == 2, f"expected two changed bytes, got {len(differing)}"
+        # One is EI_OSABI, without which binutils reads the flag as an
+        # unnamed OS-specific bit. The other is the third byte of the
+        # little-endian sh_flags, where 0x200000 lives.
+        assert differing[0] == EI_OSABI
+        assert after[EI_OSABI] == ELFOSABI_GNU
+        assert (before[differing[1]] ^ after[differing[1]]) == 0x20
+
         assert flags_of(after, "__modules") == flags_of(before, "__modules") | SHF_GNU_RETAIN
         # The measured value on a real ILC object, kept as a number so a
         # change of meaning shows up as a changed expectation.
         assert flags_of(after, "__modules") == 0x200003
+
+    def test_a_section_whose_name_merely_contains_the_wanted_one_is_left_alone(self, tmp_path):
+        """The real object carries `.rela__modules` beside `__modules`.
+
+        Without a decoy, a setter that matched by prefix or by substring
+        passes every test here, and it would retain sections nobody asked
+        for. Both mutations are caught by this one.
+        """
+        path = write_object(tmp_path, ["__modules", ".rela__modules", "__modules_extra"])
+
+        retain_sections.retain(path, ["__modules"])
+
+        after = open(path, "rb").read()
+        assert flags_of(after, "__modules") & SHF_GNU_RETAIN
+        assert not flags_of(after, ".rela__modules") & SHF_GNU_RETAIN
+        assert not flags_of(after, "__modules_extra") & SHF_GNU_RETAIN
 
     def test_the_sections_not_named_are_left_alone(self, tmp_path):
         path = write_object(tmp_path, ["__managedcode", "__modules", "__unbox"])
@@ -287,18 +333,44 @@ class TestTheBuildActuallyRunsIt:
     def test_a_failure_to_retain_stops_the_static_archive_shipping(self):
         """Shared-only is a documented outcome; an unlinkable archive is not.
 
-        Every other step in the static branch degrades to shipping no
-        static library rather than shipping a broken one, and this one
-        has to behave the same way, because the alternative is what #67
-        was: an archive that passes its own smoke and fails in every
-        consumer that uses lld.
+        This asserts the branch rather than the substring. The first
+        version looked for `MERGE_OK=0` within 400 characters and could
+        not tell "sets a variable that stops the ship" from "sets a
+        variable nothing reads": appending `|| true` to the retain call
+        re-ships the exact #67 archive and kept it green.
         """
         import build_acadsharp as ba
 
         stage = ba.stage_script("linux")
-        after = stage[stage.index("retain_sections.py") :]
+        at = stage.index("retain_sections.py")
+        call = stage[at : stage.index("fact retained_module_sections", at)]
 
-        assert "MERGE_OK=0" in after[:400]
+        assert "|| true" not in call, "a swallowed failure leaves the archive unretained"
+        assert "else" in call and "MERGE_OK=0" in call, (
+            "the failure arm has to set MERGE_OK=0, not just run and be ignored"
+        )
+        # And something downstream has to still read it, or the assignment
+        # above is a write to a dead variable.
+        assert 'if [ "$MERGE_OK" != "1" ]' in stage[at:], (
+            "MERGE_OK is set and never consumed after this point"
+        )
+
+    def test_the_loop_actually_visits_the_merged_objects(self):
+        """Pointing the loop at an empty directory kept every test green.
+
+        `RETAINED` would be 0, the archives would be dropped, and the cell
+        would publish shared-only, which is the failure this whole change
+        exists to stop.
+        """
+        import build_acadsharp as ba
+
+        stage = ba.stage_script("linux")
+        at = stage.index("RETAINED=0")
+        loop = stage[at : stage.index("fact retained_module_sections", at)]
+
+        assert '"$MERGE_DIR"/*.o' in loop, (
+            "the loop has to read the extracted members, which is where the objects are"
+        )
 
 
 def make_archive(members):
@@ -320,7 +392,9 @@ class TestReadingAnArchive:
     """
 
     def test_it_finds_the_member_carrying_the_section(self, tmp_path):
-        good = make_object(["__modules"], {"__modules": SHF_ALLOC | SHF_GNU_RETAIN})
+        good = make_object(
+            ["__modules"], {"__modules": SHF_ALLOC | SHF_GNU_RETAIN}, osabi=ELFOSABI_GNU
+        )
         path = tmp_path / "lib.a"
         path.write_bytes(make_archive([("other.o", make_object([".text"])), ("mod.o", good)]))
 
@@ -351,7 +425,12 @@ class TestReadingAnArchive:
                 [
                     ("/", b"\x00" * 64),
                     ("junk.o", b"nothing like an ELF file at all, but long enough" * 4),
-                    ("mod.o", make_object(["__modules"], {"__modules": SHF_GNU_RETAIN})),
+                    (
+                        "mod.o",
+                        make_object(
+                            ["__modules"], {"__modules": SHF_GNU_RETAIN}, osabi=ELFOSABI_GNU
+                        ),
+                    ),
                 ]
             )
         )
@@ -385,7 +464,16 @@ class TestCheckOnTheCommandLine:
     def test_a_retained_section_exits_zero(self, tmp_path):
         path = tmp_path / "lib.a"
         path.write_bytes(
-            make_archive([("mod.o", make_object(["__modules"], {"__modules": SHF_GNU_RETAIN}))])
+            make_archive(
+                [
+                    (
+                        "mod.o",
+                        make_object(
+                            ["__modules"], {"__modules": SHF_GNU_RETAIN}, osabi=ELFOSABI_GNU
+                        ),
+                    )
+                ]
+            )
         )
 
         result = self._run(str(path), "__modules")
@@ -455,3 +543,97 @@ class TestAStaticTargetCannotShipSharedOnly:
             "linux-musl-arm64",
         )
         assert not any("osx" in rid for rid in ba.STATIC_TARGETS)
+
+
+class TestTheFlagNeedsTheOsAbiByteToo:
+    """Half the fix is invisible to binutils without it.
+
+    `SHF_GNU_RETAIN` sits in the OS-specific flag range, so binutils reads
+    it as "retain" only when the object declares a GNU OS ABI. On an
+    ELFOSABI_NONE object `readelf` prints `WAo`, an unnamed OS-specific
+    flag, rather than `WAR`. lld honours the bit either way, which is why
+    the lld-only measurement said the byte was unnecessary and the
+    binutils measurement said it was not. GAS stamps ELFOSABI_GNU
+    whenever it assembles a section with the `R` flag, so setting it is
+    what a compiler would have produced.
+    """
+
+    def test_setting_the_flag_also_sets_the_os_abi(self, tmp_path):
+        path = write_object(tmp_path, ["__modules"])
+        assert open(path, "rb").read()[EI_OSABI] == 0
+
+        retain_sections.retain(path, ["__modules"])
+
+        assert open(path, "rb").read()[EI_OSABI] == ELFOSABI_GNU
+
+    def test_an_object_with_the_flag_but_no_gnu_abi_is_not_retained(self, tmp_path):
+        """The state the first version of this fix shipped in."""
+        path = tmp_path / "lib.a"
+        path.write_bytes(
+            make_archive(
+                [("mod.o", make_object(["__modules"], {"__modules": SHF_GNU_RETAIN}, osabi=0))]
+            )
+        )
+
+        found = retain_sections.check(str(path), ["__modules"])
+
+        assert [entry[3] for entry in found] == [False]
+
+    def test_the_os_abi_is_not_touched_when_no_section_matched(self, tmp_path):
+        """A refusal must not leave the object half-changed."""
+        path = write_object(tmp_path, [".text"])
+        before = open(path, "rb").read()
+
+        with pytest.raises(ValueError):
+            retain_sections.retain(path, ["__modules"])
+
+        assert open(path, "rb").read() == before
+
+
+class TestAllThreeEncapsulationSectionsAreRetained:
+    """`__modules` is the one that dies; it is not the only one exposed.
+
+    The bootstrapper references six encapsulation symbols, around
+    `__modules`, `__managedcode` and `__unbox`. The other two survive only
+    because ILC emits each as one monolithic section, so any live symbol
+    keeps the whole thing: measured on the real object, 59471 relocations
+    reach `__managedcode` and 1259 reach `__unbox`, against zero for
+    `__modules`. That is a layout accident, not a guarantee, and retaining
+    all three costs nothing (identical binary size, byte-identical
+    `.init_array`).
+    """
+
+    def test_staging_names_all_three(self):
+        import build_acadsharp as ba
+
+        stage = ba.stage_script("linux")
+        at = stage.index("retain_sections.py")
+        call = stage[at : at + 200]
+
+        for section in ("__modules", "__managedcode", "__unbox"):
+            assert section in call, f"{section} is exposed the same way and is not retained"
+
+    def test_the_verifier_checks_all_three(self):
+        with open(os.path.join(SCRIPTS, "verify_archive.sh")) as f:
+            verifier = f.read()
+
+        at = verifier.index("--check")
+        call = verifier[at : at + 200]
+
+        for section in ("__modules", "__managedcode", "__unbox"):
+            assert section in call
+
+    def test_there_is_no_upper_bound_on_how_many_objects_carry_it(self):
+        """An exact count would redden a release for a working archive.
+
+        `__modules` is an encapsulation array and N contributors is its
+        designed shape, so the day ILC splits its output or a second
+        NativeAOT library joins the merge, an `-ne 1` check fails on an
+        archive that links perfectly.
+        """
+        import build_acadsharp as ba
+
+        stage = ba.stage_script("linux")
+
+        assert '"$RETAINED" -lt 1' in stage
+        assert '"$RETAINED" -ne 1' not in stage

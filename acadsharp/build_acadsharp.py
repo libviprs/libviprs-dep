@@ -1272,6 +1272,17 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
             # why the C smoke below passes, why every arm64 job passed,
             # and why this only ever showed up on linux/x64 (#67).
             #
+            # Three sections, not one. The bootstrapper references six
+            # encapsulation symbols, around __modules, __managedcode and
+            # __unbox. Only __modules dies today, because ILC emits each
+            # of the other two as one monolithic section and any live
+            # symbol in it keeps the whole thing: measured, 59471
+            # relocations reach __managedcode and 1259 reach __unbox
+            # against zero for __modules. That is an accident of how ILC
+            # lays out sections, not a guarantee, so all three get the
+            # flag. It is free: retaining all three produces a binary of
+            # identical size with a byte-identical .init_array.
+            #
             # Setting SHF_GNU_RETAIN on the section makes the archive
             # carry its own requirement. The alternative is asking every
             # consumer to pass -z nostart-stop-gc, and a consumer cannot:
@@ -1284,18 +1295,22 @@ if [ "${WANT_STATIC:-0}" = "1" ]; then
                 readelf -S -W "$OBJ" 2>/dev/null \
                     | sed -n 's/^ *\[ *[0-9]*\] *\([^ ]*\) .*/\1/p' \
                     | grep -qx __modules || continue
-                if python3 "$WORK/retain_sections.py" "$OBJ" __modules; then
+                if python3 "$WORK/retain_sections.py" "$OBJ" \
+                        __modules __managedcode __unbox; then
                     RETAINED=$((RETAINED + 1))
                 else
                     MERGE_OK=0
                 fi
             done
             fact retained_module_sections "$RETAINED"
-            # One object carries it, the one ILC produced. Zero means the
-            # runtime renamed the section and every consumer using lld
-            # would have found out instead of this build.
-            if [ "$RETAINED" -ne 1 ]; then
-                echo "expected one object carrying __modules, found $RETAINED"
+            # At least one object has to carry it. There is no upper
+            # bound on purpose: `__modules` is an encapsulation array and
+            # N contributors is its designed shape, so an exact count
+            # would redden a release for an archive that links perfectly
+            # the day ILC splits its output or a second NativeAOT library
+            # joins the merge.
+            if [ "$RETAINED" -lt 1 ]; then
+                echo "no object carries __modules, so the runtime renamed a section"
                 MERGE_OK=0
             fi
 

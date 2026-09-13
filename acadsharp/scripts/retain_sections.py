@@ -2,6 +2,7 @@
 """Mark sections in an ELF object as retained, so --gc-sections cannot drop them.
 
 Usage: retain_sections.py <object.o> <section> [<section> ...]
+       retain_sections.py --check <archive-or-object> <section> [<section> ...]
 
 NativeAOT puts its module headers in a section called `__modules` and the
 bootstrapper finds them through `__start___modules` and `__stop___modules`,
@@ -49,6 +50,16 @@ import sys
 
 SHF_GNU_RETAIN = 0x200000
 
+# `SHF_GNU_RETAIN` is in the OS-specific flag range, so binutils only reads
+# it as "retain" when the object says which OS ABI it belongs to. On an
+# ELFOSABI_NONE object readelf prints the section as `WAo`, some
+# OS-specific flag, rather than `WAR`. GAS stamps ELFOSABI_GNU into the
+# header whenever it assembles a section with the `R` flag, so setting it
+# here is what a compiler would have produced rather than a trick. lld
+# honours the flag either way, measured from lld 13 to 22.
+EI_OSABI = 7
+ELFOSABI_GNU = 3
+
 # Offsets into ELF64: e_shoff at 0x28, then e_shentsize / e_shnum /
 # e_shstrndx packed together at 0x3A. sh_flags is the second field of a
 # section header, 8 bytes in at offset 8.
@@ -91,6 +102,9 @@ def retain(path, wanted):
             continue
         struct.pack_into("<Q", data, at + SH_FLAGS_OFFSET, flags | SHF_GNU_RETAIN)
         changed[name] = (flags, flags | SHF_GNU_RETAIN)
+
+    if changed:
+        data[EI_OSABI] = ELFOSABI_GNU
 
     missing = [name for name in wanted if name not in changed]
     if missing:
@@ -142,6 +156,13 @@ def ar_members(data):
             at += 1
 
 
+def osabi_of(blob):
+    """The object's declared OS ABI, or None when it is not an ELF64 LE object."""
+    if len(blob) < 64 or blob[:4] != b"\x7fELF" or blob[4] != 2 or blob[5] != 1:
+        return None
+    return blob[EI_OSABI]
+
+
 def sections_of(blob, wanted):
     """{name: sh_flags} for the wanted sections of the ELF64 LE object in `blob`.
 
@@ -189,8 +210,13 @@ def check(path, wanted):
         sections = sections_of(blob, wanted)
         if not sections:
             continue
+        gnu_abi = osabi_of(blob) == ELFOSABI_GNU
         for section, flags in sorted(sections.items()):
-            found.append((name, section, flags, bool(flags & SHF_GNU_RETAIN)))
+            # Both halves, because either one alone leaves a linker that
+            # ignores the flag. lld needs only the flag; binutils reads it
+            # as retain only on a GNU-ABI object.
+            retained = bool(flags & SHF_GNU_RETAIN) and gnu_abi
+            found.append((name, section, flags, retained))
 
     if not found:
         raise ValueError(
@@ -201,15 +227,34 @@ def check(path, wanted):
     return found
 
 
+def _usage_line(which):
+    """The `which`-th line of the docstring's Usage block, counting from zero.
+
+    Indexing the docstring by absolute line number is how the --check
+    usage came out blank: line 3 is the empty line under the first Usage
+    line, so the program printed nothing and exited 2. Taking the block
+    that starts at `Usage:` and ends at the next blank line cannot drift
+    when a line is added above it.
+    """
+    lines = __doc__.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("Usage:"))
+    block = []
+    for line in lines[start:]:
+        if not line.strip():
+            break
+        block.append(line.replace("Usage:", "", 1).strip())
+    return f"Usage: {block[which]}"
+
+
 def main(argv):
     if len(argv) >= 2 and argv[1] == "--check":
         if len(argv) < 4:
-            print(__doc__.splitlines()[3].strip(), file=sys.stderr)
+            print(_usage_line(1), file=sys.stderr)
             return 2
         path, wanted = argv[2], argv[3:]
         try:
             found = check(path, wanted)
-        except (ValueError, OSError) as problem:
+        except (ValueError, OSError, struct.error) as problem:
             print(f"retain_sections.py: {problem}", file=sys.stderr)
             return 1
         bad = 0
@@ -228,16 +273,17 @@ def main(argv):
         return 0
 
     if len(argv) < 3:
-        print(__doc__.splitlines()[2], file=sys.stderr)
+        print(_usage_line(0), file=sys.stderr)
         return 2
     path, wanted = argv[1], argv[2:]
     try:
         changed = retain(path, wanted)
-    except (ValueError, OSError) as problem:
+    except (ValueError, OSError, struct.error) as problem:
         print(f"retain_sections.py: {problem}", file=sys.stderr)
         return 1
     for name, (before, after) in changed.items():
         print(f"{path}: {name} sh_flags {before:#x} -> {after:#x}")
+    print(f"{path}: EI_OSABI -> {ELFOSABI_GNU} (ELFOSABI_GNU), so binutils reads the flag")
     return 0
 
 

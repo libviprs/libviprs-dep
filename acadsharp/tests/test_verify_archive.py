@@ -116,8 +116,13 @@ extern const void *const __stop___modules[];
 void _GLOBAL__sub_I_fixture(void) __attribute__((constructor));
 void _GLOBAL__sub_I_fixture(void)
 {
+	/* volatile so the inert variant keeps the reference: written as a
+	plain `%d * (count)`, gcc folds the zero away and the inert object ends
+	up with no undefined __start___modules at all, which quietly makes it a
+	fixture for a different bug than the one it names. */
+	volatile int modules = (int)(__stop___modules - __start___modules);
 	viprs_test_register();
-	viprs_test_initialised = %d * (int)(__stop___modules - __start___modules);
+	viprs_test_initialised = %d * modules;
 }
 """
 
@@ -133,6 +138,9 @@ void viprs_test_register(void);
 void viprs_test_register(void) { }
 
 static const int viprs_test_module_header = 1;
+/* Length 1, and the initialiser above multiplies by it, so the marker
+ * value every static test asserts on depends on this array surviving.
+ * Add an element and those assertions move. */
 __attribute__((used, section("__modules")))
 static const void *const viprs_test_modules[1] = { &viprs_test_module_header };
 """

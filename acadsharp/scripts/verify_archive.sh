@@ -926,8 +926,9 @@ if [ -f "$STATIC_LIB" ]; then
     RETAIN_SECTIONS="$(dirname "$0")/retain_sections.py"
     if [ ! -f "$RETAIN_SECTIONS" ]; then
       fail "retain_sections.py is not beside this script, so __modules cannot be checked"
-    elif python3 "$RETAIN_SECTIONS" --check "$STATIC_LIB" __modules > "$WORK/retain.log" 2>&1; then
-      echo "  __modules is retained, so --gc-sections cannot collect it"
+    elif python3 "$RETAIN_SECTIONS" --check "$STATIC_LIB" \
+        __modules __managedcode __unbox > "$WORK/retain.log" 2>&1; then
+      echo "  the encapsulation sections are retained, so --gc-sections cannot collect them"
     else
       fail "$STATIC_NAME would fail to link under any linker that defaults to
     -z start-stop-gc, which is every rustc on x86_64-unknown-linux-gnu:

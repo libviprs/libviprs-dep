@@ -279,6 +279,17 @@ fixed. Take a newer one. If you cannot, `-Wl,-z,nostart-stop-gc` on your own
 final binary is the workaround, and it has to go on the binary rather than on
 any crate between you and this library.
 
+**Which linkers this covers.** `SHF_GNU_RETAIN` lives in the OS-specific flag
+range, so binutils reads it as "retain" only when the object declares a GNU OS
+ABI; the producer sets `EI_OSABI` to `ELFOSABI_GNU` alongside the flag, which is
+what the GNU assembler does for any section it assembles with `R`. lld honours
+the flag either way, measured from lld 13 through lld 22. Binutils older than
+2.36 predate the flag and ignore it silently, with no warning, and they also
+predate `-z start-stop-gc`, so nothing breaks there. mold keeps the section
+regardless. The exception is **gold**, which never implemented the flag: if you
+link with `-fuse-ld=gold` nothing here protects you, and that is untested rather
+than known-broken. gold is gone from binutils 2.44 and later.
+
 ### Do not express any of this as a link argument
 
 `cargo:rustc-link-arg` does **not** propagate from a dependency's build script
