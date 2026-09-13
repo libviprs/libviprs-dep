@@ -137,6 +137,10 @@ CONSUMERS = (C_RUNNER, RUST_RUNNER)
 # because a guard nobody can run is a guard nobody has watched fail.
 LIBC_CONTROL = "acadsharp/tests/conformance/expect_libc.sh"
 
+# Shared with release-zstd.yml and release.yml, so the tag-moving logic
+# has exactly one implementation to keep right across the three.
+LATEST_SCRIPT = "tools/publish_latest_tag.sh"
+
 # The conformance runners' own fallback, which is an image name that exists
 # on one developer's machine and no registry serves.
 LOCAL_ONLY_IMAGE = "viprs-rust:arm64"
@@ -1884,3 +1888,75 @@ class TestTheTagPointsAtTheCommitThatBuiltIt:
 
         assert "--target" in step, "the tag would default to the repository's default branch"
         assert "GITHUB_SHA" in step, "it has to be the commit this run built, not a branch name"
+
+
+class TestTheLatestTagFollowsEveryFullyPublishedRelease:
+    """A floating pointer for edge consumers, distinct from the pinned tag.
+
+    `acadsharp-<version>` never moves once published, which is the whole
+    point of a version. Something that always resolves to the newest
+    build needs a tag of its own, and it needs to move only when every
+    target published, because a "latest" that can point at a partial
+    release is worse than none: a consumer tracking edge would silently
+    start missing whichever target happened to fail.
+
+    The moving itself is `tools/publish_latest_tag.sh`, shared with
+    release-zstd.yml and release.yml, so this job's own body is thin: it
+    only has to prove it calls the script with the right arguments and
+    gates on the right condition. The script carries its own tests.
+    """
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        assert "publish-latest" in self.wf["jobs"], (
+            "release-acadsharp.yml has no publish-latest job"
+        )
+        self.job = self.wf["jobs"]["publish-latest"]
+
+    def test_it_waits_on_both_build_matrices_and_the_notes(self):
+        needs = self.job["needs"]
+        for name in ("build-linux", "build-mac", "release-notes"):
+            assert name in needs, f"publish-latest must wait on {name}"
+
+    def test_it_only_moves_the_tag_when_every_target_published(self):
+        cond = self.job.get("if", "")
+        assert "needs.build-linux.result" in cond and "'success'" in cond, (
+            "publish-latest has no if: gating on build-linux succeeding, so a "
+            "partial release could still become latest"
+        )
+        assert "needs.build-mac.result" in cond, (
+            "publish-latest has no if: gating on build-mac succeeding"
+        )
+
+    def test_it_calls_the_shared_script_with_this_dependencys_name_and_glob(self):
+        run = run_text(self.job)
+        assert LATEST_SCRIPT in run, (
+            f"publish-latest does not call {LATEST_SCRIPT}, so this dependency's "
+            "latest-moving logic is a second copy rather than the shared one"
+        )
+        assert f"{LATEST_SCRIPT} acadsharp " in run, (
+            "the script needs the dependency name as its first argument, to know "
+            "which tag to move and what to name the archives it looks for"
+        )
+        assert "acadsharp-*.tgz" in run, (
+            "the script needs this dependency's own asset glob, not a hardcoded one"
+        )
+
+    def test_it_passes_the_tag_resolve_version_computed(self):
+        step = step_named(self.job, "acadsharp-latest")
+        assert step.get("env", {}).get("TAG") == "${{ needs.resolve-version.outputs.tag }}", (
+            "the step must pass the tag resolve-version resolved, not a literal or a "
+            "second reading of acadsharp/VERSION"
+        )
+
+    def test_it_has_contents_write(self):
+        assert self.job.get("permissions", {}).get("contents") == "write", (
+            "publish-latest calls `gh release`, so it needs permissions.contents: write"
+        )
+
+    def test_it_checks_out_the_repo_so_the_script_is_on_disk(self):
+        uses = [step.get("uses", "") for step in self.job.get("steps", [])]
+        assert any("actions/checkout" in u for u in uses), (
+            "publish-latest never checks out the repo, so tools/publish_latest_tag.sh "
+            "is not there to run"
+        )

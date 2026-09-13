@@ -305,3 +305,56 @@ class TestUploadsGoToTheResolvedTag:
                 f"{name} uploads, so it must wait for create-release — parallel "
                 "`gh release create` calls race"
             )
+
+
+LATEST_SCRIPT = "tools/publish_latest_tag.sh"
+
+
+def _step_named(job, name_substr):
+    i = step_index(job, name_substr)
+    assert i >= 0, f"no step whose name contains {name_substr!r}"
+    return job["steps"][i]
+
+
+class TestTheLatestTagFollowsEveryFullyPublishedRelease:
+    """A floating pointer for edge consumers, distinct from the pinned tag.
+
+    Same job as release-acadsharp.yml's ``publish-latest``, calling the
+    same shared script with zstd's own dependency name and asset glob.
+    ``tools/tests/test_publish_latest_tag.py`` covers the script itself;
+    this only has to prove zstd's copy of the job calls it right.
+    """
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        assert "publish-latest" in self.wf["jobs"], "release-zstd.yml has no publish-latest job"
+        self.job = self.wf["jobs"]["publish-latest"]
+
+    def test_it_waits_on_both_build_matrices_and_the_summary(self):
+        needs = self.job["needs"]
+        for name in ("build-linux", "build-mac", "summary"):
+            assert name in needs, f"publish-latest must wait on {name}"
+
+    def test_it_only_moves_the_tag_when_every_target_published(self):
+        cond = self.job.get("if", "")
+        assert "needs.build-linux.result" in cond and "'success'" in cond, (
+            "publish-latest has no if: gating on build-linux succeeding, so a "
+            "partial release could still become latest"
+        )
+        assert "needs.build-mac.result" in cond
+
+    def test_it_calls_the_shared_script_with_this_dependencys_name_and_glob(self):
+        run = run_text(self.job)
+        assert LATEST_SCRIPT in run, (
+            f"publish-latest does not call {LATEST_SCRIPT}, so zstd has its own "
+            "copy of the latest-moving logic rather than the shared one"
+        )
+        assert f"{LATEST_SCRIPT} zstd " in run
+        assert "zstd-*.tgz" in run
+
+    def test_it_passes_the_tag_resolve_version_computed(self):
+        step = _step_named(self.job, "zstd-latest")
+        assert step.get("env", {}).get("TAG") == "${{ needs.resolve-version.outputs.tag }}"
+
+    def test_it_has_contents_write(self):
+        assert self.job.get("permissions", {}).get("contents") == "write"
