@@ -1163,6 +1163,19 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// LEADER. Its vertices are already world coordinates and its
+				// arrowhead is not in the drawing at all, so the body and the
+				// two sentences that say why are in Flatten.Leaders.cs.
+				case Leader leader:
+				{
+					foreach (Primitive p in LeaderPolyline(leader, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// DIMENSION and HATCH are not here. They are composites: they
 				// expand into other entities, and expanding them from inside
 				// Map is what put a file-controlled recursion on the CLR
