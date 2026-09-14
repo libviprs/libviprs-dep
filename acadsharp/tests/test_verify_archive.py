@@ -476,16 +476,47 @@ CPU_TYPE_ARM64 = 0x0100000C
 CPU_TYPE_X86_64 = 0x01000007
 MH_DYLIB = 0x6
 LC_SYMTAB = 0x2
+LC_ID_DYLIB = 0xD
 N_EXT = 0x01
 N_SECT = 0x0E
 
+# What a mac archive has to record. The dylib ships as
+# libacadsharp_native.dylib and NativeAOT names it after the assembly, so
+# the two disagreed for a whole release (#95).
+GOOD_INSTALL_NAME = f"@rpath/{ba.shared_library_name('mac')}"
+# The name 3.7.1-viprs.1 actually shipped.
+SHIPPED_INSTALL_NAME = "@rpath/viprs_acadsharp.dylib"
 
-def synth_macho_dylib(path, symbols, cputype=CPU_TYPE_ARM64, pad=PAD_BYTES):
+
+def _id_dylib_command(name):
+    """One LC_ID_DYLIB carrying `name`.
+
+    `struct dylib_command` is cmd, cmdsize, then a `struct dylib` of name
+    offset, timestamp, current version and compatibility version: 24
+    bytes, with the string living inside the command from its name offset
+    to its end and the whole thing padded to the 8-byte alignment a
+    64-bit Mach-O uses. That padding is what makes the rename expensive
+    after the fact: 28 characters of `@rpath/viprs_acadsharp.dylib` fit a
+    cmdsize of 56 and 32 characters of `@rpath/libacadsharp_native.dylib`
+    need 64, so `install_name_tool` has to grow the load commands.
+    """
+    raw = name.encode() + b"\x00"
+    cmdsize = (24 + len(raw) + 7) // 8 * 8
+    blob = struct.pack("<IIIIII", LC_ID_DYLIB, cmdsize, 24, 0, 0x10000, 0x10000)
+    return blob + raw + b"\x00" * (cmdsize - 24 - len(raw))
+
+
+def synth_macho_dylib(
+    path, symbols, cputype=CPU_TYPE_ARM64, pad=PAD_BYTES, install_name=GOOD_INSTALL_NAME
+):
     """Write a 64-bit Mach-O dylib carrying `symbols` as defined externals.
 
-    Only the pieces the verifier reads: the header, one LC_SYMTAB, an
-    nlist_64 table and a string table. It is not loadable and is not meant
-    to be; it is a fixture for the reader.
+    Only the pieces the verifier reads: the header, one LC_ID_DYLIB, one
+    LC_SYMTAB, an nlist_64 table and a string table. It is not loadable
+    and is not meant to be; it is a fixture for the reader.
+
+    `install_name=None` writes a dylib with no LC_ID_DYLIB at all, which
+    is the shape a Mach-O reader has to refuse rather than pass over.
     """
     names = ["_" + s for s in symbols]
     strtab = b"\x00"
@@ -495,13 +526,24 @@ def synth_macho_dylib(path, symbols, cputype=CPU_TYPE_ARM64, pad=PAD_BYTES):
         strtab += name.encode() + b"\x00"
 
     header_size = 32
-    cmd_size = 24
-    symoff = header_size + cmd_size + pad
+    symtab_cmd_size = 24
+    # LC_ID_DYLIB goes first, the way a real dylib lays it out, so the
+    # symbol reader below has to walk past a command to find its own
+    # rather than finding it at offset 32 every time.
+    commands = b""
+    ncmds = 1
+    if install_name is not None:
+        commands += _id_dylib_command(install_name)
+        ncmds += 1
+    sizeofcmds = len(commands) + symtab_cmd_size
+
+    symoff = header_size + sizeofcmds + pad
     nsyms = len(names)
     stroff = symoff + nsyms * 16
 
-    blob = struct.pack("<IIIIIIII", MH_MAGIC_64, cputype, 0, MH_DYLIB, 1, cmd_size, 0, 0)
-    blob += struct.pack("<IIIIII", LC_SYMTAB, cmd_size, symoff, nsyms, stroff, len(strtab))
+    blob = struct.pack("<IIIIIIII", MH_MAGIC_64, cputype, 0, MH_DYLIB, ncmds, sizeofcmds, 0, 0)
+    blob += commands
+    blob += struct.pack("<IIIIII", LC_SYMTAB, symtab_cmd_size, symoff, nsyms, stroff, len(strtab))
     blob += b"\x00" * pad
     for off in offsets:
         blob += struct.pack("<IBBHQ", off, N_SECT | N_EXT, 1, 0, 0x1000)
@@ -512,11 +554,18 @@ def synth_macho_dylib(path, symbols, cputype=CPU_TYPE_ARM64, pad=PAD_BYTES):
     return path
 
 
-def _build_mac_tree(work, symbols=ENTRY_POINTS, cputype=CPU_TYPE_ARM64):
+def _build_mac_tree(
+    work, symbols=ENTRY_POINTS, cputype=CPU_TYPE_ARM64, install_name=GOOD_INSTALL_NAME
+):
     root = os.path.join(work, "acadsharp-mac-arm64")
     lib = os.path.join(root, "lib")
     os.makedirs(lib)
-    synth_macho_dylib(os.path.join(lib, ba.shared_library_name("mac")), symbols, cputype=cputype)
+    synth_macho_dylib(
+        os.path.join(lib, ba.shared_library_name("mac")),
+        symbols,
+        cputype=cputype,
+        install_name=install_name,
+    )
     return _finish(root, "mac", "arm64", static_certified=False)
 
 
@@ -1033,6 +1082,60 @@ class TestMachOBytes:
         result = _verify(_repack(root))
         assert result.returncode == 1
         assert "truncat" in _output(result)
+
+
+class TestTheMachOInstallName:
+    """The name the dylib records for itself, which is #95.
+
+    `acadsharp-3.7.1-viprs.1` shipped `lib/libacadsharp_native.dylib`
+    recording `@rpath/viprs_acadsharp.dylib`, and no file of that name is
+    anywhere in the archive, so anything linking it records a name the
+    loader cannot resolve and dies before `main`.
+
+    Nothing saw it because nothing looked. The shared smoke in stage.sh is
+    `dlopen` on an absolute path, and `dlopen` by absolute path never
+    consults `LC_ID_DYLIB`, so it loads a library whose recorded name is
+    nonsense and reports success. The link-and-run probe in this script is
+    gated on `static_certified`, which is false on mac. On the one target
+    where shared is the only link mode there was no link-and-run check at
+    all.
+
+    Read out of the bytes rather than with `otool -D`, for the same reason
+    the symbol tables are: otool is mac-only, so on every Linux runner an
+    otool check would skip itself, and a skipped check is the same colour
+    as a passing one. These four run on ubuntu-latest, on every push.
+    """
+
+    def test_the_name_3_7_1_actually_shipped_is_refused(self, tmp_path):
+        root = _build_mac_tree(str(tmp_path), install_name=SHIPPED_INSTALL_NAME)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "install name" in out
+        assert SHIPPED_INSTALL_NAME in out
+
+    def test_the_matching_name_is_accepted_and_reported(self, tmp_path, mac_tree):
+        result = _verify(_pack(_clone(mac_tree, tmp_path)))
+        assert result.returncode == 0, _output(result)
+        assert GOOD_INSTALL_NAME in result.stdout
+
+    def test_an_install_name_that_is_not_under_rpath_is_refused(self, tmp_path):
+        # The basename is the shipped file's, so the comparison #95 asks
+        # for passes. The recorded directory is the build machine's, which
+        # no consumer has, so the loader still cannot find it. That is the
+        # defect `CMAKE_INSTALL_NAME_DIR=@rpath` keeps out of the zstd
+        # dylibs, and nothing kept it out of this one.
+        name = f"/Users/runner/work/libviprs-dep/bin/{ba.shared_library_name('mac')}"
+        root = _build_mac_tree(str(tmp_path), install_name=name)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "@rpath" in _output(result)
+
+    def test_a_dylib_that_records_no_name_at_all_is_refused(self, tmp_path):
+        root = _build_mac_tree(str(tmp_path), install_name=None)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "LC_ID_DYLIB" in _output(result)
 
 
 class TestStaticArchive:
