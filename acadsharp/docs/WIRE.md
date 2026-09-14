@@ -206,6 +206,21 @@ Endpoints are never recomputed, so the pieces meet exactly at every depth.
 Thirty-two levels is a sensible cap. None of this paragraph is contractual;
 the record is.
 
+An `MLINE` lands here as one open or closed polyline per element of its style,
+in the style's element order and all under the entity's handle. Each element is
+the path offset by `(offset − reference) × scale` along each vertex's miter,
+where the reference is 0, the largest offset or the smallest offset for the
+Zero, Top and Bottom justifications, and positive offsets lie to the left of
+the path about the entity's normal. The division by the miter is what makes a
+bend meet itself: at a joint the miter runs along the turn's bisector and the
+distance to the element's line is the offset divided by `dot(miter, side)`,
+which is longer than the offset by the secant of half the turn. Fill, joint
+lines and caps are not drawn, and warning 115 says so when the style asks for
+them. An MLINE the style cannot place, because the style holds no elements or
+the path holds fewer than two vertices, emits warning 100 and no record at
+all: the centre path alone is the part that needed no lookup, and the section
+on that below is why it never crosses.
+
 **5 `Arc`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
 counter-clockwise, measured in the plane the normal defines. 96 bytes.
@@ -397,6 +412,7 @@ and 105 with these meanings, whatever it is built on.
 | 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
 | 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
 | 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
+| 115 | `MLINE_STYLE_FEATURES_IGNORED` | An `MLINE` whose style asks for something this build does not draw: a filled area between its outermost elements, the joint lines a style can display at each inner vertex, or a cap closing either end. The `Polyline` records beside it, same `item_handle`, are the element lines, which is the whole of what the entity draws here. Like 110 this sits beside real geometry and says what is missing from it rather than refusing anything. `item_handle` is the MLINE's. |
 
 ### Reserved ranges
 
@@ -517,12 +533,15 @@ different reasons:
 | --- | --- | --- |
 | a block this decoder could have resolved and could not: an insertion, an external reference | 105 `UNRESOLVED_BLOCK` | the drawing is incomplete or points outside itself, so find the missing piece and decode again |
 | one this producer will never make, or a result it will never evaluate: an external SHX glyph, an external raster, an external PDF, an embedded ACIS stream | 109 `ENTITY_REFUSED_BY_DESIGN` | waiting will not change the answer, so show whatever it shows for a thing that is not coming |
-| one nobody has implemented yet: a polyface mesh's face list, an MLINE's style offsets | 100 `UNSUPPORTED_ENTITY` | a later build may well emit it, so "not supported yet" is the honest label |
+| one nobody has implemented yet: a polyface mesh's face list, or one the drawing does not hold at all, such as an MLINE whose style carries no elements | 100 `UNSUPPORTED_ENTITY` | a later build may well emit it, so "not supported yet" is the honest label |
 
 So the four kinds a reader reaches for first do not share a code, and that is
 the point of having three. `SHAPE`, `IMAGE` and `PDFUNDERLAY` are 109. An
 insertion whose block is missing, and the external reference that is the same
-thing seen from inside, are 105. A polyface mesh and an MLINE are 100.
+thing seen from inside, are 105. A polyface mesh is 100, and so is
+an MLINE whose style carries no elements: the MLINEs whose styles do carry them
+lower to record 4, one polyline per element, which is what resolving the lookup
+looks like.
 
 109 also covers refusals that involve no lookup at all, where the shape is
 entirely in the drawing and no record this wire version defines can hold it: an

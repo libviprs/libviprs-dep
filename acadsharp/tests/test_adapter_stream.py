@@ -119,6 +119,7 @@ ONCE_RECORDED = (
     "g13_mesh.dwg",
     "g13_mesh_bad_faces.dwg",
     "g13_mirrored_bulge.dwg",
+    "g13_mline.dwg",
     "g13_nan_bulge.dwg",
     "g13_nonuniform.dwg",
     "g13_ocs_mirror.dwg",

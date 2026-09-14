@@ -35,6 +35,7 @@ CODE_FIXTURES = {
     "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
     "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
     "MESH_FACE_UNREADABLE": "g13_mesh_bad_faces.dwg",
+    "MLINE_STYLE_FEATURES_IGNORED": "g13_mline.dwg",
 }
 
 # A code the corpus cannot produce, and the C# constant that has to still be

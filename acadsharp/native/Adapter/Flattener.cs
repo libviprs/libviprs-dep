@@ -1163,6 +1163,16 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				case MLine mline:
+				{
+					foreach (Primitive p in MLinePolylines(mline, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// DIMENSION and HATCH are not here. They are composites: they
 				// expand into other entities, and expanding them from inside
 				// Map is what put a file-controlled recursion on the CLR

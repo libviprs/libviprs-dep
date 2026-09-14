@@ -39,9 +39,17 @@ The wire carries only `handle` and `flags` from the common entity fields, and th
 flattener reads `Thickness` nowhere, so there is no field in any record for those to be
 wrong in. Setting them would grow the corpus and assert nothing.
 
-Six refused kinds are absent here and stay on the real drawing, because ACadSharp's
+Five refused kinds are absent here and stay on the real drawing, because ACadSharp's
 `DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
-MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
+MULTILEADER, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
+
+MLINE was on that list and should not have been. `DwgObjectWriter.Entities.cs` dispatches
+`case MLine mLine: this.writeMLine(mLine);` and `writeMLine` writes the scale, the
+justification, the base point, the normal, the open/closed flag, every vertex with its
+direction and miter, one segment per style element per vertex, and a hard pointer to the
+style. So the kind is forgeable, `g13_mline.dwg` below is the fixture, and until it landed
+the only evidence about MLINE anywhere in this corpus was three entities on the two real
+drawings that all use the same two symmetric Standard offsets.
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
