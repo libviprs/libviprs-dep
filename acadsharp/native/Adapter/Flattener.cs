@@ -1016,21 +1016,24 @@ namespace Viprs.Cad
 				// refusing is what turns silent wrong geometry into something
 				// a consumer is told about.
 				//
-				// The message is the DXF subclass marker rather than
-				// ObjectName. All four kinds under Polyline<T> are the entity
-				// POLYLINE in DXF and are told apart by the subclass alone, so
-				// ObjectName would refuse POLYFACE_MESH by saying POLYLINE and
-				// a census of what this build refuses would gain a row that
-				// names neither kind.
+				// The subclass marker is what tells the two apart, because all
+				// four kinds under Polyline<T> are the entity POLYLINE in DXF
+				// and ObjectName says so for every one of them: refusing on
+				// ObjectName would say POLYLINE and a census of what this build
+				// refuses would gain a row naming neither kind.
+				//
+				// What goes in the message is the kind, not the marker.
+				// MarkerKind is the whole of that translation and the comment
+				// on it is the argument.
 				case PolyfaceMesh mesh:
 				{
-					yield return Refused(h, flags, mesh.SubclassMarker);
+					yield return Refused(h, flags, MarkerKind(mesh.SubclassMarker));
 					yield break;
 				}
 
 				case PolygonMesh grid:
 				{
-					yield return Refused(h, flags, grid.SubclassMarker);
+					yield return Refused(h, flags, MarkerKind(grid.SubclassMarker));
 					yield break;
 				}
 
@@ -1181,17 +1184,7 @@ namespace Viprs.Cad
 				// and carries what would reopen each row.
 				default:
 				{
-					uint code;
-					string reason;
-					if (!RefusedKinds.TryGet(e.ObjectName, out code, out reason))
-					{
-						code = WarningCodes.UnsupportedEntity;
-						reason = e.ObjectName + " is not a primitive this version flattens";
-					}
-
-					Primitive w = Primitive.Warning(code, h, reason);
-					w.Flags = flags;
-					yield return w;
+					yield return Refused(h, flags, e.ObjectName);
 					yield break;
 				}
 			}
@@ -1302,20 +1295,61 @@ namespace Viprs.Cad
 		// An entity kind this version does not flatten, named by whatever the
 		// caller has that identifies it in the source format.
 		//
-		// The switch's default arm still says the same sentence inline, and it
-		// should fold onto this the next time anything touches that arm. One
-		// sentence in two places is how the two drift, and a consumer that
-		// grepped its logs for the wording would then be reading half of what
-		// this build refuses.
+		// One refusal path, and it asks RefusedKinds first.
+		//
+		// The sentence below used to be written out in three places: here, in
+		// the switch's default arm, which also carried its own copy of the
+		// table lookup, and as a variant inside RefusedKinds' WIPEOUT row.
+		// That row keeps its variant, because it is a different sentence
+		// saying a different thing. The other two are now one.
+		//
+		// The lookup is the half that mattered. This method hardcoded code 100,
+		// so an arm refusing a kind on its own, which is what the two mesh arms
+		// above do, took 100 whatever the table said: a later decision to put a
+		// mesh on 109 would have landed in RefusedKinds, been read by the
+		// default arm no mesh reaches, and been ignored by the two arms that
+		// actually refuse one.
 		private static Primitive Refused(ulong handle, uint flags, string what)
 		{
-			Primitive w = Primitive.Warning(
-				WarningCodes.UnsupportedEntity,
-				handle,
-				what + " is not a primitive this version flattens"
-			);
+			uint code;
+			string reason;
+			if (!RefusedKinds.TryGet(what, out code, out reason))
+			{
+				code = WarningCodes.UnsupportedEntity;
+				reason = what + " is not a primitive this version flattens";
+			}
+
+			Primitive w = Primitive.Warning(code, handle, reason);
 			w.Flags = flags;
 			return w;
+		}
+
+		// The DXF kind a POLYLINE's subclass marker names.
+		//
+		// SubclassMarker stays the discriminator, because ObjectName is
+		// POLYLINE for all four kinds under Polyline<T> and cannot tell them
+		// apart. What it is not is a name anything else on this wire speaks.
+		// The refusal census of real_AC1032 reads POINT, MULTILEADER, MLINE,
+		// TOLERANCE, 3DSOLID, 3DFACE, LEADER, IMAGE, PDFUNDERLAY, RAY, REGION,
+		// SHAPE, WIPEOUT, XLINE and then AcDbPolyFaceMesh: fourteen DXF entity
+		// names and one class name, and the odd one out is the kind that got
+		// its own arm. docs/WIRE.md's row for code 100 says the message names
+		// the source format's type, and tests/test_refusal_decisions.py holds
+		// the table next door to the same rule because the corpus tests read
+		// the type back by splitting the message on its first space.
+		//
+		// Against upstream's own constants rather than the two literals, so a
+		// marker whose spelling moves under a pin bump moves this with it and
+		// a constant that goes away is a build error rather than a census that
+		// quietly grows a class name back.
+		private static string MarkerKind(string marker)
+		{
+			switch (marker)
+			{
+				case ACadSharp.DxfSubclassMarker.PolyfaceMesh: return "POLYFACE_MESH";
+				case ACadSharp.DxfSubclassMarker.PolygonMesh: return "POLYGON_MESH";
+				default: return marker;
+			}
 		}
 
 		// What the warning says, which used to be false on the input it was
