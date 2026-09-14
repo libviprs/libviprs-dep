@@ -23,6 +23,7 @@ run is the shape this whole file exists to stop.
 import json
 import os
 import re
+import types
 
 import pytest
 from g13_support import load_script, manifest
@@ -160,6 +161,125 @@ class TestTheReaderSurvivesWhatTheContainerPrints:
         assert [n for n in names if n not in seen], "this control needs more than one fixture"
 
 
+class FakeSubprocess:
+    """A stand-in for the driver's `subprocess`, holding one canned run.
+
+    Patched onto the module rather than onto the real `subprocess`, which is
+    shared with every other suite in this session, so what this replaces is
+    one attribute of one module.
+    """
+
+    def __init__(self, stdout="", stderr="", returncode=0):
+        self.result = types.SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+        self.calls = []
+
+    def run(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        return self.result
+
+
+def drive(monkeypatch, argv, stdout="", stderr="", returncode=0):
+    """`main(argv)` over a canned container transcript, as (exit code, fake)."""
+    fake = FakeSubprocess(stdout=stdout, stderr=stderr, returncode=returncode)
+    monkeypatch.setattr(replay, "subprocess", fake)
+    return replay.main(list(argv)), fake
+
+
+def every_fixture_identical():
+    """The transcript of a run where nothing has drifted."""
+    names = replay.fixtures(MANIFEST)
+    return names, transcript(
+        [(name, json.dumps({"check": "identical", "dump_error": None}), 0) for name in names]
+    )
+
+
+class TestTheDriverTurnsATranscriptIntoAVerdict:
+    """`verdict` and `parse` are covered above, one case at a time. This is
+    the part that decides the exit code, and CI reads nothing else: a `main`
+    that collected every problem correctly and returned 0 would be a replay
+    step that cannot fail, with a suite of green unit tests under it.
+
+    The container is the one thing stubbed out, because it is the one thing
+    that needs .NET. Everything between its stdout and the exit code is real.
+    """
+
+    def test_a_clean_run_exits_zero_and_says_what_it_covered(self, monkeypatch, capsys):
+        names, text = every_fixture_identical()
+        code, fake = drive(monkeypatch, ["--image", "builder"], stdout=text)
+        out = capsys.readouterr().out
+        assert code == 0
+        assert f"{len(names)} of {len(names)} fixtures replay identical" in out
+        assert len(fake.calls) == 1 and fake.calls[0][0] == "docker"
+
+    def test_one_differing_fixture_exits_one_and_names_it(self, monkeypatch, capsys):
+        names, _ = every_fixture_identical()
+        blocks = []
+        for name in names:
+            check = (
+                "record 4 differs\n  expected: x\n  actual:   y"
+                if name == names[0]
+                else "identical"
+            )
+            blocks.append((name, json.dumps({"check": check, "dump_error": None}), 0))
+        code, _ = drive(monkeypatch, ["--image", "builder"], stdout=transcript(blocks))
+        out = capsys.readouterr().out
+        assert code == 1
+        assert f"DIFFERS  {names[0]}" in out
+        assert "record 4 differs" in out
+        assert f"1 of {len(names)} replayed fixtures disagree" in out
+
+    def test_a_container_that_died_half_way_is_not_a_short_green_run(self, monkeypatch, capsys):
+        # The failure the printed list cannot show on its own: everything that
+        # came back was identical, and most of the corpus never ran. A driver
+        # that reported on what it received would exit 0 here.
+        names = replay.fixtures(MANIFEST)
+        text = transcript([(names[0], json.dumps({"check": "identical"}), 0)])
+        code, _ = drive(monkeypatch, ["--image", "builder"], stdout=text, returncode=137)
+        out = capsys.readouterr().out
+        assert code == 1
+        assert "never ran at all" in out
+        assert f"{len(names) - 1} fixture(s)" in out
+
+    def test_a_container_that_failed_after_a_clean_replay_is_still_a_failure(
+        self, monkeypatch, capsys
+    ):
+        # Every fixture came back identical and the container itself exited
+        # non-zero, which is a build or a mount that went wrong after the
+        # comparisons. Reported rather than swallowed.
+        _names, text = every_fixture_identical()
+        code, _ = drive(monkeypatch, ["--image", "builder"], stdout=text, returncode=1)
+        assert code == 1
+        assert "the replay container exited 1" in capsys.readouterr().err
+
+    def test_the_container_stderr_reaches_the_log(self, monkeypatch, capsys):
+        _names, text = every_fixture_identical()
+        drive(monkeypatch, ["--image", "builder"], stdout=text, stderr="CS1002: ; expected\n")
+        assert "CS1002" in capsys.readouterr().err
+
+    def test_plan_prints_the_command_and_runs_nothing(self, monkeypatch, capsys):
+        code, fake = drive(monkeypatch, ["--image", "builder", "--plan"])
+        out = capsys.readouterr().out
+        assert code == 0
+        assert fake.calls == [], "--plan ran the container it was asked to describe"
+        assert out.startswith("docker run --rm --platform")
+        assert "builder" in out
+
+    def test_a_manifest_naming_no_fixture_replays_nothing_and_says_so(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        # The case that would otherwise be the quietest green in the repo: a
+        # driver pointed at an empty manifest runs a container over no
+        # arguments, gets a clean transcript back, and prints "0 of 0
+        # fixtures replay identical".
+        expectations = tmp_path / "tests" / "expectations"
+        expectations.mkdir(parents=True)
+        (expectations / "MANIFEST.json").write_text(json.dumps({"fixtures": {}}))
+        code, fake = drive(monkeypatch, ["--image", "builder", "--acad", str(tmp_path)])
+        assert code == 1
+        assert fake.calls == []
+        assert "replays nothing" in capsys.readouterr().err
+
+
 class TestCiRunsIt:
     """A driver nothing calls is a script, not a guard.
 
@@ -185,9 +305,10 @@ def test_every_replayed_fixture_has_both_halves_on_disk(name):
     """The replay reads two files per fixture inside the container.
 
     Checked here rather than discovered as a decode failure at the far end of
-    a fifteen second container, because "the dump is missing" and "the dump
-    disagrees" are different problems and `--check` reports a missing file as
-    an empty expectation, which is a difference at record 0.
+    a container that has to build the generator first, because "the dump is
+    missing" and "the dump disagrees" are different problems and `--check`
+    reports a missing file as an empty expectation, which is a difference at
+    record 0.
     """
     stem = os.path.splitext(name)[0]
     assert os.path.isfile(os.path.join(HERE, "fixtures", name))
