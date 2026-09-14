@@ -97,6 +97,11 @@ DUMPED = (
     # part of implementing the kind, not part of adding the DWG.
     "g13_solid.dwg",
     "g13_mesh.dwg",
+    # The malformed-face mesh, which is the only input in this corpus that
+    # reaches the flattener's own hostile-input handling (warning 111). Its
+    # whole value is the dump: four faults, four sentences, and the good face
+    # still crossing beside them.
+    "g13_mesh_bad_faces.dwg",
     "g13_xref.dwg",
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",
