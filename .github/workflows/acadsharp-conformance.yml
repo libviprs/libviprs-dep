@@ -139,11 +139,12 @@ jobs:
         # until this step nothing on any runner decoded a single committed
         # DWG.
         #
-        # This does, all 33 of them, in the image the archive build just made,
-        # which already holds the SDK and the patched upstream checkout. It
-        # costs one Debug build of the generator and about fifteen seconds,
-        # and the same mutation it was written against names real_AC1018 and
-        # real_AC1032 with the first differing record printed under each.
+        # This does, every one of them, in the image the archive build just
+        # made, which already holds the SDK and the patched upstream checkout.
+        # It costs one Debug build of the generator and about nine seconds of
+        # replay, measured, and the same mutation it was written against names
+        # real_AC1018 and real_AC1032 with the first differing record printed
+        # under each.
         #
         # Ahead of the AbiTest publish on purpose: it is the cheaper half and
         # a stale expectation is worth hearing about before a second NativeAOT

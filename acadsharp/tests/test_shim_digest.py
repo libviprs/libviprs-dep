@@ -42,8 +42,8 @@ lines rewrite it, and measured, they do: with a refusal applied to
 `Flattener.cs`, rewriting the block put this file and `test_adapter_stream.py`
 back to 477 green over expectations recording records the shim no longer
 emits. Only running the decoder closes that, which is what the corpus replay
-in `acadsharp-conformance.yml` now does, all 33 fixtures, every push.
-`test_corpus_replay.py` holds that end.
+in `acadsharp-conformance.yml` now does, over every fixture the manifest
+names, every push. `test_corpus_replay.py` holds that end.
 
 This is the cheap half, and it is worth having as the cheap half: it turns
 silent staleness into a red test with an instruction, in a job with no .NET
