@@ -272,6 +272,15 @@ object_arch_ok() {
         return 1
       fi
       ;;
+    cafebabe|cafebabf|bebafeca|bfbafeca)
+      # Named rather than left to the catch-all, because every Mach-O
+      # reader here takes the filetype at offset 12 and the load commands
+      # at 32, which is a thin slice's layout and a fat header's arch
+      # table. These archives are one architecture each by construction.
+      fail "$label is a universal (fat) binary, and this archive is one architecture
+    per file. Thin it before packing; nothing downstream reads a fat header."
+      return 1
+      ;;
     *)
       fail "$label has unrecognised object magic '$magic' (not ELF or 64-bit Mach-O)"
       return 1
@@ -353,21 +362,46 @@ elf_defined_symbols() {
   return 0
 }
 
+# macho_cmd_end <file> -> the offset one byte past the last load command
+#
+# `sizeofcmds` is a uint32 at offset 20 of mach_header_64 and says how
+# many bytes of load commands follow the 32-byte header. It is the bound
+# the format hands you for free, and a walk that stops at the end of the
+# *file* instead is taking `ncmds` out of the header it is doubting and
+# bounding it with nothing. Each iteration of either walk below is two
+# `dd | od | tr` pipelines, measured at 1.35ms in the container this
+# suite runs in, so an `ncmds` of 0xFFFFFFFF over a multi-megabyte body
+# of eight-byte commands is around twenty-five minutes of runner time
+# before the walk falls off the end and fails. Checking `sizeofcmds`
+# against the file size up front costs one read and also catches a
+# command region that runs past the end of the file, which a walk that
+# stops at the first command it wanted never notices at all.
+#
+# It is also what holds when the header itself is too short to read. A
+# `dd` past the end gives the readers empty hex and bash arithmetic turns
+# that into a silent zero rather than an error, so a file of twenty bytes
+# reports no load commands at all, and no load commands still end at
+# offset 32, which is past the end of it.
+macho_cmd_end() {
+  echo $(( 32 + $(le32 "$(read_bytes "$1" 20 4)") ))
+}
+
 # macho_defined_symbols <file> <out> -> 0 ok, 1 truncated, 2 no table
 macho_defined_symbols() {
-  local f="$1" out="$2" size ncmds off i cmd cmdsize
+  local f="$1" out="$2" size ncmds cmdend off i cmd cmdsize
   local symoff=0 nsyms=0 stroff=0 strsize=0 found=0
   size=$(wc -c < "$f" | tr -d ' ')
   ncmds=$(le32 "$(read_bytes "$f" 16 4)")
+  cmdend=$(macho_cmd_end "$f")
+  if [ "$cmdend" -gt "$size" ]; then
+    return 1
+  fi
   off=32
   i=0
-  while [ "$i" -lt "$ncmds" ]; do
-    if [ $((off + 8)) -gt "$size" ]; then
-      return 1
-    fi
+  while [ "$i" -lt "$ncmds" ] && [ $((off + 8)) -le "$cmdend" ]; do
     cmd=$(le32 "$(read_bytes "$f" "$off" 4)")
     cmdsize=$(le32 "$(read_bytes "$f" $((off + 4)) 4)")
-    if [ "$cmdsize" -le 0 ]; then
+    if [ "$cmdsize" -le 0 ] || [ $((off + cmdsize)) -gt "$cmdend" ]; then
       return 1
     fi
     if [ "$cmd" = "2" ]; then
@@ -382,6 +416,12 @@ macho_defined_symbols() {
     i=$((i + 1))
   done
   if [ "$found" != "1" ]; then
+    # Out of commands before the header's count ran out, so the count is
+    # not one the commands back. That is a malformed header rather than a
+    # library that exports nothing.
+    if [ "$i" -lt "$ncmds" ]; then
+      return 1
+    fi
     return 2
   fi
   if [ $((symoff + nsyms * 16)) -gt "$size" ] || [ $((stroff + strsize)) -gt "$size" ]; then
@@ -393,13 +433,20 @@ macho_defined_symbols() {
   return 0
 }
 
-# macho_install_name <file> <out> -> 0 ok, 1 malformed, 2 no LC_ID_DYLIB
+# macho_install_name <file> <out> -> 0 ok, 1 malformed, 2 no LC_ID_DYLIB,
+#                                     3 the name is not a name
 #
 # The same load-command walk as above, looking for LC_ID_DYLIB (13)
 # instead of LC_SYMTAB (2). `struct dylib_command` is cmd, cmdsize, then a
 # `struct dylib` of name offset, timestamp, current version and
 # compatibility version, and the name itself lives inside the command from
 # its offset to the command's end, NUL-terminated and NUL-padded.
+#
+# The first LC_ID_DYLIB wins and the walk stops there. A file carrying two
+# of them is malformed, but dyld and otool both take the first, so the
+# first is the name that decides whether a consumer's link resolves, which
+# is the only question invariant 11 asks. Reporting the second would be
+# reporting a name nothing uses.
 #
 # Deliberately not `otool -D`. otool only exists on macOS, so on every
 # Linux runner that check would skip itself, and a skipped check is the
@@ -410,22 +457,23 @@ macho_defined_symbols() {
 # asked the same question afterwards, as a second opinion rather than as
 # the check.
 macho_install_name() {
-  local f="$1" out="$2" size ncmds off i cmd cmdsize nameoff
+  local f="$1" out="$2" size ncmds cmdend off i cmd cmdsize nameoff namelen
   size=$(wc -c < "$f" | tr -d ' ')
   ncmds=$(le32 "$(read_bytes "$f" 16 4)")
+  cmdend=$(macho_cmd_end "$f")
+  if [ "$cmdend" -gt "$size" ]; then
+    return 1
+  fi
   off=32
   i=0
-  while [ "$i" -lt "$ncmds" ]; do
-    if [ $((off + 8)) -gt "$size" ]; then
-      return 1
-    fi
+  while [ "$i" -lt "$ncmds" ] && [ $((off + 8)) -le "$cmdend" ]; do
     cmd=$(le32 "$(read_bytes "$f" "$off" 4)")
     cmdsize=$(le32 "$(read_bytes "$f" $((off + 4)) 4)")
-    if [ "$cmdsize" -le 0 ]; then
+    if [ "$cmdsize" -le 0 ] || [ $((off + cmdsize)) -gt "$cmdend" ]; then
       return 1
     fi
     if [ "$cmd" = "13" ]; then
-      if [ "$cmdsize" -lt 24 ] || [ $((off + cmdsize)) -gt "$size" ]; then
+      if [ "$cmdsize" -lt 24 ]; then
         return 1
       fi
       nameoff=$(le32 "$(read_bytes "$f" $((off + 8)) 4)")
@@ -437,11 +485,29 @@ macho_install_name() {
       # closes the pipe early the way `head` would.
       slice "$f" $((off + nameoff)) $((cmdsize - nameoff)) \
         | tr '\000' '\n' | sed -n 1p > "$out"
+      # A raw newline inside the name cuts that line in exactly the place
+      # the terminator would, and an empty name cuts it at once, so what
+      # came out is only the name if the byte just past it is the
+      # terminator. Without this the reader hands the caller a name no
+      # load command carries, and the archive is refused while naming a
+      # file that is not in it. `wc -c` counts sed's newline, hence the
+      # minus one; a name with no terminator at all leaves sed's output
+      # unterminated, so the byte it lands on is inside the name and is
+      # not a NUL either.
+      namelen=$(( $(wc -c < "$out" | tr -d ' ') - 1 ))
+      if [ "$namelen" -lt 1 ] || \
+         [ "$(read_bytes "$f" $((off + nameoff + namelen)) 1)" != "00" ]; then
+        : > "$out"
+        return 3
+      fi
       return 0
     fi
     off=$((off + cmdsize))
     i=$((i + 1))
   done
+  if [ "$i" -lt "$ncmds" ]; then
+    return 1
+  fi
   return 2
 }
 
@@ -871,7 +937,8 @@ if [ -f "$SHARED_LIB" ]; then
       rc=$?
       set -e
       case "$rc" in
-        1) fail "$SHARED_NAME is truncated: its symbol or string table runs past the end" ;;
+        1) fail "$SHARED_NAME is truncated or malformed: its load commands, symbol table
+    or string table run past what the header before them declares" ;;
         2) fail "$SHARED_NAME has no LC_SYMTAB, so it exports nothing" ;;
         *) if require_symbols "$SYMS" "$SHARED_NAME"; then
              echo "  exports every entry point the header declares"
@@ -885,10 +952,15 @@ if [ -f "$SHARED_LIB" ]; then
       rc=$?
       set -e
       case "$rc" in
-        1) fail "$SHARED_NAME has a malformed LC_ID_DYLIB: the command or its name
-    runs past the end of the file" ;;
+        1) fail "$SHARED_NAME has a malformed LC_ID_DYLIB or load-command region: a
+    command size, the header's command count or the name offset runs past the
+    load commands the header declares" ;;
         2) fail "$SHARED_NAME carries no LC_ID_DYLIB, so it records no install name
     at all and a consumer that links it has nothing to resolve" ;;
+        3) fail "$SHARED_NAME records an install name that is not a name: the bytes
+    at the LC_ID_DYLIB name offset are empty, or are not terminated inside the
+    command. Whatever they are, no loader resolves them, and printing the part
+    of them that reads as text would name a file this archive does not hold." ;;
         *)
           INSTALL_NAME=$(cat "$IDNAME_FILE")
           echo "  install name: $INSTALL_NAME"
@@ -910,6 +982,14 @@ if [ -f "$SHARED_LIB" ]; then
           # itself everywhere else, but where it can run a disagreement
           # means the reader above is wrong about a live Mach-O.
           if [ "$(uname -s)" = "Darwin" ] && command -v otool >/dev/null 2>&1; then
+            # Line 2 is the install name because the slice is thin: otool
+            # prints the file's name, then the name it records. A
+            # universal binary prints a header per architecture and line 2
+            # is something else entirely, which would fail a correct
+            # release rather than a broken one. It cannot get here,
+            # because object_arch_ok refuses fat magic above, and if that
+            # ever changes this line changes with every offset the reader
+            # uses.
             OTOOL_NAME=$(otool -D "$SHARED_LIB" | sed -n 2p)
             if [ "$OTOOL_NAME" = "$INSTALL_NAME" ]; then
               echo "  otool -D agrees (mac host, real tool, real bytes)"
