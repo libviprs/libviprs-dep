@@ -118,6 +118,7 @@ ONCE_RECORDED = (
     "g13_dimension_shallow.dwg",
     "g13_ellipse.dwg",
     "g13_empty_view.dwg",
+    "g13_face3d.dwg",
     "g13_hatch.dwg",
     "g13_insert.dwg",
     "g13_line.dwg",
