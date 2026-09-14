@@ -174,3 +174,107 @@ class TestTheCensusIsRecomputed:
             f"ADR 0002 says {point} of {total} refusals are POINT and the expectation "
             f"for {CENSUS_FIXTURE} holds {actual['point']} of {actual['refusals']}"
         )
+
+
+ADR_0003 = os.path.join(DOCS, "0003-wire-3-point-unbounded-placement.md")
+
+# What ADR 0003 has to pin, as {(record number, record name): the `length` it
+# states}. A layout with no length is prose about a record rather than a
+# record: the next campaign reads this document to write a struct, and the one
+# number it cannot derive from the field list on its own is where the payload
+# stops.
+WIRE_3_LAYOUTS = {
+    ("14", "Point"): "`80`",
+    ("15", "Unbounded"): "`80`",
+    ("16", "Placement"): "`128",
+}
+
+
+def adr_0003_text():
+    with open(ADR_0003) as f:
+        return f.read()
+
+
+def adr_0003_flat():
+    """ADR 0003 with its hard wrapping collapsed, so a reflow is not a failure."""
+    return re.sub(r"\s+", " ", adr_0003_text())
+
+
+class TestAdr0003:
+    """The wire-3 layouts, held to being layouts rather than intentions.
+
+    ADR 0002 wrote down that a wire 3 should carry Point, Unbounded and
+    Placement and then described each of them in a sentence. A sentence is not
+    something anybody can write a decoder against, so the next campaign would
+    have started from prose and invented the bytes, which is how the two ends
+    of a two-repo release disagree.
+
+    So this asks ADR 0003 for the three things prose loses: a record number, a
+    name, and where the payload stops. It is deliberately not a spelling test
+    on the whole document. Everything it pins is something a reader of the ADR
+    would have to go and invent if it went missing.
+    """
+
+    def test_it_exists(self):
+        assert os.path.isfile(ADR_0003), (
+            "ADR 0003 is the byte layout the wire-3 campaign starts from, and the "
+            "only place in either repository the three record shapes are written down"
+        )
+
+    def test_the_second_line_says_it_is_proposed(self):
+        # ADR 0001 puts its verdict on the same line, for the same reason: a
+        # reader who stops after two lines has to come away with the status.
+        # This one is not decided, and a document that reads as decided is the
+        # one that gets implemented by somebody who never reached the section
+        # saying a release sits in the middle of it.
+        lines = [ln.strip() for ln in adr_0003_text().splitlines() if ln.strip()]
+        assert lines[0].startswith("# ")
+        assert "PROPOSED" in lines[1], (
+            f"the second line has to carry the status, it says {lines[1]!r}"
+        )
+
+    def test_it_pins_three_layouts_with_their_numbers(self):
+        flat = adr_0003_flat()
+        found = dict(
+            (m.group(1, 2), m.group(3))
+            for m in re.finditer(r"\*\*(\d+) `(\w+)`\*\*.*?`length` is (`[^`]*`?)", flat)
+        )
+        missing = sorted(k for k in WIRE_3_LAYOUTS if k not in found)
+        assert not missing, (
+            f"ADR 0003 states no layout for {missing}. Each record needs its number, "
+            "its name and its length in one place, spelled the way docs/WIRE.md "
+            "spells the records it already has"
+        )
+        wrong = {
+            k: (found[k], want)
+            for k, want in WIRE_3_LAYOUTS.items()
+            if not found[k].startswith(want)
+        }
+        assert not wrong, (
+            f"ADR 0003's record lengths disagree with the field lists beside them, as "
+            f"{{record: (stated, expected prefix)}}: {wrong}. A Point is the sixteen "
+            "byte prologue, three coordinates, three normal components and a rotation, "
+            "which is 72 bytes of payload and an eight byte record header"
+        )
+
+    def test_it_carries_the_isgeometry_trap_forward(self):
+        # ADR 0002's single most useful paragraph, and the one a lane adding
+        # record 14 can ship without: IsGeometry is the contiguous range 3 to
+        # 10, Flattener.Finite() returns early outside it, and a NaN in a
+        # record numbered 14 would cross the wire untouched while WIRE.md's
+        # finiteness promise stayed literally true. This document is what the
+        # next campaign reads, so the trap has to be in it and not only in the
+        # one it supersedes.
+        flat = adr_0003_flat()
+        for token in ("IsGeometry", "3 to 10", "Finite()"):
+            assert token in flat, (
+                f"ADR 0003 never mentions {token!r}, so a reader who starts here adds a "
+                "geometry record past 13 and ships a hole in the finiteness guarantee"
+            )
+
+    def test_it_names_the_constant_a_wire_bump_moves(self):
+        assert "VIPRS_ACAD_WIRE_VERSION" in adr_0003_flat(), (
+            "ADR 0003 never names the constant, and it is the whole reason this is a "
+            "two-repo campaign: the fingerprint is a hash over the header's bytes, so "
+            "moving it refuses every compiled consumer at Decoder::new()"
+        )
