@@ -1165,13 +1165,31 @@ namespace Viprs.Cad
 				// Map is what put a file-controlled recursion on the CLR
 				// stack. Walk dispatches them onto its own stack instead.
 
+				// Two different things end up below, and until RefusedKinds
+				// existed they left the identical warning.
+				//
+				// A kind in that table is one somebody looked at and decided
+				// against: the geometry is not in the drawing (SHAPE, IMAGE,
+				// PDFUNDERLAY), or it is in a form nothing here evaluates
+				// (3DSOLID, REGION), or no record in wire 2 can hold it (RAY,
+				// XLINE). Those get code 109 and a sentence saying which.
+				// Everything else is a gap nobody has got to, which is what 100
+				// has always meant, and the difference is the whole reason a
+				// consumer has a second number to branch on.
+				//
+				// docs/adr/0002-what-this-decoder-refuses.md is the decision
+				// and carries what would reopen each row.
 				default:
 				{
-					Primitive w = Primitive.Warning(
-						WarningCodes.UnsupportedEntity,
-						h,
-						e.ObjectName + " is not a primitive this version flattens"
-					);
+					uint code;
+					string reason;
+					if (!RefusedKinds.TryGet(e.ObjectName, out code, out reason))
+					{
+						code = WarningCodes.UnsupportedEntity;
+						reason = e.ObjectName + " is not a primitive this version flattens";
+					}
+
+					Primitive w = Primitive.Warning(code, h, reason);
 					w.Flags = flags;
 					yield return w;
 					yield break;
