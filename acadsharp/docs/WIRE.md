@@ -262,6 +262,12 @@ closing span is the one `bulge[n - 1]` describes. One layout means one reader
 serves both, and a hatch loop that turns out to carry a curved edge needs no
 second shape.
 
+A hatch loop is not the only thing that lands here. A `SOLID` is one of these
+with three or four vertices and no bulge array, and a `MESH` is one per face
+of its base mesh. Neither carries a bulge, because a filled face has straight
+edges, and a `MESH` at a subdivision level above zero also emits warning 110
+to say the level was ignored rather than evaluated.
+
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
 UTF-8, padded with zeroes to a multiple of four. Not terminated.
@@ -362,6 +368,8 @@ and 105 with these meanings, whatever it is built on.
 | 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 | 108 | `EMPTY_VIEW` | This view emitted no geometry record at all. It is the other half of the inverted extents above: those say the view has no usable bounding box, and this says there was nothing to have one of. A consumer tells an empty drawing from a damaged one by what sits beside this in the same view, because every warning about something that could not be read is in that stream too, so this alone is empty and this with company is damaged. `item_handle` is 0: it is about the view. |
+| 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
+| 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
 
 ### Reserved ranges
 
