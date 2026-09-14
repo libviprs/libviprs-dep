@@ -99,6 +99,14 @@ namespace Viprs.Cad
 		// face and which fault.
 		public const uint MeshFaceUnreadable = 111u;
 
+		// An MLINE whose style asks for something this version does not draw:
+		// a filled area between its outermost elements, the joint lines a
+		// style can display at each inner vertex, or a cap closing either end.
+		// The element lines beside it are the whole of what the entity draws
+		// here, so this is a statement about what is missing rather than a
+		// refusal, which is what 110 does for a MESH's subdivision level.
+		public const uint MLineStyleFeaturesIgnored = 115u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -115,6 +123,7 @@ namespace Viprs.Cad
 				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
+				case MLineStyleFeaturesIgnored: return "MLINE_STYLE_FEATURES_IGNORED";
 				default: return "WARNING_" + code;
 			}
 		}

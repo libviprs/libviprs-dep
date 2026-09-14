@@ -122,6 +122,7 @@ public static class Corpus
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
 		yield return Pair("g13_mesh.dwg", WriteMesh);
 		yield return Pair("g13_mesh_bad_faces.dwg", WriteMeshBadFaces);
+		yield return Pair("g13_mline.dwg", WriteMLine);
 		yield return Pair("g13_tolerance.dwg", WriteTolerance);
 		yield return Pair("g13_xref.dwg", WriteXref);
 		yield return Pair("g13_xref_long.dwg", WriteXrefLong);
@@ -532,6 +533,309 @@ public static class Corpus
 				ThirdCorner = new XYZ(1, 4, 0),
 				FourthCorner = new XYZ(7, 5, 0),
 			});
+		Write(doc, path);
+	}
+
+	// MLINE, which is a path plus a style and draws one line per style element.
+	//
+	// The style is the whole reason this file is more than one entity. An MLINE
+	// holds a centre path and a handle to an MLINESTYLE, and what a drawing
+	// shows is that path offset by each of the style's element offsets, scaled
+	// by the entity's own ScaleFactor and measured along each vertex's miter.
+	// So the fixture carries three styles and six MLINEs, and the questions it
+	// is built to answer are which offsets, which reference, and along which
+	// direction.
+	//
+	// Three styles: the plain one with three elements at +1, 0 and -1.5,
+	// deliberately asymmetric so the top and bottom references are different
+	// numbers and neither is zero; the same three offsets with FillOn and a
+	// start cap, which is the only entity here that asks for something this
+	// version does not draw; and one with no elements at all, which is the one
+	// unresolvable state this layer can actually see. A dangling style HANDLE
+	// is not producible: ACadSharp substitutes "Standard" at read time, so a
+	// file whose style is missing decodes as though it said Standard.
+	//
+	// The first three MLINEs share one path and one scale factor and differ
+	// only in Justification, because that is the comparison: an arm that
+	// ignored Justification would emit the same three records three times and
+	// every coordinate in them would still be real.
+	//
+	// The path bends at a right angle on purpose. Along a straight run the
+	// miter and the segment perpendicular agree, so a straight fixture cannot
+	// tell an arm that reads Vertex.Miter from one that does not.
+	//
+	// Every vertex also carries one Segment per element with the parameter
+	// AutoCAD bakes into a real file, which is the distance along the miter to
+	// that element's line. The adapter never reads them. They are here because
+	// the DWG writer needs one segment per element per vertex to write the
+	// entity at all, and because a file that carries the wrong ones is not the
+	// file AutoCAD would have written.
+	private const double MLineScale = 2.5;
+
+	private static readonly double[] MLineOffsets = new double[] { 1.0, 0.0, -1.5 };
+
+	private static XYZ MLineUnit(XYZ v)
+	{
+		double n = Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+		return n == 0.0 ? v : new XYZ(v.X / n, v.Y / n, v.Z / n);
+	}
+
+	private static XYZ MLineSide(XYZ direction)
+	{
+		// The left of the direction about +Z, which is the side a positive
+		// offset lies on. Confirmed against real_AC1032.dwg's three MLINEs,
+		// which AutoCAD wrote, through both ezdxf's virtual_entities and the
+		// parameters baked into the file.
+		XYZ d = MLineUnit(direction);
+		return MLineUnit(new XYZ(-d.Y, d.X, 0));
+	}
+
+	// One vertex of an MLINE, with the miter worked out from the segments
+	// either side of it and one segment per element carrying its parameter.
+	//
+	// `incoming` is null at the start of an open path and `outgoing` is null at
+	// its end, which is where the miter is the plain perpendicular rather than
+	// a bisector.
+	private static MLine.Vertex MLineVertex(
+		XYZ position,
+		XYZ? incoming,
+		XYZ? outgoing,
+		double reference,
+		double scale
+	)
+	{
+		XYZ direction = outgoing.HasValue ? outgoing.Value : incoming.Value;
+		XYZ miter;
+		if (!outgoing.HasValue)
+		{
+			miter = MLineSide(incoming.Value);
+		}
+		else if (!incoming.HasValue)
+		{
+			miter = MLineSide(outgoing.Value);
+		}
+		else
+		{
+			XYZ a = MLineSide(incoming.Value);
+			XYZ b = MLineSide(outgoing.Value);
+			miter = MLineUnit(new XYZ(a.X + b.X, a.Y + b.Y, a.Z + b.Z));
+		}
+
+		XYZ side = MLineSide(direction);
+		double denom = miter.X * side.X + miter.Y * side.Y + miter.Z * side.Z;
+
+		MLine.Vertex v = new MLine.Vertex
+		{
+			Position = position,
+			Direction = MLineUnit(direction),
+			Miter = miter
+		};
+		foreach (double offset in MLineOffsets)
+		{
+			MLine.Vertex.Segment segment = new MLine.Vertex.Segment();
+			segment.Parameters.Add((offset - reference) * scale / denom);
+			segment.Parameters.Add(0.0);
+			v.Segments.Add(segment);
+		}
+
+		return v;
+	}
+
+	private static MLine NewMLine(
+		MLineStyle style,
+		MLineJustification justification,
+		double scale,
+		bool closed,
+		params XYZ[] path
+	)
+	{
+		MLine mline = NewEmptyMLine(style, justification, scale, closed, path[0]);
+		FillMLinePath(mline, justification, scale, closed, path);
+		return mline;
+	}
+
+	private static MLine NewEmptyMLine(
+		MLineStyle style,
+		MLineJustification justification,
+		double scale,
+		bool closed,
+		XYZ start
+	)
+	{
+		return new MLine
+		{
+			Style = style,
+			Justification = justification,
+			ScaleFactor = scale,
+			StartPoint = start,
+			Flags = closed ? MLineFlags.Has | MLineFlags.Closed : MLineFlags.Has
+		};
+	}
+
+	// The vertices, separately from the entity, because of an upstream defect
+	// that a block fixture walks straight into.
+	//
+	// ACadSharp 3.7.1's MLine.Clone calls base.Clone (a MemberwiseClone, so the
+	// clone's Vertices is the SAME List object as the original's), then clears
+	// it and refills it from this.Vertices, which by then is the list it just
+	// emptied. Both copies come out with no vertices. `new Insert(block)` clones
+	// the block record when the record already belongs to a document, and
+	// AddBlockInstances makes two of them, so an MLINE placed in a block before
+	// the insertions exist is silently emptied and writes as an entity with
+	// nothing in it. Filling the path after the insertions are made is the whole
+	// of the workaround; nothing in the adapter is involved.
+	private static void FillMLinePath(
+		MLine mline,
+		MLineJustification justification,
+		double scale,
+		bool closed,
+		params XYZ[] path
+	)
+	{
+		double reference = 0.0;
+		if (justification == MLineJustification.Top)
+		{
+			reference = MLineOffsets[0];
+			foreach (double o in MLineOffsets)
+			{
+				reference = Math.Max(reference, o);
+			}
+		}
+		else if (justification == MLineJustification.Bottom)
+		{
+			reference = MLineOffsets[0];
+			foreach (double o in MLineOffsets)
+			{
+				reference = Math.Min(reference, o);
+			}
+		}
+
+		int n = path.Length;
+		for (int i = 0; i < n; i++)
+		{
+			XYZ? incoming = null;
+			XYZ? outgoing = null;
+			if (i > 0)
+			{
+				incoming = path[i] - path[i - 1];
+			}
+			else if (closed)
+			{
+				incoming = path[0] - path[n - 1];
+			}
+
+			if (i < n - 1)
+			{
+				outgoing = path[i + 1] - path[i];
+			}
+			else if (closed)
+			{
+				outgoing = path[0] - path[n - 1];
+			}
+
+			mline.Vertices.Add(MLineVertex(path[i], incoming, outgoing, reference, scale));
+		}
+	}
+
+	private static MLineStyle NewMLineStyle(string name, MLineStyleFlags flags, bool withElements)
+	{
+		MLineStyle style = new MLineStyle(name) { Flags = flags };
+		if (withElements)
+		{
+			foreach (double offset in MLineOffsets)
+			{
+				style.AddElement(new MLineStyle.Element { Offset = offset });
+			}
+		}
+
+		return style;
+	}
+
+	public static void WriteMLine(string path)
+	{
+		CadDocument doc = NewDoc();
+		MLineStyle plain = NewMLineStyle("VIPRS_G13_MLS", MLineStyleFlags.None, true);
+		MLineStyle caps = NewMLineStyle(
+			"VIPRS_G13_MLS_CAPS",
+			MLineStyleFlags.FillOn | MLineStyleFlags.StartSquareCap,
+			true
+		);
+		MLineStyle empty = NewMLineStyle("VIPRS_G13_MLS_EMPTY", MLineStyleFlags.None, false);
+		doc.MLineStyles.Add(plain);
+		doc.MLineStyles.Add(caps);
+		doc.MLineStyles.Add(empty);
+
+		XYZ[] bend = new XYZ[] { new XYZ(0, 0, 0), new XYZ(10, 0, 0), new XYZ(10, 8, 0) };
+		foreach (MLineJustification j in new MLineJustification[]
+		{
+			MLineJustification.Zero,
+			MLineJustification.Top,
+			MLineJustification.Bottom
+		})
+		{
+			MLine m = NewMLine(plain, j, MLineScale, false, bend);
+			m.Layer = L(doc);
+			doc.Entities.Add(m);
+		}
+
+		MLine square = NewMLine(
+			plain,
+			MLineJustification.Zero,
+			MLineScale,
+			true,
+			new XYZ(30, 0, 0),
+			new XYZ(40, 0, 0),
+			new XYZ(40, 10, 0),
+			new XYZ(30, 10, 0)
+		);
+		square.Layer = L(doc);
+		doc.Entities.Add(square);
+
+		MLine nothingToPlace = NewMLine(
+			empty,
+			MLineJustification.Zero,
+			MLineScale,
+			false,
+			new XYZ(50, 0, 0),
+			new XYZ(58, 0, 0)
+		);
+		foreach (MLine.Vertex v in nothingToPlace.Vertices)
+		{
+			v.Segments.Clear();
+		}
+		nothingToPlace.Layer = L(doc);
+		doc.Entities.Add(nothingToPlace);
+
+		MLine asksForMore = NewMLine(
+			caps,
+			MLineJustification.Zero,
+			MLineScale,
+			false,
+			new XYZ(60, 0, 0),
+			new XYZ(70, 0, 0)
+		);
+		asksForMore.Layer = L(doc);
+		doc.Entities.Add(asksForMore);
+
+		// The block half runs on a slant, because three horizontal lines are
+		// parallel whatever an arm does with them and the assertion under the
+		// two insertions is that they stay parallel.
+		MLine inBlock = NewEmptyMLine(
+			plain,
+			MLineJustification.Zero,
+			1.0,
+			false,
+			new XYZ(0, 0, 0)
+		);
+		AddBlockInstances(doc, "VIPRS_G13_MLINE_BLK", inBlock);
+		FillMLinePath(
+			inBlock,
+			MLineJustification.Zero,
+			1.0,
+			false,
+			new XYZ(0, 0, 0),
+			new XYZ(6, 3, 0)
+		);
 		Write(doc, path);
 	}
 
