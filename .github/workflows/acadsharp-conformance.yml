@@ -118,6 +118,43 @@ jobs:
           PY
           cat "$GITHUB_OUTPUT"
 
+      - name: Replay every committed expectation through the shim in the tree
+        # The step this whole workflow was missing, and the one that makes
+        # every adapter test under acadsharp/tests mean something.
+        #
+        # pytest has no .NET (ADR 0001), so what it reads is a committed dump
+        # of a decode somebody ran once. MANIFEST.json carries the sha256 of
+        # every source the generator compiles and test_shim_digest.py
+        # recomputes it, which turns an edited flattener into a red test. That
+        # is a staleness alarm, not evidence, and it is forgeable in four
+        # lines: the manifest's shim block is computed from the source tree
+        # with the same helpers the test verifies it with, so rewriting it
+        # puts the whole suite back to exactly its old colour over
+        # expectations that record behaviour the shim no longer has. Measured,
+        # not argued: with #82's refusal applied and the block rewritten,
+        # test_shim_digest.py and test_adapter_stream.py were 477 green.
+        #
+        # Neither consumer below closes it. Both drive SyntheticSource through
+        # open_memory, so neither opens a fixture or reads an expectation, and
+        # until this step nothing on any runner decoded a single committed
+        # DWG.
+        #
+        # This does, every one of them, in the image the archive build just
+        # made, which already holds the SDK and the patched upstream checkout.
+        # It costs one Debug build of the generator and about nine seconds of
+        # replay, measured, and the same mutation it was written against names
+        # real_AC1018 and real_AC1032 with the first differing record printed
+        # under each.
+        #
+        # Ahead of the AbiTest publish on purpose: it is the cheaper half and
+        # a stale expectation is worth hearing about before a second NativeAOT
+        # build runs.
+        env:
+          BUILDER: ${{ steps.builder.outputs.image }}
+        run: |
+          python3 acadsharp/tests/fixtures/gen/replay.py \
+            --image "$BUILDER" --platform "$VIPRS_CONFORMANCE_PLATFORM"
+
       - name: Publish the test configuration in that image
         # The AbiTest configuration is Release plus the two exports that let a
         # consumer make the library throw and read its live handle count, so

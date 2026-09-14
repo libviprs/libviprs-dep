@@ -38,297 +38,431 @@
 00037 Arc handle=320 flags=0 c=[(56.351792,4.697602,0.000000)] r=3.044494 a0=5.952333 a1=2.810740 normal=[(0.000000,0.000000,1.000000)]
 00038 Ellipse handle=321 flags=0 c=[(68.000517,4.185210,0.000000)] major=[(-5.101255,0.000000,0.000000)] ratio=0.640373 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
 00039 Warning handle=322 flags=0 code=UNSUPPORTED_ENTITY message="3DFACE is not a primitive this version flattens"
-00040 Warning handle=343 flags=0 code=UNSUPPORTED_ENTITY message="MESH is not a primitive this version flattens"
-00041 Polyline handle=353 flags=0 n=4 closed=1 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00042 Polygon handle=35A flags=0 n=4 closed=1 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00043 Polyline handle=35B flags=0 n=5 closed=0 pts=[(12.140516,7.499316,0.000000);(10.946378,10.172952,0.000000);(12.781813,11.167279,0.000000);(15.684477,8.916330,0.000000);(13.274086,8.430214,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00044 Polyline handle=36C flags=0 n=4 closed=1 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00045 Polygon handle=36E flags=0 n=4 closed=1 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00046 Polyline handle=36F flags=0 n=4 closed=1 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00047 Polygon handle=371 flags=0 n=4 closed=1 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00048 Polyline handle=372 flags=0 n=4 closed=1 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00049 Polygon handle=376 flags=0 n=4 closed=1 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00050 Warning handle=380 flags=0 code=UNSUPPORTED_ENTITY message="MESH is not a primitive this version flattens"
-00051 Warning handle=389 flags=0 code=UNSUPPORTED_ENTITY message="XLINE is not a primitive this version flattens"
-00052 Warning handle=38A flags=0 code=UNSUPPORTED_ENTITY message="RAY is not a primitive this version flattens"
-00053 Warning handle=38B flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
-00054 Warning handle=3A5 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
-00055 Warning handle=3A6 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
-00056 Text handle=3B9 flags=0 p=[(147.819447,2.854975,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00057 Text handle=3BA flags=0 p=[(147.819447,10.325741,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00058 Text handle=3CF flags=0 p=[(147.819447,17.278730,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00059 Text handle=3D0 flags=0 p=[(147.819447,24.749495,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00060 Text handle=3EC flags=0 p=[(183.588928,5.226371,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
-00061 Text handle=3F5 flags=0 p=[(183.588928,9.187556,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
-00062 Text handle=3F6 flags=0 p=[(199.330342,15.326102,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
-00063 Polyline handle=422 flags=0 n=5 closed=0 pts=[(213.692029,2.252867,0.000000);(222.457789,3.348587,0.000000);(215.603726,6.635747,0.000000);(215.944553,12.075878,0.000000);(211.562496,8.827187,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00064 Polyline handle=42B flags=0 n=5 closed=0 pts=[(232.601721,0.892694,0.000000);(233.414990,3.348587,5.478600);(229.032110,4.736119,0.000000);(227.878838,8.433591,5.478600);(225.744949,9.922907,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00065 Warning handle=432 flags=0 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00066 Spline handle=433 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,1.157147,0.000000);(254.713771,11.986104,0.000000);(259.387964,1.234244,0.000000);(259.224551,11.018627,0.000000)] weights=[]
-00067 Spline handle=434 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,17.426024,0.000000);(254.713771,28.254981,0.000000);(259.387964,17.503122,0.000000);(259.224551,27.287505,0.000000)] weights=[]
-00068 Warning handle=44D flags=0 code=UNSUPPORTED_ENTITY message="WIPEOUT is not a primitive this version flattens"
-00069 Warning handle=512 flags=0 code=UNSUPPORTED_ENTITY message="LEADER is not a primitive this version flattens"
-00070 Text handle=513 flags=0 p=[(741.023750,14.696812,0.000000)] h=1.424925 rot=0.000000 value="Sample annotation"
-00071 Line handle=626 flags=1 pts=[(329.976559,3.482445,0.000000);(319.276189,22.016030,0.000000)]
-00072 Line handle=627 flags=1 pts=[(364.174764,37.680650,0.000000);(359.733100,45.373838,0.000000)]
-00073 Line handle=628 flags=1 pts=[(322.066253,22.183498,0.000000);(358.193037,43.041307,0.000000)]
-00074 Warning handle=629 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00075 Warning handle=62A flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00076 Text handle=62B flags=1 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
-00077 Warning handle=62C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00078 Warning handle=62D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00079 Warning handle=62E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00080 Line handle=62F flags=1 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
-00081 Line handle=630 flags=1 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
-00082 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
-00083 Warning handle=632 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00084 Warning handle=633 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00085 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
-00086 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00087 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00088 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00089 Warning handle=638 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00090 Line handle=639 flags=1 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
-00091 Line handle=63A flags=1 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
-00092 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
-00093 Warning handle=63C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00094 Warning handle=63D flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00095 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
-00096 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00097 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00098 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00099 Warning handle=642 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00100 Warning handle=643 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00101 Line handle=517 flags=0 pts=[(330.289059,2.941179,0.000000);(364.487264,37.139384,0.000000)]
-00102 Line handle=518 flags=0 pts=[(381.586367,8.640880,0.000000);(415.784572,42.839085,0.000000)]
-00103 Line handle=519 flags=0 pts=[(438.583375,14.340581,0.000000);(444.283076,37.139384,0.000000)]
-00104 Line handle=51A flags=0 pts=[(438.583375,14.340581,0.000000);(455.682478,8.640880,0.000000)]
-00105 Line handle=51B flags=0 pts=[(495.580383,14.340581,0.000000);(501.280084,37.139384,0.000000)]
-00106 Line handle=51C flags=0 pts=[(495.580383,14.340581,0.000000);(512.679486,8.640880,0.000000)]
-00107 Circle handle=51D flags=0 c=[(569.676494,25.739983,0.000000)] r=11.399402 normal=[(0.000000,0.000000,1.000000)]
-00108 Circle handle=51E flags=0 c=[(626.673502,25.739983,0.000000)] r=22.798803 normal=[(0.000000,0.000000,1.000000)]
-00109 Line handle=666 flags=1 pts=[(588.432922,44.496411,0.000000);(579.504855,35.568344,0.000000)]
-00110 Text handle=667 flags=1 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
-00111 Line handle=668 flags=1 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
-00112 Warning handle=669 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00113 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00114 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00115 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
-00116 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="\\U+220545,6"
-00117 Warning handle=64C flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00118 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00119 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00120 Line handle=64F flags=1 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
-00121 Line handle=650 flags=1 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
-00122 Line handle=651 flags=1 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
-00123 Text handle=652 flags=1 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
-00124 Warning handle=653 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00125 Warning handle=654 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00126 Warning handle=655 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00127 Line handle=656 flags=1 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
-00128 Line handle=657 flags=1 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
-00129 Line handle=658 flags=1 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
-00130 Text handle=659 flags=1 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
-00131 Warning handle=65A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00132 Warning handle=65B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00133 Warning handle=65C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00134 Line handle=65D flags=1 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
-00135 Line handle=65E flags=1 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
-00136 Line handle=65F flags=1 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
-00137 Text handle=662 flags=1 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
-00138 Warning handle=663 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00139 Warning handle=664 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00140 Warning handle=665 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00141 Warning handle=571 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00142 Text handle=572 flags=1 p=[(826.163031,44.793268,0.000000)] h=4.000000 rot=0.000000 value="Table sample"
-00143 Text handle=573 flags=1 p=[(791.964826,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
-00144 Text handle=574 flags=1 p=[(826.163031,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
-00145 Text handle=575 flags=1 p=[(860.361236,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
-00146 Text handle=576 flags=1 p=[(826.163031,15.582302,0.000000)] h=4.000000 rot=0.000000 value="This table will be imported as an           Insert entity"
-00147 Text handle=577 flags=1 p=[(791.964826,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
-00148 Text handle=578 flags=1 p=[(826.163031,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
-00149 Text handle=579 flags=1 p=[(860.361236,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
-00150 Line handle=57A flags=1 pts=[(774.865724,48.538786,0.000000);(877.460338,48.538786,0.000000)]
-00151 Line handle=57B flags=1 pts=[(774.865724,41.047751,0.000000);(877.460338,41.047751,0.000000)]
-00152 Line handle=57C flags=1 pts=[(774.865724,34.696655,0.000000);(877.460338,34.696655,0.000000)]
-00153 Line handle=57D flags=1 pts=[(774.865724,28.345560,0.000000);(877.460338,28.345560,0.000000)]
-00154 Line handle=57E flags=1 pts=[(774.865724,21.994465,0.000000);(877.460338,21.994465,0.000000)]
-00155 Line handle=57F flags=1 pts=[(774.865724,9.170138,0.000000);(809.063929,9.170138,0.000000)]
-00156 Line handle=580 flags=1 pts=[(809.063929,9.170138,0.000000);(877.460338,9.170138,0.000000)]
-00157 Line handle=581 flags=1 pts=[(774.865724,2.819043,0.000000);(877.460338,2.819043,0.000000)]
-00158 Line handle=582 flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,21.994465,0.000000)]
-00159 Line handle=583 flags=1 pts=[(774.865724,21.994465,0.000000);(774.865724,9.170138,0.000000)]
-00160 Line handle=584 flags=1 pts=[(774.865724,9.170138,0.000000);(774.865724,2.819043,0.000000)]
-00161 Line handle=585 flags=1 pts=[(809.063929,41.047751,0.000000);(809.063929,21.994465,0.000000)]
-00162 Line handle=586 flags=1 pts=[(809.063929,9.170138,0.000000);(809.063929,2.819043,0.000000)]
-00163 Line handle=587 flags=1 pts=[(843.262134,41.047751,0.000000);(843.262134,21.994465,0.000000)]
-00164 Line handle=588 flags=1 pts=[(843.262134,9.170138,0.000000);(843.262134,2.819043,0.000000)]
-00165 Line handle=589 flags=1 pts=[(877.460338,48.538786,0.000000);(877.460338,21.994465,0.000000)]
-00166 Line handle=58A flags=1 pts=[(877.460338,21.994465,0.000000);(877.460338,9.170138,0.000000)]
-00167 Line handle=58B flags=1 pts=[(877.460338,9.170138,0.000000);(877.460338,2.819043,0.000000)]
-00168 Line handle=58C flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,48.538786,0.000000)]
-00169 Line handle=694 flags=0 pts=[(3.592534,3.275013,0.000000);(6.863547,3.275013,0.000000)]
-00170 Line handle=695 flags=0 pts=[(3.592534,4.095481,0.000000);(6.863547,4.095481,0.000000)]
-00171 Line handle=696 flags=0 pts=[(3.592534,5.160479,0.000000);(6.863547,5.160479,0.000000)]
-00172 Line handle=697 flags=0 pts=[(3.592534,6.215892,0.000000);(6.863547,6.215892,0.000000)]
-00173 Line handle=698 flags=0 pts=[(3.592534,-7.795317,0.000000);(6.863547,-7.795317,0.000000)]
-00174 Line handle=699 flags=0 pts=[(3.592534,-6.974849,0.000000);(6.863547,-6.974849,0.000000)]
-00175 Line handle=69A flags=0 pts=[(3.592534,-5.997546,0.000000);(6.863547,-5.997546,0.000000)]
-00176 Line handle=69B flags=0 pts=[(3.592534,-5.177078,0.000000);(6.863547,-5.177078,0.000000)]
-00177 Line handle=69C flags=0 pts=[(3.592534,-4.112080,0.000000);(6.863547,-4.112080,0.000000)]
-00178 Line handle=69D flags=0 pts=[(3.592534,-3.291612,0.000000);(6.863547,-3.291612,0.000000)]
-00179 Line handle=69F flags=0 pts=[(3.592534,-14.625529,0.000000);(6.863547,-14.625529,0.000000)]
-00180 Line handle=6A0 flags=0 pts=[(3.592534,-13.805061,0.000000);(6.863547,-13.805061,0.000000)]
-00181 Line handle=6A1 flags=0 pts=[(3.592534,-12.827758,0.000000);(6.863547,-12.827758,0.000000)]
-00182 Line handle=6A2 flags=0 pts=[(3.592534,-12.007290,0.000000);(6.863547,-12.007290,0.000000)]
-00183 Line handle=6A3 flags=0 pts=[(3.592534,-10.942292,0.000000);(6.863547,-10.942292,0.000000)]
-00184 Line handle=6A4 flags=0 pts=[(3.592534,-10.121824,0.000000);(6.863547,-10.121824,0.000000)]
-00185 Text handle=705 flags=0 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="17"
-00186 Line handle=6F5 flags=1 pts=[(906.144679,1.817906,0.000000);(935.214574,30.887802,0.000000)]
-00187 Line handle=6F6 flags=1 pts=[(906.144679,30.887802,0.000000);(935.214574,1.817906,0.000000)]
-00188 Circle handle=6F7 flags=1 c=[(920.679627,16.352854,0.000000)] r=10.901211 normal=[(0.000000,0.000000,1.000000)]
-00189 Text handle=6F8 flags=1 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="1"
-00190 Text handle=756 flags=0 p=[(147.589773,32.348189,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00191 Text handle=757 flags=0 p=[(147.589773,39.818954,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00192 Text handle=75C flags=0 p=[(147.589773,46.771944,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00193 Text handle=75D flags=0 p=[(147.589773,54.242709,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
-00194 Text handle=779 flags=0 p=[(183.588928,-1.386376,0.000000)] h=1.000000 rot=0.000000 value="this is a really long Mtext\nbla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla"
-00195 Polyline handle=782 flags=1 n=7 closed=1 pts=[(963.947711,9.430154,0.000000);(961.275842,11.173665,0.000000);(962.502721,14.469992,0.000000);(964.465726,16.758352,0.000000);(966.974011,15.014840,0.000000);(966.019772,11.364362,0.000000);(964.752482,10.614173,0.000000)] bulges=[0.000000,-0.799559,0.543862,-2.844377,0.718751,0.273794,-0.047611] normal=[(0.000000,0.000000,1.000000)]
-00196 Text handle=796 flags=1 p=[(954.700244,16.277818,0.000000)] h=0.500000 rot=0.000000 value=""
-00197 Text handle=797 flags=1 p=[(959.720662,20.543441,0.000000)] h=0.500000 rot=0.000000 value=""
-00198 Text handle=798 flags=1 p=[(954.450345,11.855903,0.000000)] h=0.500000 rot=0.000000 value=""
-00199 Text handle=799 flags=1 p=[(957.433728,8.874910,0.000000)] h=0.500000 rot=0.000000 value=""
-00200 Text handle=79D flags=0 p=[(977.123033,27.000817,0.000000)] h=1.720654 rot=0.000000 value="my multi line text for the attrrib"
-00201 Text handle=79F flags=0 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value="hello"
-00202 Text handle=7A0 flags=0 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value="bla bla"
-00203 Polyline handle=782 flags=1 n=7 closed=1 pts=[(1009.104872,3.465230,0.000000);(999.910147,9.465193,0.000000);(1004.132215,20.808873,0.000000);(1010.887523,28.683823,0.000000);(1019.519306,22.683861,0.000000);(1016.235476,10.121439,0.000000);(1011.874338,7.539807,0.000000)] bulges=[0.000000,-0.799559,0.543862,-2.844377,0.718751,0.273794,-0.047611] normal=[(0.000000,0.000000,1.000000)]
-00204 Text handle=796 flags=1 p=[(977.281484,27.030160,0.000000)] h=1.720654 rot=0.000000 value=""
-00205 Text handle=797 flags=1 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value=""
-00206 Text handle=798 flags=1 p=[(976.421501,11.812983,0.000000)] h=1.720654 rot=0.000000 value=""
-00207 Text handle=799 flags=1 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value=""
-00208 Warning handle=7B8 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00209 Warning handle=822 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00210 Warning handle=823 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00211 Warning handle=824 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00212 Warning handle=889 flags=0 code=UNSUPPORTED_ENTITY message="SHAPE is not a primitive this version flattens"
-00213 Warning handle=8C6 flags=0 code=UNSUPPORTED_ENTITY message="IMAGE is not a primitive this version flattens"
-00214 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
-00215 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
-00216 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
-00217 Text handle=918 flags=0 p=[(43.114061,-67.789053,0.000000)] h=1.000000 rot=0.000000 value="XData Dist"
-00218 Text handle=919 flags=0 p=[(51.735014,-72.544611,0.000000)] h=1.000000 rot=0.000000 value="XData Hand"
-00219 Text handle=91A flags=0 p=[(58.417607,-68.473283,0.000000)] h=1.000000 rot=0.000000 value="XData Int"
-00220 Text handle=91B flags=0 p=[(66.004472,-72.707045,0.000000)] h=1.000000 rot=0.000000 value="XData Layer"
-00221 Text handle=91C flags=0 p=[(77.360318,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Long"
-00222 Text handle=91D flags=0 p=[(83.289476,-73.409835,0.000000)] h=1.000000 rot=0.000000 value="XData Pos"
-00223 Text handle=91E flags=0 p=[(92.534944,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Real"
-00224 Text handle=91F flags=0 p=[(101.478928,-74.614616,0.000000)] h=1.000000 rot=0.000000 value="XData Scale"
-00225 Text handle=920 flags=0 p=[(112.453428,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Str"
-00226 Text handle=921 flags=0 p=[(118.675155,-75.214026,0.000000)] h=1.000000 rot=0.000000 value="XData All"
-00227 Polyline handle=923 flags=0 n=4 closed=1 pts=[(13.653829,-55.544191,0.000000);(13.653829,-84.056227,0.000000);(134.926240,-84.056227,0.000000);(134.926240,-55.544191,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00228 Text handle=924 flags=0 p=[(14.361669,-53.455675,0.000000)] h=1.000000 rot=0.000000 value="XDATA sample"
-00229 Polyline handle=993 flags=0 n=4 closed=1 pts=[(13.653829,-113.085058,0.000000);(13.653829,-128.633243,0.000000);(134.926240,-128.633243,0.000000);(134.926240,-113.085058,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00230 Line handle=99E flags=0 pts=[(18.961305,-124.774938,0.000000);(23.961305,-119.774938,0.000000)]
-00231 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
-00232 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
-00233 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
-00234 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
-00235 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
-00236 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
-00237 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
-00238 Warning handle=9D8 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00239 Warning handle=9D9 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00240 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
-00241 Warning handle=9DB flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00242 Warning handle=9DC flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00243 Warning handle=9DD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00244 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
-00245 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
-00246 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
-00247 Text handle=A3A flags=1 p=[(24.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="CELL FORMAT 1"
-00248 Text handle=A3B flags=1 p=[(19.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.500000"
-00249 Text handle=A3C flags=1 p=[(22.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="60"
-00250 Text handle=A3D flags=1 p=[(24.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.000000, 0.000000, 0.000000"
-00251 Text handle=A3E flags=1 p=[(27.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="11/15/2024"
-00252 Text handle=A3F flags=1 p=[(29.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="5"
-00253 Text handle=A40 flags=1 p=[(19.640582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="35.00%"
-00254 Text handle=A41 flags=1 p=[(22.140582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="$100.00"
-00255 Circle handle=A0F flags=1 c=[(26.193958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00256 Text handle=F77 flags=1 p=[(29.784088,-141.217663,0.000000)] h=0.180000 rot=0.000000 value="Cell with 2 blocks"
-00257 Circle handle=A0F flags=1 c=[(28.693958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00258 Circle handle=A0F flags=1 c=[(29.360711,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00259 Line handle=A46 flags=1 pts=[(18.390582,-140.704330,0.000000);(30.890582,-140.704330,0.000000)]
-00260 Line handle=A47 flags=1 pts=[(18.390582,-141.157663,0.000000);(30.890582,-141.157663,0.000000)]
-00261 Line handle=A48 flags=1 pts=[(18.390582,-141.764416,0.000000);(30.890582,-141.764416,0.000000)]
-00262 Line handle=A49 flags=1 pts=[(18.390582,-142.368959,0.000000);(30.890582,-142.368959,0.000000)]
-00263 Line handle=A4A flags=1 pts=[(18.390582,-142.973502,0.000000);(30.890582,-142.973502,0.000000)]
-00264 Line handle=A4B flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-142.973502,0.000000)]
-00265 Line handle=A4C flags=1 pts=[(20.890582,-141.157663,0.000000);(20.890582,-142.973502,0.000000)]
-00266 Line handle=A4D flags=1 pts=[(23.390582,-141.157663,0.000000);(23.390582,-142.973502,0.000000)]
-00267 Line handle=A4E flags=1 pts=[(25.890582,-141.157663,0.000000);(25.890582,-142.973502,0.000000)]
-00268 Line handle=A4F flags=1 pts=[(28.390582,-141.157663,0.000000);(28.390582,-142.973502,0.000000)]
-00269 Line handle=A50 flags=1 pts=[(30.890582,-140.704330,0.000000);(30.890582,-142.973502,0.000000)]
-00270 Line handle=A51 flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-140.704330,0.000000)]
-00271 Polyline handle=A54 flags=0 n=4 closed=1 pts=[(13.653829,-137.480597,0.000000);(13.653829,-147.523764,0.000000);(37.822369,-147.523764,0.000000);(37.822369,-137.480597,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00272 Text handle=A55 flags=0 p=[(14.361669,-135.392081,0.000000)] h=1.000000 rot=0.000000 value="Table sample"
-00273 Polyline handle=A7A flags=0 n=4 closed=1 pts=[(13.653829,-155.952248,0.000000);(13.653829,-174.563083,0.000000);(41.305651,-174.563083,0.000000);(41.305651,-155.952248,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00274 Text handle=A7B flags=0 p=[(14.361669,-153.863732,0.000000)] h=1.000000 rot=0.000000 value="Dynamic blocks sample"
-00275 Circle handle=A94 flags=1 c=[(19.024708,-165.549631,0.000000)] r=0.999900 normal=[(0.000000,0.000000,1.000000)]
-00276 Circle handle=A99 flags=1 c=[(29.736907,-165.369992,0.000000)] r=7.349900 normal=[(0.000000,0.000000,1.000000)]
-00277 Warning handle=B1A flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00278 Warning handle=B1B flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00279 Warning handle=B1C flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00280 Warning handle=B1D flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00281 Warning handle=B1E flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00282 Warning handle=B1F flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00283 Warning handle=B20 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00284 Warning handle=B21 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00285 Warning handle=B22 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00286 Warning handle=B23 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00287 Warning handle=B24 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00288 Warning handle=B25 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00289 Warning handle=B26 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00290 Warning handle=B27 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00291 Polyline handle=B28 flags=0 n=4 closed=1 pts=[(52.691496,-312.361608,0.000000);(52.691496,-566.168582,0.000000);(1852.185634,-566.168582,0.000000);(1852.185634,-312.361608,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00292 Text handle=B29 flags=0 p=[(53.399335,-310.273092,0.000000)] h=1.000000 rot=0.000000 value="Multileader sample"
-00293 Polygon handle=BBB flags=0 n=4 closed=1 pts=[(18.382606,-191.583790,0.000000);(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00294 Polyline handle=BBF flags=0 n=4 closed=1 pts=[(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000);(18.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00295 Polygon handle=BC0 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00296 Polyline handle=BC1 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00297 Polygon handle=BC2 flags=0 n=4 closed=1 pts=[(28.382606,-191.583790,0.000000);(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00298 Polyline handle=BC3 flags=0 n=4 closed=1 pts=[(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000);(28.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00299 Polygon handle=BC4 flags=0 n=4 closed=1 pts=[(33.382606,-191.583790,0.000000);(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00300 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00301 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00302 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
-00303 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
-00304 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
-00305 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
-00306 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
-00307 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
-00308 Warning handle=CA1 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00309 Warning handle=CA2 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00310 Warning handle=CA3 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00311 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
-00312 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
-00313 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
-00314 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
-00315 Warning handle=CDA flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00316 Warning handle=CDB flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00317 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
-00318 Warning handle=CDD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00319 Warning handle=CDE flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00320 Warning handle=CDF flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00321 Warning handle=D07 flags=0 code=UNSUPPORTED_ENTITY message="PDFUNDERLAY is not a primitive this version flattens"
-00322 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
-00323 Warning handle=D65 flags=0 code=UNSUPPORTED_ENTITY message="3DSOLID is not a primitive this version flattens"
-00324 Warning handle=D69 flags=0 code=UNSUPPORTED_ENTITY message="REGION is not a primitive this version flattens"
-00325 Warning handle=D6A flags=0 code=UNSUPPORTED_ENTITY message="3DSOLID is not a primitive this version flattens"
-00326 Polyline handle=D70 flags=0 n=4 closed=1 pts=[(10.160533,-211.015865,0.000000);(10.160533,-229.626700,0.000000);(37.812355,-229.626700,0.000000);(37.812355,-211.015865,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00327 Text handle=D71 flags=0 p=[(10.868373,-208.927349,0.000000)] h=1.000000 rot=0.000000 value="3D Solid region and body"
-00328 Polyline handle=DFC flags=0 n=4 closed=1 pts=[(10.160533,-236.841524,0.000000);(10.160533,-255.452359,0.000000);(37.812355,-255.452359,0.000000);(37.812355,-236.841524,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00329 Text handle=DFD flags=0 p=[(10.868373,-234.753008,0.000000)] h=1.000000 rot=0.000000 value="Materials"
-00330 Circle handle=E00 flags=0 c=[(15.269596,-241.455888,0.000000)] r=2.586142 normal=[(0.000000,0.000000,1.000000)]
-00331 Circle handle=E01 flags=0 c=[(17.625983,-248.517347,0.000000)] r=4.143953 normal=[(0.000000,0.000000,1.000000)]
-00332 Circle handle=E02 flags=0 c=[(26.199179,-241.956699,0.000000)] r=4.742908 normal=[(0.000000,0.000000,1.000000)]
-00333 Circle handle=E03 flags=0 c=[(28.104337,-250.170028,0.000000)] r=2.989063 normal=[(0.000000,0.000000,1.000000)]
+00040 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(93.636573,6.148280,-4.409532);(93.977652,4.875358,-4.409532)] bulges=[] normal=[(0.258199,0.069184,-0.963611)]
+00041 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(92.704730,7.080124,-4.409532);(93.636573,6.148280,-4.409532)] bulges=[] normal=[(0.189015,0.189015,-0.963611)]
+00042 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(91.431807,7.421202,-4.409532);(92.704730,7.080124,-4.409532)] bulges=[] normal=[(0.069184,0.258199,-0.963611)]
+00043 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(90.158885,7.080124,-4.409532);(91.431807,7.421202,-4.409532)] bulges=[] normal=[(-0.069184,0.258199,-0.963611)]
+00044 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(89.227041,6.148280,-4.409532);(90.158885,7.080124,-4.409532)] bulges=[] normal=[(-0.189015,0.189015,-0.963611)]
+00045 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(88.885963,4.875358,-4.409532);(89.227041,6.148280,-4.409532)] bulges=[] normal=[(-0.258199,0.069184,-0.963611)]
+00046 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(89.227041,3.602436,-4.409532);(88.885963,4.875358,-4.409532)] bulges=[] normal=[(-0.258199,-0.069184,-0.963611)]
+00047 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(90.158885,2.670592,-4.409532);(89.227041,3.602436,-4.409532)] bulges=[] normal=[(-0.189015,-0.189015,-0.963611)]
+00048 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(91.431807,2.329514,-4.409532);(90.158885,2.670592,-4.409532)] bulges=[] normal=[(-0.069184,-0.258199,-0.963611)]
+00049 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(92.704730,2.670592,-4.409532);(91.431807,2.329514,-4.409532)] bulges=[] normal=[(0.069184,-0.258199,-0.963611)]
+00050 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(93.636573,3.602436,-4.409532);(92.704730,2.670592,-4.409532)] bulges=[] normal=[(0.189015,-0.189015,-0.963611)]
+00051 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,4.875358,-5.091689);(93.977652,4.875358,-4.409532);(93.636573,3.602436,-4.409532)] bulges=[] normal=[(0.258199,-0.069184,-0.963611)]
+00052 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.250574,7.080124,-2.545844);(95.841339,4.875358,-2.545844);(93.977652,4.875358,-4.409532);(93.636573,6.148280,-4.409532)] bulges=[] normal=[(0.694747,0.186157,-0.694747)]
+00053 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,8.694124,-2.545844);(95.250574,7.080124,-2.545844);(93.636573,6.148280,-4.409532);(92.704730,7.080124,-4.409532)] bulges=[] normal=[(0.508590,0.508590,-0.694747)]
+00054 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,9.284890,-2.545844);(93.636573,8.694124,-2.545844);(92.704730,7.080124,-4.409532);(91.431807,7.421202,-4.409532)] bulges=[] normal=[(0.186157,0.694747,-0.694747)]
+00055 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,8.694124,-2.545844);(91.431807,9.284890,-2.545844);(91.431807,7.421202,-4.409532);(90.158885,7.080124,-4.409532)] bulges=[] normal=[(-0.186157,0.694747,-0.694747)]
+00056 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.613041,7.080124,-2.545844);(89.227041,8.694124,-2.545844);(90.158885,7.080124,-4.409532);(89.227041,6.148280,-4.409532)] bulges=[] normal=[(-0.508590,0.508590,-0.694747)]
+00057 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.022276,4.875358,-2.545844);(87.613041,7.080124,-2.545844);(89.227041,6.148280,-4.409532);(88.885963,4.875358,-4.409532)] bulges=[] normal=[(-0.694747,0.186157,-0.694747)]
+00058 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.613041,2.670592,-2.545844);(87.022276,4.875358,-2.545844);(88.885963,4.875358,-4.409532);(89.227041,3.602436,-4.409532)] bulges=[] normal=[(-0.694747,-0.186157,-0.694747)]
+00059 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,1.056591,-2.545844);(87.613041,2.670592,-2.545844);(89.227041,3.602436,-4.409532);(90.158885,2.670592,-4.409532)] bulges=[] normal=[(-0.508590,-0.508590,-0.694747)]
+00060 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,0.465826,-2.545844);(89.227041,1.056591,-2.545844);(90.158885,2.670592,-4.409532);(91.431807,2.329514,-4.409532)] bulges=[] normal=[(-0.186157,-0.694747,-0.694747)]
+00061 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,1.056591,-2.545844);(91.431807,0.465826,-2.545844);(91.431807,2.329514,-4.409532);(92.704730,2.670592,-4.409532)] bulges=[] normal=[(0.186157,-0.694747,-0.694747)]
+00062 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.250574,2.670592,-2.545844);(93.636573,1.056591,-2.545844);(92.704730,2.670592,-4.409532);(93.636573,3.602436,-4.409532)] bulges=[] normal=[(0.508590,-0.508590,-0.694747)]
+00063 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.841339,4.875358,-2.545844);(95.250574,2.670592,-2.545844);(93.636573,3.602436,-4.409532);(93.977652,4.875358,-4.409532)] bulges=[] normal=[(0.694747,-0.186157,-0.694747)]
+00064 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.841339,7.421202,0.000000);(96.523496,4.875358,0.000000);(95.841339,4.875358,-2.545844);(95.250574,7.080124,-2.545844)] bulges=[] normal=[(0.935113,0.250563,-0.250563)]
+00065 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.977652,9.284890,0.000000);(95.841339,7.421202,0.000000);(95.250574,7.080124,-2.545844);(93.636573,8.694124,-2.545844)] bulges=[] normal=[(0.684550,0.684550,-0.250563)]
+00066 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,9.967047,0.000000);(93.977652,9.284890,0.000000);(93.636573,8.694124,-2.545844);(91.431807,9.284890,-2.545844)] bulges=[] normal=[(0.250563,0.935113,-0.250563)]
+00067 Polygon handle=343 flags=0 n=4 closed=1 pts=[(88.885963,9.284890,0.000000);(91.431807,9.967047,0.000000);(91.431807,9.284890,-2.545844);(89.227041,8.694124,-2.545844)] bulges=[] normal=[(-0.250563,0.935113,-0.250563)]
+00068 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.022276,7.421202,0.000000);(88.885963,9.284890,0.000000);(89.227041,8.694124,-2.545844);(87.613041,7.080124,-2.545844)] bulges=[] normal=[(-0.684550,0.684550,-0.250563)]
+00069 Polygon handle=343 flags=0 n=4 closed=1 pts=[(86.340119,4.875358,0.000000);(87.022276,7.421202,0.000000);(87.613041,7.080124,-2.545844);(87.022276,4.875358,-2.545844)] bulges=[] normal=[(-0.935113,0.250563,-0.250563)]
+00070 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.022276,2.329514,0.000000);(86.340119,4.875358,0.000000);(87.022276,4.875358,-2.545844);(87.613041,2.670592,-2.545844)] bulges=[] normal=[(-0.935113,-0.250563,-0.250563)]
+00071 Polygon handle=343 flags=0 n=4 closed=1 pts=[(88.885963,0.465826,0.000000);(87.022276,2.329514,0.000000);(87.613041,2.670592,-2.545844);(89.227041,1.056591,-2.545844)] bulges=[] normal=[(-0.684550,-0.684550,-0.250563)]
+00072 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,-0.216331,0.000000);(88.885963,0.465826,0.000000);(89.227041,1.056591,-2.545844);(91.431807,0.465826,-2.545844)] bulges=[] normal=[(-0.250563,-0.935113,-0.250563)]
+00073 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.977652,0.465826,0.000000);(91.431807,-0.216331,0.000000);(91.431807,0.465826,-2.545844);(93.636573,1.056591,-2.545844)] bulges=[] normal=[(0.250563,-0.935113,-0.250563)]
+00074 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.841339,2.329514,0.000000);(93.977652,0.465826,0.000000);(93.636573,1.056591,-2.545844);(95.250574,2.670592,-2.545844)] bulges=[] normal=[(0.684550,-0.684550,-0.250563)]
+00075 Polygon handle=343 flags=0 n=4 closed=1 pts=[(96.523496,4.875358,0.000000);(95.841339,2.329514,0.000000);(95.250574,2.670592,-2.545844);(95.841339,4.875358,-2.545844)] bulges=[] normal=[(0.935113,-0.250563,-0.250563)]
+00076 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.250574,7.080124,2.545844);(95.841339,4.875358,2.545844);(96.523496,4.875358,0.000000);(95.841339,7.421202,0.000000)] bulges=[] normal=[(0.935113,0.250563,0.250563)]
+00077 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,8.694124,2.545844);(95.250574,7.080124,2.545844);(95.841339,7.421202,0.000000);(93.977652,9.284890,0.000000)] bulges=[] normal=[(0.684550,0.684550,0.250563)]
+00078 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,9.284890,2.545844);(93.636573,8.694124,2.545844);(93.977652,9.284890,0.000000);(91.431807,9.967047,0.000000)] bulges=[] normal=[(0.250563,0.935113,0.250563)]
+00079 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,8.694124,2.545844);(91.431807,9.284890,2.545844);(91.431807,9.967047,0.000000);(88.885963,9.284890,0.000000)] bulges=[] normal=[(-0.250563,0.935113,0.250563)]
+00080 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.613041,7.080124,2.545844);(89.227041,8.694124,2.545844);(88.885963,9.284890,0.000000);(87.022276,7.421202,0.000000)] bulges=[] normal=[(-0.684550,0.684550,0.250563)]
+00081 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.022276,4.875358,2.545844);(87.613041,7.080124,2.545844);(87.022276,7.421202,0.000000);(86.340119,4.875358,0.000000)] bulges=[] normal=[(-0.935113,0.250563,0.250563)]
+00082 Polygon handle=343 flags=0 n=4 closed=1 pts=[(87.613041,2.670592,2.545844);(87.022276,4.875358,2.545844);(86.340119,4.875358,0.000000);(87.022276,2.329514,0.000000)] bulges=[] normal=[(-0.935113,-0.250563,0.250563)]
+00083 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,1.056591,2.545844);(87.613041,2.670592,2.545844);(87.022276,2.329514,0.000000);(88.885963,0.465826,0.000000)] bulges=[] normal=[(-0.684550,-0.684550,0.250563)]
+00084 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,0.465826,2.545844);(89.227041,1.056591,2.545844);(88.885963,0.465826,0.000000);(91.431807,-0.216331,0.000000)] bulges=[] normal=[(-0.250563,-0.935113,0.250563)]
+00085 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,1.056591,2.545844);(91.431807,0.465826,2.545844);(91.431807,-0.216331,0.000000);(93.977652,0.465826,0.000000)] bulges=[] normal=[(0.250563,-0.935113,0.250563)]
+00086 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.250574,2.670592,2.545844);(93.636573,1.056591,2.545844);(93.977652,0.465826,0.000000);(95.841339,2.329514,0.000000)] bulges=[] normal=[(0.684550,-0.684550,0.250563)]
+00087 Polygon handle=343 flags=0 n=4 closed=1 pts=[(95.841339,4.875358,2.545844);(95.250574,2.670592,2.545844);(95.841339,2.329514,0.000000);(96.523496,4.875358,0.000000)] bulges=[] normal=[(0.935113,-0.250563,0.250563)]
+00088 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,6.148280,4.409532);(93.977652,4.875358,4.409532);(95.841339,4.875358,2.545844);(95.250574,7.080124,2.545844)] bulges=[] normal=[(0.694747,0.186157,0.694747)]
+00089 Polygon handle=343 flags=0 n=4 closed=1 pts=[(92.704730,7.080124,4.409532);(93.636573,6.148280,4.409532);(95.250574,7.080124,2.545844);(93.636573,8.694124,2.545844)] bulges=[] normal=[(0.508590,0.508590,0.694747)]
+00090 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,7.421202,4.409532);(92.704730,7.080124,4.409532);(93.636573,8.694124,2.545844);(91.431807,9.284890,2.545844)] bulges=[] normal=[(0.186157,0.694747,0.694747)]
+00091 Polygon handle=343 flags=0 n=4 closed=1 pts=[(90.158885,7.080124,4.409532);(91.431807,7.421202,4.409532);(91.431807,9.284890,2.545844);(89.227041,8.694124,2.545844)] bulges=[] normal=[(-0.186157,0.694747,0.694747)]
+00092 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,6.148280,4.409532);(90.158885,7.080124,4.409532);(89.227041,8.694124,2.545844);(87.613041,7.080124,2.545844)] bulges=[] normal=[(-0.508590,0.508590,0.694747)]
+00093 Polygon handle=343 flags=0 n=4 closed=1 pts=[(88.885963,4.875358,4.409532);(89.227041,6.148280,4.409532);(87.613041,7.080124,2.545844);(87.022276,4.875358,2.545844)] bulges=[] normal=[(-0.694747,0.186157,0.694747)]
+00094 Polygon handle=343 flags=0 n=4 closed=1 pts=[(89.227041,3.602436,4.409532);(88.885963,4.875358,4.409532);(87.022276,4.875358,2.545844);(87.613041,2.670592,2.545844)] bulges=[] normal=[(-0.694747,-0.186157,0.694747)]
+00095 Polygon handle=343 flags=0 n=4 closed=1 pts=[(90.158885,2.670592,4.409532);(89.227041,3.602436,4.409532);(87.613041,2.670592,2.545844);(89.227041,1.056591,2.545844)] bulges=[] normal=[(-0.508590,-0.508590,0.694747)]
+00096 Polygon handle=343 flags=0 n=4 closed=1 pts=[(91.431807,2.329514,4.409532);(90.158885,2.670592,4.409532);(89.227041,1.056591,2.545844);(91.431807,0.465826,2.545844)] bulges=[] normal=[(-0.186157,-0.694747,0.694747)]
+00097 Polygon handle=343 flags=0 n=4 closed=1 pts=[(92.704730,2.670592,4.409532);(91.431807,2.329514,4.409532);(91.431807,0.465826,2.545844);(93.636573,1.056591,2.545844)] bulges=[] normal=[(0.186157,-0.694747,0.694747)]
+00098 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.636573,3.602436,4.409532);(92.704730,2.670592,4.409532);(93.636573,1.056591,2.545844);(95.250574,2.670592,2.545844)] bulges=[] normal=[(0.508590,-0.508590,0.694747)]
+00099 Polygon handle=343 flags=0 n=4 closed=1 pts=[(93.977652,4.875358,4.409532);(93.636573,3.602436,4.409532);(95.250574,2.670592,2.545844);(95.841339,4.875358,2.545844)] bulges=[] normal=[(0.694747,-0.186157,0.694747)]
+00100 Polygon handle=343 flags=0 n=3 closed=1 pts=[(93.977652,4.875358,4.409532);(93.636573,6.148280,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.258199,0.069184,0.963611)]
+00101 Polygon handle=343 flags=0 n=3 closed=1 pts=[(93.636573,6.148280,4.409532);(92.704730,7.080124,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.189015,0.189015,0.963611)]
+00102 Polygon handle=343 flags=0 n=3 closed=1 pts=[(92.704730,7.080124,4.409532);(91.431807,7.421202,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.069184,0.258199,0.963611)]
+00103 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,7.421202,4.409532);(90.158885,7.080124,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.069184,0.258199,0.963611)]
+00104 Polygon handle=343 flags=0 n=3 closed=1 pts=[(90.158885,7.080124,4.409532);(89.227041,6.148280,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.189015,0.189015,0.963611)]
+00105 Polygon handle=343 flags=0 n=3 closed=1 pts=[(89.227041,6.148280,4.409532);(88.885963,4.875358,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.258199,0.069184,0.963611)]
+00106 Polygon handle=343 flags=0 n=3 closed=1 pts=[(88.885963,4.875358,4.409532);(89.227041,3.602436,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.258199,-0.069184,0.963611)]
+00107 Polygon handle=343 flags=0 n=3 closed=1 pts=[(89.227041,3.602436,4.409532);(90.158885,2.670592,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.189015,-0.189015,0.963611)]
+00108 Polygon handle=343 flags=0 n=3 closed=1 pts=[(90.158885,2.670592,4.409532);(91.431807,2.329514,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(-0.069184,-0.258199,0.963611)]
+00109 Polygon handle=343 flags=0 n=3 closed=1 pts=[(91.431807,2.329514,4.409532);(92.704730,2.670592,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.069184,-0.258199,0.963611)]
+00110 Polygon handle=343 flags=0 n=3 closed=1 pts=[(92.704730,2.670592,4.409532);(93.636573,3.602436,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.189015,-0.189015,0.963611)]
+00111 Polygon handle=343 flags=0 n=3 closed=1 pts=[(93.636573,3.602436,4.409532);(93.977652,4.875358,4.409532);(91.431807,4.875358,5.091689)] bulges=[] normal=[(0.258199,-0.069184,0.963611)]
+00112 Polyline handle=353 flags=0 n=4 closed=1 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00113 Polygon handle=35A flags=0 n=4 closed=1 pts=[(102.745762,0.085318,0.000000);(123.199087,0.085318,0.000000);(123.199087,13.710069,0.000000);(102.745762,13.710069,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00114 Polyline handle=35B flags=0 n=5 closed=0 pts=[(12.140516,7.499316,0.000000);(10.946378,10.172952,0.000000);(12.781813,11.167279,0.000000);(15.684477,8.916330,0.000000);(13.274086,8.430214,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00115 Polyline handle=36C flags=0 n=4 closed=1 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00116 Polygon handle=36E flags=0 n=4 closed=1 pts=[(102.745762,17.314131,0.000000);(123.199087,17.314131,0.000000);(123.199087,30.938882,0.000000);(102.745762,30.938882,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00117 Polyline handle=36F flags=0 n=4 closed=1 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00118 Polygon handle=371 flags=0 n=4 closed=1 pts=[(102.745762,33.467211,0.000000);(123.199087,33.467211,0.000000);(123.199087,47.091962,0.000000);(102.745762,47.091962,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00119 Polyline handle=372 flags=0 n=4 closed=1 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00120 Polygon handle=376 flags=0 n=4 closed=1 pts=[(102.745762,49.509655,0.000000);(123.199087,49.509655,0.000000);(123.199087,63.134406,0.000000);(102.745762,63.134406,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00121 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.387610,21.247192,0.000000);(95.074467,20.934049,1.069136);(96.583306,17.291390,1.069136);(97.026157,17.291390,0.000000)] bulges=[] normal=[(0.862856,0.357407,0.357407)]
+00122 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.074467,20.934049,1.069136);(94.318474,20.178056,1.511986);(95.514170,17.291390,1.511986);(96.583306,17.291390,1.069136)] bulges=[] normal=[(0.377964,0.156558,0.912487)]
+00123 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.318474,20.178056,1.511986);(93.562481,19.422063,1.069136);(94.445035,17.291390,1.069136);(95.514170,17.291390,1.511986)] bulges=[] normal=[(-0.377964,-0.156558,0.912487)]
+00124 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.562481,19.422063,1.069136);(93.249338,19.108921,0.000000);(94.002184,17.291390,0.000000);(94.445035,17.291390,1.069136)] bulges=[] normal=[(-0.862856,-0.357407,0.357407)]
+00125 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.249338,19.108921,0.000000);(93.562481,19.422063,-1.069136);(94.445035,17.291390,-1.069136);(94.002184,17.291390,0.000000)] bulges=[] normal=[(-0.862856,-0.357407,-0.357407)]
+00126 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.562481,19.422063,-1.069136);(94.318474,20.178056,-1.511986);(95.514170,17.291390,-1.511986);(94.445035,17.291390,-1.069136)] bulges=[] normal=[(-0.377964,-0.156558,-0.912487)]
+00127 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.318474,20.178056,-1.511986);(95.074467,20.934049,-1.069136);(96.583306,17.291390,-1.069136);(95.514170,17.291390,-1.511986)] bulges=[] normal=[(0.377964,0.156558,-0.912487)]
+00128 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.074467,20.934049,-1.069136);(95.387610,21.247192,0.000000);(97.026157,17.291390,0.000000);(96.583306,17.291390,-1.069136)] bulges=[] normal=[(0.862856,0.357407,-0.357407)]
+00129 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,22.885739,0.000000);(91.431807,22.442888,1.069136);(95.074467,20.934049,1.069136);(95.387610,21.247192,0.000000)] bulges=[] normal=[(0.357407,0.862856,0.357407)]
+00130 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,22.442888,1.069136);(91.431807,21.373753,1.511986);(94.318474,20.178056,1.511986);(95.074467,20.934049,1.069136)] bulges=[] normal=[(0.156558,0.377964,0.912487)]
+00131 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,21.373753,1.511986);(91.431807,20.304617,1.069136);(93.562481,19.422063,1.069136);(94.318474,20.178056,1.511986)] bulges=[] normal=[(-0.156558,-0.377964,0.912487)]
+00132 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,20.304617,1.069136);(91.431807,19.861767,0.000000);(93.249338,19.108921,0.000000);(93.562481,19.422063,1.069136)] bulges=[] normal=[(-0.357407,-0.862856,0.357407)]
+00133 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,19.861767,0.000000);(91.431807,20.304617,-1.069136);(93.562481,19.422063,-1.069136);(93.249338,19.108921,0.000000)] bulges=[] normal=[(-0.357407,-0.862856,-0.357407)]
+00134 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,20.304617,-1.069136);(91.431807,21.373753,-1.511986);(94.318474,20.178056,-1.511986);(93.562481,19.422063,-1.069136)] bulges=[] normal=[(-0.156558,-0.377964,-0.912487)]
+00135 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,21.373753,-1.511986);(91.431807,22.442888,-1.069136);(95.074467,20.934049,-1.069136);(94.318474,20.178056,-1.511986)] bulges=[] normal=[(0.156558,0.377964,-0.912487)]
+00136 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,22.442888,-1.069136);(91.431807,22.885739,0.000000);(95.387610,21.247192,0.000000);(95.074467,20.934049,-1.069136)] bulges=[] normal=[(0.357407,0.862856,-0.357407)]
+00137 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.476005,21.247192,0.000000);(87.789148,20.934049,1.069136);(91.431807,22.442888,1.069136);(91.431807,22.885739,0.000000)] bulges=[] normal=[(-0.357407,0.862856,0.357407)]
+00138 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.789148,20.934049,1.069136);(88.545141,20.178056,1.511986);(91.431807,21.373753,1.511986);(91.431807,22.442888,1.069136)] bulges=[] normal=[(-0.156558,0.377964,0.912487)]
+00139 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.545141,20.178056,1.511986);(89.301134,19.422063,1.069136);(91.431807,20.304617,1.069136);(91.431807,21.373753,1.511986)] bulges=[] normal=[(0.156558,-0.377964,0.912487)]
+00140 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.301134,19.422063,1.069136);(89.614276,19.108921,0.000000);(91.431807,19.861767,0.000000);(91.431807,20.304617,1.069136)] bulges=[] normal=[(0.357407,-0.862856,0.357407)]
+00141 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.614276,19.108921,0.000000);(89.301134,19.422063,-1.069136);(91.431807,20.304617,-1.069136);(91.431807,19.861767,0.000000)] bulges=[] normal=[(0.357407,-0.862856,-0.357407)]
+00142 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.301134,19.422063,-1.069136);(88.545141,20.178056,-1.511986);(91.431807,21.373753,-1.511986);(91.431807,20.304617,-1.069136)] bulges=[] normal=[(0.156558,-0.377964,-0.912487)]
+00143 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.545141,20.178056,-1.511986);(87.789148,20.934049,-1.069136);(91.431807,22.442888,-1.069136);(91.431807,21.373753,-1.511986)] bulges=[] normal=[(-0.156558,0.377964,-0.912487)]
+00144 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.789148,20.934049,-1.069136);(87.476005,21.247192,0.000000);(91.431807,22.885739,0.000000);(91.431807,22.442888,-1.069136)] bulges=[] normal=[(-0.357407,0.862856,-0.357407)]
+00145 Polygon handle=380 flags=0 n=4 closed=1 pts=[(85.837458,17.291390,0.000000);(86.280309,17.291390,1.069136);(87.789148,20.934049,1.069136);(87.476005,21.247192,0.000000)] bulges=[] normal=[(-0.862856,0.357407,0.357407)]
+00146 Polygon handle=380 flags=0 n=4 closed=1 pts=[(86.280309,17.291390,1.069136);(87.349444,17.291390,1.511986);(88.545141,20.178056,1.511986);(87.789148,20.934049,1.069136)] bulges=[] normal=[(-0.377964,0.156558,0.912487)]
+00147 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.349444,17.291390,1.511986);(88.418580,17.291390,1.069136);(89.301134,19.422063,1.069136);(88.545141,20.178056,1.511986)] bulges=[] normal=[(0.377964,-0.156558,0.912487)]
+00148 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.418580,17.291390,1.069136);(88.861430,17.291390,0.000000);(89.614276,19.108921,0.000000);(89.301134,19.422063,1.069136)] bulges=[] normal=[(0.862856,-0.357407,0.357407)]
+00149 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.861430,17.291390,0.000000);(88.418580,17.291390,-1.069136);(89.301134,19.422063,-1.069136);(89.614276,19.108921,0.000000)] bulges=[] normal=[(0.862856,-0.357407,-0.357407)]
+00150 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.418580,17.291390,-1.069136);(87.349444,17.291390,-1.511986);(88.545141,20.178056,-1.511986);(89.301134,19.422063,-1.069136)] bulges=[] normal=[(0.377964,-0.156558,-0.912487)]
+00151 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.349444,17.291390,-1.511986);(86.280309,17.291390,-1.069136);(87.789148,20.934049,-1.069136);(88.545141,20.178056,-1.511986)] bulges=[] normal=[(-0.377964,0.156558,-0.912487)]
+00152 Polygon handle=380 flags=0 n=4 closed=1 pts=[(86.280309,17.291390,-1.069136);(85.837458,17.291390,0.000000);(87.476005,21.247192,0.000000);(87.789148,20.934049,-1.069136)] bulges=[] normal=[(-0.862856,0.357407,-0.357407)]
+00153 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.476005,13.335587,0.000000);(87.789148,13.648730,1.069136);(86.280309,17.291390,1.069136);(85.837458,17.291390,0.000000)] bulges=[] normal=[(-0.862856,-0.357407,0.357407)]
+00154 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.789148,13.648730,1.069136);(88.545141,14.404723,1.511986);(87.349444,17.291390,1.511986);(86.280309,17.291390,1.069136)] bulges=[] normal=[(-0.377964,-0.156558,0.912487)]
+00155 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.545141,14.404723,1.511986);(89.301134,15.160716,1.069136);(88.418580,17.291390,1.069136);(87.349444,17.291390,1.511986)] bulges=[] normal=[(0.377964,0.156558,0.912487)]
+00156 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.301134,15.160716,1.069136);(89.614276,15.473859,0.000000);(88.861430,17.291390,0.000000);(88.418580,17.291390,1.069136)] bulges=[] normal=[(0.862856,0.357407,0.357407)]
+00157 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.614276,15.473859,0.000000);(89.301134,15.160716,-1.069136);(88.418580,17.291390,-1.069136);(88.861430,17.291390,0.000000)] bulges=[] normal=[(0.862856,0.357407,-0.357407)]
+00158 Polygon handle=380 flags=0 n=4 closed=1 pts=[(89.301134,15.160716,-1.069136);(88.545141,14.404723,-1.511986);(87.349444,17.291390,-1.511986);(88.418580,17.291390,-1.069136)] bulges=[] normal=[(0.377964,0.156558,-0.912487)]
+00159 Polygon handle=380 flags=0 n=4 closed=1 pts=[(88.545141,14.404723,-1.511986);(87.789148,13.648730,-1.069136);(86.280309,17.291390,-1.069136);(87.349444,17.291390,-1.511986)] bulges=[] normal=[(-0.377964,-0.156558,-0.912487)]
+00160 Polygon handle=380 flags=0 n=4 closed=1 pts=[(87.789148,13.648730,-1.069136);(87.476005,13.335587,0.000000);(85.837458,17.291390,0.000000);(86.280309,17.291390,-1.069136)] bulges=[] normal=[(-0.862856,-0.357407,-0.357407)]
+00161 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,11.697040,0.000000);(91.431807,12.139891,1.069136);(87.789148,13.648730,1.069136);(87.476005,13.335587,0.000000)] bulges=[] normal=[(-0.357407,-0.862856,0.357407)]
+00162 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,12.139891,1.069136);(91.431807,13.209027,1.511986);(88.545141,14.404723,1.511986);(87.789148,13.648730,1.069136)] bulges=[] normal=[(-0.156558,-0.377964,0.912487)]
+00163 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,13.209027,1.511986);(91.431807,14.278162,1.069136);(89.301134,15.160716,1.069136);(88.545141,14.404723,1.511986)] bulges=[] normal=[(0.156558,0.377964,0.912487)]
+00164 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,14.278162,1.069136);(91.431807,14.721013,0.000000);(89.614276,15.473859,0.000000);(89.301134,15.160716,1.069136)] bulges=[] normal=[(0.357407,0.862856,0.357407)]
+00165 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,14.721013,0.000000);(91.431807,14.278162,-1.069136);(89.301134,15.160716,-1.069136);(89.614276,15.473859,0.000000)] bulges=[] normal=[(0.357407,0.862856,-0.357407)]
+00166 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,14.278162,-1.069136);(91.431807,13.209027,-1.511986);(88.545141,14.404723,-1.511986);(89.301134,15.160716,-1.069136)] bulges=[] normal=[(0.156558,0.377964,-0.912487)]
+00167 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,13.209027,-1.511986);(91.431807,12.139891,-1.069136);(87.789148,13.648730,-1.069136);(88.545141,14.404723,-1.511986)] bulges=[] normal=[(-0.156558,-0.377964,-0.912487)]
+00168 Polygon handle=380 flags=0 n=4 closed=1 pts=[(91.431807,12.139891,-1.069136);(91.431807,11.697040,0.000000);(87.476005,13.335587,0.000000);(87.789148,13.648730,-1.069136)] bulges=[] normal=[(-0.357407,-0.862856,-0.357407)]
+00169 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.387610,13.335587,0.000000);(95.074467,13.648730,1.069136);(91.431807,12.139891,1.069136);(91.431807,11.697040,0.000000)] bulges=[] normal=[(0.357407,-0.862856,0.357407)]
+00170 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.074467,13.648730,1.069136);(94.318474,14.404723,1.511986);(91.431807,13.209027,1.511986);(91.431807,12.139891,1.069136)] bulges=[] normal=[(0.156558,-0.377964,0.912487)]
+00171 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.318474,14.404723,1.511986);(93.562481,15.160716,1.069136);(91.431807,14.278162,1.069136);(91.431807,13.209027,1.511986)] bulges=[] normal=[(-0.156558,0.377964,0.912487)]
+00172 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.562481,15.160716,1.069136);(93.249338,15.473859,0.000000);(91.431807,14.721013,0.000000);(91.431807,14.278162,1.069136)] bulges=[] normal=[(-0.357407,0.862856,0.357407)]
+00173 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.249338,15.473859,0.000000);(93.562481,15.160716,-1.069136);(91.431807,14.278162,-1.069136);(91.431807,14.721013,0.000000)] bulges=[] normal=[(-0.357407,0.862856,-0.357407)]
+00174 Polygon handle=380 flags=0 n=4 closed=1 pts=[(93.562481,15.160716,-1.069136);(94.318474,14.404723,-1.511986);(91.431807,13.209027,-1.511986);(91.431807,14.278162,-1.069136)] bulges=[] normal=[(-0.156558,0.377964,-0.912487)]
+00175 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.318474,14.404723,-1.511986);(95.074467,13.648730,-1.069136);(91.431807,12.139891,-1.069136);(91.431807,13.209027,-1.511986)] bulges=[] normal=[(0.156558,-0.377964,-0.912487)]
+00176 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.074467,13.648730,-1.069136);(95.387610,13.335587,0.000000);(91.431807,11.697040,0.000000);(91.431807,12.139891,-1.069136)] bulges=[] normal=[(0.357407,-0.862856,-0.357407)]
+00177 Polygon handle=380 flags=0 n=4 closed=1 pts=[(97.026157,17.291390,0.000000);(96.583306,17.291390,1.069136);(95.074467,13.648730,1.069136);(95.387610,13.335587,0.000000)] bulges=[] normal=[(0.862856,-0.357407,0.357407)]
+00178 Polygon handle=380 flags=0 n=4 closed=1 pts=[(96.583306,17.291390,1.069136);(95.514170,17.291390,1.511986);(94.318474,14.404723,1.511986);(95.074467,13.648730,1.069136)] bulges=[] normal=[(0.377964,-0.156558,0.912487)]
+00179 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.514170,17.291390,1.511986);(94.445035,17.291390,1.069136);(93.562481,15.160716,1.069136);(94.318474,14.404723,1.511986)] bulges=[] normal=[(-0.377964,0.156558,0.912487)]
+00180 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.445035,17.291390,1.069136);(94.002184,17.291390,0.000000);(93.249338,15.473859,0.000000);(93.562481,15.160716,1.069136)] bulges=[] normal=[(-0.862856,0.357407,0.357407)]
+00181 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.002184,17.291390,0.000000);(94.445035,17.291390,-1.069136);(93.562481,15.160716,-1.069136);(93.249338,15.473859,0.000000)] bulges=[] normal=[(-0.862856,0.357407,-0.357407)]
+00182 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.445035,17.291390,-1.069136);(95.514170,17.291390,-1.511986);(94.318474,14.404723,-1.511986);(93.562481,15.160716,-1.069136)] bulges=[] normal=[(-0.377964,0.156558,-0.912487)]
+00183 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.514170,17.291390,-1.511986);(96.583306,17.291390,-1.069136);(95.074467,13.648730,-1.069136);(94.318474,14.404723,-1.511986)] bulges=[] normal=[(0.377964,-0.156558,-0.912487)]
+00184 Polygon handle=380 flags=0 n=4 closed=1 pts=[(96.583306,17.291390,-1.069136);(97.026157,17.291390,0.000000);(95.387610,13.335587,0.000000);(95.074467,13.648730,-1.069136)] bulges=[] normal=[(0.862856,-0.357407,-0.357407)]
+00185 Warning handle=389 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="XLINE runs both ways from its base point forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
+00186 Warning handle=38A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="RAY runs from its base point in one direction forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
+00187 Warning handle=38B flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00188 Warning handle=3A5 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00189 Warning handle=3A6 flags=0 code=UNSUPPORTED_ENTITY message="MLINE is not a primitive this version flattens"
+00190 Text handle=3B9 flags=0 p=[(147.819447,2.854975,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00191 Text handle=3BA flags=0 p=[(147.819447,10.325741,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00192 Text handle=3CF flags=0 p=[(147.819447,17.278730,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00193 Text handle=3D0 flags=0 p=[(147.819447,24.749495,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00194 Text handle=3EC flags=0 p=[(183.588928,5.226371,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00195 Text handle=3F5 flags=0 p=[(183.588928,9.187556,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00196 Text handle=3F6 flags=0 p=[(199.330342,15.326102,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
+00197 Warning handle=422 flags=0 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
+00198 Polyline handle=42B flags=0 n=5 closed=0 pts=[(232.601721,0.892694,0.000000);(233.414990,3.348587,5.478600);(229.032110,4.736119,0.000000);(227.878838,8.433591,5.478600);(225.744949,9.922907,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00199 Polygon handle=432 flags=0 n=4 closed=1 pts=[(235.606430,4.785764,0.000000);(244.372190,3.348587,0.000000);(246.095727,11.937454,0.000000);(236.702150,11.791500,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00200 Spline handle=433 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,1.157147,0.000000);(254.713771,11.986104,0.000000);(259.387964,1.234244,0.000000);(259.224551,11.018627,0.000000)] weights=[]
+00201 Spline handle=434 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,17.426024,0.000000);(254.713771,28.254981,0.000000);(259.387964,17.503122,0.000000);(259.224551,27.287505,0.000000)] weights=[]
+00202 Warning handle=44D flags=0 code=UNSUPPORTED_ENTITY message="WIPEOUT is not a primitive this version flattens, and it is the one refusal on this wire that reveals rather than loses: a wipeout is a mask, so dropping it shows whatever the drawing put underneath it"
+00203 Warning handle=512 flags=0 code=UNSUPPORTED_ENTITY message="LEADER is not a primitive this version flattens"
+00204 Text handle=513 flags=0 p=[(741.023750,14.696812,0.000000)] h=1.424925 rot=0.000000 value="Sample annotation"
+00205 Line handle=626 flags=1 pts=[(329.976559,3.482445,0.000000);(319.276189,22.016030,0.000000)]
+00206 Line handle=627 flags=1 pts=[(364.174764,37.680650,0.000000);(359.733100,45.373838,0.000000)]
+00207 Line handle=628 flags=1 pts=[(322.066253,22.183498,0.000000);(358.193037,43.041307,0.000000)]
+00208 Polygon handle=629 flags=1 n=3 closed=1 pts=[(321.857920,22.544342,0.000000);(322.274586,21.822654,0.000000);(319.901189,20.933498,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00209 Polygon handle=62A flags=1 n=3 closed=1 pts=[(357.984703,43.402150,0.000000);(358.401370,42.680463,0.000000);(360.358100,44.291307,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00210 Text handle=62B flags=1 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
+00211 Warning handle=62C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00212 Warning handle=62D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00213 Warning handle=62E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00214 Line handle=62F flags=1 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
+00215 Line handle=630 flags=1 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
+00216 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
+00217 Polygon handle=632 flags=1 n=3 closed=1 pts=[(472.578479,5.658233,0.000000);(471.778922,5.893082,0.000000);(471.474155,3.376988,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00218 Polygon handle=633 flags=1 n=3 closed=1 pts=[(449.278421,46.881641,0.000000);(449.509551,47.682281,0.000000);(446.992067,47.975350,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00219 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00220 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00221 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00222 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00223 Warning handle=638 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00224 Line handle=639 flags=1 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
+00225 Line handle=63A flags=1 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
+00226 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
+00227 Polygon handle=63C flags=1 n=3 closed=1 pts=[(528.882361,5.889541,0.000000);(528.082623,6.123770,0.000000);(527.779805,3.607440,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00228 Polygon handle=63D flags=1 n=3 closed=1 pts=[(506.097832,46.172874,0.000000);(506.329582,46.973334,0.000000);(503.812326,47.268354,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00229 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00230 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00231 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00232 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00233 Warning handle=642 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00234 Warning handle=643 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00235 Line handle=517 flags=0 pts=[(330.289059,2.941179,0.000000);(364.487264,37.139384,0.000000)]
+00236 Line handle=518 flags=0 pts=[(381.586367,8.640880,0.000000);(415.784572,42.839085,0.000000)]
+00237 Line handle=519 flags=0 pts=[(438.583375,14.340581,0.000000);(444.283076,37.139384,0.000000)]
+00238 Line handle=51A flags=0 pts=[(438.583375,14.340581,0.000000);(455.682478,8.640880,0.000000)]
+00239 Line handle=51B flags=0 pts=[(495.580383,14.340581,0.000000);(501.280084,37.139384,0.000000)]
+00240 Line handle=51C flags=0 pts=[(495.580383,14.340581,0.000000);(512.679486,8.640880,0.000000)]
+00241 Circle handle=51D flags=0 c=[(569.676494,25.739983,0.000000)] r=11.399402 normal=[(0.000000,0.000000,1.000000)]
+00242 Circle handle=51E flags=0 c=[(626.673502,25.739983,0.000000)] r=22.798803 normal=[(0.000000,0.000000,1.000000)]
+00243 Line handle=666 flags=1 pts=[(588.432922,44.496411,0.000000);(579.504855,35.568344,0.000000)]
+00244 Text handle=667 flags=1 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
+00245 Line handle=668 flags=1 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
+00246 Polygon handle=669 flags=1 n=3 closed=1 pts=[(579.210227,35.862972,0.000000);(579.799483,35.273716,0.000000);(577.737088,33.800577,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00247 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00248 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00249 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
+00250 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="\\U+220545,6"
+00251 Polygon handle=64C flags=1 n=3 closed=1 pts=[(646.972306,26.156649,0.000000);(646.972306,25.323316,0.000000);(649.472306,25.739983,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00252 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00253 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00254 Line handle=64F flags=1 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
+00255 Line handle=650 flags=1 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
+00256 Line handle=651 flags=1 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
+00257 Text handle=652 flags=1 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
+00258 Warning handle=653 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00259 Warning handle=654 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00260 Warning handle=655 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00261 Line handle=656 flags=1 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
+00262 Line handle=657 flags=1 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
+00263 Line handle=658 flags=1 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
+00264 Text handle=659 flags=1 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
+00265 Warning handle=65A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00266 Warning handle=65B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00267 Warning handle=65C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00268 Line handle=65D flags=1 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
+00269 Line handle=65E flags=1 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
+00270 Line handle=65F flags=1 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
+00271 Text handle=662 flags=1 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
+00272 Warning handle=663 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00273 Warning handle=664 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00274 Warning handle=665 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00275 Polygon handle=571 flags=1 n=4 closed=1 pts=[(774.865724,21.994465,0.000000);(774.865724,9.170138,0.000000);(877.460338,9.170138,0.000000);(877.460338,21.994465,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00276 Text handle=572 flags=1 p=[(826.163031,44.793268,0.000000)] h=4.000000 rot=0.000000 value="Table sample"
+00277 Text handle=573 flags=1 p=[(791.964826,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00278 Text handle=574 flags=1 p=[(826.163031,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00279 Text handle=575 flags=1 p=[(860.361236,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
+00280 Text handle=576 flags=1 p=[(826.163031,15.582302,0.000000)] h=4.000000 rot=0.000000 value="This table will be imported as an           Insert entity"
+00281 Text handle=577 flags=1 p=[(791.964826,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00282 Text handle=578 flags=1 p=[(826.163031,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00283 Text handle=579 flags=1 p=[(860.361236,9.135940,0.000000)] h=4.000000 rot=0.000000 value="cell text"
+00284 Line handle=57A flags=1 pts=[(774.865724,48.538786,0.000000);(877.460338,48.538786,0.000000)]
+00285 Line handle=57B flags=1 pts=[(774.865724,41.047751,0.000000);(877.460338,41.047751,0.000000)]
+00286 Line handle=57C flags=1 pts=[(774.865724,34.696655,0.000000);(877.460338,34.696655,0.000000)]
+00287 Line handle=57D flags=1 pts=[(774.865724,28.345560,0.000000);(877.460338,28.345560,0.000000)]
+00288 Line handle=57E flags=1 pts=[(774.865724,21.994465,0.000000);(877.460338,21.994465,0.000000)]
+00289 Line handle=57F flags=1 pts=[(774.865724,9.170138,0.000000);(809.063929,9.170138,0.000000)]
+00290 Line handle=580 flags=1 pts=[(809.063929,9.170138,0.000000);(877.460338,9.170138,0.000000)]
+00291 Line handle=581 flags=1 pts=[(774.865724,2.819043,0.000000);(877.460338,2.819043,0.000000)]
+00292 Line handle=582 flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,21.994465,0.000000)]
+00293 Line handle=583 flags=1 pts=[(774.865724,21.994465,0.000000);(774.865724,9.170138,0.000000)]
+00294 Line handle=584 flags=1 pts=[(774.865724,9.170138,0.000000);(774.865724,2.819043,0.000000)]
+00295 Line handle=585 flags=1 pts=[(809.063929,41.047751,0.000000);(809.063929,21.994465,0.000000)]
+00296 Line handle=586 flags=1 pts=[(809.063929,9.170138,0.000000);(809.063929,2.819043,0.000000)]
+00297 Line handle=587 flags=1 pts=[(843.262134,41.047751,0.000000);(843.262134,21.994465,0.000000)]
+00298 Line handle=588 flags=1 pts=[(843.262134,9.170138,0.000000);(843.262134,2.819043,0.000000)]
+00299 Line handle=589 flags=1 pts=[(877.460338,48.538786,0.000000);(877.460338,21.994465,0.000000)]
+00300 Line handle=58A flags=1 pts=[(877.460338,21.994465,0.000000);(877.460338,9.170138,0.000000)]
+00301 Line handle=58B flags=1 pts=[(877.460338,9.170138,0.000000);(877.460338,2.819043,0.000000)]
+00302 Line handle=58C flags=1 pts=[(774.865724,48.538786,0.000000);(774.865724,48.538786,0.000000)]
+00303 Line handle=694 flags=0 pts=[(3.592534,3.275013,0.000000);(6.863547,3.275013,0.000000)]
+00304 Line handle=695 flags=0 pts=[(3.592534,4.095481,0.000000);(6.863547,4.095481,0.000000)]
+00305 Line handle=696 flags=0 pts=[(3.592534,5.160479,0.000000);(6.863547,5.160479,0.000000)]
+00306 Line handle=697 flags=0 pts=[(3.592534,6.215892,0.000000);(6.863547,6.215892,0.000000)]
+00307 Line handle=698 flags=0 pts=[(3.592534,-7.795317,0.000000);(6.863547,-7.795317,0.000000)]
+00308 Line handle=699 flags=0 pts=[(3.592534,-6.974849,0.000000);(6.863547,-6.974849,0.000000)]
+00309 Line handle=69A flags=0 pts=[(3.592534,-5.997546,0.000000);(6.863547,-5.997546,0.000000)]
+00310 Line handle=69B flags=0 pts=[(3.592534,-5.177078,0.000000);(6.863547,-5.177078,0.000000)]
+00311 Line handle=69C flags=0 pts=[(3.592534,-4.112080,0.000000);(6.863547,-4.112080,0.000000)]
+00312 Line handle=69D flags=0 pts=[(3.592534,-3.291612,0.000000);(6.863547,-3.291612,0.000000)]
+00313 Line handle=69F flags=0 pts=[(3.592534,-14.625529,0.000000);(6.863547,-14.625529,0.000000)]
+00314 Line handle=6A0 flags=0 pts=[(3.592534,-13.805061,0.000000);(6.863547,-13.805061,0.000000)]
+00315 Line handle=6A1 flags=0 pts=[(3.592534,-12.827758,0.000000);(6.863547,-12.827758,0.000000)]
+00316 Line handle=6A2 flags=0 pts=[(3.592534,-12.007290,0.000000);(6.863547,-12.007290,0.000000)]
+00317 Line handle=6A3 flags=0 pts=[(3.592534,-10.942292,0.000000);(6.863547,-10.942292,0.000000)]
+00318 Line handle=6A4 flags=0 pts=[(3.592534,-10.121824,0.000000);(6.863547,-10.121824,0.000000)]
+00319 Text handle=705 flags=0 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="17"
+00320 Line handle=6F5 flags=1 pts=[(906.144679,1.817906,0.000000);(935.214574,30.887802,0.000000)]
+00321 Line handle=6F6 flags=1 pts=[(906.144679,30.887802,0.000000);(935.214574,1.817906,0.000000)]
+00322 Circle handle=6F7 flags=1 c=[(920.679627,16.352854,0.000000)] r=10.901211 normal=[(0.000000,0.000000,1.000000)]
+00323 Text handle=6F8 flags=1 p=[(920.679627,16.352854,0.000000)] h=1.816868 rot=0.000000 value="1"
+00324 Text handle=756 flags=0 p=[(147.589773,32.348189,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00325 Text handle=757 flags=0 p=[(147.589773,39.818954,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00326 Text handle=75C flags=0 p=[(147.589773,46.771944,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00327 Text handle=75D flags=0 p=[(147.589773,54.242709,0.000000)] h=1.000000 rot=0.000000 value="Hello this is a single line text"
+00328 Text handle=779 flags=0 p=[(183.588928,-1.386376,0.000000)] h=1.000000 rot=0.000000 value="this is a really long Mtext\nbla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla bla"
+00329 Polyline handle=782 flags=1 n=7 closed=1 pts=[(963.947711,9.430154,0.000000);(961.275842,11.173665,0.000000);(962.502721,14.469992,0.000000);(964.465726,16.758352,0.000000);(966.974011,15.014840,0.000000);(966.019772,11.364362,0.000000);(964.752482,10.614173,0.000000)] bulges=[0.000000,-0.799559,0.543862,-2.844377,0.718751,0.273794,-0.047611] normal=[(0.000000,0.000000,1.000000)]
+00330 Text handle=796 flags=1 p=[(954.700244,16.277818,0.000000)] h=0.500000 rot=0.000000 value=""
+00331 Text handle=797 flags=1 p=[(959.720662,20.543441,0.000000)] h=0.500000 rot=0.000000 value=""
+00332 Text handle=798 flags=1 p=[(954.450345,11.855903,0.000000)] h=0.500000 rot=0.000000 value=""
+00333 Text handle=799 flags=1 p=[(957.433728,8.874910,0.000000)] h=0.500000 rot=0.000000 value=""
+00334 Text handle=79D flags=0 p=[(977.123033,27.000817,0.000000)] h=1.720654 rot=0.000000 value="my multi line text for the attrrib"
+00335 Text handle=79F flags=0 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value="hello"
+00336 Text handle=7A0 flags=0 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value="bla bla"
+00337 Polyline handle=782 flags=1 n=7 closed=1 pts=[(1009.104872,3.465230,0.000000);(999.910147,9.465193,0.000000);(1004.132215,20.808873,0.000000);(1010.887523,28.683823,0.000000);(1019.519306,22.683861,0.000000);(1016.235476,10.121439,0.000000);(1011.874338,7.539807,0.000000)] bulges=[0.000000,-0.799559,0.543862,-2.844377,0.718751,0.273794,-0.047611] normal=[(0.000000,0.000000,1.000000)]
+00338 Text handle=796 flags=1 p=[(977.281484,27.030160,0.000000)] h=1.720654 rot=0.000000 value=""
+00339 Text handle=797 flags=1 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value=""
+00340 Text handle=798 flags=1 p=[(976.421501,11.812983,0.000000)] h=1.720654 rot=0.000000 value=""
+00341 Text handle=799 flags=1 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value=""
+00342 Warning handle=7B8 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00343 Warning handle=822 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00344 Warning handle=823 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00345 Warning handle=824 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
+00346 Warning handle=889 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="SHAPE draws a glyph out of an external SHX file and carries only the placement and the name, and this decoder opens no path a drawing names, so the outline is not in this file and is not fetched"
+00347 Warning handle=8C6 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="IMAGE shows an external raster the drawing only names, and this decoder opens no path a drawing names, so what it displays is not in this file"
+00348 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
+00349 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
+00350 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
+00351 Text handle=918 flags=0 p=[(43.114061,-67.789053,0.000000)] h=1.000000 rot=0.000000 value="XData Dist"
+00352 Text handle=919 flags=0 p=[(51.735014,-72.544611,0.000000)] h=1.000000 rot=0.000000 value="XData Hand"
+00353 Text handle=91A flags=0 p=[(58.417607,-68.473283,0.000000)] h=1.000000 rot=0.000000 value="XData Int"
+00354 Text handle=91B flags=0 p=[(66.004472,-72.707045,0.000000)] h=1.000000 rot=0.000000 value="XData Layer"
+00355 Text handle=91C flags=0 p=[(77.360318,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Long"
+00356 Text handle=91D flags=0 p=[(83.289476,-73.409835,0.000000)] h=1.000000 rot=0.000000 value="XData Pos"
+00357 Text handle=91E flags=0 p=[(92.534944,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Real"
+00358 Text handle=91F flags=0 p=[(101.478928,-74.614616,0.000000)] h=1.000000 rot=0.000000 value="XData Scale"
+00359 Text handle=920 flags=0 p=[(112.453428,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Str"
+00360 Text handle=921 flags=0 p=[(118.675155,-75.214026,0.000000)] h=1.000000 rot=0.000000 value="XData All"
+00361 Polyline handle=923 flags=0 n=4 closed=1 pts=[(13.653829,-55.544191,0.000000);(13.653829,-84.056227,0.000000);(134.926240,-84.056227,0.000000);(134.926240,-55.544191,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00362 Text handle=924 flags=0 p=[(14.361669,-53.455675,0.000000)] h=1.000000 rot=0.000000 value="XDATA sample"
+00363 Polyline handle=993 flags=0 n=4 closed=1 pts=[(13.653829,-113.085058,0.000000);(13.653829,-128.633243,0.000000);(134.926240,-128.633243,0.000000);(134.926240,-113.085058,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00364 Line handle=99E flags=0 pts=[(18.961305,-124.774938,0.000000);(23.961305,-119.774938,0.000000)]
+00365 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
+00366 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
+00367 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
+00368 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
+00369 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
+00370 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
+00371 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
+00372 Polygon handle=9D8 flags=1 n=3 closed=1 pts=[(35.260903,-122.045502,0.000000);(35.303330,-122.087929,0.000000);(35.154837,-122.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00373 Polygon handle=9D9 flags=1 n=3 closed=1 pts=[(40.006345,-117.300061,0.000000);(40.048771,-117.342487,0.000000);(40.154837,-117.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00374 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
+00375 Warning handle=9DB flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00376 Warning handle=9DC flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00377 Warning handle=9DD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00378 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
+00379 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
+00380 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
+00381 Text handle=A3A flags=1 p=[(24.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="CELL FORMAT 1"
+00382 Text handle=A3B flags=1 p=[(19.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.500000"
+00383 Text handle=A3C flags=1 p=[(22.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="60"
+00384 Text handle=A3D flags=1 p=[(24.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.000000, 0.000000, 0.000000"
+00385 Text handle=A3E flags=1 p=[(27.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="11/15/2024"
+00386 Text handle=A3F flags=1 p=[(29.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="5"
+00387 Text handle=A40 flags=1 p=[(19.640582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="35.00%"
+00388 Text handle=A41 flags=1 p=[(22.140582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="$100.00"
+00389 Circle handle=A0F flags=1 c=[(26.193958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00390 Text handle=F77 flags=1 p=[(29.784088,-141.217663,0.000000)] h=0.180000 rot=0.000000 value="Cell with 2 blocks"
+00391 Circle handle=A0F flags=1 c=[(28.693958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00392 Circle handle=A0F flags=1 c=[(29.360711,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00393 Line handle=A46 flags=1 pts=[(18.390582,-140.704330,0.000000);(30.890582,-140.704330,0.000000)]
+00394 Line handle=A47 flags=1 pts=[(18.390582,-141.157663,0.000000);(30.890582,-141.157663,0.000000)]
+00395 Line handle=A48 flags=1 pts=[(18.390582,-141.764416,0.000000);(30.890582,-141.764416,0.000000)]
+00396 Line handle=A49 flags=1 pts=[(18.390582,-142.368959,0.000000);(30.890582,-142.368959,0.000000)]
+00397 Line handle=A4A flags=1 pts=[(18.390582,-142.973502,0.000000);(30.890582,-142.973502,0.000000)]
+00398 Line handle=A4B flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-142.973502,0.000000)]
+00399 Line handle=A4C flags=1 pts=[(20.890582,-141.157663,0.000000);(20.890582,-142.973502,0.000000)]
+00400 Line handle=A4D flags=1 pts=[(23.390582,-141.157663,0.000000);(23.390582,-142.973502,0.000000)]
+00401 Line handle=A4E flags=1 pts=[(25.890582,-141.157663,0.000000);(25.890582,-142.973502,0.000000)]
+00402 Line handle=A4F flags=1 pts=[(28.390582,-141.157663,0.000000);(28.390582,-142.973502,0.000000)]
+00403 Line handle=A50 flags=1 pts=[(30.890582,-140.704330,0.000000);(30.890582,-142.973502,0.000000)]
+00404 Line handle=A51 flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-140.704330,0.000000)]
+00405 Polyline handle=A54 flags=0 n=4 closed=1 pts=[(13.653829,-137.480597,0.000000);(13.653829,-147.523764,0.000000);(37.822369,-147.523764,0.000000);(37.822369,-137.480597,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00406 Text handle=A55 flags=0 p=[(14.361669,-135.392081,0.000000)] h=1.000000 rot=0.000000 value="Table sample"
+00407 Polyline handle=A7A flags=0 n=4 closed=1 pts=[(13.653829,-155.952248,0.000000);(13.653829,-174.563083,0.000000);(41.305651,-174.563083,0.000000);(41.305651,-155.952248,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00408 Text handle=A7B flags=0 p=[(14.361669,-153.863732,0.000000)] h=1.000000 rot=0.000000 value="Dynamic blocks sample"
+00409 Circle handle=A94 flags=1 c=[(19.024708,-165.549631,0.000000)] r=0.999900 normal=[(0.000000,0.000000,1.000000)]
+00410 Circle handle=A99 flags=1 c=[(29.736907,-165.369992,0.000000)] r=7.349900 normal=[(0.000000,0.000000,1.000000)]
+00411 Warning handle=B1A flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00412 Warning handle=B1B flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00413 Warning handle=B1C flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00414 Warning handle=B1D flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00415 Warning handle=B1E flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00416 Warning handle=B1F flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00417 Warning handle=B20 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00418 Warning handle=B21 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00419 Warning handle=B22 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00420 Warning handle=B23 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00421 Warning handle=B24 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00422 Warning handle=B25 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00423 Warning handle=B26 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00424 Warning handle=B27 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
+00425 Polyline handle=B28 flags=0 n=4 closed=1 pts=[(52.691496,-312.361608,0.000000);(52.691496,-566.168582,0.000000);(1852.185634,-566.168582,0.000000);(1852.185634,-312.361608,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00426 Text handle=B29 flags=0 p=[(53.399335,-310.273092,0.000000)] h=1.000000 rot=0.000000 value="Multileader sample"
+00427 Polygon handle=BBB flags=0 n=4 closed=1 pts=[(18.382606,-191.583790,0.000000);(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00428 Polyline handle=BBF flags=0 n=4 closed=1 pts=[(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000);(18.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00429 Polygon handle=BC0 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00430 Polyline handle=BC1 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00431 Polygon handle=BC2 flags=0 n=4 closed=1 pts=[(28.382606,-191.583790,0.000000);(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00432 Polyline handle=BC3 flags=0 n=4 closed=1 pts=[(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000);(28.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00433 Polygon handle=BC4 flags=0 n=4 closed=1 pts=[(33.382606,-191.583790,0.000000);(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00434 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00435 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00436 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
+00437 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
+00438 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
+00439 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
+00440 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
+00441 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
+00442 Warning handle=CA1 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00443 Warning handle=CA2 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00444 Warning handle=CA3 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00445 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
+00446 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
+00447 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
+00448 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
+00449 Polygon handle=CDA flags=1 n=3 closed=1 pts=[(314.084306,-21.584004,0.000000);(314.084306,-21.644004,0.000000);(313.904306,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00450 Polygon handle=CDB flags=1 n=3 closed=1 pts=[(348.669638,-21.584004,0.000000);(348.669638,-21.644004,0.000000);(348.849638,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00451 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
+00452 Warning handle=CDD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00453 Warning handle=CDE flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00454 Warning handle=CDF flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00455 Warning handle=D07 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="PDFUNDERLAY shows an external PDF the drawing only names, and this decoder opens no path a drawing names, so what it displays is not in this file"
+00456 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
+00457 Warning handle=D65 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
+00458 Warning handle=D69 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="REGION keeps its geometry as an embedded ACIS stream, the same as 3DSOLID, so there is no outline here to flatten and producing one means evaluating a proprietary boundary representation"
+00459 Warning handle=D6A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
+00460 Polyline handle=D70 flags=0 n=4 closed=1 pts=[(10.160533,-211.015865,0.000000);(10.160533,-229.626700,0.000000);(37.812355,-229.626700,0.000000);(37.812355,-211.015865,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00461 Text handle=D71 flags=0 p=[(10.868373,-208.927349,0.000000)] h=1.000000 rot=0.000000 value="3D Solid region and body"
+00462 Polyline handle=DFC flags=0 n=4 closed=1 pts=[(10.160533,-236.841524,0.000000);(10.160533,-255.452359,0.000000);(37.812355,-255.452359,0.000000);(37.812355,-236.841524,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00463 Text handle=DFD flags=0 p=[(10.868373,-234.753008,0.000000)] h=1.000000 rot=0.000000 value="Materials"
+00464 Circle handle=E00 flags=0 c=[(15.269596,-241.455888,0.000000)] r=2.586142 normal=[(0.000000,0.000000,1.000000)]
+00465 Circle handle=E01 flags=0 c=[(17.625983,-248.517347,0.000000)] r=4.143953 normal=[(0.000000,0.000000,1.000000)]
+00466 Circle handle=E02 flags=0 c=[(26.199179,-241.956699,0.000000)] r=4.742908 normal=[(0.000000,0.000000,1.000000)]
+00467 Circle handle=E03 flags=0 c=[(28.104337,-250.170028,0.000000)] r=2.989063 normal=[(0.000000,0.000000,1.000000)]

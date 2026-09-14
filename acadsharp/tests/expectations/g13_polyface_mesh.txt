@@ -2,5 +2,8 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Warning handle=49 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00005 Polygon handle=4A flags=0 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(0.000000,0.000000,0.000000);(0.000000,0.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00004 Warning handle=49 flags=0 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
+00005 Warning handle=53 flags=0 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
+00006 Warning handle=60 flags=1 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
+00007 Warning handle=60 flags=1 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
+00008 Warning handle=0 flags=0 code=EMPTY_VIEW message="this view holds no geometry"

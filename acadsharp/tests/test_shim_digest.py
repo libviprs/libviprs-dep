@@ -21,10 +21,33 @@ actually compiled into the run, and a new file under `native/Adapter/`,
 `native/Sources/` or `native/Wire/` is swept up by the same glob the
 generator uses, so it is covered the day it lands.
 
-What this does not do is prove the recorded *behaviour* is still the shim's
-behaviour. Only running the decoder can do that, and that is what
-`.github/workflows/acadsharp-conformance.yml` is for. This is the cheap
-half: it turns silent staleness into a red test with an instruction.
+Two things this is not, and both of them used to read as though it were.
+
+It is not a digest of the shipped library. The generator lists its sources;
+the native project names none and takes the SDK's default glob over
+`native/`, so the library compiles one file the generator does not:
+`native/Exports.cs`, the entry points themselves. Everything the flattener
+does is covered here and the ABI surface around it is not, which is the right
+split, because what proves the exports is a consumer calling them and
+`.github/workflows/acadsharp-conformance.yml` runs two of those. It is only
+the right split while the difference stays one file, so
+`TestTheCapturesCoverTheLibraryMinusItsEntryPoints` below asserts exactly
+that and a second file landing on the far side is a red test.
+
+And it is not proof the recorded behaviour is still the shim's behaviour. It
+cannot be: the block it checks is computed from the source tree by the same
+`g13_support.shim_digest` this file verifies it with, so it is a pure function
+of the tree and carries no information about whether a decode ever ran. Four
+lines rewrite it, and measured, they do: with a refusal applied to
+`Flattener.cs`, rewriting the block put this file and `test_adapter_stream.py`
+back to 477 green over expectations recording records the shim no longer
+emits. Only running the decoder closes that, which is what the corpus replay
+in `acadsharp-conformance.yml` now does, over every fixture the manifest
+names, every push. `test_corpus_replay.py` holds that end.
+
+This is the cheap half, and it is worth having as the cheap half: it turns
+silent staleness into a red test with an instruction, in a job with no .NET
+in it.
 """
 
 import os
@@ -33,6 +56,7 @@ import pytest
 from g13_support import (
     ACAD_ROOT,
     manifest,
+    native_sources,
     sha256_file,
     shim_digest,
     shim_sources,
@@ -91,6 +115,55 @@ class TestTheGuardIsNotHollow:
             f"the generator compiles only {shim_sources()}, which is too few to be "
             "the shim. Check the <Compile Include> globs in its csproj"
         )
+
+
+class TestTheCapturesCoverTheLibraryMinusItsEntryPoints:
+    """What is in the shipped library and not in this digest, named.
+
+    The generator lists its sources in its csproj; the native project lists
+    none and takes the SDK's default glob, so the library compiles everything
+    under `native/` and the generator compiles everything except
+    `native/Exports.cs`. That one file is the ABI surface, it is proved by the
+    two conformance consumers calling it rather than by a recorded decode, and
+    leaving it out is deliberate.
+
+    It is only defensible while it is one file. A second one landing on that
+    side would be behaviour in the shipped library that no capture here is
+    bound to, and it would land silently, because both sets are globs and
+    neither would say anything. This is what says something.
+    """
+
+    def test_the_library_compiles_exactly_one_file_the_captures_do_not(self):
+        extra = sorted(set(native_sources()) - set(shim_sources()))
+        assert extra == ["native/Exports.cs"], (
+            f"the shipped library compiles {extra} that the fixture generator does "
+            "not, so whatever those files do is not bound to any capture in this "
+            "directory. Either add them to the generator's csproj, or move the "
+            "behaviour out of them, or change this test and say why in the commit"
+        )
+
+    def test_the_captures_compile_nothing_the_library_does_not(self):
+        extra = sorted(set(shim_sources()) - set(native_sources()))
+        assert not extra, (
+            f"the fixture generator compiles {extra} and the shipped library does "
+            "not, so the corpus records a program nobody ships"
+        )
+
+    def test_the_reader_found_a_library_at_all(self):
+        # A digest over nothing passes both cases above, in both directions.
+        assert len(native_sources()) > len(shim_sources()) >= 10
+
+    def test_the_entry_points_really_are_in_that_file(self):
+        # The reason the exception is defensible, checked rather than
+        # asserted in prose: Exports.cs is left out because it is the ABI
+        # surface, and if the exports moved somewhere else the argument moved
+        # with them.
+        path = os.path.join(ACAD_ROOT, "native", "Exports.cs")
+        with open(path) as f:
+            assert "UnmanagedCallersOnly" in f.read(), (
+                "native/Exports.cs is excused from the capture digest because it is "
+                "the entry points, and it no longer holds any"
+            )
 
 
 class TestTheCapturesAreOfTheShimInTheTree:

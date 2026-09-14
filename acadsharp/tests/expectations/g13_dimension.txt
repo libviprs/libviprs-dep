@@ -7,8 +7,8 @@
 00006 Warning handle=50 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00007 Warning handle=51 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00008 Line handle=52 flags=1 pts=[(0.000000,3.000000,0.000000);(10.000000,3.000000,0.000000)]
-00009 Warning handle=53 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
-00010 Warning handle=54 flags=1 code=UNSUPPORTED_ENTITY message="SOLID is not a primitive this version flattens"
+00009 Polygon handle=53 flags=1 n=3 closed=1 pts=[(0.000000,3.000000,0.000000);(0.180000,3.030000,0.000000);(0.180000,2.970000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00010 Polygon handle=54 flags=1 n=3 closed=1 pts=[(10.000000,3.000000,0.000000);(9.820000,2.970000,0.000000);(9.820000,3.030000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00011 Line handle=55 flags=1 pts=[(0.000000,0.625000,0.000000);(0.000000,4.250000,0.000000)]
 00012 Line handle=56 flags=1 pts=[(10.000000,0.625000,0.000000);(10.000000,4.250000,0.000000)]
 00013 Text handle=57 flags=1 p=[(5.000000,3.625000,0.000000)] h=0.180000 rot=0.000000 value="10"

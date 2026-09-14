@@ -75,6 +75,13 @@ BATCH_BYTES = 65536
 DUMPED = (
     "g13_line.dwg",
     "g13_polyline.dwg",
+    # The two kinds the IPolyline arm used to swallow. The DWGs and their
+    # PROVENANCE.md rows landed without these two lines, and `expectations()`
+    # iterates this tuple and nothing else, so they produced no dump, got no
+    # MANIFEST.json entry, and were files the suite could not read
+    # (libviprs-dep#82).
+    "g13_polyface_mesh.dwg",
+    "g13_polygon_mesh.dwg",
     "g13_arc.dwg",
     "g13_circle.dwg",
     "g13_ellipse.dwg",
@@ -84,6 +91,17 @@ DUMPED = (
     "g13_dimension.dwg",
     "g13_hatch.dwg",
     "g13_unsupported.dwg",
+    # The refused-kind corpus PR #94 added. A fixture that is in
+    # tests/fixtures and not in here is never dumped and never reaches
+    # MANIFEST.json, so it is a file the suite cannot read: the entry is
+    # part of implementing the kind, not part of adding the DWG.
+    "g13_solid.dwg",
+    "g13_mesh.dwg",
+    # The malformed-face mesh, which is the only input in this corpus that
+    # reaches the flattener's own hostile-input handling (warning 111). Its
+    # whole value is the dump: four faults, four sentences, and the good face
+    # still crossing beside them.
+    "g13_mesh_bad_faces.dwg",
     "g13_xref.dwg",
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",
@@ -102,6 +120,13 @@ DUMPED = (
     "g13_long_text.dwg",
     "g13_scale_1x.dwg",
     "g13_dimension_shallow.dwg",
+    # RAY and XLINE, one of each, so the deliberate refusal
+    # (ENTITY_REFUSED_BY_DESIGN, docs/adr/0002) is evidenced on a fixture
+    # carrying nothing else as well as on the two real drawings. It arrived
+    # with #94 and was never added here, and expectations() iterates this
+    # tuple and nothing else, so until now it was a DWG the suite could not
+    # read: no dump, no MANIFEST entry, green and inert.
+    "g13_ray_xline.dwg",
     "real_AC1032.dwg",
     "real_AC1018.dwg",
     "g11_shapes.dwg",
