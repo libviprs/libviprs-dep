@@ -85,6 +85,37 @@ SOURCE_COMMIT = {
     "3.7.1": "d7dc111023477d8a9fffc2153139459c95b4f345",
 }
 
+# What shim each artifact version is. SOURCE_SHA256 above pins the upstream
+# half; this pins the other one, and until now nothing did.
+#
+# The value is the rollup `g13_support.shim_digest()` computes over the sources
+# the fixture generator compiles: one sha256 per file, over the sorted paths and
+# the bytes behind them. `tests/test_acadsharp_version.py` holds the tree
+# against the row for the version VERSION names right now, so a change under
+# `native/` with the number left still is a red test naming this table rather
+# than a second library published under a name that already means something.
+#
+# That is not hypothetical. `3.7.1-viprs.1` is published, and seven flattener
+# changes landed on top of it with the number unmoved. Nothing downstream would
+# have caught it either: `release-acadsharp.yml` uploads with `--clobber` and
+# says in its own words that a re-run is safe, and `acadsharp-rs`'s COMPAT.toml
+# globs `3.7.1-viprs.*`. `split_version` exists precisely so "the shim changed"
+# has a number of its own, and a number nothing checks does not move.
+#
+# The viprs.1 row is measured rather than typed: it is the `shim.sha256` block
+# in `acadsharp/tests/expectations/MANIFEST.json` at the `acadsharp-3.7.1-viprs.1`
+# tag, which the same function wrote. Put VERSION back to `3.7.1-viprs.1` today
+# and the test goes red with the two digests side by side, which is the whole
+# finding in one assertion.
+#
+# A row for a version whose tag exists is frozen. Editing one is a diff whose
+# only purpose is to let one published name mean two different libraries; bump
+# the shim revision instead, because that is what the revision is for.
+SHIM_DIGESTS = {
+    "3.7.1-viprs.1": "4d00f97ca7d7e7fdeedece16e5875b30be4b30d0ae6ceaa9f5cf248245b4aa6c",
+    "3.7.1-viprs.2": "1d365427d4d4b712e1656bb0ae950db6cb93f7e7aff53e9060c05cea8071b65f",
+}
+
 # What this build changes about the pinned source before compiling it.
 #
 # SOURCE_SHA256 and SOURCE_COMMIT say what was downloaded, and until there was
@@ -400,6 +431,23 @@ def source_commit(version):
         ) from None
 
 
+def shim_digest_for(version):
+    """The shim rollup an artifact version is, out of ``SHIM_DIGESTS``.
+
+    Same shape as ``source_sha256`` and for the same reason: a version with no
+    row is a version nobody wrote down what the shim was for, and guessing is
+    how a published name comes to mean two different libraries.
+    """
+    try:
+        return SHIM_DIGESTS[version]
+    except KeyError:
+        raise KeyError(
+            f"no shim digest for {version} in SHIM_DIGESTS in "
+            f"{os.path.relpath(__file__, REPO_ROOT)}. Every artifact version records "
+            "which shim it is, so bumping acadsharp/VERSION means adding the row too"
+        ) from None
+
+
 def verify_digest(path, expected):
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -579,6 +627,56 @@ def shared_ext(plat):
 
 def shared_library_name(plat):
     return f"{SHARED_LIBRARY_STEM}.{shared_ext(plat)}"
+
+
+def mac_install_name():
+    """The name a mac publish has to record for itself, `LC_ID_DYLIB`.
+
+    NativeAOT sets that at link time from the assembly name, so a mac
+    publish records `@rpath/viprs_acadsharp.dylib` and the rename in
+    scripts/stage.sh cannot touch it: the file ships as
+    libacadsharp_native.dylib and the recorded name points at something
+    that is not in the archive, so anything that links it dies before
+    main. That is what 3.7.1-viprs.1 shipped (#95). ELF records nothing
+    equivalent, which is why the same rename is invisible on Linux and
+    load-bearing here.
+
+    It is not ILC being clever, it is a documented default sitting in
+    Microsoft.NETCore.Native.Unix.targets:
+
+        <SharedLibraryInstallName
+          Condition="'$(SharedLibraryInstallName)' == '' and ...">
+          @rpath/$(TargetName)$(NativeBinaryExt)</SharedLibraryInstallName>
+
+    and twenty lines further down that property becomes exactly one
+    `-Wl,-install_name,...` on the Apple link. `TargetName` is the
+    assembly name, so the default is the wrong name here, and the
+    condition is `== ''`, so naming it from outside replaces it rather
+    than fighting it.
+
+    Set at the link rather than rewritten afterwards. `install_name_tool
+    -id` has to grow LC_ID_DYLIB from a cmdsize of 56 to 64, because the
+    name lives inside the load command and 28 characters of
+    `@rpath/viprs_acadsharp.dylib` fit where 32 of
+    `@rpath/libacadsharp_native.dylib` do not, and growing the load
+    commands works only while there is headerpad left. Measured on the
+    published binary: 3296 bytes of load commands, `__text` at 3400, so
+    72 bytes free and the rewrite would have fitted with 64 to spare.
+    That margin is whatever the AOT link happened to reserve, and the
+    failure mode would be a build error on the one target with no local
+    reproduction. The property sets the name before anything is written
+    and cannot run out.
+
+    Not a `LinkerArg` item of our own either, which was the first attempt:
+    the targets line above is unconditional for an Apple shared library,
+    so an extra item puts a *second* `-install_name` on the same link line
+    and the last one wins. Measured on a Linux container with a shell
+    script standing in for clang, publishing for osx-arm64: default gives
+    one `-Wl,-install_name,@rpath/viprs_acadsharp.dylib`, an extra item
+    gives two with the wrong one last, and this property gives one with
+    the right name.
+    """
+    return f"@rpath/{shared_library_name('mac')}"
 
 
 # ---------------------------------------------------------------------------
@@ -971,6 +1069,13 @@ def publish_command(rid, static=False, project=PROJECT, configuration="Release")
     cmd = ["dotnet", "publish", project, "-r", rid, "-c", configuration]
     if static:
         cmd.append("-p:NativeLib=Static")
+    if TARGETS.get(rid, {}).get("platform") == "mac":
+        # The SDK's own property, which becomes the one
+        # `-Wl,-install_name,...` on the Apple link. Passed by the driver
+        # rather than written into the csproj so the name is built from
+        # SHARED_LIBRARY_STEM, the same constant the archive is named
+        # from, and the two cannot drift.
+        cmd.append(f"-p:SharedLibraryInstallName={mac_install_name()}")
     return cmd
 
 

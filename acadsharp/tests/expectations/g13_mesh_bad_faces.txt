@@ -1,0 +1,9 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Polygon handle=49 flags=0 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,0.000000,0.000000);(10.000000,10.000000,4.000000)] bulges=[] normal=[(0.000000,-0.371391,0.928477)]
+00005 Warning handle=49 flags=0 code=MESH_FACE_UNREADABLE message="face 1 of this MESH indexes vertex 99 of a list that holds 3, so it is not emitted"
+00006 Warning handle=49 flags=0 code=MESH_FACE_UNREADABLE message="face 2 of this MESH lists 2 vertices and a closed polygon needs three, so it is not emitted"
+00007 Warning handle=49 flags=0 code=MESH_FACE_UNREADABLE message="face 3 of this MESH indexes vertex -1 of a list that holds 3, so it is not emitted"
+00008 Warning handle=49 flags=0 code=MESH_FACE_UNREADABLE message="face 4 of this MESH lists 0 vertices and a closed polygon needs three, so it is not emitted"

@@ -262,6 +262,38 @@ closing span is the one `bulge[n - 1]` describes. One layout means one reader
 serves both, and a hatch loop that turns out to carry a curved edge needs no
 second shape.
 
+A hatch loop is not the only thing that lands here. A `SOLID` is one of these
+with three or four vertices and no bulge array, and a `MESH` is one per face
+of its base mesh. Neither carries a bulge, because a filled face has straight
+edges, and a `MESH` at a subdivision level above zero also emits warning 110
+to say the level was ignored rather than evaluated.
+
+Record 9's normal is **the entity's own plane where the entity has one, and the
+face's measured plane where it does not**, and the two are not the same
+convention. A `SOLID` has an extrusion direction in the file, so its normal is
+the placement basis with a mirror corrected out, which keeps it on the entity's
+side of the sheet whatever transform the insertion applies. A `MESH` face has
+no direction of its own, so its normal is Newell's over the points that record
+carries, which follows their winding. Under one mirrored insertion both
+behaviours show at once: the solid's points come out reversed and its normal
+stays `(0, 0, 1)`, while the mesh face's points come out reversed and its
+normal goes to `(0, 0, -1)`.
+
+So **do not infer winding from the normal on this record**, in either
+direction. A renderer that culls back faces by testing the two against each
+other gets opposite answers from two record 9s in the same stream, and both of
+them are correct. Use the point order for winding and the normal for the plane,
+and if a face has to be two-sided, make that the consumer's decision rather
+than something read out of a field that means different things.
+
+A record 9 may also have zero extent. A degenerate `SOLID`, which is a shape a
+drawing is perfectly entitled to hold, flattens to three coincident vertices
+with a fabricated `+Z` normal: it is emitted rather than dropped, because the
+entity is in the drawing and the handle is worth carrying, and every number in
+it is finite. A consumer computing a bounding box over record 9s should expect
+a contribution of no width, no height and no area, and not treat it as a parse
+failure.
+
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
 UTF-8, padded with zeroes to a multiple of four. Not terminated.
@@ -353,7 +385,7 @@ and 105 with these meanings, whatever it is built on.
 
 | Code | Name | What it says |
 | --- | --- | --- |
-| 100 | `UNSUPPORTED_ENTITY` | An entity kind this build does not flatten. The message names the source format's type and `item_handle` is the entity's, which together are enough to find it in the drawing. |
+| 100 | `UNSUPPORTED_ENTITY` | An entity kind this build does not flatten. The message opens with the kind's name and `item_handle` is the entity's, which together are enough to find it in the drawing. That name is the source format's own type where the format has a distinct one, and the name this document uses where it does not: a polyface mesh is `POLYFACE_MESH` and a polygon mesh is `POLYGON_MESH`, both of which DXF spells `POLYLINE` and tells apart by a flag. It is never an implementation's class name, which is a thing a consumer cannot look up anywhere. |
 | 101 | `READER_NOTIFICATION` | Something the backing reader had to say about the file, passed through. `item_handle` is 0: it is about the document. |
 | 102 | `DIMENSION_WITHOUT_BLOCK` | A dimension with no geometry block to take its lines and text from, so nothing was emitted for it. |
 | 103 | `HATCH_PATTERN_ONLY` | A hatch with no boundary loop that could become a `Polygon`. |
@@ -362,6 +394,9 @@ and 105 with these meanings, whatever it is built on.
 | 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 | 108 | `EMPTY_VIEW` | This view emitted no geometry record at all. It is the other half of the inverted extents above: those say the view has no usable bounding box, and this says there was nothing to have one of. A consumer tells an empty drawing from a damaged one by what sits beside this in the same view, because every warning about something that could not be read is in that stream too, so this alone is empty and this with company is damaged. `item_handle` is 0: it is about the view. |
+| 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
+| 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
+| 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
 
 ### Reserved ranges
 
@@ -445,6 +480,92 @@ Warnings may appear anywhere between `ViewBegin` and `ViewEnd`. They are not
 errors: a decode that emits a hundred of them and returns `VIPRS_ACAD_OK`
 succeeded, and the warnings are what it has to say about the parts of the
 drawing it could not fully represent.
+
+## Geometry that needs a lookup
+
+Some entities do not carry their own shape. A polyface mesh carries a vertex
+list and a separate set of face records that index into it; an MLINE carries a
+centre line and a style that holds the offsets the lines actually sit at; an
+insertion carries a block name; an external reference carries a path to another
+file; a `SHAPE` names a glyph in an external SHX file, an `IMAGE` names an
+external raster and a `PDFUNDERLAY` names an external PDF. In every one of them
+the entity holds a placement and a reference, and the shape is somewhere else.
+
+**When an entity's geometry depends on something outside the entity, a producer
+emits the resolved geometry or it emits a warning and no geometry record at
+all. It never emits the part it could compute without the lookup.**
+
+The part it can compute without the lookup is the dangerous output, because it
+is type-compatible with a correct one. A polyface mesh flattened through its
+vertex list is a `Polyline` record with a plausible point count and real
+coordinates, and there is no field on it that says it is the half that did not
+need the faces. A consumer cannot tell it from the polyline beside it, so it
+draws a wandering line and reports success. That is a defect and not a
+degradation: a degradation is something the consumer knows it has.
+
+Zero geometry and a warning is always readable. The consumer knows exactly what
+it is missing, `item_handle` says where in the drawing to look, and nothing it
+draws is wrong.
+
+### Which warning it is
+
+There is always a warning, and which one is a question about the lookup rather
+than about the entity. Three answers, and a consumer branches on them for three
+different reasons:
+
+| The lookup is | Code | What a consumer does with it |
+| --- | --- | --- |
+| a block this decoder could have resolved and could not: an insertion, an external reference | 105 `UNRESOLVED_BLOCK` | the drawing is incomplete or points outside itself, so find the missing piece and decode again |
+| one this producer will never make, or a result it will never evaluate: an external SHX glyph, an external raster, an external PDF, an embedded ACIS stream | 109 `ENTITY_REFUSED_BY_DESIGN` | waiting will not change the answer, so show whatever it shows for a thing that is not coming |
+| one nobody has implemented yet: a polyface mesh's face list, an MLINE's style offsets | 100 `UNSUPPORTED_ENTITY` | a later build may well emit it, so "not supported yet" is the honest label |
+
+So the four kinds a reader reaches for first do not share a code, and that is
+the point of having three. `SHAPE`, `IMAGE` and `PDFUNDERLAY` are 109. An
+insertion whose block is missing, and the external reference that is the same
+thing seen from inside, are 105. A polyface mesh and an MLINE are 100.
+
+109 also covers refusals that involve no lookup at all, where the shape is
+entirely in the drawing and no record this wire version defines can hold it: an
+unbounded `RAY` or `XLINE` is the standing example. The code's row in the table
+above is the whole statement; this section is only the part of it that is about
+a lookup.
+
+### The external ones, and why they stay 109
+
+A producer on this wire never resolves an external resource. It opens no path a
+drawing names, on any route, and that is a rule about the decoder rather than a
+gap in it: a decoder that followed a path out of the file it was handed is a
+decoder that can be pointed at `/etc/passwd` or a UNC share by whoever wrote
+the drawing. So `SHAPE`, `IMAGE` and `PDFUNDERLAY` produce
+`ENTITY_REFUSED_BY_DESIGN` and no geometry record, and nothing is fetched.
+
+`UNRESOLVED_BLOCK` looks like an exception and is not. A block lives in the
+same file, so resolving one is a lookup inside the drawing and this producer
+does make it; 105 is what a consumer gets when that lookup fails, which is also
+what an external reference looks like from in here. Neither code is ever a
+fetch.
+
+A later wire version may add a placement record carrying the frame, the
+transform and the referenced name as an opaque string, which is enough to draw
+a box with a label and enough for a consumer that has its own policy to go and
+get the thing itself. The refusal is about resolving, not about placing, and
+adding that record would not change it.
+
+An embedded ACIS stream (`3DSOLID`, `REGION`) is the other half of the same
+shape. Those bytes are in the drawing, but they are a boundary representation
+rather than a tessellation, and turning one into something drawable means
+evaluating a proprietary format that no reader on this boundary implements. It
+is the same code, for a reason that will not expire either.
+
+### What this rule is not
+
+This is not the same as a warning beside a record that really is the entity.
+`NON_UNIFORM_BLOCK_SCALE` sits next to a record whose parameters are the
+entity's own, measured in a frame the transform does not preserve, and the
+consumer can decide what to do about that. The rule here is about the case
+where no record is emitted, and `UNRESOLVED_BLOCK` is it already: an insertion
+whose block could not be resolved emits the warning and nothing else, rather
+than the insertion point on its own.
 
 ## Refusing a stream
 

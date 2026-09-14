@@ -29,6 +29,23 @@ CODE_FIXTURES = {
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
+    # The real drawing carries seven of the eight kinds in RefusedKinds.cs
+    # (3DSOLID, REGION, SHAPE, IMAGE, PDFUNDERLAY, RAY, XLINE), so it is the
+    # fixture this code is produced by. WIPEOUT is the eighth and stays on 100.
+    "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
+    "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
+    "MESH_FACE_UNREADABLE": "g13_mesh_bad_faces.dwg",
+}
+
+# A code the corpus cannot produce, and the C# constant that has to still be
+# there for the arm to exist at all.
+#
+# One row rather than a hardcoded name, because there have been two: 111 sat
+# here with "this campaign's lanes do not regenerate the corpus" as its reason,
+# and the test below was still singular and asserting only about the other one,
+# so the second uncovered code was excused by a comment and by nothing else.
+UNCOVERED = {
+    "DIMENSION_WITHOUT_BLOCK": "DimensionWithoutBlock",
 }
 
 
@@ -39,9 +56,15 @@ def declared_codes():
 
 
 class TestUnsupportedEntities:
-    def test_the_fixture_produces_warnings_and_nothing_else(self):
+    def test_the_fixture_carries_one_refusal_and_the_solid_beside_it(self):
+        # The SOLID in this file is flattened now, so the fixture is no longer
+        # only warnings. Keeping the Polygon in the assertion is the point: it
+        # is what tells "SOLID is implemented" apart from "the SOLID went
+        # missing", which a set of {"Warning"} could not.
         counts = kinds("g13_unsupported.dwg")
-        assert set(counts) == {"Warning"}, f"expected only warnings, got {counts}"
+        assert set(counts) == {"Warning", "Polygon"}, (
+            f"expected one refusal and one solid, got {counts}"
+        )
 
     def test_each_one_names_the_entity_type(self):
         named = {
@@ -49,7 +72,7 @@ class TestUnsupportedEntities:
             for w in warnings("g13_unsupported.dwg")
             if w["code"] == "UNSUPPORTED_ENTITY"
         }
-        assert named == {"POINT", "SOLID"}, (
+        assert named == {"POINT"}, (
             f"the warnings name {sorted(named)}. A warning that does not say which "
             "entity type it could not flatten cannot be acted on"
         )
@@ -212,16 +235,20 @@ class TestAnEmptyView:
     @pytest.mark.parametrize(
         "fixture,alongside",
         [
-            ("g13_unsupported.dwg", "UNSUPPORTED_ENTITY"),
             ("g13_xref.dwg", "UNRESOLVED_BLOCK"),
             ("g13_nan_bulge.dwg", "NON_FINITE_GEOMETRY"),
         ],
     )
     def test_a_damaged_view_carries_it_with_company(self, fixture, alongside):
-        # The other side of the distinction, and it was already in the corpus:
-        # three fixtures produce no geometry at all, each for a different
-        # reason, and each says what that reason was in the same stream. A
-        # consumer reads the pair, not the code on its own.
+        # The other side of the distinction: a fixture that produces no
+        # geometry at all says in the same stream why, and a consumer reads
+        # the pair rather than the code on its own.
+        #
+        # g13_unsupported.dwg was the third row and is not one any more. It
+        # held a POINT and a SOLID, both refused, so its view was empty; the
+        # SOLID is flattened now, so the view has geometry in it and
+        # EMPTY_VIEW is correctly absent. The two rows left cover the claim
+        # from two different reasons, which is what the row was for.
         codes = {w["code"] for w in warnings(fixture)}
         assert "EMPTY_VIEW" in codes
         assert alongside in codes
@@ -279,12 +306,24 @@ class TestNonFiniteGeometry:
 
 
 class TestTheCodeTableIsComplete:
-    def test_the_one_code_with_no_fixture_is_named_and_explained(self):
-        # DIMENSION_WITHOUT_BLOCK is reachable and deliberately uncovered:
-        # ACadSharp's DwgWriter generates a block for every dimension it
-        # writes, so the corpus generator cannot produce a dimension without
-        # one, and a file that has one would have to be a real drawing nobody
-        # here has. The arm stays because a real drawing can carry it.
-        assert CODE_FIXTURES["DIMENSION_WITHOUT_BLOCK"] is None
+    """DIMENSION_WITHOUT_BLOCK is reachable and deliberately uncovered:
+    ACadSharp's DwgWriter generates a block for every dimension it writes, so
+    the corpus generator cannot produce a dimension without one, and a file
+    that has one would have to be a real drawing nobody here has. The arm stays
+    because a real drawing can carry it."""
+
+    def test_the_uncovered_codes_are_the_ones_named_here(self):
+        assert sorted(c for c, f in CODE_FIXTURES.items() if f is None) == sorted(UNCOVERED), (
+            "a code was excused from having a fixture without being named in UNCOVERED, "
+            "which is how MESH_FACE_UNREADABLE sat uncovered behind a test that only "
+            "ever looked at DIMENSION_WITHOUT_BLOCK"
+        )
+
+    @pytest.mark.parametrize("code,constant", sorted(UNCOVERED.items()))
+    def test_each_uncovered_code_is_named_and_explained(self, code, constant):
+        assert CODE_FIXTURES[code] is None
         with open(WARNING_CODES) as f:
-            assert "DimensionWithoutBlock" in f.read()
+            assert constant in f.read(), (
+                f"{code} is excused from having a fixture and WarningCodes.cs no longer "
+                f"declares {constant}, so the excuse outlived the arm"
+            )

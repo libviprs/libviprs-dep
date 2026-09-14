@@ -31,7 +31,11 @@ using Viprs.Wire;
 // because above this file a nested insertion is just more records.
 namespace Viprs.Cad
 {
-	internal sealed class Flattener
+	// `partial` because the SOLID and MESH arm bodies live in
+	// Flatten.Faces.cs. The `case` labels stay in the switch below: their
+	// order is semantics, the compiler enforces it, and splitting the labels
+	// across files would put a rule nothing checks between two of them.
+	internal sealed partial class Flattener
 	{
 		private const double Eps = 1e-12;
 
@@ -782,8 +786,16 @@ namespace Viprs.Cad
 					yield break;
 				}
 
-				// Arc before Circle: ACadSharp's Arc derives from Circle, so
-				// the other order silently turns every arc into a full circle.
+				// Arc before Circle: ACadSharp's Arc derives from Circle.
+				//
+				// This used to say the other order silently turns every arc
+				// into a full circle. It does not: a subtype after its base is
+				// CS8120, the arm is unreachable, and the build fails. The
+				// order of the arms that exist is the one thing the compiler
+				// does hold. What it cannot see is a kind with no arm at all,
+				// which is what POLYFACE_MESH and POLYGON_MESH were until the
+				// two arms below, and what test_shim_source_rules.py reads
+				// this switch as text to check.
 				case Arc arc:
 				{
 					// The centre is in the arc's own plane and the angles are
@@ -987,6 +999,44 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// PolyfaceMesh and PolygonMesh before IPolyline. Both derive
+				// from Polyline<T>, Polyline<T> implements IPolyline, so both
+				// used to reach the arm below and go out as one open polyline
+				// threaded through their own vertices: a wandering line
+				// through real coordinates, no warning, and byte-identical in
+				// shape to the polylines beside it. A consumer holding that
+				// record has no way to know it is not a polyline, which is the
+				// one outcome docs/WIRE.md's contract exists to prevent
+				// (libviprs-dep#82).
+				//
+				// Neither is a polyline. A polyface mesh is a set of faces
+				// indexed into a vertex list, kept in its own Faces collection
+				// here, and a polygon mesh is an M by N grid. Emitting the
+				// faces and the grid is a feature and it is not this change;
+				// refusing is what turns silent wrong geometry into something
+				// a consumer is told about.
+				//
+				// The subclass marker is what tells the two apart, because all
+				// four kinds under Polyline<T> are the entity POLYLINE in DXF
+				// and ObjectName says so for every one of them: refusing on
+				// ObjectName would say POLYLINE and a census of what this build
+				// refuses would gain a row naming neither kind.
+				//
+				// What goes in the message is the kind, not the marker.
+				// MarkerKind is the whole of that translation and the comment
+				// on it is the argument.
+				case PolyfaceMesh mesh:
+				{
+					yield return Refused(h, flags, MarkerKind(mesh.SubclassMarker));
+					yield break;
+				}
+
+				case PolygonMesh grid:
+				{
+					yield return Refused(h, flags, MarkerKind(grid.SubclassMarker));
+					yield break;
+				}
+
 				case IPolyline poly:
 				{
 					// POLYLINE's 3D flag is exactly the flag that says its
@@ -1084,20 +1134,57 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// SOLID and MESH. Both are a filled face given by its corners and
+				// both lower to record 9, so their bodies sit together in
+				// Flatten.Faces.cs; only the labels are here, because the order of
+				// the labels is what the compiler checks.
+				//
+				// 3DFACE is deliberately not beside them. It carries the same four
+				// corner properties at the same DXF codes and is a different
+				// entity in both of the ways that decide what a Polygon says: its
+				// per-edge InvisibleEdgeFlags only read as traversal order, so its
+				// corners go out 1, 2, 3, 4 rather than SOLID's 1, 2, 4, 3, and
+				// Face3D carries no normal at all and documents every corner as
+				// world, so it is neither lifted through an OCS nor entitled to
+				// the placement's normal. Flatten.Faces.cs records the rest.
+				case Solid solid:
+				{
+					yield return SolidPolygon(solid, h, flags, place);
+					yield break;
+				}
+
+				case Mesh mesh:
+				{
+					foreach (Primitive p in MeshPolygons(mesh, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// DIMENSION and HATCH are not here. They are composites: they
 				// expand into other entities, and expanding them from inside
 				// Map is what put a file-controlled recursion on the CLR
 				// stack. Walk dispatches them onto its own stack instead.
 
+				// Two different things end up below, and until RefusedKinds
+				// existed they left the identical warning.
+				//
+				// A kind in that table is one somebody looked at and decided
+				// against: the geometry is not in the drawing (SHAPE, IMAGE,
+				// PDFUNDERLAY), or it is in a form nothing here evaluates
+				// (3DSOLID, REGION), or no record in wire 2 can hold it (RAY,
+				// XLINE). Those get code 109 and a sentence saying which.
+				// Everything else is a gap nobody has got to, which is what 100
+				// has always meant, and the difference is the whole reason a
+				// consumer has a second number to branch on.
+				//
+				// docs/adr/0002-what-this-decoder-refuses.md is the decision
+				// and carries what would reopen each row.
 				default:
 				{
-					Primitive w = Primitive.Warning(
-						WarningCodes.UnsupportedEntity,
-						h,
-						e.ObjectName + " is not a primitive this version flattens"
-					);
-					w.Flags = flags;
-					yield return w;
+					yield return Refused(h, flags, e.ObjectName);
 					yield break;
 				}
 			}
@@ -1203,6 +1290,66 @@ namespace Viprs.Cad
 				normal.Y,
 				normal.Z
 			);
+		}
+
+		// An entity kind this version does not flatten, named by whatever the
+		// caller has that identifies it in the source format.
+		//
+		// One refusal path, and it asks RefusedKinds first.
+		//
+		// The sentence below used to be written out in three places: here, in
+		// the switch's default arm, which also carried its own copy of the
+		// table lookup, and as a variant inside RefusedKinds' WIPEOUT row.
+		// That row keeps its variant, because it is a different sentence
+		// saying a different thing. The other two are now one.
+		//
+		// The lookup is the half that mattered. This method hardcoded code 100,
+		// so an arm refusing a kind on its own, which is what the two mesh arms
+		// above do, took 100 whatever the table said: a later decision to put a
+		// mesh on 109 would have landed in RefusedKinds, been read by the
+		// default arm no mesh reaches, and been ignored by the two arms that
+		// actually refuse one.
+		private static Primitive Refused(ulong handle, uint flags, string what)
+		{
+			uint code;
+			string reason;
+			if (!RefusedKinds.TryGet(what, out code, out reason))
+			{
+				code = WarningCodes.UnsupportedEntity;
+				reason = what + " is not a primitive this version flattens";
+			}
+
+			Primitive w = Primitive.Warning(code, handle, reason);
+			w.Flags = flags;
+			return w;
+		}
+
+		// The DXF kind a POLYLINE's subclass marker names.
+		//
+		// SubclassMarker stays the discriminator, because ObjectName is
+		// POLYLINE for all four kinds under Polyline<T> and cannot tell them
+		// apart. What it is not is a name anything else on this wire speaks.
+		// The refusal census of real_AC1032 reads POINT, MULTILEADER, MLINE,
+		// TOLERANCE, 3DSOLID, 3DFACE, LEADER, IMAGE, PDFUNDERLAY, RAY, REGION,
+		// SHAPE, WIPEOUT, XLINE and then AcDbPolyFaceMesh: fourteen DXF entity
+		// names and one class name, and the odd one out is the kind that got
+		// its own arm. docs/WIRE.md's row for code 100 says the message names
+		// the source format's type, and tests/test_refusal_decisions.py holds
+		// the table next door to the same rule because the corpus tests read
+		// the type back by splitting the message on its first space.
+		//
+		// Against upstream's own constants rather than the two literals, so a
+		// marker whose spelling moves under a pin bump moves this with it and
+		// a constant that goes away is a build error rather than a census that
+		// quietly grows a class name back.
+		private static string MarkerKind(string marker)
+		{
+			switch (marker)
+			{
+				case ACadSharp.DxfSubclassMarker.PolyfaceMesh: return "POLYFACE_MESH";
+				case ACadSharp.DxfSubclassMarker.PolygonMesh: return "POLYGON_MESH";
+				default: return marker;
+			}
 		}
 
 		// What the warning says, which used to be false on the input it was

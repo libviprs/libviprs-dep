@@ -384,3 +384,136 @@ class TestAFixtureActuallyExercisesTheSecondBranch:
             "the other way. The angles would run backwards for every record whose "
             "normal is not +Z."
         )
+
+
+# ----------------------------------------------------- one section, one name
+#
+# `WIRE.md` carried two sections called "Geometry that needs a lookup", and
+# they contradicted each other. The `###` one said the external-resource kinds
+# emit `ENTITY_REFUSED_BY_DESIGN`; the `##` one said, in bold as its whole
+# point, `UNSUPPORTED_ENTITY`. Both were right for the lane that wrote them,
+# neither lane could see the other, and being in different places is exactly
+# why both merged clean.
+#
+# The bolded rule also named four examples and got three of them wrong by this
+# document's own warning table. So the merged section carries the disposition
+# rule as a table a reader can check, and the two classes below hold the two
+# halves: the name is unique, and the codes are all three still there.
+
+LOOKUP_HEADING = "Geometry that needs a lookup"
+
+# One disposition per code, each with an exemplar the old bolded sentence
+# filed under the wrong one.
+DISPOSITIONS = (
+    ("105", "UNRESOLVED_BLOCK", "external reference"),
+    ("109", "ENTITY_REFUSED_BY_DESIGN", "SHX"),
+    ("100", "UNSUPPORTED_ENTITY", "MLINE"),
+)
+
+
+def headings(text):
+    """Every ATX heading, as (level, title), with fenced code skipped."""
+    out = []
+    fenced = False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        m = re.match(r"^(#+)\s+(\S.*?)\s*$", line)
+        if m:
+            out.append((len(m.group(1)), m.group(2)))
+    return out
+
+
+@pytest.fixture(scope="module")
+def lookup_section(wire):
+    """The one `## Geometry that needs a lookup`, down to the next `##`."""
+    start = wire.index(f"\n## {LOOKUP_HEADING}\n")
+    rest = wire[start + 1 :]
+    end = rest.index("\n## ", 1)
+    return rest[:end]
+
+
+class TestEveryHeadingIsItsOwn:
+    """A repeated heading is a defect even once the contradiction is gone.
+
+    Two sections with one name cannot be cited: "see Geometry that needs a
+    lookup" picks out neither. They also collide on anchor, because every
+    generator that makes an id out of the text emits
+    `#geometry-that-needs-a-lookup` twice and one of the two links silently
+    goes to the wrong section. This document ships inside every archive and
+    claims to be sufficient on its own, so a reader has nothing else to check
+    it against.
+    """
+
+    def test_the_reader_finds_the_headings_at_all(self, wire):
+        found = headings(wire)
+        assert len(found) > 10, f"WIRE.md parsed to {found}, which is not its outline"
+        assert (1, "The VACB batch protocol, wire version 2") in found
+
+    def test_no_two_headings_carry_the_same_text(self, wire):
+        seen = {}
+        for level, title in headings(wire):
+            seen.setdefault(title, []).append(level)
+        repeated = {t: lv for t, lv in seen.items() if len(lv) > 1}
+        assert not repeated, (
+            f"WIRE.md has more than one heading called each of {sorted(repeated)}, at "
+            f"levels {repeated}. Two sections with one name cannot be cited, they "
+            "collide on anchor in anything that generates ids from the text, and the "
+            "last pair of them said opposite things about the same warning code for a "
+            "whole campaign because neither lane could see the other."
+        )
+
+
+class TestTheLookupSectionSaysWhichCode:
+    """The contradiction, closed by making the answer a table.
+
+    "It emits a warning and no geometry record" is the part both versions
+    agreed on. Which warning is the part they did not, and it is the part a
+    consumer branches on: 105 means go and find the missing piece, 109 means
+    stop waiting, 100 means wait.
+    """
+
+    def test_the_bolded_rule_names_no_single_code(self, lookup_section):
+        bold = re.findall(r"\*\*(.+?)\*\*", lookup_section, re.S)
+        assert bold, "the lookup section no longer states its rule in bold"
+        rule = bold[0]
+        named = [code for _n, code, _e in DISPOSITIONS if code in rule]
+        assert not named, (
+            f"the lookup rule is stated in bold as emitting {named}, which is the shape "
+            "that made two sections of this document contradict each other. The rule is "
+            "that a warning is emitted and no geometry record; which warning is three "
+            "answers and belongs in the table under it."
+        )
+
+    @pytest.mark.parametrize("number,code,exemplar", DISPOSITIONS)
+    def test_each_disposition_is_in_the_section(self, lookup_section, number, code, exemplar):
+        row = [ln for ln in lookup_section.splitlines() if ln.startswith("|") and code in ln]
+        assert len(row) == 1, (
+            f"the lookup section carries {len(row)} disposition rows mentioning {code}. "
+            "Each of the three codes gets exactly one, or a reader deciding what to do "
+            "with a warning has to guess which row is theirs."
+        )
+        assert number in row[0], (
+            f"{code}'s row in the lookup section does not carry the number {number}, "
+            f"and the number is what a consumer branches on. It reads: {row[0]!r}"
+        )
+        assert exemplar in lookup_section, (
+            f"the lookup section no longer mentions {exemplar!r}, which is one of the "
+            f"cases the old single-code rule filed under the wrong one of these three"
+        )
+
+    def test_the_three_codes_are_the_ones_the_table_defines(self, wire):
+        # The control: the section is only useful if the codes it hands out
+        # are codes this document defines, with those numbers.
+        documented = {
+            m.group(2): m.group(1)
+            for m in re.finditer(r"^\|\s*(\d+)\s*\|\s*`([A-Z0-9_]+)`\s*\|", wire, re.M)
+        }
+        for number, code, _exemplar in DISPOSITIONS:
+            assert documented.get(code) == number, (
+                f"the lookup section sends a consumer to {code} as {number} and the "
+                f"warning-code table says {documented.get(code)}"
+            )

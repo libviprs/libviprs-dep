@@ -103,8 +103,23 @@ namespace Viprs.Abi
 		public const uint WireVersion = 2u;
 		public const uint StructVersion = 1u;
 
-		// The inclusive AC10xx range the backing reader handles. ADR 0001
-		// took these from upstream's own reader table for the pinned version.
+		// The inclusive AC10xx range the backing reader handles. The ceiling
+		// is the reader's; the floor is this build's, and it is higher.
+		//
+		// ACadSharp reads AC1012 (R13): CreateFileHeader sends it to the AC15
+		// file header and GetStreamHandler to the AC12 stream reader. The floor
+		// stays at AC1014 because nothing in this repository can produce an R13
+		// drawing to prove a lower one on. DwgWriter refuses AC1012 outright,
+		// and that is measured rather than inferred: writing a one-line
+		// document at AC1012 raises CadNotSupportedException, "File version not
+		// supported: AC1012", where AC1014 and AC1015 both write and read back.
+		// So the fixture generator cannot make the fixture, exactly as it
+		// cannot make the AC1021 that tests/ac21_forge.py builds by hand.
+		//
+		// docs/adr/0002-what-this-decoder-refuses.md carries the working and
+		// the asymmetry behind leaving it where it is: lowering this floor is
+		// additive and needs no version to move, raising it is breaking and a
+		// consumer finds out one drawing at a time.
 		public const uint DwgVersionMin = 1014u;
 		public const uint DwgVersionMax = 1032u;
 
