@@ -99,6 +99,22 @@ namespace Viprs.Cad
 		// face and which fault.
 		public const uint MeshFaceUnreadable = 111u;
 
+		// The Polygon record beside this one is a mask rather than a face: it
+		// hides whatever the stream drew before it, inside its boundary. A
+		// WIPEOUT is one.
+		//
+		// This is the sanctioned way to say it on wire version 2. Record 9 has
+		// no slot for "this one covers", and the prologue's spare bits are a
+		// semantic change under an unchanged version number, which is the one
+		// thing the fingerprint and the version exist to stop. A code is not:
+		// docs/WIRE.md says a consumer skips a code it does not know and
+		// carries on, so a consumer built before this existed fills the
+		// boundary like any other record 9. That still hides what is under it
+		// and the worst it does is paint a coloured face where a blank
+		// belongs, which is the direction this has to fail in. Dropping the
+		// record is the other direction and shows what the drawing was hiding.
+		public const uint PolygonMasks = 112u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -115,6 +131,7 @@ namespace Viprs.Cad
 				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
+				case PolygonMasks: return "POLYGON_MASKS";
 				default: return "WARNING_" + code;
 			}
 		}

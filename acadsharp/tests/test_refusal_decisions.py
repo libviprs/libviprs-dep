@@ -55,7 +55,7 @@ DISPOSITION_CODE = {
 # the same reason: an unevidenced row is allowed exactly once, in writing, and
 # the day a drawing carrying the kind lands the excuse has to come off. It is
 # empty today, and that is worth saying out loud rather than leaving as an
-# absence: all eight rows in the table are evidenced, five of them by the two
+# absence: all seven rows in the table are evidenced, five of them by the two
 # real drawings and RAY and XLINE by `g13_ray_xline.dwg` as well.
 #
 # A row that needs adding here is a row worth arguing about first. The cheap
@@ -262,13 +262,17 @@ class TestThereIsSomethingToCompare:
     empty ones agree about everything."""
 
     def test_the_adr_decides_a_set_of_kinds(self, decided):
-        assert len(decided) >= 8, (
+        # Seven and not eight since WIPEOUT was implemented: it was the one
+        # deferred row, it left the table when its arm landed, and a threshold
+        # that stayed at eight would be asking the ADR to keep a kind this
+        # decoder flattens.
+        assert len(decided) >= 7, (
             f"ADR 0002's disposition table parsed to {sorted(decided)}. A table this "
             "reader cannot see makes every comparison in this file pass over nothing."
         )
 
     def test_the_shim_carries_the_same_kind_of_table(self, table):
-        assert len(table) >= 8, f"RefusedKinds.cs parsed to {sorted(table)}"
+        assert len(table) >= 7, f"RefusedKinds.cs parsed to {sorted(table)}"
 
 
 class TestTheDecisionAndTheCodeAgree:
@@ -366,7 +370,7 @@ class TestTheFlattenerActuallyConsultsIt:
 
 
 class TestTheThingsTheNextCampaignInherits:
-    """The ADR's job is not only to record eight rows. These are the three
+    """The ADR's job is not only to record seven rows. These are the three
     facts a reader six months from now cannot re-derive cheaply."""
 
     def test_the_verdict_is_the_first_line_after_the_title(self, adr):
