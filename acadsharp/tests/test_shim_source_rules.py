@@ -329,3 +329,217 @@ class TestTheTestConfigurationCompiles:
         names = re.findall(r"public static (?:unsafe )?\S+ (\w+)\(", code)
         duplicates = sorted({n for n in names if names.count(n) > 1})
         assert not duplicates, f"Exports.cs declares {duplicates} more than once"
+
+
+# ---------------------------------------------------------------------------
+# The entity switch, and the arms that match more than they name
+# ---------------------------------------------------------------------------
+
+FLATTENER = os.path.join(NATIVE, "Adapter", "Flattener.cs")
+
+# The ACadSharp release the table below was read off, which is the one
+# build_acadsharp.py pins. The table is a copy of part of upstream's entity
+# model, so a bump is a new model and has to come back through here. That is
+# the whole of what this check can do about a kind upstream has not added yet.
+MODEL_VERSION = "3.7.1"
+
+# Every type an arm could name that matches more than itself, and what else it
+# matches, read off the pinned tarball's src/ACadSharp/Entities.
+#
+# Leaves are not here and do not need to be: `case Line line:` matches a LINE
+# and nothing else, so an arm on one raises no question and a lane adding one
+# is not held up by this table. Two names are left out of IPolyline on
+# purpose. `Polyline<T>` is the abstract base and cannot be a case without a
+# type argument, and `PolyLinePlaceholder` is internal to upstream's reader
+# and replaced before a document is handed out, so the shim cannot name it in
+# a case at all.
+ENTITY_SUBTYPES = {
+    "AttributeBase": ("AttributeDefinition", "AttributeEntity"),
+    "CadWipeoutBase": ("RasterImage", "Wipeout"),
+    "Circle": ("Arc",),
+    "Dimension": (
+        "DimensionAligned",
+        "DimensionAngular2Line",
+        "DimensionAngular3Pt",
+        "DimensionArc",
+        "DimensionDiameter",
+        "DimensionLinear",
+        "DimensionOrdinate",
+        "DimensionPlaceholder",
+        "DimensionRadius",
+    ),
+    "DimensionAligned": ("DimensionLinear",),
+    "IPolyline": ("LwPolyline", "PolyfaceMesh", "PolygonMesh", "Polyline2D", "Polyline3D"),
+    "IProxy": ("ProxyEntity",),
+    "IText": ("AttributeBase", "AttributeDefinition", "AttributeEntity", "MText", "TextEntity"),
+    "IVertex": (
+        "PolygonMeshVertex",
+        "Vertex",
+        "Vertex2D",
+        "Vertex3D",
+        "VertexFaceMesh",
+        "VertexFaceRecord",
+        "VertexPlaceholder",
+    ),
+    "Insert": ("TableEntity",),
+    "MechanicalEntity": ("AcmBalloon", "AcmPartList", "AcmPartRef"),
+    "ModelerGeometry": ("CadBody", "Region", "Solid3D"),
+    "TextEntity": ("AttributeBase", "AttributeDefinition", "AttributeEntity"),
+    "UnderlayEntity": ("PdfUnderlay",),
+    "Vertex": (
+        "PolygonMeshVertex",
+        "Vertex2D",
+        "Vertex3D",
+        "VertexFaceMesh",
+        "VertexFaceRecord",
+        "VertexPlaceholder",
+    ),
+}
+
+# An arm that is deliberately written for a kind it also matches, and the
+# reason. Everything else in the table above needs its own case ahead of the
+# wider one, and the compiler agrees: a subtype after its base, or a class
+# after an interface it implements, is CS8120 and does not build.
+CARRIED = {
+    ("IPolyline", "Polyline2D"): (
+        "a POLYLINE whose vertices are in the plane its normal defines, which is the "
+        "case the arm's placement split is written around"
+    ),
+    ("IPolyline", "Polyline3D"): (
+        "a POLYLINE whose vertices are already world coordinates, which the arm branches on by name"
+    ),
+    ("TextEntity", "AttributeBase"): (
+        "abstract, and the base the two below share, so nothing is ever one of these"
+    ),
+    ("TextEntity", "AttributeEntity"): (
+        "the text a block instance actually shows, which is why the arm is reached "
+        "from InsertBody at all"
+    ),
+    ("TextEntity", "AttributeDefinition"): (
+        "an ATTDEF carries a text value and a position and the arm emits both. It is "
+        "in a block's own entity list, so an insertion reaches the definition and the "
+        "instance, which is the thing to look at first if a drawing ever comes back "
+        "with its attribute text doubled"
+    ),
+}
+
+# An arm on one of these is the default arm under another name: it matches
+# whole families of entity, so whatever it does is done to kinds nobody chose
+# it for. There is no reason to write one, and a lane that finds one it wants
+# should split it rather than list every kind it swallows here.
+MATCHES_WHOLE_FAMILIES = (
+    "Entity",
+    "IEntity",
+    "IGeometricEntity",
+    "IHandledCadObject",
+    "IOrientable",
+)
+
+_ARM = re.compile(r"^\s*case\s+([A-Za-z_][\w.]*)\b[^\n:]*:", re.M)
+
+
+def entity_switch():
+    """The body of `switch (e)` in `Flattener.Map`, braces included."""
+    return body_of(read(FLATTENER), r"switch \(e\)")
+
+
+def switch_arms(body):
+    """The type each `case` in that body names, in source order."""
+    return _ARM.findall(body)
+
+
+def swallowed_without_an_arm(arms):
+    """Every (arm, kind) the arm also matches and nothing ahead of it names."""
+    out = []
+    for i, arm in enumerate(arms):
+        for kind in ENTITY_SUBTYPES.get(arm, ()):
+            if (arm, kind) in CARRIED or kind in arms[:i]:
+                continue
+            out.append((arm, kind))
+    return out
+
+
+class TestNoArmSwallowsAKindNobodyWroteItFor:
+    """`case IPolyline poly:` matched POLYFACE_MESH and POLYGON_MESH, because
+    both derive from `Polyline<T>` and `Polyline<T>` implements `IPolyline`.
+    Each went out as one open polyline threaded through its own vertices, with
+    no warning and byte-indistinguishable from the polylines beside it, which
+    is the one outcome docs/WIRE.md exists to prevent (libviprs-dep#82).
+
+    The compiler is no help here and it is worth being precise about why. It
+    orders the arms that exist: a subtype after its base, or a class after an
+    interface it implements, is CS8120 and a hard build error, so the arm this
+    one needed could not have been put in the wrong place. What nothing checks
+    is that the arm is there at all, and an absent arm is the defect. So this
+    reads the switch as text and asks the other question."""
+
+    def test_the_switch_is_the_one_this_reads(self):
+        # The extraction control. A rule that silently found nothing to check
+        # is the same colour as a rule that checked everything.
+        body = entity_switch()
+        assert body, "Flattener has no `switch (e)`, so nothing below read the entity switch"
+        arms = switch_arms(body)
+        assert "Line" in arms and "IPolyline" in arms, (
+            f"the switch this parsed has arms {arms}, which is not the entity switch"
+        )
+        assert "switch (" not in body, (
+            "the entity switch now holds a nested switch, so the arms above are two "
+            "switches' arms in one list and the ordering this checks is not a real order"
+        )
+        assert body.rstrip().endswith("}") and "default:" in body
+
+    def test_the_table_is_pinned_to_the_model_it_was_read_from(self):
+        import build_acadsharp as ba
+
+        upstream, _shim = ba.split_version(ba.read_version())
+        assert upstream == MODEL_VERSION, (
+            f"ENTITY_SUBTYPES was read off ACadSharp {MODEL_VERSION} and the pin is now "
+            f"{upstream}. Re-read src/ACadSharp/Entities before moving this string: a new "
+            "kind under an existing base is exactly what this check exists to catch, and "
+            "it cannot see one that is not in the table."
+        )
+
+    def test_no_arm_matches_a_kind_with_no_arm_ahead_of_it(self):
+        offenders = swallowed_without_an_arm(switch_arms(entity_switch()))
+        assert not offenders, (
+            "these arms match kinds nothing ahead of them names: "
+            + ", ".join(f"`case {arm}` also matches {kind}" for arm, kind in offenders)
+            + ". Each one crosses the wire as whatever that arm emits, with no warning "
+            "and nothing in the record saying it is not the kind the arm was written "
+            "for. Give it its own arm ahead of this one, or say in CARRIED why this "
+            "arm is right for it."
+        )
+
+    def test_no_arm_matches_whole_families(self):
+        arms = switch_arms(entity_switch())
+        offenders = sorted(set(arms) & set(MATCHES_WHOLE_FAMILIES))
+        assert not offenders, (
+            f"{offenders} is an arm on a type most of the entity model derives from, so "
+            "it is the default arm with a narrower name and every kind it swallows was "
+            "swallowed by nobody's decision"
+        )
+
+    def test_the_rule_catches_the_defect_it_was_written_for(self):
+        # The positive control, and the one that says this is not vacuous: the
+        # switch as it stood before #82, with LwPolyline ahead of IPolyline and
+        # no mesh arm anywhere.
+        assert swallowed_without_an_arm(["Line", "LwPolyline", "IPolyline", "MText"]) == [
+            ("IPolyline", "PolyfaceMesh"),
+            ("IPolyline", "PolygonMesh"),
+        ]
+
+    def test_an_arm_ahead_of_the_wide_one_satisfies_it(self):
+        # The other control. Ordering is the fix, so the rule has to accept it,
+        # and `case Arc` ahead of `case Circle` is the version of it already in
+        # the tree.
+        assert swallowed_without_an_arm(["Arc", "Circle"]) == []
+        assert swallowed_without_an_arm(["Circle", "Arc"]) == [("Circle", "Arc")]
+
+    def test_every_carried_pair_is_one_the_model_has(self):
+        # A reason written for a pair that cannot happen is a reason nobody
+        # will ever reread, and it hides the day the pair stops existing.
+        stale = sorted(
+            (arm, kind) for arm, kind in CARRIED if kind not in ENTITY_SUBTYPES.get(arm, ())
+        )
+        assert not stale, f"{stale} is carried by an arm that does not match it"
+        assert all(CARRIED.values()), "a carried pair with no reason is not a decision"

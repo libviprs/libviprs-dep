@@ -446,6 +446,38 @@ errors: a decode that emits a hundred of them and returns `VIPRS_ACAD_OK`
 succeeded, and the warnings are what it has to say about the parts of the
 drawing it could not fully represent.
 
+## Geometry that needs a lookup
+
+Some entities do not carry their own shape. A polyface mesh carries a vertex
+list and a separate set of face records that index into it; an MLINE carries a
+centre line and a style that holds the offsets the lines actually sit at; an
+insertion carries a block name; an external reference carries a path to
+another file.
+
+**When an entity's geometry depends on something outside the entity, a
+producer emits the resolved geometry or it emits `UNSUPPORTED_ENTITY` and no
+geometry record at all. It never emits the part it could compute without the
+lookup.**
+
+The part it can compute without the lookup is the dangerous output, because it
+is type-compatible with a correct one. A polyface mesh flattened through its
+vertex list is a `Polyline` record with a plausible point count and real
+coordinates, and there is no field on it that says it is the half that did not
+need the faces. A consumer cannot tell it from the polyline beside it, so it
+draws a wandering line and reports success. That is a defect and not a
+degradation: a degradation is something the consumer knows it has.
+
+Zero geometry and a warning is always readable. The consumer knows exactly
+what it is missing, `item_handle` says where in the drawing to look, and
+nothing it draws is wrong.
+
+This is not the same as a warning beside a record that really is the entity.
+`NON_UNIFORM_BLOCK_SCALE` sits next to a record whose parameters are the
+entity's own, measured in a frame the transform does not preserve, and the
+consumer can decide what to do about that. `UNRESOLVED_BLOCK` is this rule
+already: an insertion whose block could not be resolved emits the warning and
+nothing else, rather than the insertion point on its own.
+
 ## Refusing a stream
 
 | Condition | Result |
