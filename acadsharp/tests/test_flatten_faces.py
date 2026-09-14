@@ -1,7 +1,7 @@
-"""SOLID and MESH, the two filled-face kinds that lower to record 9.
+"""SOLID, MESH and 3DFACE, the filled-face kinds that lower to record 9.
 
-Both were refused until now and both are a `Polygon` with no bulge array, so
-they share a file the way they share an arm file in the shim.
+All three were refused until now and all three are a `Polygon` with no bulge
+array, so they share a file the way they share an arm file in the shim.
 
 The assertions here are about ORDER, and that is the whole reason this module
 is not three lines checking a record count. DXF stores a SOLID's third and
@@ -12,6 +12,15 @@ an area or a bounding box passes either way. `g13_solid.dwg`'s first solid is
 asymmetric on purpose, and `TestTheFixtureCanFail` below is what proves the
 assertion could go red, by reordering the same emitted points into the wrong
 order and showing the number moves.
+
+A 3DFACE is the same claim from the third side, and the reason it is in this
+file rather than sharing SOLID's helper. It carries the same four corners at
+the same group codes and goes out in the OTHER order, 1, 2, 3, 4, because its
+per-edge visibility flags only mean anything in traversal order. So the
+plausible wrong implementation here is the opposite one: an arm that copies
+SOLID's 1, 2, 4, 3 and draws the bow-tie on a 3DFACE instead. `g13_face3d.dwg`
+carries the same asymmetric quad for the same reason, and
+`TestFace3DCornerOrder` pins the order and the control beside it.
 
 A MESH is the same shape of claim from the other side: its faces are
 deliberately not coplanar, so an implementation that collapsed the mesh to one
@@ -29,6 +38,7 @@ import pytest
 from g13_support import kinds, manifest, records, vertex_record, warnings
 
 SOLID = "g13_solid.dwg"
+FACE3D = "g13_face3d.dwg"
 MESH = "g13_mesh.dwg"
 BAD_FACES = "g13_mesh_bad_faces.dwg"
 # The degenerate SOLID is here rather than in g13_solid.dwg: this fixture's is
@@ -49,6 +59,23 @@ def polygons(fixture):
             continue
         pts, bulges, normal = vertex_record(r["rest"])
         out.append((r["flags"], pts, bulges, normal))
+    return out
+
+
+def polygon_rows(fixture):
+    """Every Polygon in one dump, as (index, handle, flags, points, normal).
+
+    `polygons` above drops the index and the handle and nothing that reads
+    SOLID or MESH needs either. A 3DFACE does: warning 113 has to sit beside
+    the face it is about and carry that face's handle, and both of those are
+    claims about which record is where rather than about how many there are.
+    """
+    out = []
+    for r in records(fixture):
+        if r["kind"] != "Polygon":
+            continue
+        pts, bulges, normal = vertex_record(r["rest"])
+        out.append((r["index"], r["handle"], r["flags"], pts, bulges, normal))
     return out
 
 
@@ -198,6 +225,235 @@ class TestTheFixtureCanFail:
             f"the other order encloses {bowtie}, and the bow-tie is 3.5. If these two "
             "numbers were equal this fixture could not tell the orders apart."
         )
+
+
+class TestFace3DCornerOrder:
+    """A 3DFACE goes out 1, 2, 3, 4, which is the other order from a SOLID's.
+
+    ACadSharp gives `Face3D` and `Solid` the same four corner properties with
+    the same names at the same DXF group codes, so one shared helper compiles,
+    reads right and is wrong on one of the two. What decides which order is
+    `InvisibleEdgeFlags`: First, Second, Third and Fourth only mean anything if
+    edge 1 runs from corner 1 to corner 2 and edge 4 runs from corner 4 back to
+    corner 1, and that is traversal order. DXF's swap is SOLID's alone.
+
+    So the plausible wrong arm here is the one that copies `SolidPolygon` and
+    emits 1, 2, 4, 3. Over a rectangle that is invisible, which is why this
+    fixture's first face is the same asymmetric quad `g13_solid.dwg` uses: the
+    right order encloses 50 and the SOLID permutation encloses 3.5.
+    """
+
+    def test_the_first_face_is_emitted_in_1_2_3_4_order(self):
+        _index, _handle, flags, pts, _bulges, _normal = polygon_rows(FACE3D)[0]
+        assert flags == 0, "the first Polygon should be the first top-level face"
+        expected = [(0.0, 0.0, 0.0), (10.0, 1.0, 0.0), (11.0, 7.0, 0.0), (2.0, 5.0, 0.0)]
+        assert len(pts) == 4, f"the asymmetric quad emitted {len(pts)} vertices"
+        for i, (got, want) in enumerate(zip(pts, expected)):
+            assert close(got, want), (
+                f"vertex {i} is {got} and traversal order puts {want} there. SOLID's "
+                "1, 2, 4, 3 is the permutation this fixture exists to catch, and on "
+                "these corners it is the bow-tie."
+            )
+
+    def test_the_two_orders_are_different_polygons(self):
+        # The control, and without it the assertion above could be sitting on a
+        # fixed point. The face's corners are (0,0), (10,1), (11,7) and (2,5);
+        # 1,2,3,4 traces a simple quad and 1,2,4,3 crosses itself, so the two
+        # shoelaces are 50 and 3.5. If those two numbers were equal this file
+        # could not tell the orders apart on this fixture.
+        _index, _handle, _flags, pts, _bulges, _normal = polygon_rows(FACE3D)[0]
+        assert len(pts) == 4
+        traversal = shoelace(pts)
+        # Back to SOLID's 1, 2, 4, 3 from the emitted 1, 2, 3, 4.
+        bowtie = shoelace([pts[0], pts[1], pts[3], pts[2]])
+        assert abs(traversal - 50.0) <= TOL, (
+            f"the emitted order encloses {traversal} and the correct quad is 50"
+        )
+        assert abs(bowtie - 3.5) <= TOL, (
+            f"the SOLID order encloses {bowtie} and the bow-tie is 3.5. Two equal "
+            "numbers here would mean the order assertion above proves nothing."
+        )
+
+    def test_a_fourth_corner_equal_to_the_third_is_a_triangle(self):
+        _index, _handle, _flags, pts, bulges, _normal = polygon_rows(FACE3D)[1]
+        assert len(pts) == 3, (
+            f"the three-cornered face emitted {len(pts)} vertices. A 3DFACE repeats "
+            "its third corner as its fourth when only three were entered, and the DWG "
+            "reader reads the fourth with the third as its default, so the two are "
+            "exactly equal and emitting both puts a coincident vertex on the wire."
+        )
+        expected = [(20.0, 0.0, 0.0), (26.0, 2.0, 0.0), (22.0, 6.0, 0.0)]
+        for got, want in zip(pts, expected):
+            assert close(got, want), f"{got} is not {want}"
+        assert bulges == [], "a face's edges are straight, so record 9 carries no array"
+
+
+class TestAFaceMeasuresItsOwnPlane:
+    """Record 9 carries a normal and a 3DFACE has none to give it.
+
+    `Face3D` is a plain `Entity`. It has no DXF 210 and its own property
+    documentation says all four corners are world coordinates, so there is
+    nothing to lift through and nothing to read the plane off. The normal is
+    Newell's over the points the record carries, which is the MESH rule, and
+    the alternative (the placement's basis normal, which is SOLID's rule)
+    answers `+Z` for a face standing on its side.
+    """
+
+    def test_a_standing_face_names_its_own_plane(self):
+        # The third face is (30,0,0) (34,0,0) (34,0,3) (30,0,3), standing in
+        # the XZ plane. Newell's sums (a.z - b.z) * (a.x + b.x) for the y
+        # component: the two spans with no z change contribute nothing, the
+        # span (34,0,0) to (34,0,3) contributes -3 * 68 = -204 and the span
+        # (30,0,3) to (30,0,0) contributes 3 * 60 = 180, so ny = -24 and the
+        # unit normal is (0, -1, 0). Recomputed here rather than taken on
+        # trust, because a number nobody can redo is a number nobody checks.
+        _index, _handle, _flags, pts, _bulges, normal = polygon_rows(FACE3D)[2]
+        assert close(normal, (0.0, -1.0, 0.0)), (
+            f"the standing face names the plane {normal}. (0, 0, 1) is what the "
+            "placement's basis reports, and the face is not in that plane."
+        )
+        assert not all(abs(p[2]) <= TOL for p in pts), (
+            "every emitted z is zero, so this is not the standing face at all"
+        )
+
+    def test_its_corners_are_the_ones_the_file_holds(self):
+        # The other half, and the reason the arm does not call WithOcs. A
+        # 3DFACE's corners are already world coordinates, so lifting them
+        # through any plane moves them somewhere the drawing does not have
+        # them. Here that shows up as the exact numbers rather than as a shape.
+        _index, _handle, _flags, pts, _bulges, _normal = polygon_rows(FACE3D)[2]
+        expected = [(30.0, 0.0, 0.0), (34.0, 0.0, 0.0), (34.0, 0.0, 3.0), (30.0, 0.0, 3.0)]
+        for i, (got, want) in enumerate(zip(pts, expected)):
+            assert close(got, want), f"vertex {i} is {got} and not {want}"
+
+
+class TestInvisibleEdges:
+    """Warning 113, and the decision behind it.
+
+    A 3DFACE can mark any of its four edges invisible and record 9 has no
+    per-edge visibility at all. Three answers were on the table: drop the flags
+    silently, split the face into the visible edges as Lines, or cross whole
+    and say so. The third is the one here, for 110's reason: the face is the
+    entity, a run of lines is not, and a consumer that is told which faces lost
+    a flag can do something about it while a consumer told nothing cannot.
+    """
+
+    def test_a_face_with_invisible_edges_still_crosses_whole_and_says_so(self):
+        index, handle, _flags, pts, _bulges, _normal = polygon_rows(FACE3D)[3]
+        assert len(pts) == 4, (
+            f"the flagged face emitted {len(pts)} vertices. It has two edges marked "
+            "invisible and four corners, so an arm that split it into its visible "
+            "edges leaves no four-vertex Polygon at this handle."
+        )
+        expected = [(40.0, 0.0, 0.0), (46.0, 1.0, 0.0), (47.0, 5.0, 0.0), (41.0, 4.0, 0.0)]
+        for i, (got, want) in enumerate(zip(pts, expected)):
+            assert close(got, want), f"vertex {i} is {got} and not {want}"
+
+        found = [w for w in warnings(FACE3D) if w["code"] == "FACE_EDGE_VISIBILITY_IGNORED"]
+        assert len(found) == 1, (
+            f"{len(found)} faces said their edge flags were ignored, and one face in "
+            "this fixture carries any. Dropping them silently is the outcome this "
+            "code exists to stop."
+        )
+        assert found[0]["handle"] == handle, (
+            f"the warning names {found[0]['handle']} and the face it is about is "
+            f"{handle}, so nobody reading it can find the face"
+        )
+        said = [
+            r
+            for r in records(FACE3D)
+            if r["kind"] == "Warning" and "FACE_EDGE_VISIBILITY_IGNORED" in r["rest"]
+        ]
+        assert said[0]["index"] < index, (
+            "the warning follows the Polygon it is about, and a consumer reading the "
+            "stream in order meets the record before it is told anything about it"
+        )
+
+    def test_the_other_faces_say_nothing(self):
+        # The control. One warning in the dump is satisfied by a warning fired
+        # once per drawing, and the three unflagged top-level faces plus the
+        # two block copies are what tells the two apart.
+        found = [w for w in warnings(FACE3D) if w["code"] == "FACE_EDGE_VISIBILITY_IGNORED"]
+        flagged = {w["handle"] for w in found}
+        others = {h for _i, h, _f, _p, _b, _n in polygon_rows(FACE3D)} - flagged
+        assert len(others) >= 3, (
+            f"only {len(others)} other faces came out, so this control is not "
+            "separating a per-face warning from a per-drawing one"
+        )
+
+    def test_the_message_names_which_edges(self):
+        found = [w for w in warnings(FACE3D) if w["code"] == "FACE_EDGE_VISIBILITY_IGNORED"]
+        message = found[0]["message"]
+        assert message.split(" ")[0] == "3DFACE", (
+            f"{message!r} does not open with the DXF kind, which is the one thing "
+            "every message on this wire is held to"
+        )
+        assert "first" in message and "third" in message, (
+            f"{message!r} does not say which edges were marked. The fixture's face "
+            "flags the first and the third, and a message that only says some edge "
+            "was flagged cannot be acted on."
+        )
+        assert "second" not in message and "fourth" not in message, (
+            f"{message!r} names edges the face does not flag, so the list is a "
+            "constant rather than a reading of the entity"
+        )
+
+
+class TestFace3DInsideABlock:
+    def test_the_block_copies_cross_and_are_labelled(self):
+        found = [p for p in polygon_rows(FACE3D) if p[2] == 1]
+        assert len(found) == 2, (
+            f"{len(found)} faces came out of the two insertions. Bit 0 of flags is "
+            "'came from expanding a nested insertion'."
+        )
+
+    def test_each_block_copy_is_its_own_insertion(self):
+        # The block's face is (0,0) (6,1) (7,5) (1,4) in traversal order, which
+        # is the same quad g13_solid.dwg's block member is, reached through the
+        # other corner order: the SOLID stores it as 1, 2, 4, 3 and this stores
+        # it as 1, 2, 3, 4, so the two fixtures emit the same six numbers from
+        # different files and a copied arm cannot be told apart by them alone.
+        # The insertions are 3x/1.5 and a mirrored -2x/2.
+        found = [p for p in polygon_rows(FACE3D) if p[2] == 1]
+        assert len(found) == 2
+        expected = [
+            [(40.0, 0.0, 0.0), (58.0, 1.5, 0.0), (61.0, 7.5, 0.0), (43.0, 6.0, 0.0)],
+            [(80.0, 0.0, 0.0), (68.0, 2.0, 0.0), (66.0, 10.0, 0.0), (78.0, 8.0, 0.0)],
+        ]
+        for i, (_index, _handle, _flags, pts, _bulges, _normal) in enumerate(found):
+            assert len(pts) == 4, f"insertion {i} emitted {len(pts)} vertices"
+            for j, (got, want) in enumerate(zip(pts, expected[i])):
+                assert close(got, want), f"insertion {i} vertex {j} is {got} and not {want}"
+
+    def test_the_mirrored_copy_flips_the_measured_normal(self):
+        # This is record 9's documented MESH behaviour and a 3DFACE shares it,
+        # because a 3DFACE has no plane of its own either. A mirror reverses
+        # the traversal, and a normal measured off the reversed traversal
+        # reverses with it. The arm that took the placement's normal with the
+        # mirror corrected out, which is SOLID's rule, reports +Z for both.
+        found = [p for p in polygon_rows(FACE3D) if p[2] == 1]
+        assert len(found) == 2
+        assert close(found[0][5], (0.0, 0.0, 1.0)), (
+            f"the 3x/1.5 insertion names {found[0][5]}, and a pure scale keeps the "
+            "winding the file stores"
+        )
+        assert close(found[1][5], (0.0, 0.0, -1.0)), (
+            f"the mirrored insertion names {found[1][5]}. A normal that survived the "
+            "mirror is one that was fabricated rather than measured."
+        )
+
+
+class TestFace3DIsNoLongerRefused:
+    def test_nothing_still_refuses_a_3dface(self):
+        # Not a check that no message opens with 3DFACE: warning 113's does,
+        # deliberately, because every message on this wire opens with the DXF
+        # kind. What has to be gone is the refusal.
+        refused = {
+            w["message"].split(" ")[0]
+            for w in warnings(FACE3D)
+            if w["code"] in ("UNSUPPORTED_ENTITY", "ENTITY_REFUSED_BY_DESIGN")
+        }
+        assert "3DFACE" not in refused, "a 3DFACE is still reaching a refusal arm"
 
 
 class TestMeshFaces:
@@ -428,7 +684,7 @@ class TestADegenerateSolidIsStillASolid:
 
 
 class TestNeitherFixtureProducesAnythingElse:
-    @pytest.mark.parametrize("fixture", (SOLID, MESH, BAD_FACES))
+    @pytest.mark.parametrize("fixture", (SOLID, FACE3D, MESH, BAD_FACES))
     def test_only_polygons_and_warnings(self, fixture):
         assert set(kinds(fixture)) <= {"Polygon", "Warning"}, (
             f"{fixture} produced {sorted(kinds(fixture))}, and a filled face is a "

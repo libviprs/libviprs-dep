@@ -1134,19 +1134,22 @@ namespace Viprs.Cad
 					yield break;
 				}
 
-				// SOLID and MESH. Both are a filled face given by its corners and
-				// both lower to record 9, so their bodies sit together in
-				// Flatten.Faces.cs; only the labels are here, because the order of
-				// the labels is what the compiler checks.
+				// SOLID, MESH and 3DFACE. All three are a filled face given by its
+				// corners and all three lower to record 9, so their bodies sit
+				// together in Flatten.Faces.cs; only the labels are here, because
+				// the order of the labels is what the compiler checks.
 				//
-				// 3DFACE is deliberately not beside them. It carries the same four
-				// corner properties at the same DXF codes and is a different
-				// entity in both of the ways that decide what a Polygon says: its
-				// per-edge InvisibleEdgeFlags only read as traversal order, so its
-				// corners go out 1, 2, 3, 4 rather than SOLID's 1, 2, 4, 3, and
-				// Face3D carries no normal at all and documents every corner as
-				// world, so it is neither lifted through an OCS nor entitled to
-				// the placement's normal. Flatten.Faces.cs records the rest.
+				// 3DFACE is beside them and shares nothing with SOLID but the
+				// record. It carries the same four corner properties at the same
+				// DXF codes and is a different entity in both of the ways that
+				// decide what a Polygon says: its per-edge InvisibleEdgeFlags only
+				// read as traversal order, so its corners go out 1, 2, 3, 4 rather
+				// than SOLID's 1, 2, 4, 3, and Face3D carries no normal at all and
+				// documents every corner as world, so it is neither lifted through
+				// an OCS nor entitled to the placement's normal. It is also the
+				// only one of the three that can ask for something record 9 has no
+				// field for, which is warning 113. Flatten.Faces.cs records the
+				// rest.
 				case Solid solid:
 				{
 					yield return SolidPolygon(solid, h, flags, place);
@@ -1156,6 +1159,57 @@ namespace Viprs.Cad
 				case Mesh mesh:
 				{
 					foreach (Primitive p in MeshPolygons(mesh, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case Face3D face:
+				{
+					foreach (Primitive p in Face3DPolygon(face, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				// WIPEOUT. The body is in Flatten.Masks.cs, beside the mapping
+				// out of pixel space that is the whole of its geometry and the
+				// argument for warning 112 rather than a flag on the record.
+				//
+				// Not with SOLID and MESH even though all three are record 9:
+				// those two are faces and this one is a hole, so what a consumer
+				// does with it is the opposite, and the file that holds it is
+				// where the reason for that lives.
+				case Wipeout wipeout:
+				{
+					foreach (Primitive p in WipeoutPolygon(wipeout, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case MLine mline:
+				{
+					foreach (Primitive p in MLinePolylines(mline, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				// LEADER. Its vertices are already world coordinates and its
+				// arrowhead is not in the drawing at all, so the body and the
+				// two sentences that say why are in Flatten.Leaders.cs.
+				case Leader leader:
+				{
+					foreach (Primitive p in LeaderPolyline(leader, h, flags, place))
 					{
 						yield return p;
 					}
@@ -1300,8 +1354,9 @@ namespace Viprs.Cad
 		// The sentence below used to be written out in three places: here, in
 		// the switch's default arm, which also carried its own copy of the
 		// table lookup, and as a variant inside RefusedKinds' WIPEOUT row.
-		// That row keeps its variant, because it is a different sentence
-		// saying a different thing. The other two are now one.
+		// The first two are now one, and the third went with the row it was
+		// in: a WIPEOUT is flattened now, so RefusedKinds no longer has a
+		// sentence for it and the arm above is where it goes instead.
 		//
 		// The lookup is the half that mattered. This method hardcoded code 100,
 		// so an arm refusing a kind on its own, which is what the two mesh arms

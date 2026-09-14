@@ -99,6 +99,55 @@ namespace Viprs.Cad
 		// face and which fault.
 		public const uint MeshFaceUnreadable = 111u;
 
+		// The Polygon record beside this one is a mask rather than a face: it
+		// hides whatever the stream drew before it, inside its boundary. A
+		// WIPEOUT is one.
+		//
+		// This is the sanctioned way to say it on wire version 2. Record 9 has
+		// no slot for "this one covers", and the prologue's spare bits are a
+		// semantic change under an unchanged version number, which is the one
+		// thing the fingerprint and the version exist to stop. A code is not:
+		// docs/WIRE.md says a consumer skips a code it does not know and
+		// carries on, so a consumer built before this existed fills the
+		// boundary like any other record 9. That still hides what is under it
+		// and the worst it does is paint a coloured face where a blank
+		// belongs, which is the direction this has to fail in. Dropping the
+		// record is the other direction and shows what the drawing was hiding.
+		public const uint PolygonMasks = 112u;
+
+		// A 3DFACE that marks one or more of its edges invisible. Record 9 has
+		// no per-edge visibility, so there are three things this could have
+		// been and this is the one it is: the face crosses whole, carrying
+		// every edge, and this says which flags were dropped.
+		//
+		// The other two are worse. Dropping them silently means a consumer
+		// cannot tell a face that asked for a hidden edge from one that did
+		// not, and there is nothing in the record to go and look at. Splitting
+		// the face into its visible edges as Lines loses the face: a filled
+		// quad becomes a run of segments, the fill goes away, and the handle
+		// then names several records that are not the entity. 110 is the
+		// precedent, one code beside the geometry saying what was not
+		// evaluated, and the failure direction here is an edge drawn that the
+		// drawing wanted blank rather than an entity nobody can see.
+		public const uint FaceEdgeVisibilityIgnored = 113u;
+
+		// A LEADER whose arrowhead flag is set. The Polyline beside it is the
+		// vertex run and nothing else: an arrowhead is a glyph the dimension
+		// style names, at a size the style sets, and neither the glyph nor the
+		// size is geometry this file holds, so drawing one would be this layer
+		// deciding what the drawing looks like. A consumer that never hears
+		// about it draws a leader pointing at nothing and has no way to know
+		// that is what happened, which is what this code is for.
+		public const uint ArrowheadNotDrawn = 114u;
+
+		// An MLINE whose style asks for something this version does not draw:
+		// a filled area between its outermost elements, the joint lines a
+		// style can display at each inner vertex, or a cap closing either end.
+		// The element lines beside it are the whole of what the entity draws
+		// here, so this is a statement about what is missing rather than a
+		// refusal, which is what 110 does for a MESH's subdivision level.
+		public const uint MLineStyleFeaturesIgnored = 115u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -115,6 +164,10 @@ namespace Viprs.Cad
 				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
+				case PolygonMasks: return "POLYGON_MASKS";
+				case FaceEdgeVisibilityIgnored: return "FACE_EDGE_VISIBILITY_IGNORED";
+				case ArrowheadNotDrawn: return "ARROWHEAD_NOT_DRAWN";
+				case MLineStyleFeaturesIgnored: return "MLINE_STYLE_FEATURES_IGNORED";
 				default: return "WARNING_" + code;
 			}
 		}

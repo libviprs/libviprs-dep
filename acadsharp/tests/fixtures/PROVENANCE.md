@@ -39,9 +39,48 @@ The wire carries only `handle` and `flags` from the common entity fields, and th
 flattener reads `Thickness` nowhere, so there is no field in any record for those to be
 wrong in. Setting them would grow the corpus and assert nothing.
 
-Six refused kinds are absent here and stay on the real drawing, because ACadSharp's
-`DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
-MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
+Three refused kinds are absent here and stay on the real drawing: MULTILEADER, 3DSOLID and
+REGION. The reason this file used to give, that `DwgObjectWriter` has no case for them and
+its final arm throws `NotImplementedException`, is wrong for all three, so it is gone rather
+than corrected in place. `DwgObjectWriter.isEntitySupported` (`DwgObjectWriter.cs:131`) drops
+`Solid3D` and `Region` with a NotImplemented notification before the entity switch runs at
+all, so neither ever reaches that final arm; 3DSOLID even has `case Solid3D solid3d:` at line
+618 of `DwgObjectWriter.Entities.cs` with a `writeSolid3D` behind it at 2205, which the filter
+makes unreachable. MULTILEADER is not filtered and has `case MultiLeader multiLeader:` at 569
+with a real `writeMultiLeader` at 1611, so the writer can forge one. What keeps a MULTILEADER
+fixture out of this directory is the thing recorded on libviprs-dep#86: the reader that would
+read it back is the same 3.7.1 context-data path the fifteen instances on `real_AC1032.dwg`
+go through, and it is the least trusted reader in the pin, so a fixture this writer forges
+round-trips one implementation against itself and says nothing about those fifteen. Whoever
+adds one runs an independent oracle over the real drawing first.
+
+The list said six until this round, and every kind that came off it came off because somebody
+read the writer instead of the list. 3DFACE had `case Face3D face3D:` at 545 and a real
+`writeFace3D` at 679 the whole time, so `g13_face3d.dwg` below is written the way every other
+fixture here is. MLINE has `case MLine mLine: this.writeMLine(mLine);` at 563, and `writeMLine`
+at 1412 writes the scale, the justification, the base point, the normal, the open/closed flag,
+every vertex with its direction and miter, one segment per style element per vertex, and a hard
+pointer to the style, so `g13_mline.dwg` below is the fixture; until it landed the only evidence
+about MLINE anywhere in this corpus was three entities on the two real drawings that all use the
+same two symmetric Standard offsets. PDFUNDERLAY has `case PdfUnderlay pdfUnderlay:` at 575 and a
+`writePdfUnderlay` at 1920 that writes the normal, the insertion point, the rotation, the three
+scales, the flags, the contrast, the fade, the definition handle and the clip boundary, and
+`UnderlayEntity` adds no `IsValid` override, so nothing filters one out either. It is still
+refused on code 109, for the reason `docs/adr/0002` gives (what it displays is an external PDF
+this decoder will not open), and that reason has nothing to do with whether a fixture could be
+written. WIPEOUT was never on the list, which is just as well, because `g13_wipeout.dwg` below
+is one.
+
+Writing that one took a detour worth recording. `CadWipeoutBase.IsValid` refuses any
+instance whose `Definition` or `DefinitionReactor` is null, and
+`DwgObjectWriter.isEntitySupported` calls it and drops the entity rather than throwing, so
+the first attempt wrote a perfectly well-formed 10507-byte DWG with no entities in it at
+all. That rule is RasterImage's: a wipeout has no raster by definition and AutoCAD writes
+one with a zero definition handle, and `DefinitionReactor` cannot be filled in from out
+here because its setter and both of its constructors are internal to ACadSharp.dll. So the
+generator writes the entity through a subclass that overrides `IsValid`, which changes
+nothing about the bytes: `writeCadImage` is the same method and the reader gives back a
+plain `Wipeout`. `Corpus.cs` carries the long version beside the code.
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
@@ -49,12 +88,16 @@ Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 | --- | --- | --- |
 | `g13_point.dwg` | `80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e` | AC1032. Four POINTs at top level, one at the origin, one off it, one with a Z, one on a non-Z extrusion; then two more inside a block, inserted non-uniformly and mirrored. |
 | `g13_solid.dwg` | `dea64a63b283585bb38b4d5a311ff1aadb9eb57cb399380e180294fe7ceafca1` | AC1032. Three SOLIDs at top level: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one on a non-Z extrusion. A fourth, also asymmetric, inside a block. |
+| `g13_face3d.dwg` | `025e5769c0efcedaca4e0286e69e7848539c681ede41854ae1a30da18df4c3f5` | AC1032. Four 3DFACEs at top level: the same asymmetric quad `g13_solid.dwg` holds but listed in traversal order, so the two fixtures separate a 3DFACE's 1, 2, 3, 4 from a SOLID's 1, 2, 4, 3; a triangle (fourth corner equal to the third); one standing in the XZ plane, which is what separates a measured normal from the placement's; and one marking its first and third edges invisible, which is the only entity in this corpus that produces warning 113. A fifth, also asymmetric, inside a block. |
 | `g13_ray_xline.dwg` | `332411ca8ee2e05fce04520594ac87952ff7c36d18c3c279ff5abda03a49cdae` | AC1032. A RAY and an XLINE with non-axis-aligned directions plus a bounded LINE that gives the drawing finite extents, then one of each inside a block. The mirrored insertion reverses the half line a RAY covers. |
+| `g13_leader.dwg` | `6fbf1b031622a8df6bdff1d755e139391f29fe38575d81a0453dc4f58bb5603a` | AC1032. Four LEADERs at top level: a three-vertex run with the arrowhead on, a two-vertex run with it off, a spline-fit one whose four fit points are not collinear, and one on a non-Z extrusion with a z on its second vertex, because a LEADER's vertices are world coordinates and an arm that lifted them would move both while still drawing a plausible leader. A fifth inside a block, arrowhead on, so the warning is evidenced under a transform too. |
 | `g13_polyface_mesh.dwg` | `ccd27150f2a135ded937e02b2ca10a04c58ce250850267e8537839026e1d3c8e` | AC1032. Two POLYFACE_MESHes of six vertices and two non-coplanar faces, one on +Z and one on a non-Z extrusion, vertices ordered so a line threaded through them in storage order self-intersects. A third inside a block. |
 | `g13_polygon_mesh.dwg` | `de3286f404c9a39f707a33b4294f0bdbd433ebdc8f821c3a93afa6535170f322` | AC1032. Two 3x4 POLYGON_MESHes with alternating elevation, one on +Z and one on a non-Z extrusion, so an M/N transposition changes the record. A third inside a block. |
 | `g13_mesh.dwg` | `962b4ecde6653787467fc4467e2eb7b08a60027f20a85141c1e6f829e1f12517` | AC1032. A MESH of two non-coplanar faces at subdivision level 2, and a second inside a block. The mirrored insertion is what makes face winding testable. |
 | `g13_mesh_bad_faces.dwg` | `5e3c636aea9cdba44869caa68f01ad7caff27a45e3f0c0f02b9b407d87ee98e9` | AC1032. One MESH of three vertices carrying one good non-planar face and four the file contradicts itself about: an index past the end of its own vertex list, a face of two vertices, an index below zero, and a face of none. The only input in this corpus that reaches warning 111, which until now was written and never executed. |
+| `g13_mline.dwg` | `68b999799207002f2ed1ca3c60654e8c109bc01a3b31111938929da23349ce55` | AC1032. Six MLINEs at top level over three styles. The first three share one right-angled path, one scale factor of 2.5 and one style of three asymmetric offsets (+1, 0, -1.5) and differ only in justification, so Zero, Top and Bottom are three different drawings rather than three copies. The fourth is a closed square, where the first vertex is a joint like every other one. The fifth names a style with no elements, which is the only unresolvable style state ACadSharp lets through (a dangling handle decodes as Standard). The sixth names a style with FillOn and a start cap, which is the only entity here that asks for something this version does not draw. A seventh, on a slant so parallelism is a real assertion, sits in a block inserted non-uniformly and mirrored. |
 | `g13_tolerance.dwg` | `28f3d76765aaf05bac62a0cb7d5fbd9652756fa1caed0506211d3c8a4918f799` | AC1032. Two TOLERANCE feature-control frames with two stacked rows, one on +Z and one on a non-Z extrusion, and a third inside a block. |
+| `g13_wipeout.dwg` | `272b7d95c2e3fb8923087866353ecf8a2e967fb96a29eb42667e9f643ee45d22` | AC1032. Three WIPEOUTs at top level: a rectangular clip, which stores two opposite corners and means four; an asymmetric polygonal clip whose third vertex is off centre both ways, which is what makes the pixel-space row flip visible at all; and one whose U and V are neither axis-aligned nor the same length, so reading them as a width and a height is a different answer. A fourth, polygonal and wound the other way, inside a block. Every boundary is in pixel space and every expected world coordinate was confirmed against ezdxf. |
 
 ## From upstream
 
