@@ -34,10 +34,18 @@ CODE_FIXTURES = {
     # fixture this code is produced by. WIPEOUT is the eighth and stays on 100.
     "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
     "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
-    # None, like DIMENSION_WITHOUT_BLOCK above. Producing it needs a MESH whose
-    # face list indexes past its own vertex list, which means a new corpus
-    # fixture, and this campaign's lanes do not regenerate the corpus.
-    "MESH_FACE_UNREADABLE": None,
+    "MESH_FACE_UNREADABLE": "g13_mesh_bad_faces.dwg",
+}
+
+# A code the corpus cannot produce, and the C# constant that has to still be
+# there for the arm to exist at all.
+#
+# One row rather than a hardcoded name, because there have been two: 111 sat
+# here with "this campaign's lanes do not regenerate the corpus" as its reason,
+# and the test below was still singular and asserting only about the other one,
+# so the second uncovered code was excused by a comment and by nothing else.
+UNCOVERED = {
+    "DIMENSION_WITHOUT_BLOCK": "DimensionWithoutBlock",
 }
 
 
@@ -298,12 +306,24 @@ class TestNonFiniteGeometry:
 
 
 class TestTheCodeTableIsComplete:
-    def test_the_one_code_with_no_fixture_is_named_and_explained(self):
-        # DIMENSION_WITHOUT_BLOCK is reachable and deliberately uncovered:
-        # ACadSharp's DwgWriter generates a block for every dimension it
-        # writes, so the corpus generator cannot produce a dimension without
-        # one, and a file that has one would have to be a real drawing nobody
-        # here has. The arm stays because a real drawing can carry it.
-        assert CODE_FIXTURES["DIMENSION_WITHOUT_BLOCK"] is None
+    """DIMENSION_WITHOUT_BLOCK is reachable and deliberately uncovered:
+    ACadSharp's DwgWriter generates a block for every dimension it writes, so
+    the corpus generator cannot produce a dimension without one, and a file
+    that has one would have to be a real drawing nobody here has. The arm stays
+    because a real drawing can carry it."""
+
+    def test_the_uncovered_codes_are_the_ones_named_here(self):
+        assert sorted(c for c, f in CODE_FIXTURES.items() if f is None) == sorted(UNCOVERED), (
+            "a code was excused from having a fixture without being named in UNCOVERED, "
+            "which is how MESH_FACE_UNREADABLE sat uncovered behind a test that only "
+            "ever looked at DIMENSION_WITHOUT_BLOCK"
+        )
+
+    @pytest.mark.parametrize("code,constant", sorted(UNCOVERED.items()))
+    def test_each_uncovered_code_is_named_and_explained(self, code, constant):
+        assert CODE_FIXTURES[code] is None
         with open(WARNING_CODES) as f:
-            assert "DimensionWithoutBlock" in f.read()
+            assert constant in f.read(), (
+                f"{code} is excused from having a fixture and WarningCodes.cs no longer "
+                f"declares {constant}, so the excuse outlived the arm"
+            )

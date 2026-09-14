@@ -17,13 +17,24 @@ A MESH is the same shape of claim from the other side: its faces are
 deliberately not coplanar, so an implementation that collapsed the mesh to one
 polygon, or that emitted the vertex list as a path, fails on the normals
 rather than on a count.
+
+Two more questions live here because they are questions about a filled face.
+`g13_mesh_bad_faces.dwg` is the only input in the corpus that reaches the
+flattener's own hostile-input handling, warning 111, and a degenerate SOLID is
+a record that is not a shape: both are decisions, so both are asserted rather
+than left to whatever the code happens to do.
 """
 
 import pytest
-from g13_support import kinds, records, vertex_record, warnings
+from g13_support import kinds, manifest, records, vertex_record, warnings
 
 SOLID = "g13_solid.dwg"
 MESH = "g13_mesh.dwg"
+BAD_FACES = "g13_mesh_bad_faces.dwg"
+# The degenerate SOLID is here rather than in g13_solid.dwg: this fixture's is
+# default constructed, which is the only way to get one out of the generator,
+# and it is where flattening SOLID first showed the question up.
+DEGENERATE = "g13_unsupported.dwg"
 
 # The dump prints six decimals, so this is the floor of what any comparison
 # here can mean.
@@ -120,6 +131,43 @@ class TestSolidCornerOrder:
             "'came from expanding a nested insertion'."
         )
 
+    def test_each_block_copy_is_its_own_insertion(self):
+        # A count of two is satisfied by the same instance twice, and the two
+        # insertions are 3x/1.5 and a mirrored -2x/2 of one asymmetric quad:
+        # exactly the pair where a corner-order defect and a winding defect
+        # compound, which Corpus.cs says in as many words is why the block
+        # member has no symmetry. Counting them proves neither.
+        #
+        # The block's corners are (0,0), (6,1), (1,4) and (7,5), so 1, 2, 4, 3
+        # traces (0,0) (6,1) (7,5) (1,4) and each insertion is that scaled and
+        # moved.
+        found = [p for p in polygons(SOLID) if p[0] == 1]
+        assert len(found) == 2
+        expected = [
+            [(40.0, 0.0, 0.0), (58.0, 1.5, 0.0), (61.0, 7.5, 0.0), (43.0, 6.0, 0.0)],
+            [(80.0, 0.0, 0.0), (68.0, 2.0, 0.0), (66.0, 10.0, 0.0), (78.0, 8.0, 0.0)],
+        ]
+        for i, (_flags, pts, _bulges, _normal) in enumerate(found):
+            assert len(pts) == 4, f"insertion {i} emitted {len(pts)} vertices"
+            for j, (got, want) in enumerate(zip(pts, expected[i])):
+                assert close(got, want), (
+                    f"insertion {i} vertex {j} is {got} and not {want}. The second "
+                    "insertion is the mirrored one, so a winding that was not "
+                    "reversed and a corner order that was not swapped both land here."
+                )
+
+    def test_the_mirrored_copy_is_not_the_other_one(self):
+        # The control for the pair above. Two records that happened to be the
+        # same instance emitted twice would satisfy a count and a zip of one
+        # expectation, and the shoelace of these two has opposite signs.
+        found = [p for p in polygons(SOLID) if p[0] == 1]
+        first = shoelace(found[0][1])
+        second = shoelace(found[1][1])
+        assert first * second < 0, (
+            f"the two insertions enclose {first} and {second}, and one of them is a "
+            "mirror of the other, so their signed areas cannot have the same sign"
+        )
+
     def test_nothing_still_refuses_a_solid(self):
         named = {w["message"].split(" ")[0] for w in warnings(SOLID)}
         assert "SOLID" not in named, "a SOLID is still reaching the unsupported arm"
@@ -194,6 +242,43 @@ class TestMeshFaces:
         found = [p for p in polygons(MESH) if p[0] == 1]
         assert len(found) == 4, f"{len(found)} faces came out of the two insertions"
 
+    def test_the_mirrored_insertion_reverses_the_winding(self):
+        # What the mirrored insertion is for, and the assertion Corpus.cs asks
+        # for: "a mesh whose faces face the wrong way renders inside out rather
+        # than obviously wrong". A count of four says nothing about it, and
+        # neither does anything else in this file, because a normal is the only
+        # place a reversed traversal shows up in a record.
+        #
+        # The second insertion is -2x/2, so its faces traverse the other way
+        # and the normals measured off the emitted points follow them. The
+        # first face is flat and comes out -Z where the unmirrored copy is +Z;
+        # the second is not flat, which is why its normal is a number rather
+        # than a sign.
+        found = [p for p in polygons(MESH) if p[0] == 1]
+        assert len(found) == 4
+        mirrored = [found[2][3], found[3][3]]
+        expected = [(0.0, 0.0, -1.0), (0.192450, 0.192450, -0.962250)]
+        for i, (got, want) in enumerate(zip(mirrored, expected)):
+            assert close(got, want), (
+                f"the mirrored insertion's face {i} names the plane {got} and not "
+                f"{want}. A winding that survived the mirror puts the sign back."
+            )
+
+    def test_the_two_insertions_do_not_agree_about_which_way_the_faces_face(self):
+        # The control. Both halves of the pair above are assertions about one
+        # insertion, and a build that emitted the same instance twice would
+        # satisfy them by putting the mirrored copy in both slots. The
+        # unmirrored insertion is 3x/1.5, a pure scale, so its faces keep the
+        # winding the file stores and its flat face is +Z.
+        found = [p for p in polygons(MESH) if p[0] == 1]
+        assert close(found[0][3], (0.0, 0.0, 1.0)), (
+            f"the unmirrored insertion's flat face names {found[0][3]}"
+        )
+        assert not close(found[0][3], found[2][3]), (
+            "both insertions' flat faces name the same plane, so either nothing was "
+            "mirrored or the same instance came out twice"
+        )
+
     def test_the_subdivision_level_is_ignored_out_loud(self):
         found = [w for w in warnings(MESH) if w["code"] == "MESH_SUBDIVISION_IGNORED"]
         assert len(found) == 3, (
@@ -212,8 +297,138 @@ class TestMeshFaces:
         ), "a MESH is still reaching the unsupported arm"
 
 
+class TestAFaceThatIsNotAPolygon:
+    """Warning 111, and the only hostile input the flattener's own C# handles.
+
+    Everything else malformed in this corpus is refused by the reader or by a
+    bound before the walk sees it. A MESH is different because the file
+    controls the face list and the vertex list independently, so the two can
+    contradict each other while both parse, and the decision is that one
+    entity's worth of bad data drops a face rather than failing the decode.
+
+    `g13_mesh_bad_faces.dwg` holds one MESH of three vertices: a good face
+    first, then an index past the end, a face of two vertices, an index below
+    zero and a face of none. Both branches of `Unreadable` and both ends of
+    each, and the good face is what separates "the rest of the mesh crosses"
+    from "the decoder stopped".
+    """
+
+    def test_every_bad_face_is_named_with_its_index_and_its_fault(self):
+        found = [w for w in warnings(BAD_FACES) if w["code"] == "MESH_FACE_UNREADABLE"]
+        assert len(found) == 4, (
+            f"{len(found)} faces were called unreadable and the fixture holds four"
+        )
+        expected = [
+            "face 1 of this MESH indexes vertex 99 of a list that holds 3, so it is not emitted",
+            "face 2 of this MESH lists 2 vertices and a closed polygon needs three, "
+            "so it is not emitted",
+            "face 3 of this MESH indexes vertex -1 of a list that holds 3, so it is not emitted",
+            "face 4 of this MESH lists 0 vertices and a closed polygon needs three, "
+            "so it is not emitted",
+        ]
+        assert [w["message"] for w in found] == expected
+
+    def test_a_negative_index_is_one_of_them(self):
+        # The end a bounds check written as `>= vertices.Count` misses, and it
+        # does not degrade to a warning: it is an IndexOutOfRangeException out
+        # of the middle of the walk. Asserted on its own because the list above
+        # would still pass with three of the four right.
+        messages = [w["message"] for w in warnings(BAD_FACES)]
+        assert any("vertex -1" in m for m in messages), (
+            "nothing reported the negative index, so the lower bound is untested"
+        )
+
+    def test_each_one_carries_the_handle_of_the_mesh(self):
+        found = [w for w in warnings(BAD_FACES) if w["code"] == "MESH_FACE_UNREADABLE"]
+        assert {w["handle"] for w in found} == {"49"}, (
+            "a warning about one face of one entity has to name that entity, or the "
+            f"drawing's owner cannot find it: {[w['handle'] for w in found]}"
+        )
+
+    def test_the_good_face_still_crosses(self):
+        found = polygons(BAD_FACES)
+        assert len(found) == 1, (
+            f"{len(found)} polygons. Four faces are unreadable and one is not, and a "
+            "mesh that lost its good face is a decoder that gave up rather than one "
+            "that dropped what it could not read."
+        )
+        _flags, pts, _bulges, normal = found[0]
+        expected = [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 10.0, 4.0)]
+        for i, (got, want) in enumerate(zip(pts, expected)):
+            assert close(got, want), f"vertex {i} is {got} and not {want}"
+        assert not close(normal, (0.0, 0.0, 1.0)), (
+            f"the good face names {normal}. It is deliberately off the +Z plane, so a "
+            "normal that was fabricated rather than measured off the face lands here."
+        )
+
+    def test_the_decode_still_succeeds(self):
+        # The whole point of a warning rather than a refusal: a file with a
+        # contradictory face list is a file with four faces missing, not a
+        # failed decode.
+        assert manifest()["fixtures"][BAD_FACES]["decode_code"] == "OK"
+
+
+class TestADegenerateSolidIsStillASolid:
+    """Three coincident vertices and a `+Z` normal nothing measured.
+
+    `MeshPolygons` reasons about degenerate faces at length and `SolidPolygon`
+    said nothing about the same question, so what a default-constructed SOLID
+    does was an accident that nobody had looked at. It is a decision now and
+    this is where it is written down: the record goes out, because the corners
+    are what the file holds and refusing real geometry is worse than emitting a
+    shape with no area.
+
+    A mesh face is the other answer for a reason that is not taste. Its face
+    list indexes a vertex list the same file controls, so a face naming vertex
+    99 of 3 is data contradicting itself and there is nothing to emit; a
+    SOLID's four corners agree with each other and happen to coincide.
+
+    It is not free, and the cost is recorded here too. `g13_unsupported.dwg`
+    used to carry EMPTY_VIEW, code 108, which is a branch docs/WIRE.md tells
+    consumers to take. Flattening this SOLID put geometry in that view and the
+    warning went away.
+    """
+
+    def test_it_is_emitted_rather_than_refused(self):
+        found = [r for r in records(DEGENERATE) if r["kind"] == "Polygon"]
+        assert len(found) == 1, (
+            f"{len(found)} polygons came out of a fixture holding one SOLID. A "
+            "degenerate SOLID is emitted on purpose: the corners are in the file."
+        )
+
+    def test_it_is_three_coincident_vertices(self):
+        pts, bulges, _normal = vertex_record(
+            [r for r in records(DEGENERATE) if r["kind"] == "Polygon"][0]["rest"]
+        )
+        assert len(pts) == 3, (
+            f"the default-constructed SOLID emitted {len(pts)} vertices. Its fourth "
+            "corner equals its third, which is the format's way of saying triangle."
+        )
+        for i, p in enumerate(pts):
+            assert close(p, (0.0, 0.0, 0.0)), f"vertex {i} is {p} and not the origin"
+        assert bulges == []
+
+    def test_its_normal_is_a_name_rather_than_a_measurement(self):
+        # A shape with no area has no plane, and record 9 has a slot for one
+        # anyway. +Z is what goes in it, which is a statement about the format
+        # and not about the drawing, and a consumer reading this record's
+        # normal as a measured plane is reading something nobody measured.
+        _pts, _bulges, normal = vertex_record(
+            [r for r in records(DEGENERATE) if r["kind"] == "Polygon"][0]["rest"]
+        )
+        assert close(normal, (0.0, 0.0, 1.0)), f"the degenerate solid names {normal}"
+
+    def test_the_view_it_occupies_no_longer_reports_itself_empty(self):
+        # The cost, asserted rather than described. EMPTY_VIEW is about a view
+        # that produced no geometry record at all, and this view produces one,
+        # so its absence is correct. It is here so that the day somebody
+        # decides a degenerate SOLID should be refused, this goes red beside
+        # the tests above rather than quietly coming back.
+        assert "EMPTY_VIEW" not in {w["code"] for w in warnings(DEGENERATE)}
+
+
 class TestNeitherFixtureProducesAnythingElse:
-    @pytest.mark.parametrize("fixture", (SOLID, MESH))
+    @pytest.mark.parametrize("fixture", (SOLID, MESH, BAD_FACES))
     def test_only_polygons_and_warnings(self, fixture):
         assert set(kinds(fixture)) <= {"Polygon", "Warning"}, (
             f"{fixture} produced {sorted(kinds(fixture))}, and a filled face is a "
