@@ -216,6 +216,15 @@ the ordinary way and add one `-l` per `shared_system_libraries` entry. The
 initialiser problem is a static-archive problem: a shared library runs its own
 initialisers when it is loaded.
 
+One extra step on mac, and only on mac. The `.dylib` records its own name as
+`@rpath/libacadsharp_native.dylib`, and that string is what your link copies into
+your binary, so the loader needs an rpath to expand it against: pass
+`-Wl,-rpath,<archive>/lib`, or whatever directory you install the library into.
+The `.so` records no name at all, so on Linux the linker writes down the path it
+was handed and nothing else is needed. `dlopen` on an absolute path ignores the
+recorded name on both, which is worth knowing because it means a `dlopen` smoke
+cannot tell you whether a consumer's link would have worked.
+
 ### As a build script's directives
 
 For a consumer whose `-sys` crate reads this manifest in `build.rs`, the

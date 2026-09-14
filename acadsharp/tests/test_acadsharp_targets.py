@@ -47,6 +47,41 @@ class TestTargets:
         assert "-p:NativeLib=Static" not in ba.publish_command("linux-x64")
 
 
+class TestTheMacPublishSetsTheInstallName:
+    """#95: the dylib has to record the name it ships under.
+
+    The publish emits the assembly name and the archive ships a name
+    `-lacadsharp_native` can take, and on Mach-O that rename cannot reach
+    LC_ID_DYLIB, so 3.7.1-viprs.1 shipped a library recording
+    `@rpath/viprs_acadsharp.dylib` with no such file in the archive.
+    scripts/verify_archive.sh refuses that from the bytes now; this is the
+    half that stops it being written in the first place.
+
+    `SharedLibraryInstallName` is the SDK's own property, defaulted in
+    Microsoft.NETCore.Native.Unix.targets to `@rpath/$(TargetName)...`
+    under a `== ''` condition and turned into the single
+    `-Wl,-install_name,...` the Apple link gets. Naming it replaces that
+    default; adding a LinkerArg of our own would put a second
+    `-install_name` on the line instead.
+    """
+
+    def test_the_install_name_is_the_file_the_archive_ships(self):
+        assert ba.mac_install_name() == f"@rpath/{ba.shared_library_name('mac')}"
+
+    def test_the_mac_publish_passes_it(self):
+        cmd = ba.publish_command("osx-arm64")
+        assert f"-p:SharedLibraryInstallName={ba.mac_install_name()}" in cmd
+
+    def test_no_linux_publish_carries_it(self):
+        # ELF records no SONAME here, so the rename is invisible on Linux
+        # and a linker argument there would only be noise.
+        for rid, info in ba.TARGETS.items():
+            if info["platform"] == "mac":
+                continue
+            carried = [a for a in ba.publish_command(rid) if "InstallName" in a]
+            assert carried == [], f"{rid} is not a mac target"
+
+
 class TestNothingNamesAMicrosoftTarget:
     """The acceptance bullet, as a check over the whole directory.
 
