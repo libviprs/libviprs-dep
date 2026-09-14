@@ -4,20 +4,21 @@ using ACadSharp.Entities;
 using CSMath;
 using Viprs.Wire;
 
-// The two entity kinds that are a filled face given by the corners the file
-// already holds: SOLID, which is one quadrilateral, and MESH, which is an
-// explicit vertex list plus a face list that indexes it. Both lower to
-// docs/WIRE.md's record 9, Polygon, which is why they are one file: neither
-// needs a new record, neither tessellates anything, and both are entirely a
-// question of which corners come out in which order.
+// The three entity kinds that are a filled face given by the corners the file
+// already holds: SOLID, which is one quadrilateral, MESH, which is an explicit
+// vertex list plus a face list that indexes it, and 3DFACE, which is one
+// quadrilateral again and is not a SOLID. All three lower to docs/WIRE.md's
+// record 9, Polygon, which is why they are one file: none needs a new record,
+// none tessellates anything, and all three are entirely a question of which
+// corners come out in which order.
 //
-// What is NOT here is 3DFACE, and the reason is worth having written down
-// where the next person looking for it will be.
+// 3DFACE is here, and what it is NOT is a shared QuadPoints(a, b, c, d) with
+// SOLID. That is the thing worth having written down where the next person
+// looking for it will be, because it is the move anybody would make.
 //
-// 3DFACE looks like the same work. ACadSharp gives Face3D the same four
-// properties with the same names at the same DXF group codes, 10, 11, 12 and
-// 13, so one shared QuadPoints(a, b, c, d) helper is the obvious move. It is
-// the wrong one twice over:
+// ACadSharp gives Face3D the same four properties with the same names at the
+// same DXF group codes, 10, 11, 12 and 13, so one shared helper is obvious. It
+// is the wrong one twice over:
 //
 //  1. The orders differ. DXF stores a SOLID's third and fourth corners
 //     swapped relative to traversal order, so a SOLID emits 1, 2, 4, 3. A
@@ -35,11 +36,19 @@ using Viprs.Wire;
 //     the placement's would ship +Z for a face standing on its side, so a
 //     3DFACE's normal has to be measured off its own corners.
 //
-// So 3DFACE stays refused for now. What it needs is an isolated fixture: one
-// instance on a real drawing cannot tell a corner order from a corner order,
-// and every assertion that could is an assertion about an asymmetric quad
-// nobody has written yet. ACadSharp's DwgObjectWriter does have a case for
-// Face3D with a real writeFace3D method, so that fixture is producible.
+// So Face3DPolygon below is its own method and shares nothing with
+// SolidPolygon but the record it lands on. What made it writable at all is an
+// isolated fixture: one instance on a real drawing cannot tell a corner order
+// from a corner order, and every assertion that could is an assertion about an
+// asymmetric quad. g13_face3d.dwg is that quad, written through ACadSharp's
+// own DwgObjectWriter, which has had a case for Face3D and a real writeFace3D
+// all along.
+//
+// There is a third difference, and it is the one that costs a warning code
+// rather than a line of code. A 3DFACE can mark any of its edges invisible and
+// record 9 has no per-edge anything, so the face crosses whole and warning 113
+// names the flags that were dropped. 110 is the precedent: one code beside the
+// geometry saying what was not evaluated.
 namespace Viprs.Cad
 {
 	internal sealed partial class Flattener
@@ -126,6 +135,153 @@ namespace Viprs.Cad
 				basis.Normal.Y,
 				basis.Normal.Z
 			);
+		}
+
+		// 3DFACE as one closed Polygon, and almost nothing of SolidPolygon
+		// applies to it.
+		//
+		// The corner order is 1, 2, 3, 4, which is the order the file lists them
+		// in and the opposite of SOLID's. DXF's swap is SOLID's own. A 3DFACE
+		// carries InvisibleEdgeFlags whose members are First, Second, Third and
+		// Fourth, and per-edge visibility only means anything if edge 1 runs from
+		// corner 1 to corner 2 and edge 4 runs from corner 4 back to corner 1, so
+		// the file's order is traversal order and the corners go out as they came
+		// in. g13_face3d.dwg's first face is the same asymmetric quad
+		// g13_solid.dwg's first solid is, and on it the two orders enclose 50 and
+		// 3.5, which is what makes the difference measurable rather than a matter
+		// of opinion.
+		//
+		// Nothing is lifted. Face3D is a plain Entity: not IOrientable, no DXF
+		// 210, and its own property documentation says every corner is in WCS.
+		// There is no object coordinate system to compose, so WithOcs is not
+		// called at all and the placement is applied as it arrives. Record 9
+		// still needs a normal and the placement's basis would report +Z for a
+		// face standing on its side, so it is measured off the emitted points
+		// with FaceNormal, the way a MESH face's is. That is also what makes a
+		// mirrored insertion come out right without a correction of its own: the
+		// traversal reverses and the measured normal reverses with it, which is
+		// record 9's documented behaviour for a face with no plane of its own and
+		// the opposite of what a SOLID does under the same insertion.
+		//
+		// The degenerate case is SOLID's and the sentence is upstream's: "if only
+		// three corners are entered, this is the same as the third corner". The
+		// comparison is exact and it is made on what the file holds rather than
+		// on transformed points, which is safe to rely on here: the DWG writer
+		// writes the fourth corner as a delta against the third and the reader
+		// reads it with the third as its default, so an equal pair round-trips
+		// equal rather than nearly equal.
+		//
+		// Per-edge visibility has nowhere to go and warning 113 is where that is
+		// said. Record 9 carries a run of vertices and no per-edge anything, so
+		// the face crosses whole carrying every edge. Splitting it into its
+		// visible edges was the alternative and it loses the entity: the fill
+		// goes, and one handle ends up naming several records none of which is
+		// the face.
+		private IEnumerable<Primitive> Face3DPolygon(
+			Face3D face,
+			ulong h,
+			uint flags,
+			Placement place
+		)
+		{
+			bool triangle = face.FourthCorner == face.ThirdCorner;
+			int n = triangle ? 3 : 4;
+			CheckPointCount(n, "a Polygon record");
+
+			if (face.Flags != InvisibleEdgeFlags.None)
+			{
+				Primitive ignored = Primitive.Warning(
+					WarningCodes.FaceEdgeVisibilityIgnored,
+					h,
+					"3DFACE marks " + EdgeList(face.Flags)
+						+ " invisible, and record 9 has no per-edge visibility, so the "
+						+ "face crosses whole and the flags are ignored rather than the "
+						+ "face being split"
+				);
+				ignored.Flags = flags;
+				yield return ignored;
+			}
+
+			List<double> pts = new List<double>(n * 3);
+
+			// 1, 2, 3, 4. Group codes 10, 11, 12, 13, in that order.
+			Append(pts, place, face.FirstCorner);
+			Append(pts, place, face.SecondCorner);
+			Append(pts, place, face.ThirdCorner);
+			if (!triangle)
+			{
+				Append(pts, place, face.FourthCorner);
+			}
+
+			double[] points = pts.ToArray();
+			XYZ normal = FaceNormal(points);
+
+			// No bulge array, for SolidPolygon's reason: a face's edges are
+			// straight and record 9 leaves the array out entirely when every span
+			// is. That is also why nothing here raises NON_UNIFORM_BLOCK_SCALE. A
+			// polygon's vertices transform exactly whatever the scale, and that
+			// warning is about parameters that stop naming the shape.
+			yield return Primitive.Polygon(
+				h,
+				flags,
+				points,
+				null,
+				normal.X,
+				normal.Y,
+				normal.Z
+			);
+		}
+
+		// Which edges a 3DFACE marked invisible, in words.
+		//
+		// Words rather than the number, because docs/WIRE.md forbids parsing a
+		// message and the only reader this sentence has is a person who then goes
+		// and looks at that face. A bit pattern tells them nothing they can act
+		// on without the specification open beside them.
+		//
+		// The last branch is the hostile one. The flag word is a BitShort the
+		// file controls and the reader casts it straight to the enum, so a
+		// drawing can set a bit above 8 that names none of the four edges. That
+		// is still a 3DFACE asking for something record 9 cannot carry, so it
+		// still warns; what it cannot do is name an edge, and a list built
+		// without this guard would be empty and indexed out of range from inside
+		// the walk.
+		private static string EdgeList(InvisibleEdgeFlags flags)
+		{
+			List<string> named = new List<string>(4);
+			if ((flags & InvisibleEdgeFlags.First) != 0)
+			{
+				named.Add("first");
+			}
+
+			if ((flags & InvisibleEdgeFlags.Second) != 0)
+			{
+				named.Add("second");
+			}
+
+			if ((flags & InvisibleEdgeFlags.Third) != 0)
+			{
+				named.Add("third");
+			}
+
+			if ((flags & InvisibleEdgeFlags.Fourth) != 0)
+			{
+				named.Add("fourth");
+			}
+
+			if (named.Count == 0)
+			{
+				return "edges under flag bits this version does not name (0x"
+					+ ((int)flags).ToString("X", CultureInfo.InvariantCulture) + ")";
+			}
+
+			string list = named[0];
+			for (int i = 1; i < named.Count; i++)
+			{
+				list += (i + 1 == named.Count ? " and " : ", ") + named[i];
+			}
+
+			return "its " + list + (named.Count == 1 ? " edge" : " edges");
 		}
 
 		// MESH as one closed Polygon per face of the base mesh.

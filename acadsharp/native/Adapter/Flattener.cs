@@ -1134,19 +1134,22 @@ namespace Viprs.Cad
 					yield break;
 				}
 
-				// SOLID and MESH. Both are a filled face given by its corners and
-				// both lower to record 9, so their bodies sit together in
-				// Flatten.Faces.cs; only the labels are here, because the order of
-				// the labels is what the compiler checks.
+				// SOLID, MESH and 3DFACE. All three are a filled face given by its
+				// corners and all three lower to record 9, so their bodies sit
+				// together in Flatten.Faces.cs; only the labels are here, because
+				// the order of the labels is what the compiler checks.
 				//
-				// 3DFACE is deliberately not beside them. It carries the same four
-				// corner properties at the same DXF codes and is a different
-				// entity in both of the ways that decide what a Polygon says: its
-				// per-edge InvisibleEdgeFlags only read as traversal order, so its
-				// corners go out 1, 2, 3, 4 rather than SOLID's 1, 2, 4, 3, and
-				// Face3D carries no normal at all and documents every corner as
-				// world, so it is neither lifted through an OCS nor entitled to
-				// the placement's normal. Flatten.Faces.cs records the rest.
+				// 3DFACE is beside them and shares nothing with SOLID but the
+				// record. It carries the same four corner properties at the same
+				// DXF codes and is a different entity in both of the ways that
+				// decide what a Polygon says: its per-edge InvisibleEdgeFlags only
+				// read as traversal order, so its corners go out 1, 2, 3, 4 rather
+				// than SOLID's 1, 2, 4, 3, and Face3D carries no normal at all and
+				// documents every corner as world, so it is neither lifted through
+				// an OCS nor entitled to the placement's normal. It is also the
+				// only one of the three that can ask for something record 9 has no
+				// field for, which is warning 113. Flatten.Faces.cs records the
+				// rest.
 				case Solid solid:
 				{
 					yield return SolidPolygon(solid, h, flags, place);
@@ -1156,6 +1159,16 @@ namespace Viprs.Cad
 				case Mesh mesh:
 				{
 					foreach (Primitive p in MeshPolygons(mesh, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case Face3D face:
+				{
+					foreach (Primitive p in Face3DPolygon(face, h, flags, place))
 					{
 						yield return p;
 					}

@@ -39,9 +39,15 @@ The wire carries only `handle` and `flags` from the common entity fields, and th
 flattener reads `Thickness` nowhere, so there is no field in any record for those to be
 wrong in. Setting them would grow the corpus and assert nothing.
 
-Six refused kinds are absent here and stay on the real drawing, because ACadSharp's
+Five refused kinds are absent here and stay on the real drawing, because ACadSharp's
 `DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
-MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
+MULTILEADER, MLINE, 3DSOLID, REGION and PDFUNDERLAY.
+
+3DFACE was the sixth and is not any more. `DwgObjectWriter.Entities.cs` has had a
+`case Face3D` with a real `writeFace3D` behind it all along, so `g13_face3d.dwg` below is
+written the same way every other fixture here is. Worth reading the writer rather than the
+list above before assuming any of the other five is unwritable: this entry was wrong about
+3DFACE for as long as it existed, and nothing in the suite could tell.
 
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
@@ -49,6 +55,7 @@ Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 | --- | --- | --- |
 | `g13_point.dwg` | `80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e` | AC1032. Four POINTs at top level, one at the origin, one off it, one with a Z, one on a non-Z extrusion; then two more inside a block, inserted non-uniformly and mirrored. |
 | `g13_solid.dwg` | `dea64a63b283585bb38b4d5a311ff1aadb9eb57cb399380e180294fe7ceafca1` | AC1032. Three SOLIDs at top level: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one on a non-Z extrusion. A fourth, also asymmetric, inside a block. |
+| `g13_face3d.dwg` | `025e5769c0efcedaca4e0286e69e7848539c681ede41854ae1a30da18df4c3f5` | AC1032. Four 3DFACEs at top level: the same asymmetric quad `g13_solid.dwg` holds but listed in traversal order, so the two fixtures separate a 3DFACE's 1, 2, 3, 4 from a SOLID's 1, 2, 4, 3; a triangle (fourth corner equal to the third); one standing in the XZ plane, which is what separates a measured normal from the placement's; and one marking its first and third edges invisible, which is the only entity in this corpus that produces warning 113. A fifth, also asymmetric, inside a block. |
 | `g13_ray_xline.dwg` | `332411ca8ee2e05fce04520594ac87952ff7c36d18c3c279ff5abda03a49cdae` | AC1032. A RAY and an XLINE with non-axis-aligned directions plus a bounded LINE that gives the drawing finite extents, then one of each inside a block. The mirrored insertion reverses the half line a RAY covers. |
 | `g13_polyface_mesh.dwg` | `ccd27150f2a135ded937e02b2ca10a04c58ce250850267e8537839026e1d3c8e` | AC1032. Two POLYFACE_MESHes of six vertices and two non-coplanar faces, one on +Z and one on a non-Z extrusion, vertices ordered so a line threaded through them in storage order self-intersects. A third inside a block. |
 | `g13_polygon_mesh.dwg` | `de3286f404c9a39f707a33b4294f0bdbd433ebdc8f821c3a93afa6535170f322` | AC1032. Two 3x4 POLYGON_MESHes with alternating elevation, one on +Z and one on a non-Z extrusion, so an M/N transposition changes the record. A third inside a block. |

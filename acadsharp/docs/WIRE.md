@@ -264,9 +264,14 @@ second shape.
 
 A hatch loop is not the only thing that lands here. A `SOLID` is one of these
 with three or four vertices and no bulge array, and a `MESH` is one per face
-of its base mesh. Neither carries a bulge, because a filled face has straight
-edges, and a `MESH` at a subdivision level above zero also emits warning 110
-to say the level was ignored rather than evaluated.
+of its base mesh. A `3DFACE` is one of these too, with its corners in the order
+the file lists them (that order is traversal order for a 3DFACE and is not for
+a SOLID), no bulge array, and a normal measured off its own corners the way a
+`MESH` face's is, because the entity carries none. None of the three carries a
+bulge, because a filled face has straight edges, a `MESH` at a subdivision
+level above zero also emits warning 110 to say the level was ignored rather
+than evaluated, and a `3DFACE` that marks an edge invisible emits warning 113
+to say record 9 has nowhere to carry that.
 
 Record 9's normal is **the entity's own plane where the entity has one, and the
 face's measured plane where it does not**, and the two are not the same
@@ -397,6 +402,7 @@ and 105 with these meanings, whatever it is built on.
 | 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
 | 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
 | 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
+| 113 | `FACE_EDGE_VISIBILITY_IGNORED` | A `3DFACE` that marks one or more of its edges invisible. The `Polygon` beside it, same `item_handle`, carries all of its edges: record 9 has no per-edge visibility, so the flags are ignored rather than the face being split into lines. `item_handle` is the face's. |
 
 ### Reserved ranges
 

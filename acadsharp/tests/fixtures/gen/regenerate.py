@@ -96,6 +96,10 @@ DUMPED = (
     # MANIFEST.json, so it is a file the suite cannot read: the entry is
     # part of implementing the kind, not part of adding the DWG.
     "g13_solid.dwg",
+    # 3DFACE, which shares record 9 with SOLID and goes out in the other
+    # corner order. The dump is the only place the two orders are
+    # distinguishable, so the fixture without it proves nothing.
+    "g13_face3d.dwg",
     "g13_mesh.dwg",
     # The malformed-face mesh, which is the only input in this corpus that
     # reaches the flattener's own hostile-input handling (warning 111). Its

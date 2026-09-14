@@ -117,6 +117,7 @@ public static class Corpus
 		// input to run rather than only the 341-record real drawing.
 		yield return Pair("g13_point.dwg", WritePoint);
 		yield return Pair("g13_solid.dwg", WriteSolidQuad);
+		yield return Pair("g13_face3d.dwg", WriteFace3D);
 		yield return Pair("g13_ray_xline.dwg", WriteRayXline);
 		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
@@ -531,6 +532,88 @@ public static class Corpus
 				SecondCorner = new XYZ(6, 1, 0),
 				ThirdCorner = new XYZ(1, 4, 0),
 				FourthCorner = new XYZ(7, 5, 0),
+			});
+		Write(doc, path);
+	}
+
+	// 3DFACE, and the corner order is the whole point here too, from the
+	// other side.
+	//
+	// A SOLID's third and fourth corners are swapped relative to traversal
+	// order and a 3DFACE's are not, so the same four properties at the same
+	// group codes come out 1, 2, 4, 3 for one and 1, 2, 3, 4 for the other.
+	// An arm written by copying SolidPolygon compiles and draws a bow-tie,
+	// which over a rectangle is invisible. So the first face is the same
+	// asymmetric quad g13_solid.dwg carries, listed in traversal order: the
+	// two orders enclose 50 and 3.5, and an expectation compares the emitted
+	// point ORDER rather than an area or a box.
+	//
+	// The second is the triangle case, a fourth corner exactly equal to the
+	// third. The writer writes the fourth as a delta against the third and the
+	// reader reads it with the third as its default, so the equality survives
+	// the round trip and the arm's `==` is comparing what the file holds.
+	//
+	// The third stands in the XZ plane, which is the one thing in this file
+	// that separates a normal measured off the face from the placement's. A
+	// Face3D is a plain Entity with no DXF 210 at all, so there is no
+	// extrusion to lift through and nothing to read a plane off: the
+	// placement's basis would report +Z for this face, and the face is not in
+	// that plane.
+	//
+	// The fourth marks two of its edges invisible, which record 9 cannot
+	// carry. It is the only entity in this corpus that produces warning 113,
+	// and it flags the first and the third rather than all four so that a
+	// message listing a constant is visible in the text.
+	//
+	// The block copy is asymmetric for g13_solid.dwg's reason: the mirrored
+	// insertion is where a corner-order defect and a winding defect compound.
+	// Its corners are the same quad the SOLID block member holds, reached
+	// through the other order, so the two fixtures emit the same coordinates
+	// from different stored orders and neither can be mistaken for the other's
+	// arm by the numbers alone.
+	public static void WriteFace3D(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(new Face3D
+		{
+			FirstCorner = new XYZ(0, 0, 0),
+			SecondCorner = new XYZ(10, 1, 0),
+			ThirdCorner = new XYZ(11, 7, 0),
+			FourthCorner = new XYZ(2, 5, 0),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new Face3D
+		{
+			FirstCorner = new XYZ(20, 0, 0),
+			SecondCorner = new XYZ(26, 2, 0),
+			ThirdCorner = new XYZ(22, 6, 0),
+			FourthCorner = new XYZ(22, 6, 0),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new Face3D
+		{
+			FirstCorner = new XYZ(30, 0, 0),
+			SecondCorner = new XYZ(34, 0, 0),
+			ThirdCorner = new XYZ(34, 0, 3),
+			FourthCorner = new XYZ(30, 0, 3),
+			Layer = L(doc)
+		});
+		doc.Entities.Add(new Face3D
+		{
+			FirstCorner = new XYZ(40, 0, 0),
+			SecondCorner = new XYZ(46, 1, 0),
+			ThirdCorner = new XYZ(47, 5, 0),
+			FourthCorner = new XYZ(41, 4, 0),
+			Flags = InvisibleEdgeFlags.First | InvisibleEdgeFlags.Third,
+			Layer = L(doc)
+		});
+		AddBlockInstances(doc, "VIPRS_G13_FACE3D_BLK",
+			new Face3D
+			{
+				FirstCorner = new XYZ(0, 0, 0),
+				SecondCorner = new XYZ(6, 1, 0),
+				ThirdCorner = new XYZ(7, 5, 0),
+				FourthCorner = new XYZ(1, 4, 0),
 			});
 		Write(doc, path);
 	}
