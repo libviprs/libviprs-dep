@@ -362,6 +362,7 @@ and 105 with these meanings, whatever it is built on.
 | 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 | 108 | `EMPTY_VIEW` | This view emitted no geometry record at all. It is the other half of the inverted extents above: those say the view has no usable bounding box, and this says there was nothing to have one of. A consumer tells an empty drawing from a damaged one by what sits beside this in the same view, because every warning about something that could not be read is in that stream too, so this alone is empty and this with company is damaged. `item_handle` is 0: it is about the view. |
+| 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
 
 ### Reserved ranges
 
@@ -387,6 +388,32 @@ and reading it produces numbers rather than an error. An unknown warning
 code means a record whose layout is fully known is saying something this
 consumer has no branch for, and the record after it is still exactly where
 the length says it is.
+
+### Geometry that needs a lookup
+
+Some entity kinds do not carry their geometry at all. A `SHAPE` names a glyph
+in an external SHX file, an `IMAGE` names an external raster and a
+`PDFUNDERLAY` names an external PDF. In all three the drawing holds a
+placement and a name, and nothing anybody can draw.
+
+A producer on this wire never resolves one. It opens no path a drawing names,
+on any route, and that is a rule about the decoder rather than a gap in it: a
+decoder that followed a path out of the file it was handed is a decoder that
+can be pointed at `/etc/passwd` or a UNC share by whoever wrote the drawing.
+So these kinds produce `ENTITY_REFUSED_BY_DESIGN` and no geometry record, the
+same way an unresolved block produces `UNRESOLVED_BLOCK` and never a fetch.
+
+A later wire version may add a placement record carrying the frame, the
+transform and the referenced name as an opaque string, which is enough to draw
+a box with a label and enough for a consumer that has its own policy to go and
+get the thing itself. The refusal here is about resolving, not about placing,
+and adding that record would not change it.
+
+An embedded ACIS stream (`3DSOLID`, `REGION`) is the other half of the same
+shape. Those bytes are in the drawing, but they are a boundary representation
+rather than a tessellation, and turning one into something drawable means
+evaluating a proprietary format that no reader on this boundary implements. It
+is the same code, for a reason that will not expire either.
 
 ### A message that did not fit
 

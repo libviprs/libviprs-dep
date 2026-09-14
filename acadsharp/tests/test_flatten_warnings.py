@@ -29,6 +29,10 @@ CODE_FIXTURES = {
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
+    # The real drawing carries seven of the eight kinds in RefusedKinds.cs
+    # (3DSOLID, REGION, SHAPE, IMAGE, PDFUNDERLAY, RAY, XLINE), so it is the
+    # fixture this code is produced by. WIPEOUT is the eighth and stays on 100.
+    "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
 }
 
 

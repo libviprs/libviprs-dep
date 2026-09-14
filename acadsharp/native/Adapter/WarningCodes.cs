@@ -70,6 +70,19 @@ namespace Viprs.Cad
 		// apart is whether anything else in the same view's stream is a warning.
 		public const uint EmptyView = 108u;
 
+		// An entity kind this build has looked at and will not flatten,
+		// which is a different fact from 100. 100 is "nobody has got to this
+		// kind yet"; this one is "somebody did, and the answer is no". The
+		// table behind it is Adapter/RefusedKinds.cs, one row per kind with
+		// the sentence that goes on the wire and the condition that would
+		// reopen it.
+		//
+		// A consumer cannot tell those two apart from the message, because
+		// docs/WIRE.md forbids parsing it, so before this code existed a
+		// decoder that will never render a 3DSOLID and a decoder that has not
+		// got round to MLINE looked identical on the wire.
+		public const uint EntityRefusedByDesign = 109u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -83,6 +96,7 @@ namespace Viprs.Cad
 				case NonUniformBlockScale: return "NON_UNIFORM_BLOCK_SCALE";
 				case NonFiniteGeometry: return "NON_FINITE_GEOMETRY";
 				case EmptyView: return "EMPTY_VIEW";
+				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				default: return "WARNING_" + code;
 			}
 		}
