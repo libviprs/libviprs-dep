@@ -69,7 +69,7 @@ survives here so the next one starts from it rather than from scratch.
 A wire 3 worth cutting carries three records at once:
 
 * **Point.** The biggest single gap on a real drawing and the cheapest: **40**
-  of the **73** refusals on `real_AC1032.dwg` are POINT.
+  of the **67** refusals on `real_AC1032.dwg` are POINT.
 * **Unbounded.** Base point and direction, covering RAY and XLINE, with the
   clip left to the consumer that knows its viewport.
 * **Placement.** An insertion point, two axis vectors, an optional clip
@@ -175,8 +175,8 @@ The numbers:
 * Of the 17 fixtures whose geometry can be compared without reimplementing the
   flattener, 15 match to 1e-6, including every OCS fixture, which is what says
   the arbitrary-axis lift is right.
-* On `real_AC1032.dwg` this adapter emits **371** geometry records and **104**
-  warnings, of which **73** are entity refusals: **65** on code 100 and **8** on
+* On `real_AC1032.dwg` this adapter emits **380** geometry records and **100**
+  warnings, of which **67** are entity refusals: **59** on code 100 and **8** on
   code 109. acadrust reads every one of them with matching counts, so none of
   these gaps are things ACadSharp cannot expose. They are flattener and
   wire-format work.
