@@ -29,6 +29,11 @@ CODE_FIXTURES = {
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
+    "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
+    # None, like DIMENSION_WITHOUT_BLOCK above. Producing it needs a MESH whose
+    # face list indexes past its own vertex list, which means a new corpus
+    # fixture, and this campaign's lanes do not regenerate the corpus.
+    "MESH_FACE_UNREADABLE": None,
 }
 
 
@@ -39,9 +44,15 @@ def declared_codes():
 
 
 class TestUnsupportedEntities:
-    def test_the_fixture_produces_warnings_and_nothing_else(self):
+    def test_the_fixture_carries_one_refusal_and_the_solid_beside_it(self):
+        # The SOLID in this file is flattened now, so the fixture is no longer
+        # only warnings. Keeping the Polygon in the assertion is the point: it
+        # is what tells "SOLID is implemented" apart from "the SOLID went
+        # missing", which a set of {"Warning"} could not.
         counts = kinds("g13_unsupported.dwg")
-        assert set(counts) == {"Warning"}, f"expected only warnings, got {counts}"
+        assert set(counts) == {"Warning", "Polygon"}, (
+            f"expected one refusal and one solid, got {counts}"
+        )
 
     def test_each_one_names_the_entity_type(self):
         named = {
@@ -49,7 +60,7 @@ class TestUnsupportedEntities:
             for w in warnings("g13_unsupported.dwg")
             if w["code"] == "UNSUPPORTED_ENTITY"
         }
-        assert named == {"POINT", "SOLID"}, (
+        assert named == {"POINT"}, (
             f"the warnings name {sorted(named)}. A warning that does not say which "
             "entity type it could not flatten cannot be acted on"
         )
@@ -212,16 +223,20 @@ class TestAnEmptyView:
     @pytest.mark.parametrize(
         "fixture,alongside",
         [
-            ("g13_unsupported.dwg", "UNSUPPORTED_ENTITY"),
             ("g13_xref.dwg", "UNRESOLVED_BLOCK"),
             ("g13_nan_bulge.dwg", "NON_FINITE_GEOMETRY"),
         ],
     )
     def test_a_damaged_view_carries_it_with_company(self, fixture, alongside):
-        # The other side of the distinction, and it was already in the corpus:
-        # three fixtures produce no geometry at all, each for a different
-        # reason, and each says what that reason was in the same stream. A
-        # consumer reads the pair, not the code on its own.
+        # The other side of the distinction: a fixture that produces no
+        # geometry at all says in the same stream why, and a consumer reads
+        # the pair rather than the code on its own.
+        #
+        # g13_unsupported.dwg was the third row and is not one any more. It
+        # held a POINT and a SOLID, both refused, so its view was empty; the
+        # SOLID is flattened now, so the view has geometry in it and
+        # EMPTY_VIEW is correctly absent. The two rows left cover the claim
+        # from two different reasons, which is what the row was for.
         codes = {w["code"] for w in warnings(fixture)}
         assert "EMPTY_VIEW" in codes
         assert alongside in codes

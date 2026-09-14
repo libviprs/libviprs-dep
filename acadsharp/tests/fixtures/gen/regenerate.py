@@ -91,6 +91,12 @@ DUMPED = (
     "g13_dimension.dwg",
     "g13_hatch.dwg",
     "g13_unsupported.dwg",
+    # The refused-kind corpus PR #94 added. A fixture that is in
+    # tests/fixtures and not in here is never dumped and never reaches
+    # MANIFEST.json, so it is a file the suite cannot read: the entry is
+    # part of implementing the kind, not part of adding the DWG.
+    "g13_solid.dwg",
+    "g13_mesh.dwg",
     "g13_xref.dwg",
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",

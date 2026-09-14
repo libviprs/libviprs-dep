@@ -70,6 +70,22 @@ namespace Viprs.Cad
 		// apart is whether anything else in the same view's stream is a warning.
 		public const uint EmptyView = 108u;
 
+		// A MESH whose subdivision level is not zero. The Polygon records
+		// beside it are the base mesh the file stores, one per face.
+		// Evaluating the subdivision would invent vertices the drawing does
+		// not hold, and "these are the faces in the file" is a promise this
+		// layer can keep while "this is what AutoCAD displays" is not, so the
+		// level is ignored and this is where a consumer learns that.
+		public const uint MeshSubdivisionIgnored = 110u;
+
+		// One face of a MESH that does not describe a polygon: fewer than
+		// three vertices, or an index outside the vertex list the same entity
+		// carries. A file controls both numbers, so this is one entity's worth
+		// of bad data rather than a reason to fail the decode: the face is
+		// dropped, the rest of the mesh crosses, and the message says which
+		// face and which fault.
+		public const uint MeshFaceUnreadable = 111u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -83,6 +99,8 @@ namespace Viprs.Cad
 				case NonUniformBlockScale: return "NON_UNIFORM_BLOCK_SCALE";
 				case NonFiniteGeometry: return "NON_FINITE_GEOMETRY";
 				case EmptyView: return "EMPTY_VIEW";
+				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
+				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
 				default: return "WARNING_" + code;
 			}
 		}
