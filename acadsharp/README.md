@@ -12,8 +12,11 @@ of EPIC G built on it: the C ABI is frozen in
 [docs/ABI.md](docs/ABI.md), and the adapter behind them flattens DWG into that
 record stream. Read
 [docs/adr/0001-nativeaot-feasibility.md](docs/adr/0001-nativeaot-feasibility.md)
-for the go/no-go and every measurement behind it; read the three contract
-documents for what a consumer is actually written against.
+for the go/no-go and every measurement behind it, and
+[docs/adr/0002-what-this-decoder-refuses.md](docs/adr/0002-what-this-decoder-refuses.md)
+for which entity kinds this build will not flatten and what would reopen each
+one; read the three contract documents for what a consumer is actually written
+against.
 
 ## Downloads
 
@@ -189,7 +192,8 @@ acadsharp/
   include/                  # viprs_acadsharp.h, the frozen C ABI
   docs/                     # ABI.md, WIRE.md and LINKINFO.md, the three frozen
                             # contracts; every one ships inside the archive
-  docs/adr/                 # 0001 is the spike's verdict, and stays in the repo
+  docs/adr/                 # 0001 is the spike's verdict and 0002 is what the
+                            # decoder refuses; both stay in the repo
   native/                   # the shim: exports, ABI structs, sources, adapter, wire
   scripts/                  # stage.sh, verify_archive.sh and the link-consumer smoke
   patches/                  # empty; upstream patches go here if a site needs one
