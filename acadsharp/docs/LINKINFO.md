@@ -216,14 +216,27 @@ the ordinary way and add one `-l` per `shared_system_libraries` entry. The
 initialiser problem is a static-archive problem: a shared library runs its own
 initialisers when it is loaded.
 
-One extra step on mac, and only on mac. The `.dylib` records its own name as
-`@rpath/libacadsharp_native.dylib`, and that string is what your link copies into
-your binary, so the loader needs an rpath to expand it against: pass
+One extra step on mac, and only on mac. From artifact version `3.7.1-viprs.2`
+onward the `.dylib` records its own name as `@rpath/libacadsharp_native.dylib`,
+which is the file this archive ships, and that string is what your link copies
+into your binary, so the loader needs an rpath to expand it against: pass
 `-Wl,-rpath,<archive>/lib`, or whatever directory you install the library into.
 The `.so` records no name at all, so on Linux the linker writes down the path it
 was handed and nothing else is needed. `dlopen` on an absolute path ignores the
 recorded name on both, which is worth knowing because it means a `dlopen` smoke
 cannot tell you whether a consumer's link would have worked.
+
+**Read `artifact_version` in this manifest before you act on that paragraph.**
+The mac archive published as `3.7.1-viprs.1` records `@rpath/viprs_acadsharp.dylib`
+instead, which is the assembly name NativeAOT writes by default, and no file of
+that name is anywhere in the archive. An rpath does not rescue it: there is
+nothing under that name for the loader to find, so a consumer who adds one still
+fails to load, with every reason to believe the mistake is at their end. It is
+not. Take a `viprs.2` or later archive, or rewrite the copy you have with
+`install_name_tool -id @rpath/libacadsharp_native.dylib <the dylib>`, which fits
+on that binary: its load commands leave 72 bytes free and the longer name needs
+8 more. `scripts/verify_archive.sh` reads the recorded name out of the Mach-O
+bytes and refuses a mismatch, so no later archive can ship the same way quietly.
 
 ### As a build script's directives
 

@@ -64,8 +64,8 @@ survives here so the next one starts from it rather than from scratch.
 
 A wire 3 worth cutting carries three records at once:
 
-* **Point.** The biggest single gap on a real drawing and the cheapest: 40 of
-  the 88 refusals in #92's census are POINT.
+* **Point.** The biggest single gap on a real drawing and the cheapest: **40**
+  of the **73** refusals on `real_AC1032.dwg` are POINT.
 * **Unbounded.** Base point and direction, covering RAY and XLINE, with the
   clip left to the consumer that knows its viewport.
 * **Placement.** An insertion point, two axis vectors, an optional clip
@@ -152,16 +152,30 @@ whoever is holding the drawing.
 The differential comparison against acadrust 0.5.5 is the measurement this whole
 lane is built on, and it lives in libviprs/libviprs-dep#92 with the harness in
 spdrman/acadrust#2. Its headline numbers, so this document does not depend on
-an issue staying open:
+an issue staying open.
+
+Four of them are counts of this adapter's own output, and typing those is how a
+document goes stale on the day it merges: the census measured 222 geometry
+records and 88 refusals, the campaign that followed it flattened kinds the
+census had counted as refusals, and this section still said 222 and 88 while
+the corpus beside it said otherwise. So `tests/test_acadsharp_adr.py` reads the
+numbers back out of this prose and recomputes them from the committed
+expectation for that drawing, the same way `tests/test_warning_codes.py` holds
+the code table against the shim. Change the flattener and this paragraph goes
+red rather than quietly wrong.
+
+The numbers:
 
 * 42 of 43 fixtures open in both readers. The one refusal, `g13_ac1009.dwg`, is
   refused by both.
 * Of the 17 fixtures whose geometry can be compared without reimplementing the
   flattener, 15 match to 1e-6, including every OCS fixture, which is what says
   the arbitrary-axis lift is right.
-* On `real_AC1032.dwg` this adapter emits 222 geometry records and refuses 88
-  entities. acadrust reads all 88 with matching counts, so none of these gaps
-  are things ACadSharp cannot expose. They are flattener and wire-format work.
+* On `real_AC1032.dwg` this adapter emits **371** geometry records and **104**
+  warnings, of which **73** are entity refusals: **65** on code 100 and **8** on
+  code 109. acadrust reads every one of them with matching counts, so none of
+  these gaps are things ACadSharp cannot expose. They are flattener and
+  wire-format work.
 * Where the two disagree on quality rather than coverage, this adapter is the
   correct one twice: acadrust returns un-normalized extrusion normals, and it
   passes NaN and Infinity straight through where `WIRE.md`'s finiteness
