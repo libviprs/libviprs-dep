@@ -148,6 +148,7 @@ ONCE_RECORDED = (
     "g13_two_entities.dwg",
     "g13_unsupported.dwg",
     "g13_wide_polyline.dwg",
+    "g13_wipeout.dwg",
     "g13_xref.dwg",
     "real_AC1018.dwg",
     "real_AC1032.dwg",

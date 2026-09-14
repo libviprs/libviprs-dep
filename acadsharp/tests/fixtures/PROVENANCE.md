@@ -59,6 +59,27 @@ least trusted reader in the pin, so a fixture this writer forges round-trips one
 implementation against itself and says nothing about those fifteen. Whoever adds one runs an
 independent oracle over the real drawing first.
 
+Two corrections to that sentence, from reading the writer rather than trusting it.
+PDFUNDERLAY does not belong on it: `DwgObjectWriter.Entities.cs` has
+`case PdfUnderlay pdfUnderlay:` and a `writePdfUnderlay` that writes the normal, the
+insertion point, the rotation, the three scales, the flags, the contrast, the fade, the
+definition handle and the clip boundary, and `UnderlayEntity` adds no `IsValid` override,
+so nothing filters one out either. It is still refused on code 109, for the reason
+`docs/adr/0002` gives (what it displays is an external PDF this decoder will not open),
+and that reason has nothing to do with whether a fixture could be written. And WIPEOUT was
+never on the list, which is just as well, because `g13_wipeout.dwg` below is one.
+
+Writing that one took a detour worth recording. `CadWipeoutBase.IsValid` refuses any
+instance whose `Definition` or `DefinitionReactor` is null, and
+`DwgObjectWriter.isEntitySupported` calls it and drops the entity rather than throwing, so
+the first attempt wrote a perfectly well-formed 10507-byte DWG with no entities in it at
+all. That rule is RasterImage's: a wipeout has no raster by definition and AutoCAD writes
+one with a zero definition handle, and `DefinitionReactor` cannot be filled in from out
+here because its setter and both of its constructors are internal to ACadSharp.dll. So the
+generator writes the entity through a subclass that overrides `IsValid`, which changes
+nothing about the bytes: `writeCadImage` is the same method and the reader gives back a
+plain `Wipeout`. `Corpus.cs` carries the long version beside the code.
+
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
 | File | sha256 | What it holds |
@@ -73,6 +94,7 @@ Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 | `g13_mesh.dwg` | `962b4ecde6653787467fc4467e2eb7b08a60027f20a85141c1e6f829e1f12517` | AC1032. A MESH of two non-coplanar faces at subdivision level 2, and a second inside a block. The mirrored insertion is what makes face winding testable. |
 | `g13_mesh_bad_faces.dwg` | `5e3c636aea9cdba44869caa68f01ad7caff27a45e3f0c0f02b9b407d87ee98e9` | AC1032. One MESH of three vertices carrying one good non-planar face and four the file contradicts itself about: an index past the end of its own vertex list, a face of two vertices, an index below zero, and a face of none. The only input in this corpus that reaches warning 111, which until now was written and never executed. |
 | `g13_tolerance.dwg` | `28f3d76765aaf05bac62a0cb7d5fbd9652756fa1caed0506211d3c8a4918f799` | AC1032. Two TOLERANCE feature-control frames with two stacked rows, one on +Z and one on a non-Z extrusion, and a third inside a block. |
+| `g13_wipeout.dwg` | `272b7d95c2e3fb8923087866353ecf8a2e967fb96a29eb42667e9f643ee45d22` | AC1032. Three WIPEOUTs at top level: a rectangular clip, which stores two opposite corners and means four; an asymmetric polygonal clip whose third vertex is off centre both ways, which is what makes the pixel-space row flip visible at all; and one whose U and V are neither axis-aligned nor the same length, so reading them as a width and a height is a different answer. A fourth, polygonal and wound the other way, inside a block. Every boundary is in pixel space and every expected world coordinate was confirmed against ezdxf. |
 
 ## From upstream
 

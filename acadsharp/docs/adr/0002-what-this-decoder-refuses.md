@@ -1,13 +1,18 @@
 # ADR 0002: what this decoder refuses, and why each one
 
-**REFUSED by decision, not by backlog.** Eight entity kinds now leave a warning
-that says somebody looked. Seven of them carry the new code 109,
-`ENTITY_REFUSED_BY_DESIGN`, because the answer will not change by waiting:
-their geometry is outside the drawing, or it is in a form nothing on this
-boundary evaluates, or no record wire version 2 defines can hold it. The
-eighth, `WIPEOUT`, stays on code 100 because it is genuinely unfinished work,
-and it gets its own sentence because it is the one omission that reveals rather
-than loses. No wire version moves and no record is added.
+**REFUSED by decision, not by backlog.** Seven entity kinds leave a warning
+that says somebody looked, and all seven carry the code 109 this document
+added, `ENTITY_REFUSED_BY_DESIGN`, because the answer will not change by
+waiting: their geometry is outside the drawing, or it is in a form nothing on
+this boundary evaluates, or no record wire version 2 defines can hold it. No
+wire version moves and no record is added.
+
+There were eight when this was written. `WIPEOUT` was the odd one, on code 100
+rather than 109 because it was unfinished work rather than a decision, and the
+work is finished: it lowers to the `Polygon` record that already existed, with
+warning 112 beside it saying the polygon masks. Its row is gone from the table
+below rather than restated, because a decision table that carries kinds this
+decoder does flatten is a table a reader cannot use.
 
 Date: 2026-09-13. Issues: libviprs/libviprs-dep#85, #88, #89, #90, #91, #92.
 
@@ -45,7 +50,6 @@ table to the same kinds and the same codes.
 | `PDFUNDERLAY` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same shape as IMAGE with an external PDF behind it. | The same placement record as IMAGE, and the two land together or not at all. |
 | `RAY` | refused | `ENTITY_REFUSED_BY_DESIGN` | A base point and a direction, running forever. Every record wire 2 defines is bounded, and clipping to the drawing extents to get a Line is the trap #85 exists to name: it is the easiest thing to implement and the hardest to notice being wrong, and `g13_bad_extents.dwg` is in the corpus precisely because extents cannot be trusted. | An unbounded record on a later wire, carrying base point and direction and leaving the clip to whoever knows the viewport. |
 | `XLINE` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same as RAY, running both ways. One record covers both kinds with a flag or two entries. | The same unbounded record. RAY and XLINE are one piece of work and always were. |
-| `WIPEOUT` | deferred | `UNSUPPORTED_ENTITY` | Not a decision at all. Its geometry is entirely in the file, it needs no external resource, and it lowers to the `Polygon` record that already exists plus a way to say it masks. It stays on 100 because 100 is honest about it. | Nothing but somebody doing it, and the panel moved it up the queue: dropping a wipeout shows what the drawing meant to hide, so the failure direction is a plausible wrong drawing rather than an obviously incomplete one, and the blast radius is the area it covers rather than the one entity it is. |
 
 The refusals are not symmetric with each other, and the codes say so. A consumer
 that wants to draw a placeholder box can do it for IMAGE, PDFUNDERLAY and SHAPE

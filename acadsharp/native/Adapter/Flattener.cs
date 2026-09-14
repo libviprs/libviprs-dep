@@ -1176,6 +1176,24 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// WIPEOUT. The body is in Flatten.Masks.cs, beside the mapping
+				// out of pixel space that is the whole of its geometry and the
+				// argument for warning 112 rather than a flag on the record.
+				//
+				// Not with SOLID and MESH even though all three are record 9:
+				// those two are faces and this one is a hole, so what a consumer
+				// does with it is the opposite, and the file that holds it is
+				// where the reason for that lives.
+				case Wipeout wipeout:
+				{
+					foreach (Primitive p in WipeoutPolygon(wipeout, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// LEADER. Its vertices are already world coordinates and its
 				// arrowhead is not in the drawing at all, so the body and the
 				// two sentences that say why are in Flatten.Leaders.cs.
@@ -1326,8 +1344,9 @@ namespace Viprs.Cad
 		// The sentence below used to be written out in three places: here, in
 		// the switch's default arm, which also carried its own copy of the
 		// table lookup, and as a variant inside RefusedKinds' WIPEOUT row.
-		// That row keeps its variant, because it is a different sentence
-		// saying a different thing. The other two are now one.
+		// The first two are now one, and the third went with the row it was
+		// in: a WIPEOUT is flattened now, so RefusedKinds no longer has a
+		// sentence for it and the arm above is where it goes instead.
 		//
 		// The lookup is the half that mattered. This method hardcoded code 100,
 		// so an arm refusing a kind on its own, which is what the two mesh arms

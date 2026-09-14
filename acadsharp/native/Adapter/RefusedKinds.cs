@@ -23,14 +23,18 @@
 // eight ACadSharp class names into a switch nothing in this repository's gate
 // compiles.
 //
-// WIPEOUT is in the table at code 100 and not 109, which looks like an
-// exception and is the point of the table. Its geometry is in the drawing, it
-// lowers to the Polygon record that already exists, and it is deferred work
-// rather than a decision. What it gets from being here is its own sentence,
-// because it is the one refusal on this list that reveals instead of losing: a
-// wipeout is a mask, so dropping it shows what the drawing meant to hide, and
-// the result is a plausible wrong drawing rather than an obviously incomplete
-// one.
+// Every row here is on code 109, and that is now true rather than nearly true.
+// WIPEOUT used to sit in this table on 100, as the one row that was deferred
+// work rather than a decision, and it is gone because the work is done: its
+// boundary lowers to the Polygon record that already existed, with warning 112
+// beside it saying that the polygon masks. Flatten.Masks.cs is where that
+// lives now.
+//
+// So the table says one thing again. A kind is here when the answer will not
+// change by waiting, the code beside it says so, and a kind nobody has got to
+// yet falls through to 100 with no row at all. If a later round wants to defer
+// something in here again, the thing to keep is that a consumer can still tell
+// the two apart from the number alone, which is the whole of what 109 bought.
 namespace Viprs.Cad
 {
 	internal static class RefusedKinds
@@ -92,14 +96,6 @@ namespace Viprs.Cad
 						"XLINE runs both ways from its base point forever and every record wire "
 						+ "version 2 defines is bounded, so it is refused rather than clipped to "
 						+ "the drawing's extents and passed off as a line";
-					return true;
-
-				case "WIPEOUT":
-					code = WarningCodes.UnsupportedEntity;
-					reason =
-						"WIPEOUT is not a primitive this version flattens, and it is the one "
-						+ "refusal on this wire that reveals rather than loses: a wipeout is a "
-						+ "mask, so dropping it shows whatever the drawing put underneath it";
 					return true;
 
 				default:
