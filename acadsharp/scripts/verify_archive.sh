@@ -86,6 +86,20 @@
 #      other is one half its callers refuse. Like 7 and 8 this needs the
 #      library linked and running, so it holds where the host can build
 #      for the target.
+#  11. A Mach-O shared library records itself under the name it ships as.
+#      `LC_ID_DYLIB` is what a consumer's link copies into its own
+#      `LC_LOAD_DYLIB`, so a dylib whose recorded name is not the file
+#      beside it produces a binary that links cleanly and dies before
+#      `main`. 3.7.1-viprs.1 shipped exactly that: the archive holds
+#      `lib/libacadsharp_native.dylib` and the bytes say
+#      `@rpath/viprs_acadsharp.dylib`, which is nowhere in the archive.
+#      Nothing saw it because nothing looked. The build's shared smoke is
+#      `dlopen` on an absolute path and `dlopen` by absolute path never
+#      consults `LC_ID_DYLIB`, so it loaded the library and reported
+#      success; the link-and-run probe in 7 is gated on
+#      `static_certified`, which is false on mac. On the one target where
+#      shared is the only link mode, nothing linked anything. This reads
+#      the name out of the load commands, so it holds on any host.
 #
 # Why the binary readers are hand-rolled rather than `nm`: this script has
 # to verify a foreign-architecture archive on whatever runner is to hand.
@@ -377,6 +391,58 @@ macho_defined_symbols() {
   slice "$f" "$symoff" $((nsyms * 16)) | od -An -v -tx1 > "$WORK/symtab.hex"
   awk -v fmt=macho "$SYMBOL_AWK" "$WORK/strtab.txt" "$WORK/symtab.hex" > "$out"
   return 0
+}
+
+# macho_install_name <file> <out> -> 0 ok, 1 malformed, 2 no LC_ID_DYLIB
+#
+# The same load-command walk as above, looking for LC_ID_DYLIB (13)
+# instead of LC_SYMTAB (2). `struct dylib_command` is cmd, cmdsize, then a
+# `struct dylib` of name offset, timestamp, current version and
+# compatibility version, and the name itself lives inside the command from
+# its offset to the command's end, NUL-terminated and NUL-padded.
+#
+# Deliberately not `otool -D`. otool only exists on macOS, so on every
+# Linux runner that check would skip itself, and a skipped check is the
+# same colour as a passing one; this repo has shipped a broken recipe
+# behind exactly that kind of skip before (the musl cargo link, invariant
+# 7 above). Reading the bytes holds on any host, which is the same
+# reasoning the symbol readers already give. On a mac host `otool -D` is
+# asked the same question afterwards, as a second opinion rather than as
+# the check.
+macho_install_name() {
+  local f="$1" out="$2" size ncmds off i cmd cmdsize nameoff
+  size=$(wc -c < "$f" | tr -d ' ')
+  ncmds=$(le32 "$(read_bytes "$f" 16 4)")
+  off=32
+  i=0
+  while [ "$i" -lt "$ncmds" ]; do
+    if [ $((off + 8)) -gt "$size" ]; then
+      return 1
+    fi
+    cmd=$(le32 "$(read_bytes "$f" "$off" 4)")
+    cmdsize=$(le32 "$(read_bytes "$f" $((off + 4)) 4)")
+    if [ "$cmdsize" -le 0 ]; then
+      return 1
+    fi
+    if [ "$cmd" = "13" ]; then
+      if [ "$cmdsize" -lt 24 ] || [ $((off + cmdsize)) -gt "$size" ]; then
+        return 1
+      fi
+      nameoff=$(le32 "$(read_bytes "$f" $((off + 8)) 4)")
+      if [ "$nameoff" -lt 24 ] || [ "$nameoff" -ge "$cmdsize" ]; then
+        return 1
+      fi
+      # Everything from the name offset to the end of the command, cut at
+      # the first NUL. `sed -n 1p` reads its whole input, so nothing here
+      # closes the pipe early the way `head` would.
+      slice "$f" $((off + nameoff)) $((cmdsize - nameoff)) \
+        | tr '\000' '\n' | sed -n 1p > "$out"
+      return 0
+    fi
+    off=$((off + cmdsize))
+    i=$((i + 1))
+  done
+  return 2
 }
 
 # ---------------------------------------------------------------------------
@@ -810,6 +876,50 @@ if [ -f "$SHARED_LIB" ]; then
         *) if require_symbols "$SYMS" "$SHARED_NAME"; then
              echo "  exports every entry point the header declares"
            fi ;;
+      esac
+
+      # Invariant 11: the name the dylib records for itself.
+      IDNAME_FILE="$WORK/install-name.txt"
+      set +e
+      macho_install_name "$SHARED_LIB" "$IDNAME_FILE"
+      rc=$?
+      set -e
+      case "$rc" in
+        1) fail "$SHARED_NAME has a malformed LC_ID_DYLIB: the command or its name
+    runs past the end of the file" ;;
+        2) fail "$SHARED_NAME carries no LC_ID_DYLIB, so it records no install name
+    at all and a consumer that links it has nothing to resolve" ;;
+        *)
+          INSTALL_NAME=$(cat "$IDNAME_FILE")
+          echo "  install name: $INSTALL_NAME"
+          if [ "$(basename "$INSTALL_NAME")" != "$SHARED_NAME" ]; then
+            fail "$SHARED_NAME records the install name '$INSTALL_NAME', whose basename
+    is not $SHARED_NAME. No file of that name is in this archive, so anything
+    that links this library records a name the loader cannot resolve and dies
+    before main. The publish emits the assembly name and the archive ships a
+    name '-lacadsharp_native' can take; renaming the file cannot rewrite
+    LC_ID_DYLIB, so the install name has to be set at link time."
+          elif [ "$INSTALL_NAME" != "@rpath/$SHARED_NAME" ]; then
+            fail "$SHARED_NAME records the install name '$INSTALL_NAME', which is not
+    @rpath/$SHARED_NAME. The basename is right, so '-l' finds the file, and the
+    recorded directory is the build machine's rather than the consumer's, so
+    the loader looks somewhere that exists on one host only."
+          fi
+          # Second opinion, on a mac host only: the real tool reading the
+          # real bytes. It cannot be the check, because it would skip
+          # itself everywhere else, but where it can run a disagreement
+          # means the reader above is wrong about a live Mach-O.
+          if [ "$(uname -s)" = "Darwin" ] && command -v otool >/dev/null 2>&1; then
+            OTOOL_NAME=$(otool -D "$SHARED_LIB" | sed -n 2p)
+            if [ "$OTOOL_NAME" = "$INSTALL_NAME" ]; then
+              echo "  otool -D agrees (mac host, real tool, real bytes)"
+            else
+              fail "otool -D reads the install name as '$OTOOL_NAME' and the byte reader
+    read '$INSTALL_NAME'. One of the two is wrong about this file, and on this
+    host the real tool is the tie-breaker."
+            fi
+          fi
+          ;;
       esac
     fi
   fi
