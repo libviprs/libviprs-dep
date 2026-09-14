@@ -73,6 +73,13 @@ ABI_HEADER = os.path.join(ACADSHARP_DIR, "include", "viprs_acadsharp.h")
 # six URLs for a release that had never been cut and nothing checked.
 UNPUBLISHED_MARKER = "No archives are published yet"
 
+# And what it says in the third state, which #43 did not have and this
+# dependency now does: a release exists, VERSION has moved past it, and the
+# table therefore describes the previous tag on purpose. Left unsaid, that
+# reads exactly like a table nobody updated, and a consumer downloads
+# archives believing they are a build of the tree beside them.
+NOT_CUT_MARKER = "is not cut yet"
+
 # ---------------------------------------------------------------------------
 # The contract issue #48 freezes, in the two vocabularies it is written in.
 #
@@ -1672,16 +1679,36 @@ class TestReadmeHoldsUrlsAndDigestsTogether:
             f"acadsharp/README.md never mentions the {TAG_PREFIX}{version} release tag"
         )
 
-    def test_no_stale_version_in_readme_download_urls(self):
+    def test_the_download_urls_are_all_one_release(self):
+        linked = sorted(set(re.findall(rf"/releases/download/{TAG_PREFIX}(\S+?)/", self.readme)))
+        assert len(linked) <= 1, (
+            f"acadsharp/README.md links archives from {linked}. A download table mixing "
+            "two releases is five digests a reader cannot tell apart by looking."
+        )
+
+    def test_a_table_behind_the_pinned_version_says_so(self):
+        # The stale-version check, with the one honest exception it needs.
+        #
+        # It used to be "every download URL is the pinned version", which is
+        # right until the day a shim revision is bumped and wrong from then
+        # until the release is cut: `viprs.1` archives are what exists, and
+        # deleting the table rather than explaining it hands a consumer
+        # nothing. So the older table is allowed, and the price is a sentence
+        # naming the pinned tag and saying it is not published, because a
+        # table that is deliberately behind and a table nobody updated look
+        # identical from the outside.
         version = ba.read_version()
-        stale = [
-            url
-            for url in re.findall(rf"/releases/download/{TAG_PREFIX}(\S+?)/", self.readme)
-            if url != version
-        ]
-        assert not stale, (
-            f"acadsharp/README.md links archives from {sorted(set(stale))} but "
-            f"acadsharp/VERSION says {version}"
+        linked = sorted(set(re.findall(rf"/releases/download/{TAG_PREFIX}(\S+?)/", self.readme)))
+        if not linked or linked == [version]:
+            return
+        # Hard wrapping collapsed first, so a reflow is not a failure.
+        flat = re.sub(r"\s+", " ", self.readme)
+        pattern = re.escape(f"{TAG_PREFIX}{version}") + r"[^.]{0,40}?" + NOT_CUT_MARKER
+        assert re.search(pattern, flat), (
+            f"acadsharp/README.md's download table is {linked[0]} and acadsharp/VERSION "
+            f"says {version}, and nothing in the README says {TAG_PREFIX}{version} "
+            f"{NOT_CUT_MARKER}. Either the table is stale, or it is deliberately the "
+            "previous release and a reader has no way to tell which."
         )
 
     def test_readme_points_at_the_workflow_that_cuts_the_release(self):
