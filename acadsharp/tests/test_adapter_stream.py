@@ -58,12 +58,12 @@ DUMPED = tuple(load_script(os.path.join(FIXTURES, "gen", "regenerate.py"), "rege
 # is a one-line edit in the branch that adds it and does not wait for a
 # regeneration.
 CARRIED_NOT_RECORDED = (
-    "g13_mesh.dwg",
+    # Five names left here during this campaign, each in the branch that put
+    # its fixture into DUMPED: g13_solid and g13_mesh when SOLID and MESH
+    # landed, g13_polyface_mesh and g13_polygon_mesh when the IPolyline arm
+    # stopped swallowing them, g13_ray_xline when RAY and XLINE became an
+    # explicit refusal. What is left is the two kinds nothing implements yet.
     "g13_point.dwg",
-    "g13_polyface_mesh.dwg",
-    "g13_polygon_mesh.dwg",
-    "g13_ray_xline.dwg",
-    "g13_solid.dwg",
     "g13_tolerance.dwg",
 )
 
