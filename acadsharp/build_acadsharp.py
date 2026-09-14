@@ -581,6 +581,56 @@ def shared_library_name(plat):
     return f"{SHARED_LIBRARY_STEM}.{shared_ext(plat)}"
 
 
+def mac_install_name():
+    """The name a mac publish has to record for itself, `LC_ID_DYLIB`.
+
+    NativeAOT sets that at link time from the assembly name, so a mac
+    publish records `@rpath/viprs_acadsharp.dylib` and the rename in
+    scripts/stage.sh cannot touch it: the file ships as
+    libacadsharp_native.dylib and the recorded name points at something
+    that is not in the archive, so anything that links it dies before
+    main. That is what 3.7.1-viprs.1 shipped (#95). ELF records nothing
+    equivalent, which is why the same rename is invisible on Linux and
+    load-bearing here.
+
+    It is not ILC being clever, it is a documented default sitting in
+    Microsoft.NETCore.Native.Unix.targets:
+
+        <SharedLibraryInstallName
+          Condition="'$(SharedLibraryInstallName)' == '' and ...">
+          @rpath/$(TargetName)$(NativeBinaryExt)</SharedLibraryInstallName>
+
+    and twenty lines further down that property becomes exactly one
+    `-Wl,-install_name,...` on the Apple link. `TargetName` is the
+    assembly name, so the default is the wrong name here, and the
+    condition is `== ''`, so naming it from outside replaces it rather
+    than fighting it.
+
+    Set at the link rather than rewritten afterwards. `install_name_tool
+    -id` has to grow LC_ID_DYLIB from a cmdsize of 56 to 64, because the
+    name lives inside the load command and 28 characters of
+    `@rpath/viprs_acadsharp.dylib` fit where 32 of
+    `@rpath/libacadsharp_native.dylib` do not, and growing the load
+    commands works only while there is headerpad left. Measured on the
+    published binary: 3296 bytes of load commands, `__text` at 3400, so
+    72 bytes free and the rewrite would have fitted with 64 to spare.
+    That margin is whatever the AOT link happened to reserve, and the
+    failure mode would be a build error on the one target with no local
+    reproduction. The property sets the name before anything is written
+    and cannot run out.
+
+    Not a `LinkerArg` item of our own either, which was the first attempt:
+    the targets line above is unconditional for an Apple shared library,
+    so an extra item puts a *second* `-install_name` on the same link line
+    and the last one wins. Measured on a Linux container with a shell
+    script standing in for clang, publishing for osx-arm64: default gives
+    one `-Wl,-install_name,@rpath/viprs_acadsharp.dylib`, an extra item
+    gives two with the wrong one last, and this property gives one with
+    the right name.
+    """
+    return f"@rpath/{shared_library_name('mac')}"
+
+
 # ---------------------------------------------------------------------------
 # The ABI, read out of the header rather than repeated
 # ---------------------------------------------------------------------------
@@ -971,6 +1021,13 @@ def publish_command(rid, static=False, project=PROJECT, configuration="Release")
     cmd = ["dotnet", "publish", project, "-r", rid, "-c", configuration]
     if static:
         cmd.append("-p:NativeLib=Static")
+    if TARGETS.get(rid, {}).get("platform") == "mac":
+        # The SDK's own property, which becomes the one
+        # `-Wl,-install_name,...` on the Apple link. Passed by the driver
+        # rather than written into the csproj so the name is built from
+        # SHARED_LIBRARY_STEM, the same constant the archive is named
+        # from, and the two cannot drift.
+        cmd.append(f"-p:SharedLibraryInstallName={mac_install_name()}")
     return cmd
 
 
