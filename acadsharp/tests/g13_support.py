@@ -14,12 +14,14 @@ Regenerating all of it is ``tests/fixtures/gen/regenerate.py``.
 """
 
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import random
 import re
 import struct
+import sys
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ACAD_ROOT = os.path.dirname(TESTS_DIR)
@@ -59,6 +61,30 @@ FLIP_SEED = 4713
 LINE_RE = re.compile(r"^(\d{5}) ([A-Za-z0-9]+) handle=([0-9A-F]+) flags=(\d+)(.*)$")
 
 
+def load_script(path, name):
+    """One of the standalone drivers under tests/fixtures/gen, as a module.
+
+    Imported rather than grepped: what these tests need out of `regenerate.py`
+    and `replay.py` are contracts between the driver and the file that reads
+    it, and a second reader of a contract is a second thing to keep in step.
+    Neither driver does anything at import; every stage is under `main()`.
+
+    No .pyc is left beside the driver. It would be gitignored and never
+    committed, but a cached copy is one more thing that can be of a different
+    file than the one on disk, which is the subject of this whole directory.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    written = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = written
+    return module
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -73,6 +99,10 @@ def sha256_bytes(data):
 
 # One <Compile Include="..."/> line of the fixture generator's csproj.
 COMPILE_INCLUDE = re.compile(r'<Compile\s+Include="([^"]+)"\s*/>')
+
+# Its opposite, which the native project would use to carve a file out of the
+# SDK's default glob. It uses neither today and native_sources() refuses both.
+COMPILE_REMOVE = re.compile(r'<Compile\s+Remove="([^"]+)"')
 
 
 def shim_sources():
@@ -109,6 +139,55 @@ def shim_sources():
                 "g13_support.shim_sources() the shape before shipping it."
             )
 
+    return sorted(os.path.relpath(p, ACAD_ROOT).replace(os.sep, "/") for p in found)
+
+
+NATIVE_PROJECT = os.path.join(ACAD_ROOT, "native", "Viprs.ACadSharp.Native.csproj")
+NATIVE_DIR = os.path.join(ACAD_ROOT, "native")
+
+# A <Compile Include> the native project carries for a file the build writes
+# into the intermediate directory. Those are generated, never in the tree, and
+# never in anybody's digest.
+GENERATED_INCLUDE = "$(IntermediateOutputPath)"
+
+
+def native_sources():
+    """Every source the shipped library compiles, relative to acadsharp/.
+
+    The native project names no source at all: it takes the SDK's default
+    glob, so what it compiles is every .cs under ``native/`` that is not build
+    output. That is a different set from ``shim_sources`` above, which is the
+    fixture generator's explicit list, and the difference is the point. The
+    captures are bound to the generator's set; the library ships one file
+    more.
+
+    Reading the default glob means asserting that it is still the default, so
+    an ``EnableDefaultCompileItems`` or a ``<Compile>`` naming a file in the
+    tree is refused rather than ignored. Either would mean the set this
+    returns is no longer the set that compiles, which is the quiet kind of
+    wrong.
+    """
+    with open(NATIVE_PROJECT) as f:
+        text = f.read()
+
+    if "EnableDefaultCompileItems" in text:
+        raise AssertionError(
+            f"{NATIVE_PROJECT} sets EnableDefaultCompileItems, so its compiled set is "
+            "no longer the default glob this reader walks. Teach it the new shape."
+        )
+    named = COMPILE_INCLUDE.findall(text) + COMPILE_REMOVE.findall(text)
+    for include in named:
+        if GENERATED_INCLUDE not in include:
+            raise AssertionError(
+                f"{NATIVE_PROJECT} names {include!r} explicitly. The default glob is "
+                "no longer the whole of what it compiles, so this reader would be "
+                "reporting a set that is not the one in the library."
+            )
+
+    found = []
+    for dirpath, dirs, files in os.walk(NATIVE_DIR):
+        dirs[:] = sorted(d for d in dirs if d not in ("bin", "obj"))
+        found += [os.path.join(dirpath, f) for f in files if f.endswith(".cs")]
     return sorted(os.path.relpath(p, ACAD_ROOT).replace(os.sep, "/") for p in found)
 
 

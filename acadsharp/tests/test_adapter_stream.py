@@ -24,6 +24,7 @@ from g13_support import (
     expectation_path,
     first_difference,
     kinds,
+    load_script,
     manifest,
     parse,
     read_expectation,
@@ -38,15 +39,24 @@ FIXTURE_NAMES = sorted(MANIFEST["fixtures"])
 RECORDED = recorded_fixtures()
 COMMITTED = committed_fixtures()
 
-# A DWG in tests/fixtures that no committed capture mentions at all. Nothing
-# decodes it, nothing pins its bytes, and nothing notices when it changes: it
-# is a file the repository carries and does not check.
+
+# What the generator has been told to record an expectation for. This is the
+# upstream control and the manifest is downstream of it: expectations() walks
+# DUMPED and nothing else, so a fixture that is not in here can never get a
+# manifest entry however often anybody regenerates. #94's seven were never
+# added, which is the mechanism behind all of it.
+DUMPED = tuple(load_script(os.path.join(FIXTURES, "gen", "regenerate.py"), "regenerate").DUMPED)
+
+# A DWG in tests/fixtures that the generator has not been told to record and
+# that no committed capture mentions. Nothing decodes it, nothing pins its
+# bytes, and nothing notices when it changes: it is a file the repository
+# carries and does not check.
 #
-# These seven came in with #94 ahead of the refusal work that will record
-# them, which is a reasonable thing to do once and a bad thing to be able to
-# do by accident. The list is here so the next one is a red test rather than
-# a discovery. Every name on it has to leave when its fixture is recorded,
-# which the control below enforces.
+# These came in with #94 ahead of the refusal work that will record them,
+# which is a reasonable thing to do once and a bad thing to be able to do by
+# accident. A name leaves this list the moment its fixture joins DUMPED, which
+# is a one-line edit in the branch that adds it and does not wait for a
+# regeneration.
 CARRIED_NOT_RECORDED = (
     "g13_mesh.dwg",
     "g13_point.dwg",
@@ -113,30 +123,57 @@ class TestNoFixtureIsOutsideEveryCheck:
     them, nothing pinned their bytes, and editing one changed nothing any test
     could see.
 
-    Neither case below skips an allow-listed fixture, because a skip is the
-    same colour as a pass and these lists are meant to shrink. An excused
-    fixture is asserted to still need excusing, so the day one is recorded the
-    test that goes red is the one telling you to take it off the list.
+    The manifest is the symptom and DUMPED is the cause. `expectations()`
+    walks that tuple and nothing else, so a fixture missing from it cannot get
+    a manifest entry however often anybody regenerates, and a guard reading
+    only the manifest would tell the next person to rerun the generator when
+    what they actually need is to add a name. So the first case below asks
+    DUMPED, and the manifest's agreement with it is a case of its own.
+
+    Neither allow-list skips, because a skip is the same colour as a pass and
+    both lists are meant to shrink. An excused fixture is asserted to still
+    need excusing, so the day one is recorded the test that goes red is the
+    one telling you to take it off the list.
     """
 
     @pytest.mark.parametrize("fixture", COMMITTED)
-    def test_every_fixture_is_mentioned_by_a_committed_capture(self, fixture):
+    def test_every_fixture_is_one_the_generator_records(self, fixture):
+        recorded = fixture in DUMPED or fixture in RECORDED
         if fixture in CARRIED_NOT_RECORDED:
-            assert fixture not in RECORDED, (
+            assert not recorded, (
                 f"{fixture} is recorded now, so take it off CARRIED_NOT_RECORDED. An "
                 "allow-list that does not shrink is a list of things nobody checks"
             )
             return
-        assert fixture in RECORDED, (
-            f"{fixture} is in tests/fixtures and no expectation, scenario or benchmark "
-            "mentions it, so nothing in this repository reads it and nothing notices "
-            "when it changes. Record it by rerunning tests/fixtures/gen/regenerate.py, "
-            "or add it to CARRIED_NOT_RECORDED with a reason"
+        assert recorded, (
+            f"{fixture} is in tests/fixtures, is not in regenerate.py's DUMPED, and "
+            "no scenario or benchmark names it, so nothing in this repository reads "
+            "it and nothing notices when it changes. Add it to DUMPED and rerun "
+            "tests/fixtures/gen/regenerate.py --only expectations, or add it to "
+            "CARRIED_NOT_RECORDED with a reason"
+        )
+
+    def test_the_generator_and_the_manifest_agree_on_what_is_dumped(self):
+        # The state a branch is in between adding a name to DUMPED and
+        # regenerating. That is a legitimate state to push in and not a
+        # legitimate state to merge in, which is what makes it a test rather
+        # than a comment.
+        added = sorted(set(DUMPED) - set(FIXTURE_NAMES))
+        gone = sorted(set(FIXTURE_NAMES) - set(DUMPED))
+        assert not added and not gone, (
+            f"regenerate.py dumps {added} that MANIFEST.json has no entry for, and "
+            f"the manifest carries {gone} the generator no longer dumps. Rerun "
+            "tests/fixtures/gen/regenerate.py --only expectations and read the diff"
         )
 
     @pytest.mark.parametrize("fixture", COMMITTED)
     def test_every_fixture_a_capture_uses_is_pinned_by_its_digest(self, fixture):
         if fixture in CARRIED_NOT_RECORDED:
+            return
+        if fixture in DUMPED and fixture not in RECORDED:
+            # Named for recording and not recorded yet. The case above is
+            # where that is reported, and reporting it twice would read as two
+            # problems.
             return
         pinned = any(RECORDED.get(fixture, ()))
         if fixture in NAMED_BUT_NOT_PINNED:
@@ -156,12 +193,20 @@ class TestNoFixtureIsOutsideEveryCheck:
             "exception outlived the file"
         )
 
+    def test_every_dumped_fixture_is_a_file(self):
+        # DUMPED is the list this guard trusts, so it gets a control of its
+        # own: a name in it with no DWG beside it is a regeneration that
+        # cannot run, reported here rather than as a RuntimeError halfway
+        # through a container.
+        missing = [name for name in DUMPED if not os.path.isfile(os.path.join(FIXTURES, name))]
+        assert not missing, f"regenerate.py dumps {missing}, which are not in tests/fixtures"
+
     def test_the_guard_would_see_a_new_fixture(self):
         # The control. Everything above is parametrised over what is on disk,
         # so if that listing ever came back short every case would pass by
         # being absent.
-        assert len(COMMITTED) > len(FIXTURE_NAMES), (
-            "the fixture listing found no more files than the manifest names, which "
+        assert len(COMMITTED) > len(DUMPED), (
+            "the fixture listing found no more files than the generator dumps, which "
             "is either true or a broken listing, and this guard cannot tell"
         )
         assert "a_fixture_nobody_committed.dwg" not in RECORDED

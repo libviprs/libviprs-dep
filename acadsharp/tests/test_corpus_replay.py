@@ -20,29 +20,19 @@ of the ways a replay can go wrong. A guard whose own failure path has never
 run is the shape this whole file exists to stop.
 """
 
-import importlib.util
 import json
 import os
 import re
-import sys
 
 import pytest
-from g13_support import manifest
+from g13_support import load_script, manifest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DRIVER = os.path.join(HERE, "fixtures", "gen", "replay.py")
 WORKFLOW = os.path.join(HERE, "..", "..", ".github", "workflows", "acadsharp-conformance.yml")
 
 
-def _load(path, name):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-replay = _load(DRIVER, "replay")
+replay = load_script(DRIVER, "replay")
 MANIFEST = manifest()
 
 
