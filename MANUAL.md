@@ -535,11 +535,35 @@ dependency's flake should not colour another's release run red.
   run fails. An archive that disagrees with its own tag is worse than a
   missing one because it looks right.
 
-No acadsharp release has been cut yet, and `acadsharp/README.md` says so
-rather than linking archives that do not exist. Cut the first one by
-dispatching the workflow by hand, for the same reason zstd's has to be
-dispatched: publishing an already-committed version changes no file, so
-there is nothing to push at `release`.
+`acadsharp-3.7.1-viprs.1` is cut, with five archives on it, and
+`acadsharp/README.md` links them. `acadsharp/VERSION` now says
+`3.7.1-viprs.2`, which is not cut, and that is the next one to publish.
+Dispatch it by hand, for the same reason zstd's has to be dispatched:
+publishing an already-committed version changes no file, so there is
+nothing to push at `release`.
+
+Three things go with cutting one, and the workflow does none of them.
+
+- The shim revision only means something if somebody moves it, and for
+  one campaign nobody did: seven flattener changes landed on a published
+  `viprs.1`. `SHIM_DIGESTS` in `acadsharp/build_acadsharp.py` records
+  which shim each version is, and
+  `acadsharp/tests/test_acadsharp_version.py` holds the tree against the
+  row for the version in `VERSION`, so a change under `native/` is red
+  until the revision moves and its row lands. A row whose tag exists is
+  frozen. Nothing else would catch it: the workflow uploads with
+  `--clobber` and says re-running is safe, and `acadsharp-rs`'s
+  `COMPAT.toml` globs `3.7.1-viprs.*`.
+- `acadsharp/README.md`'s Downloads table is the previous release until
+  the new one exists, and it says so in as many words. Recut it from
+  what `release-notes` writes when the run finishes: five URLs and five
+  digests, and the paragraph saying the pinned tag is not cut yet comes
+  out with them.
+- `viprs.1`'s mac archive does not load, which is #95, and both
+  `acadsharp/README.md` and `acadsharp/docs/LINKINFO.md` tell a consumer
+  so. Those two passages come out with the release that fixes it and not
+  before, because `LINKINFO.md` ships inside the archive and a consumer
+  holding the broken one has nothing else to read.
 
 To try the whole thing without committing to a version, dispatch it with
 the `version` input set to a throwaway (`3.7.1-viprs.0`, say). It needs a
@@ -814,7 +838,7 @@ container image. There is no Windows cell and there will not be one.
 
 **`--version VERSION`**
 
-:   The artifact version to build, e.g. `3.7.1-viprs.1`. Defaults to the
+:   The artifact version to build, e.g. `3.7.1-viprs.2`. Defaults to the
     contents of `acadsharp/VERSION`, which is the usual case. The release
     workflow passes its `workflow_dispatch` override here, so the
     archives, the tag, the release notes and `artifact_version` in

@@ -85,6 +85,37 @@ SOURCE_COMMIT = {
     "3.7.1": "d7dc111023477d8a9fffc2153139459c95b4f345",
 }
 
+# What shim each artifact version is. SOURCE_SHA256 above pins the upstream
+# half; this pins the other one, and until now nothing did.
+#
+# The value is the rollup `g13_support.shim_digest()` computes over the sources
+# the fixture generator compiles: one sha256 per file, over the sorted paths and
+# the bytes behind them. `tests/test_acadsharp_version.py` holds the tree
+# against the row for the version VERSION names right now, so a change under
+# `native/` with the number left still is a red test naming this table rather
+# than a second library published under a name that already means something.
+#
+# That is not hypothetical. `3.7.1-viprs.1` is published, and seven flattener
+# changes landed on top of it with the number unmoved. Nothing downstream would
+# have caught it either: `release-acadsharp.yml` uploads with `--clobber` and
+# says in its own words that a re-run is safe, and `acadsharp-rs`'s COMPAT.toml
+# globs `3.7.1-viprs.*`. `split_version` exists precisely so "the shim changed"
+# has a number of its own, and a number nothing checks does not move.
+#
+# The viprs.1 row is measured rather than typed: it is the `shim.sha256` block
+# in `acadsharp/tests/expectations/MANIFEST.json` at the `acadsharp-3.7.1-viprs.1`
+# tag, which the same function wrote. Put VERSION back to `3.7.1-viprs.1` today
+# and the test goes red with the two digests side by side, which is the whole
+# finding in one assertion.
+#
+# A row for a version whose tag exists is frozen. Editing one is a diff whose
+# only purpose is to let one published name mean two different libraries; bump
+# the shim revision instead, because that is what the revision is for.
+SHIM_DIGESTS = {
+    "3.7.1-viprs.1": "4d00f97ca7d7e7fdeedece16e5875b30be4b30d0ae6ceaa9f5cf248245b4aa6c",
+    "3.7.1-viprs.2": "b0c780a6373c91d3401652754bfcbba01aee490073c9731b5423fa7621303ad2",
+}
+
 # What this build changes about the pinned source before compiling it.
 #
 # SOURCE_SHA256 and SOURCE_COMMIT say what was downloaded, and until there was
@@ -397,6 +428,23 @@ def source_commit(version):
             f"no upstream commit for ACadSharp {version} in SOURCE_COMMIT in "
             f"{os.path.relpath(__file__, REPO_ROOT)}. LINKINFO.json records the commit "
             "the artifact was built from, so a tag with no commit cannot be packaged"
+        ) from None
+
+
+def shim_digest_for(version):
+    """The shim rollup an artifact version is, out of ``SHIM_DIGESTS``.
+
+    Same shape as ``source_sha256`` and for the same reason: a version with no
+    row is a version nobody wrote down what the shim was for, and guessing is
+    how a published name comes to mean two different libraries.
+    """
+    try:
+        return SHIM_DIGESTS[version]
+    except KeyError:
+        raise KeyError(
+            f"no shim digest for {version} in SHIM_DIGESTS in "
+            f"{os.path.relpath(__file__, REPO_ROOT)}. Every artifact version records "
+            "which shim it is, so bumping acadsharp/VERSION means adding the row too"
         ) from None
 
 
