@@ -62,6 +62,25 @@ namespace Viprs.Cad
 		// A rectangle cannot tell them apart, which is why that fixture's
 		// first solid has no symmetry at all and why an assertion on area or
 		// on a bounding box would pass either way.
+		//
+		// A degenerate SOLID is emitted, deliberately, and this is the one
+		// question MeshPolygons answers below and this method used to be
+		// silent about. A default-constructed SOLID has all four corners at the
+		// origin, so it comes out as three coincident vertices with a normal of
+		// +Z that FaceNormal's Unit() names rather than measures, and that is a
+		// record that is not a shape. It still goes out, because the corners
+		// are what the file holds: refusing them means a consumer that cannot
+		// see the entity at all, and the entity is real even where its area is
+		// not. The difference from a mesh face is whose numbers they are. A
+		// MESH's face list indexes a vertex list the same file controls, so a
+		// face naming vertex 99 of 3 is data that contradicts itself and there
+		// is nothing to emit; a SOLID's corners are four points that agree
+		// with each other and happen to coincide.
+		//
+		// tests/test_flatten_faces.py pins it on g13_unsupported.dwg, which is
+		// where it first showed up: that fixture's SOLID is default
+		// constructed, and flattening it turned the view from empty into
+		// occupied and took the EMPTY_VIEW warning with it.
 		private Primitive SolidPolygon(Solid solid, ulong h, uint flags, Placement place)
 		{
 			// "If only three corners are entered to define the SOLID, then the
@@ -153,6 +172,18 @@ namespace Viprs.Cad
 				int[] face = mesh.Faces[f];
 				int n = face == null ? 0 : face.Length;
 
+				// Before anything walks the face, which is a step further than
+				// the rule the Spline and LwPolyline arms follow. Those apply
+				// the bound before the array exists, because the bound is a
+				// bound on what gets allocated and counting after the
+				// allocation is counting too late. Here the allocation is not
+				// the only thing the caller is paying for: Unreadable scans
+				// every index, so a file claiming a face of a billion vertices
+				// buys a billion comparisons under a max_polyline_points the
+				// caller set to stop exactly that. The bound now covers the
+				// scan as well as the array.
+				CheckPointCount(n, "a Polygon record");
+
 				// A face list a file controls can say anything, and an index
 				// past the end of the vertex list is one entity's worth of bad
 				// data rather than a reason to fail the decode. The face is
@@ -171,12 +202,6 @@ namespace Viprs.Cad
 					yield return w;
 					continue;
 				}
-
-				// Before the array exists, which is the rule the Spline and
-				// LwPolyline arms follow: the bound is a bound on what gets
-				// allocated, so counting after the allocation is counting too
-				// late.
-				CheckPointCount(n, "a Polygon record");
 
 				double[] pts = new double[n * 3];
 				for (int i = 0; i < n; i++)
