@@ -1,0 +1,9 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Polygon handle=49 flags=0 n=4 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,1.000000,0.000000);(11.000000,7.000000,0.000000);(2.000000,5.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00005 Polygon handle=4A flags=0 n=3 closed=1 pts=[(20.000000,0.000000,0.000000);(26.000000,2.000000,0.000000);(22.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00006 Polygon handle=4B flags=0 n=4 closed=1 pts=[(0.000000,0.000000,0.000000);(-3.577709,1.788854,0.000000);(-4.472136,0.000000,2.236068);(-0.894427,-1.788854,2.236068)] bulges=[] normal=[(0.333333,0.666667,0.666667)]
+00007 Polygon handle=4F flags=1 n=4 closed=1 pts=[(40.000000,0.000000,0.000000);(58.000000,1.500000,0.000000);(61.000000,7.500000,0.000000);(43.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00008 Polygon handle=4F flags=1 n=4 closed=1 pts=[(80.000000,0.000000,0.000000);(68.000000,2.000000,0.000000);(66.000000,10.000000,0.000000);(78.000000,8.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
