@@ -102,6 +102,13 @@ DUMPED = (
     "g13_long_text.dwg",
     "g13_scale_1x.dwg",
     "g13_dimension_shallow.dwg",
+    # RAY and XLINE, one of each, so the deliberate refusal
+    # (ENTITY_REFUSED_BY_DESIGN, docs/adr/0002) is evidenced on a fixture
+    # carrying nothing else as well as on the two real drawings. It arrived
+    # with #94 and was never added here, and expectations() iterates this
+    # tuple and nothing else, so until now it was a DWG the suite could not
+    # read: no dump, no MANIFEST entry, green and inert.
+    "g13_ray_xline.dwg",
     "real_AC1032.dwg",
     "real_AC1018.dwg",
     "g11_shapes.dwg",
