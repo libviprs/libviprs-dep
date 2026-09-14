@@ -11,12 +11,24 @@ ADR with no code behind it reads exactly like a decision that shipped.
 So this compares them the way `test_warning_codes.py` compares the shim's
 enumeration against the specification, and for the same reason. It needs no
 .NET and no fixture: all three are text.
+
+Three documents written by one hand agreeing with each other is a weaker
+statement than it looks, and it was measured on this tree: change
+`case "XLINE"` to `case "XLINEE"` in the C# table, change its sentence to
+match, change the ADR row to match, and the whole consistency suite below is
+18 passed. One person writing all three from one wrong belief is the realistic
+mistake, and a misspelled string degrades silently to warning 100 rather than
+failing a build. So `TestEveryRowIsEvidencedByADecodeSomebodyRan` asks the
+fourth document instead: the committed dumps, which are a recording of what
+the shim actually emitted when somebody ran it over the corpus. A row nothing
+in those dumps carries is a row this build has never been observed to apply.
 """
 
 import os
 import re
 
 import pytest
+from g13_support import manifest, warnings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ACADSHARP = os.path.dirname(HERE)
@@ -35,6 +47,21 @@ DISPOSITION_CODE = {
     "refused": "ENTITY_REFUSED_BY_DESIGN",
     "deferred": "UNSUPPORTED_ENTITY",
 }
+
+# A row nothing in the corpus can evidence, because no fixture and neither
+# real drawing carries that kind at all.
+#
+# The same shape as `CARRIED_NOT_RECORDED` in test_adapter_stream.py and for
+# the same reason: an unevidenced row is allowed exactly once, in writing, and
+# the day a drawing carrying the kind lands the excuse has to come off. It is
+# empty today, and that is worth saying out loud rather than leaving as an
+# absence: all eight rows in the table are evidenced, five of them by the two
+# real drawings and RAY and XLINE by `g13_ray_xline.dwg` as well.
+#
+# A row that needs adding here is a row worth arguing about first. The cheap
+# way out is the right one: a fixture the generator writes carrying one
+# instance of the kind, which is what g13_ray_xline.dwg is.
+NO_DRAWING_CARRIES = ()
 
 
 def read(path):
@@ -122,6 +149,112 @@ def messages(refused_cs):
     for m in re.finditer(pattern, refused_cs, re.S):
         out[m.group(1)] = "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(2)))
     return out
+
+
+@pytest.fixture(scope="module")
+def evidenced():
+    """``{(code, sentence): [the dumps that carry it]}`` over the whole corpus.
+
+    Keyed on the pair rather than on either half, so a row is evidenced only
+    when the exact code and the exact sentence were emitted together. That is
+    the whole point: a sentence moved to a different code, or a code left on a
+    reworded sentence, is a row whose decision nobody has watched apply.
+
+    The comparison is verbatim on both sides. The sentence comes out of the
+    C# source as its string literals joined, and out of a dump as whatever is
+    between the quotes on the Warning line, and neither side unescapes, so a
+    row has to survive a round trip through the wire to count.
+    """
+    out = {}
+    for fixture in sorted(manifest()["fixtures"]):
+        dump = os.path.splitext(fixture)[0] + ".txt"
+        for warning in warnings(fixture):
+            out.setdefault((warning["code"], warning["message"]), set()).add(dump)
+    return {pair: sorted(dumps) for pair, dumps in out.items()}
+
+
+def evidence_line(kind, code, dumps):
+    """One row and what carries it, the way a failure should read."""
+    return f"{kind}  {code}  evidenced by: {dumps if dumps else 'NOTHING'}"
+
+
+class TestEveryRowIsEvidencedByADecodeSomebodyRan:
+    """The document the other three cannot be written into.
+
+    Everything else in this file cross-checks the ADR, the C# table and
+    WIRE.md, and all three are prose somebody types. The dumps under
+    tests/expectations are not: each one is a recording of what the shim
+    emitted decoding a committed DWG, and `test_adapter_stream.py` binds each
+    to the bytes it was produced from while `test_shim_digest.py` binds it to
+    the sources that produced it. So a row that appears in a dump is a row the
+    shim has been observed to apply to a real drawing, and a row that appears
+    in no dump is a decision nobody has ever seen happen.
+
+    Measured, and it is the gap this closes: with XLINE misspelled XLINEE in
+    the C# arm, in its own sentence and in the ADR row, every other case in
+    this file passes. The kind ACadSharp reports is XLINE, so the misspelled
+    arm is never taken, every XLINE in the corpus falls through to warning 100,
+    and the three documents agree perfectly about a refusal that has stopped
+    happening.
+    """
+
+    def test_each_row_appears_verbatim_in_a_committed_expectation(self, table, messages, evidenced):
+        for kind in sorted(table):
+            code = table[kind]
+            dumps = evidenced.get((code, messages[kind]), [])
+            if kind in NO_DRAWING_CARRIES:
+                assert not dumps, (
+                    f"{evidence_line(kind, code, dumps)}\n"
+                    f"{kind} is excused from needing evidence and has some, so take it "
+                    "off NO_DRAWING_CARRIES. An allow-list that does not shrink is a "
+                    "list of things nobody checks"
+                )
+                continue
+            assert dumps, (
+                f"{evidence_line(kind, code, dumps)}\n"
+                f"no committed dump carries {code} with {kind}'s exact sentence, so "
+                "nothing in this repository has ever watched that row apply. Either "
+                "the row is misspelled and the arm is dead, in which case the kind is "
+                "falling through to warning 100, or the corpus has no drawing carrying "
+                f"a {kind} and NO_DRAWING_CARRIES is where that gets written down"
+            )
+
+    def test_the_exemptions_name_rows_the_table_has(self, table):
+        # The same control test_the_allow_lists_name_files_that_are_here gives
+        # the fixture lists: an exemption for a row that no longer exists is
+        # one nobody will reread, and it hides the day the row comes back.
+        stale = sorted(set(NO_DRAWING_CARRIES) - set(table))
+        assert not stale, (
+            f"{stale} is excused from needing evidence and is not a kind RefusedKinds.cs "
+            "refuses, so the exception outlived the row"
+        )
+
+    def test_there_is_evidence_to_find(self, evidenced):
+        # The positive control. Every case above reads one dict, and an empty
+        # dict would fail them all rather than pass them, which is the right
+        # direction, but a dict holding only READER_NOTIFICATION lines would
+        # not, so what is asserted is that refusals reached it.
+        refusals = [pair for pair in evidenced if pair[0] == "ENTITY_REFUSED_BY_DESIGN"]
+        assert len(refusals) >= 7, (
+            f"the corpus reader found {len(refusals)} refusal sentences, which is not "
+            "the corpus this repository carries, so every case above is passing over "
+            "nothing"
+        )
+
+    def test_a_sentence_nobody_emits_is_not_evidenced(self, messages, evidenced):
+        # The near-miss control, and the exact mutation this class was written
+        # against. The match has to be on the whole sentence: a prefix, a
+        # substring or a first-word comparison would all call the misspelling
+        # evidenced by the dumps that carry the correct one.
+        sentence = messages.get("XLINE")
+        assert sentence, (
+            "RefusedKinds.cs carries no XLINE arm, so this control has nothing to be a "
+            "near miss of. If the kind was renamed, the case above is the one to read; "
+            "if it was genuinely retired, move this control onto another row"
+        )
+        wrong = "XLINEE" + sentence[len("XLINE") :]
+        assert ("ENTITY_REFUSED_BY_DESIGN", wrong) not in evidenced
+        assert ("ENTITY_REFUSED_BY_DESIGN", sentence) in evidenced
 
 
 class TestThereIsSomethingToCompare:
