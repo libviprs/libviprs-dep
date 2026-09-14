@@ -1194,6 +1194,16 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				case MLine mline:
+				{
+					foreach (Primitive p in MLinePolylines(mline, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// LEADER. Its vertices are already world coordinates and its
 				// arrowhead is not in the drawing at all, so the body and the
 				// two sentences that say why are in Flatten.Leaders.cs.

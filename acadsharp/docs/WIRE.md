@@ -168,16 +168,6 @@ UTF-8, padded with zeroes to a multiple of four. The name is not terminated.
 
 `length` is `64 + 24n + 8bc`.
 
-A `LEADER` lands here as one open polyline through the vertices the file holds,
-hook line included where the file recorded one, and nothing synthesised. Its
-vertices are world coordinates even though the entity carries an extrusion
-direction, so they are not lifted through it; the normal on the record is still
-the entity's own plane, because that is what an in-plane measurement is made
-against. Its arrowhead is a glyph the dimension style names and is not drawn,
-and warning 114 beside it under the same handle says so. A spline-fit leader
-carries fit points rather than a curve, so it is refused on 100 rather than
-straightened into a polyline through them.
-
 `bulge[i]` is the bulge of the span from vertex `i` to vertex `i + 1`. For a
 closed polyline `bulge[n - 1]` is the closing span's, from the last vertex
 back to the first; for an open one it has no span and a consumer ignores it.
@@ -215,6 +205,35 @@ exact above 1 and 0 below `1e-300`, so the split at `|b| = 1` is load-bearing.
 Endpoints are never recomputed, so the pieces meet exactly at every depth.
 Thirty-two levels is a sensible cap. None of this paragraph is contractual;
 the record is.
+
+Two entity kinds reach this record by a route the paragraphs above do not
+describe, because what crosses is not the vertex run the file stores. Both are
+here rather than beside the layout table so the bulge rules read as one piece.
+
+A `LEADER` lands here as one open polyline through the vertices the file holds,
+hook line included where the file recorded one, and nothing synthesised. Its
+vertices are world coordinates even though the entity carries an extrusion
+direction, so they are not lifted through it; the normal on the record is still
+the entity's own plane, because that is what an in-plane measurement is made
+against. Its arrowhead is a glyph the dimension style names and is not drawn,
+and warning 114 beside it under the same handle says so. A spline-fit leader
+carries fit points rather than a curve, so it is refused on 100 rather than
+straightened into a polyline through them.
+
+An `MLINE` lands here as one open or closed polyline per element of its style,
+in the style's element order and all under the entity's handle. Each element is
+the path offset by `(offset − reference) × scale` along each vertex's miter,
+where the reference is 0, the largest offset or the smallest offset for the
+Zero, Top and Bottom justifications, and positive offsets lie to the left of
+the path about the entity's normal. The division by the miter is what makes a
+bend meet itself: at a joint the miter runs along the turn's bisector and the
+distance to the element's line is the offset divided by `dot(miter, side)`,
+which is longer than the offset by the secant of half the turn. Fill, joint
+lines and caps are not drawn, and warning 115 says so when the style asks for
+them. An MLINE the style cannot place, because the style holds no elements or
+the path holds fewer than two vertices, emits warning 100 and no record at
+all: the centre path alone is the part that needed no lookup, and the section
+on that below is why it never crosses.
 
 **5 `Arc`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
@@ -283,6 +302,16 @@ level above zero also emits warning 110 to say the level was ignored rather
 than evaluated, and a `3DFACE` that marks an edge invisible emits warning 113
 to say record 9 has nowhere to carry that.
 
+A `WIPEOUT` lands here as well, as the boundary it masks, with warning 112
+immediately before it under the same `item_handle`. Its vertices are the clip
+boundary mapped out of the image's own pixel space,
+`insert + u·(px + 0.5) + v·(size_y − py − 0.5)`, which is the convention every
+raster-image consumer already applies: pixel rows run the opposite way from `v`
+and the pixel origin sits half a pixel outside the first pixel. Its normal is
+measured off the emitted points, because the entity carries none of its own.
+Stream order is draw order, so a mask hides what precedes it and not what
+follows.
+
 Record 9's normal is **the entity's own plane where the entity has one, and the
 face's measured plane where it does not**, and the two are not the same
 convention. A `SOLID` has an extrusion direction in the file, so its normal is
@@ -308,8 +337,6 @@ entity is in the drawing and the handle is worth carrying, and every number in
 it is finite. A consumer computing a bounding box over record 9s should expect
 a contribution of no width, no height and no area, and not treat it as a parse
 failure.
-
-A `WIPEOUT` lands here as well, as the boundary it masks, with warning 112 immediately before it under the same `item_handle`. Its vertices are the clip boundary mapped out of the image's own pixel space, `insert + u·(px + 0.5) + v·(size_y − py − 0.5)`, which is the convention every raster-image consumer already applies: pixel rows run the opposite way from `v` and the pixel origin sits half a pixel outside the first pixel. Its normal is measured off the emitted points, because the entity carries none of its own. Stream order is draw order, so a mask hides what precedes it and not what follows.
 
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
@@ -417,6 +444,7 @@ and 105 with these meanings, whatever it is built on.
 | 112 | `POLYGON_MASKS` | The `Polygon` record that follows with the same `item_handle` is a mask rather than a face: it hides whatever the stream drew before it, inside its boundary. A `WIPEOUT` is one. A consumer that knows this code paints the boundary in its background colour over what it has already drawn, or clips against it; a consumer that does not fills it like any other record 9, which still hides what is under it and at worst shows a coloured face where a blank belongs. Neither of those reveals the content, which is the failure direction this code exists to choose. `item_handle` is the wipeout's. |
 | 113 | `FACE_EDGE_VISIBILITY_IGNORED` | A `3DFACE` that marks one or more of its edges invisible. The `Polygon` beside it, same `item_handle`, carries all of its edges: record 9 has no per-edge visibility, so the flags are ignored rather than the face being split into lines. `item_handle` is the face's. |
 | 114 | `ARROWHEAD_NOT_DRAWN` | A `LEADER` whose arrowhead flag is set. The `Polyline` beside it, same `item_handle`, is the vertex run and nothing else. An arrowhead is a glyph the drawing's dimension style names, at a size that style sets, and neither the glyph nor the size is in the file as geometry, so it is not drawn and nothing is invented in its place. A consumer that wants one draws it itself at the first vertex, pointing along the first span; a consumer that does not know this code draws a leader whose tip is bare, which is the failure direction this code exists to make visible rather than silent. `item_handle` is the leader's. |
+| 115 | `MLINE_STYLE_FEATURES_IGNORED` | An `MLINE` whose style asks for something this build does not draw: a filled area between its outermost elements, the joint lines a style can display at each inner vertex, or a cap closing either end. The `Polyline` records beside it, same `item_handle`, are the element lines, which is the whole of what the entity draws here. Like 110 this sits beside real geometry and says what is missing from it rather than refusing anything. `item_handle` is the MLINE's. |
 
 ### Reserved ranges
 
@@ -537,12 +565,15 @@ different reasons:
 | --- | --- | --- |
 | a block this decoder could have resolved and could not: an insertion, an external reference | 105 `UNRESOLVED_BLOCK` | the drawing is incomplete or points outside itself, so find the missing piece and decode again |
 | one this producer will never make, or a result it will never evaluate: an external SHX glyph, an external raster, an external PDF, an embedded ACIS stream | 109 `ENTITY_REFUSED_BY_DESIGN` | waiting will not change the answer, so show whatever it shows for a thing that is not coming |
-| one nobody has implemented yet: a polyface mesh's face list, an MLINE's style offsets | 100 `UNSUPPORTED_ENTITY` | a later build may well emit it, so "not supported yet" is the honest label |
+| one nobody has implemented yet: a polyface mesh's face list, or one the drawing does not hold at all, such as an MLINE whose style carries no elements | 100 `UNSUPPORTED_ENTITY` | a later build may well emit it, so "not supported yet" is the honest label |
 
 So the four kinds a reader reaches for first do not share a code, and that is
 the point of having three. `SHAPE`, `IMAGE` and `PDFUNDERLAY` are 109. An
 insertion whose block is missing, and the external reference that is the same
-thing seen from inside, are 105. A polyface mesh and an MLINE are 100.
+thing seen from inside, are 105. A polyface mesh is 100, and so is
+an MLINE whose style carries no elements: the MLINEs whose styles do carry them
+lower to record 4, one polyline per element, which is what resolving the lookup
+looks like.
 
 109 also covers refusals that involve no lookup at all, where the shape is
 entirely in the drawing and no record this wire version defines can hold it: an

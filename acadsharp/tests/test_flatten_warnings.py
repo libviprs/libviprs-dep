@@ -39,6 +39,7 @@ CODE_FIXTURES = {
     "POLYGON_MASKS": "g13_wipeout.dwg",
     "FACE_EDGE_VISIBILITY_IGNORED": "g13_face3d.dwg",
     "ARROWHEAD_NOT_DRAWN": "g13_leader.dwg",
+    "MLINE_STYLE_FEATURES_IGNORED": "g13_mline.dwg",
 }
 
 # A code the corpus cannot produce, and the C# constant that has to still be

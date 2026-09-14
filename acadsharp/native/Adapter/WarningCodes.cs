@@ -140,6 +140,14 @@ namespace Viprs.Cad
 		// that is what happened, which is what this code is for.
 		public const uint ArrowheadNotDrawn = 114u;
 
+		// An MLINE whose style asks for something this version does not draw:
+		// a filled area between its outermost elements, the joint lines a
+		// style can display at each inner vertex, or a cap closing either end.
+		// The element lines beside it are the whole of what the entity draws
+		// here, so this is a statement about what is missing rather than a
+		// refusal, which is what 110 does for a MESH's subdivision level.
+		public const uint MLineStyleFeaturesIgnored = 115u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -159,6 +167,7 @@ namespace Viprs.Cad
 				case PolygonMasks: return "POLYGON_MASKS";
 				case FaceEdgeVisibilityIgnored: return "FACE_EDGE_VISIBILITY_IGNORED";
 				case ArrowheadNotDrawn: return "ARROWHEAD_NOT_DRAWN";
+				case MLineStyleFeaturesIgnored: return "MLINE_STYLE_FEATURES_IGNORED";
 				default: return "WARNING_" + code;
 			}
 		}

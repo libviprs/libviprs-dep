@@ -149,6 +149,12 @@ DUMPED = (
     # tuple and nothing else, so until now it was a DWG the suite could not
     # read: no dump, no MANIFEST entry, green and inert.
     "g13_ray_xline.dwg",
+    # MLINE, one per justification plus a closed one, a style with no
+    # elements and a style that asks for fill and caps. The dump is the only
+    # place the element offsets and the miters are visible: the real drawings
+    # carry three MLINEs and all three use Standard's two symmetric offsets,
+    # which cannot tell a style order from its reverse.
+    "g13_mline.dwg",
     "real_AC1032.dwg",
     "real_AC1018.dwg",
     "g11_shapes.dwg",
