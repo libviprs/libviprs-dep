@@ -488,7 +488,7 @@ GOOD_INSTALL_NAME = f"@rpath/{ba.shared_library_name('mac')}"
 SHIPPED_INSTALL_NAME = "@rpath/viprs_acadsharp.dylib"
 
 
-def _id_dylib_command(name):
+def _id_dylib_command(name, cmdsize=None, nameoff=None):
     """One LC_ID_DYLIB carrying `name`.
 
     `struct dylib_command` is cmd, cmdsize, then a `struct dylib` of name
@@ -499,15 +499,46 @@ def _id_dylib_command(name):
     after the fact: 28 characters of `@rpath/viprs_acadsharp.dylib` fit a
     cmdsize of 56 and 32 characters of `@rpath/libacadsharp_native.dylib`
     need 64, so `install_name_tool` has to grow the load commands.
+
+    `cmdsize` and `nameoff` overwrite those two fields without moving a
+    byte of the payload, which is what a corrupt or hostile dylib looks
+    like from the outside: the bytes are still laid out, the numbers that
+    describe them are not.
     """
     raw = name.encode() + b"\x00"
-    cmdsize = (24 + len(raw) + 7) // 8 * 8
-    blob = struct.pack("<IIIIII", LC_ID_DYLIB, cmdsize, 24, 0, 0x10000, 0x10000)
-    return blob + raw + b"\x00" * (cmdsize - 24 - len(raw))
+    real = (24 + len(raw) + 7) // 8 * 8
+    blob = struct.pack(
+        "<IIIIII",
+        LC_ID_DYLIB,
+        real if cmdsize is None else cmdsize,
+        24 if nameoff is None else nameoff,
+        0,
+        0x10000,
+        0x10000,
+    )
+    return blob + raw + b"\x00" * (real - 24 - len(raw))
+
+
+# A load command the reader has never heard of, eight bytes long, which
+# is the smallest a command can be. A body of these is the cheapest way
+# to make an unbounded walk expensive: every one of them is two `dd`
+# pipelines that find nothing.
+FILLER_COMMAND = struct.pack("<II", 0x99, 8)
 
 
 def synth_macho_dylib(
-    path, symbols, cputype=CPU_TYPE_ARM64, pad=PAD_BYTES, install_name=GOOD_INSTALL_NAME
+    path,
+    symbols,
+    cputype=CPU_TYPE_ARM64,
+    pad=PAD_BYTES,
+    install_name=GOOD_INSTALL_NAME,
+    *,
+    extra_install_names=(),
+    id_cmdsize=None,
+    id_nameoff=None,
+    ncmds=None,
+    sizeofcmds=None,
+    pad_with_commands=False,
 ):
     """Write a 64-bit Mach-O dylib carrying `symbols` as defined externals.
 
@@ -517,6 +548,14 @@ def synth_macho_dylib(
 
     `install_name=None` writes a dylib with no LC_ID_DYLIB at all, which
     is the shape a Mach-O reader has to refuse rather than pass over.
+
+    `extra_install_names` appends further LC_ID_DYLIBs after the first,
+    which no dylib carries and a reader still has to have an answer for.
+
+    `ncmds` and `sizeofcmds` overwrite the header's two descriptions of
+    the load commands, and `pad_with_commands` fills the body with
+    eight-byte commands instead of zeros. Together they are the hostile
+    header: a count nothing backs, over a body that keeps a walk going.
     """
     names = ["_" + s for s in symbols]
     strtab = b"\x00"
@@ -531,20 +570,37 @@ def synth_macho_dylib(
     # symbol reader below has to walk past a command to find its own
     # rather than finding it at offset 32 every time.
     commands = b""
-    ncmds = 1
+    real_ncmds = 1
     if install_name is not None:
-        commands += _id_dylib_command(install_name)
-        ncmds += 1
-    sizeofcmds = len(commands) + symtab_cmd_size
+        commands += _id_dylib_command(install_name, cmdsize=id_cmdsize, nameoff=id_nameoff)
+        real_ncmds += 1
+    for extra in extra_install_names:
+        commands += _id_dylib_command(extra)
+        real_ncmds += 1
+    real_sizeofcmds = len(commands) + symtab_cmd_size
 
-    symoff = header_size + sizeofcmds + pad
+    symoff = header_size + real_sizeofcmds + pad
     nsyms = len(names)
     stroff = symoff + nsyms * 16
 
-    blob = struct.pack("<IIIIIIII", MH_MAGIC_64, cputype, 0, MH_DYLIB, ncmds, sizeofcmds, 0, 0)
+    blob = struct.pack(
+        "<IIIIIIII",
+        MH_MAGIC_64,
+        cputype,
+        0,
+        MH_DYLIB,
+        real_ncmds if ncmds is None else ncmds,
+        real_sizeofcmds if sizeofcmds is None else sizeofcmds,
+        0,
+        0,
+    )
     blob += commands
     blob += struct.pack("<IIIIII", LC_SYMTAB, symtab_cmd_size, symoff, nsyms, stroff, len(strtab))
-    blob += b"\x00" * pad
+    if pad_with_commands:
+        blob += FILLER_COMMAND * (pad // len(FILLER_COMMAND))
+        blob += b"\x00" * (pad % len(FILLER_COMMAND))
+    else:
+        blob += b"\x00" * pad
     for off in offsets:
         blob += struct.pack("<IBBHQ", off, N_SECT | N_EXT, 1, 0, 0x1000)
     blob += strtab
@@ -555,7 +611,7 @@ def synth_macho_dylib(
 
 
 def _build_mac_tree(
-    work, symbols=ENTRY_POINTS, cputype=CPU_TYPE_ARM64, install_name=GOOD_INSTALL_NAME
+    work, symbols=ENTRY_POINTS, cputype=CPU_TYPE_ARM64, install_name=GOOD_INSTALL_NAME, **kw
 ):
     root = os.path.join(work, "acadsharp-mac-arm64")
     lib = os.path.join(root, "lib")
@@ -565,6 +621,7 @@ def _build_mac_tree(
         symbols,
         cputype=cputype,
         install_name=install_name,
+        **kw,
     )
     return _finish(root, "mac", "arm64", static_certified=False)
 
@@ -679,9 +736,13 @@ def _pack(root, name=None):
     return tgz
 
 
-def _verify(tgz, *args):
+def _verify(tgz, *args, timeout=None):
     return subprocess.run(
-        ["bash", SCRIPT_PATH, tgz, *args], capture_output=True, text=True, check=False
+        ["bash", SCRIPT_PATH, tgz, *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
     )
 
 
@@ -1083,6 +1144,25 @@ class TestMachOBytes:
         assert result.returncode == 1
         assert "truncat" in _output(result)
 
+    def test_a_file_too_short_to_hold_a_header_is_rejected(self, tmp_path, mac_tree):
+        # Twenty bytes is not a dylib, and both readers are handed it
+        # anyway: the size floor records its failure and carries on, and
+        # the magic and the filetype are both inside the first sixteen
+        # bytes. `sizeofcmds` at offset 20 is not, and a `dd` past the end
+        # gives back empty hex that bash arithmetic reads as a silent
+        # zero, so the header answers "no load commands" rather than
+        # failing. The bound is what catches it: no load commands still
+        # end at offset 32, and this file stops at 20.
+        root = _clone(mac_tree, tmp_path)
+        path = _shared(root, "mac")
+        with open(path, "r+b") as f:
+            f.truncate(20)
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "truncated or malformed" in out
+        assert "malformed LC_ID_DYLIB" in out
+
 
 class TestTheMachOInstallName:
     """The name the dylib records for itself, which is #95.
@@ -1134,6 +1214,153 @@ class TestTheMachOInstallName:
     def test_a_dylib_that_records_no_name_at_all_is_refused(self, tmp_path):
         root = _build_mac_tree(str(tmp_path), install_name=None)
         result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "LC_ID_DYLIB" in _output(result)
+
+    def test_a_name_cut_short_by_a_newline_is_not_reported_as_the_name(self, tmp_path):
+        # The reader cuts the name at its terminator by turning NULs into
+        # newlines and taking the first line, and a raw newline *inside*
+        # the name cuts it in exactly the same place. The archive is
+        # refused either way, on the basename, but it used to be refused
+        # while printing `@rpath/lib`: a name that is in no load command,
+        # for whoever is now looking through the build for where it came
+        # from. A name that does not end where the command says it ends
+        # is not a name, and saying so is the whole report.
+        name = "@rpath/lib\nacadsharp_native.dylib"
+        root = _build_mac_tree(str(tmp_path), install_name=name)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "'@rpath/lib'" not in out
+        assert "not terminated" in out
+
+    def test_an_empty_install_name_is_refused_as_malformed(self, tmp_path):
+        # `nameoff` points straight at the terminator. Nothing here runs
+        # past anything, so every bound in the reader is satisfied and the
+        # name is still not a name.
+        root = _build_mac_tree(str(tmp_path), install_name="")
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "empty" in _output(result)
+
+
+class TestTheMachOLoadCommandWalk:
+    """The guards on the walk itself, each one watched failing.
+
+    Every layout here is one no compiler emits: what the header says
+    about the load commands disagrees with the load commands. Five of
+    these guards were already in the reader and every one of them held,
+    but not one had ever been watched failing, which is the shape
+    `test_corpus_replay.py` says in as many words this file exists to
+    stop. The last two are the cases those five did not cover: a command
+    region that runs past the end of the file, which the reader accepted,
+    and a command count nothing backs, which it took twenty-five minutes
+    to refuse.
+
+    The walk is bounded by `sizeofcmds` as well as by `ncmds` because
+    `ncmds` comes out of the same header the file is being doubted over.
+    """
+
+    # Two `dd | od | tr` pipelines an iteration, measured at 1.35ms in
+    # the container this suite runs in, so the 250,000 filler commands
+    # below are five and a half minutes of runner time for a reader that
+    # walks to the end of the file. The real commands stop 56 bytes in,
+    # and a reader that believes `sizeofcmds` never enters the body.
+    HOSTILE_BODY = 2_000_000
+    HOSTILE_SECONDS = 60
+
+    def test_a_zero_command_size_is_refused(self, tmp_path):
+        # The guard whose absence is a hang rather than a wrong answer: a
+        # command that declares no size never advances the offset, so the
+        # walk reads the same eight bytes until the runner kills the job.
+        root = _build_mac_tree(str(tmp_path), id_cmdsize=0)
+        result = _verify(_pack(root), timeout=self.HOSTILE_SECONDS)
+        assert result.returncode == 1
+        assert "malformed" in _output(result)
+
+    def test_a_command_too_small_for_its_own_struct_is_refused(self, tmp_path):
+        # 16 bytes cannot hold `struct dylib_command`, so the name offset
+        # the reader is about to take is not inside the command.
+        root = _build_mac_tree(str(tmp_path), id_cmdsize=16)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "malformed" in _output(result)
+
+    def test_a_command_that_runs_past_the_file_is_refused(self, tmp_path):
+        root = _build_mac_tree(str(tmp_path), id_cmdsize=1 << 30)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "malformed" in _output(result)
+
+    def test_a_name_offset_inside_the_struct_is_refused(self, tmp_path):
+        # 16 lands on `struct dylib`'s own fields, so the "name" would be
+        # the timestamp read as text.
+        root = _build_mac_tree(str(tmp_path), id_nameoff=16)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "malformed" in _output(result)
+
+    def test_a_name_offset_past_the_command_is_refused(self, tmp_path):
+        # The name lives inside the command, between its offset and its
+        # end. 4096 is past the end of every command in this file.
+        root = _build_mac_tree(str(tmp_path), id_nameoff=4096)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "malformed" in _output(result)
+
+    def test_a_command_region_that_runs_past_the_file_is_refused(self, tmp_path):
+        # The one the file-size bound could not see. `sizeofcmds` claims a
+        # gigabyte of load commands the file does not hold, and the
+        # LC_ID_DYLIB sits in front of them, well formed, so a reader that
+        # walks only until it finds what it came for reads the name,
+        # reports it and calls a truncated file good.
+        root = _build_mac_tree(str(tmp_path), sizeofcmds=1 << 30)
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "load commands" in _output(result)
+
+    def test_a_name_that_runs_to_the_end_of_its_command_is_refused(self, tmp_path):
+        # `cmdsize` is eight bytes short of the padded command, so the
+        # terminator sits one byte past where the command says it stops
+        # and the name a loader reads runs into whatever follows it. The
+        # bytes this reader is allowed to look at hold 32 characters and
+        # no NUL, and a name it cannot see the end of is not a name.
+        root = _build_mac_tree(str(tmp_path), id_cmdsize=24 + len(GOOD_INSTALL_NAME))
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert "not terminated" in _output(result)
+
+    def test_the_first_of_two_id_dylibs_is_the_one_reported(self, tmp_path):
+        # A dylib carries one LC_ID_DYLIB, so this file is malformed, and
+        # dyld and otool both answer with the first one. The first is
+        # therefore the name that decides whether a consumer's link
+        # resolves, and it is the shipped-wrong one here while the name
+        # the archive wants sits right behind it. A reader that walked on
+        # would report the good name and pass the archive that is broken.
+        root = _build_mac_tree(
+            str(tmp_path),
+            install_name=SHIPPED_INSTALL_NAME,
+            extra_install_names=(GOOD_INSTALL_NAME,),
+        )
+        result = _verify(_pack(root))
+        assert result.returncode == 1
+        assert SHIPPED_INSTALL_NAME in _output(result)
+
+    def test_a_lying_command_count_is_refused_promptly(self, tmp_path):
+        # `ncmds` is 16 million over a body of eight-byte commands, and
+        # there is no LC_ID_DYLIB to stop on, so the reader is asked to
+        # walk every one of them. `sizeofcmds` says the commands end 56
+        # bytes in. The archive has to be refused, and it has to be
+        # refused now: this test fails by running out of time, which is
+        # exactly how it failed before the bound went in.
+        root = _build_mac_tree(
+            str(tmp_path),
+            install_name=None,
+            ncmds=0xFFFFFF,
+            pad=self.HOSTILE_BODY,
+            pad_with_commands=True,
+        )
+        result = _verify(_pack(root), timeout=self.HOSTILE_SECONDS)
         assert result.returncode == 1
         assert "LC_ID_DYLIB" in _output(result)
 
