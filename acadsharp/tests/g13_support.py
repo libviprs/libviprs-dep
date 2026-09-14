@@ -151,6 +151,55 @@ def amplification():
     return load_json(AMPLIFICATION)
 
 
+def recorded_fixtures():
+    """Every fixture a committed capture mentions, and what it pinned it as.
+
+    The value is the set of sha256 digests the captures recorded for that
+    name, and it holds ``None`` for a capture that named the file without
+    recording its bytes. That distinction is the whole point of this reader:
+    "no capture mentions this DWG at all" and "a capture measures it and never
+    wrote down which file it measured" are different gaps and only the first
+    is closed by adding a row somewhere.
+
+    Three artefacts record a run against a DWG and each spells the fixture
+    differently, so all three are read here rather than one being taken as
+    the whole: ``MANIFEST.json`` keys its fixtures by name, a scenario carries
+    the container's path to its input, and a benchmark names a ``fixture``.
+    A fourth artefact would be a fourth reader, which is why the shapes are
+    named rather than walked generically: a capture whose shape this does not
+    understand is a fixture silently outside every check, which is exactly
+    what this exists to find.
+    """
+    found = {}
+
+    def note(name, digest):
+        if name:
+            found.setdefault(name, set()).add(digest)
+
+    for name, entry in manifest()["fixtures"].items():
+        note(name, entry.get("sha256"))
+
+    caps = scenarios()
+    for s in caps["scenarios"]:
+        note(os.path.basename(s.get("input", "")), s.get("fixture_sha256"))
+    note(caps.get("malformed", {}).get("source"), None)
+
+    amp = amplification()
+    for section in ("amplification", "path_versus_memory"):
+        entry = amp.get(section, {})
+        note(entry.get("fixture"), entry.get("fixture_sha256"))
+        note(entry.get("single_instance", {}).get("fixture"), None)
+    for entry in amp.get("streaming", []):
+        note(entry.get("fixture"), entry.get("fixture_sha256"))
+
+    return found
+
+
+def committed_fixtures():
+    """Every .dwg in tests/fixtures, whatever anything says about it."""
+    return sorted(n for n in os.listdir(FIXTURES) if n.endswith(".dwg"))
+
+
 def expectation_path(fixture):
     return os.path.join(EXPECTATIONS, os.path.splitext(fixture)[0] + ".txt")
 

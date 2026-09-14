@@ -20,18 +20,54 @@ from g13_support import (
     EXPECTATIONS,
     FIXTURES,
     RECORD_KINDS,
+    committed_fixtures,
     expectation_path,
     first_difference,
     kinds,
     manifest,
     parse,
     read_expectation,
+    recorded_fixtures,
     records,
     sha256_file,
 )
 
 MANIFEST = manifest()
 FIXTURE_NAMES = sorted(MANIFEST["fixtures"])
+
+RECORDED = recorded_fixtures()
+COMMITTED = committed_fixtures()
+
+# A DWG in tests/fixtures that no committed capture mentions at all. Nothing
+# decodes it, nothing pins its bytes, and nothing notices when it changes: it
+# is a file the repository carries and does not check.
+#
+# These seven came in with #94 ahead of the refusal work that will record
+# them, which is a reasonable thing to do once and a bad thing to be able to
+# do by accident. The list is here so the next one is a red test rather than
+# a discovery. Every name on it has to leave when its fixture is recorded,
+# which the control below enforces.
+CARRIED_NOT_RECORDED = (
+    "g13_mesh.dwg",
+    "g13_point.dwg",
+    "g13_polyface_mesh.dwg",
+    "g13_polygon_mesh.dwg",
+    "g13_ray_xline.dwg",
+    "g13_solid.dwg",
+    "g13_tolerance.dwg",
+)
+
+# Named by a capture that did not record which file it measured. The streaming
+# benchmark decodes these two and test_adapter_benchmarks.py asserts on the
+# numbers, including that the 16x point is sixteen times the 1x one, and the
+# 1x fixture carries a digest because it also has a dump. These two have
+# neither, so the assertions are about a run of whatever happens to be on
+# disk. Fixing it means a `fixture_sha256` per streaming entry, which is a
+# benchmark regeneration, and this campaign does not regenerate benchmarks.
+NAMED_BUT_NOT_PINNED = (
+    "g13_scale_16x.dwg",
+    "g13_scale_4x.dwg",
+)
 
 QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')
 
@@ -65,6 +101,70 @@ class TestTheExpectationsExist:
         dumps = {name[:-4] for name in os.listdir(EXPECTATIONS) if name.endswith(".txt")}
         known = {os.path.splitext(f)[0] for f in FIXTURE_NAMES}
         assert dumps <= known, f"{sorted(dumps - known)} has no fixture in the manifest"
+
+
+class TestNoFixtureIsOutsideEveryCheck:
+    """The direction test_no_dump_is_orphaned does not look in.
+
+    That one catches a dump with no fixture. This catches the other way round,
+    which is the one that actually happened: #94 landed seven DWGs and the
+    parametrisation above is built from MANIFEST["fixtures"], so all seven sat
+    in tests/fixtures outside every check in this repository. Nothing decoded
+    them, nothing pinned their bytes, and editing one changed nothing any test
+    could see.
+
+    Neither case below skips an allow-listed fixture, because a skip is the
+    same colour as a pass and these lists are meant to shrink. An excused
+    fixture is asserted to still need excusing, so the day one is recorded the
+    test that goes red is the one telling you to take it off the list.
+    """
+
+    @pytest.mark.parametrize("fixture", COMMITTED)
+    def test_every_fixture_is_mentioned_by_a_committed_capture(self, fixture):
+        if fixture in CARRIED_NOT_RECORDED:
+            assert fixture not in RECORDED, (
+                f"{fixture} is recorded now, so take it off CARRIED_NOT_RECORDED. An "
+                "allow-list that does not shrink is a list of things nobody checks"
+            )
+            return
+        assert fixture in RECORDED, (
+            f"{fixture} is in tests/fixtures and no expectation, scenario or benchmark "
+            "mentions it, so nothing in this repository reads it and nothing notices "
+            "when it changes. Record it by rerunning tests/fixtures/gen/regenerate.py, "
+            "or add it to CARRIED_NOT_RECORDED with a reason"
+        )
+
+    @pytest.mark.parametrize("fixture", COMMITTED)
+    def test_every_fixture_a_capture_uses_is_pinned_by_its_digest(self, fixture):
+        if fixture in CARRIED_NOT_RECORDED:
+            return
+        pinned = any(RECORDED.get(fixture, ()))
+        if fixture in NAMED_BUT_NOT_PINNED:
+            assert not pinned, (
+                f"{fixture} carries a recorded digest now, so take it off NAMED_BUT_NOT_PINNED"
+            )
+            return
+        assert pinned, (
+            f"a capture measures {fixture} and recorded no sha256 for it, so the "
+            "numbers it asserts on are about whatever file is on disk"
+        )
+
+    @pytest.mark.parametrize("fixture", CARRIED_NOT_RECORDED + NAMED_BUT_NOT_PINNED)
+    def test_the_allow_lists_name_files_that_are_here(self, fixture):
+        assert os.path.isfile(os.path.join(FIXTURES, fixture)), (
+            f"{fixture} is excused from a check and is not in the tree, so the "
+            "exception outlived the file"
+        )
+
+    def test_the_guard_would_see_a_new_fixture(self):
+        # The control. Everything above is parametrised over what is on disk,
+        # so if that listing ever came back short every case would pass by
+        # being absent.
+        assert len(COMMITTED) > len(FIXTURE_NAMES), (
+            "the fixture listing found no more files than the manifest names, which "
+            "is either true or a broken listing, and this guard cannot tell"
+        )
+        assert "a_fixture_nobody_committed.dwg" not in RECORDED
 
 
 class TestTheExpectationIsOfTheFixtureInTheTree:
