@@ -195,7 +195,7 @@
 00194 Text handle=3EC flags=0 p=[(183.588928,5.226371,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
 00195 Text handle=3F5 flags=0 p=[(183.588928,9.187556,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
 00196 Text handle=3F6 flags=0 p=[(199.330342,15.326102,0.000000)] h=1.000000 rot=0.000000 value="this is a Mtext\nwith multiple lines in it"
-00197 Warning handle=422 flags=0 code=UNSUPPORTED_ENTITY message="AcDbPolyFaceMesh is not a primitive this version flattens"
+00197 Warning handle=422 flags=0 code=UNSUPPORTED_ENTITY message="POLYFACE_MESH is not a primitive this version flattens"
 00198 Polyline handle=42B flags=0 n=5 closed=0 pts=[(232.601721,0.892694,0.000000);(233.414990,3.348587,5.478600);(229.032110,4.736119,0.000000);(227.878838,8.433591,5.478600);(225.744949,9.922907,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00199 Polygon handle=432 flags=0 n=4 closed=1 pts=[(235.606430,4.785764,0.000000);(244.372190,3.348587,0.000000);(246.095727,11.937454,0.000000);(236.702150,11.791500,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00200 Spline handle=433 flags=0 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.458791,1.157147,0.000000);(254.713771,11.986104,0.000000);(259.387964,1.234244,0.000000);(259.224551,11.018627,0.000000)] weights=[]

@@ -312,6 +312,26 @@
       ],
       "views_without_extents": 0
     },
+    "g13_mesh_bad_faces.dwg": {
+      "batches": 1,
+      "bytes": 10571,
+      "decode_code": "OK",
+      "kinds": {
+        "Polygon": 1,
+        "Warning": 8
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1436,
+      "records": 9,
+      "sha256": "5e3c636aea9cdba44869caa68f01ad7caff27a45e3f0c0f02b9b407d87ee98e9",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_mirrored_bulge.dwg": {
       "batches": 1,
       "bytes": 10699,
@@ -467,7 +487,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1248,
+      "output_bytes": 1232,
       "records": 9,
       "sha256": "ccd27150f2a135ded937e02b2ca10a04c58ce250850267e8537839026e1d3c8e",
       "view_count": 2,
@@ -753,7 +773,7 @@
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 57536,
+      "output_bytes": 57532,
       "records": 468,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4,
@@ -782,7 +802,7 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 58716,
+      "output_bytes": 58712,
       "records": 475,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
@@ -798,15 +818,15 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "b0c780a6373c91d3401652754bfcbba01aee490073c9731b5423fa7621303ad2",
+    "sha256": "1d365427d4d4b712e1656bb0ae950db6cb93f7e7aff53e9060c05cea8071b65f",
     "sources": {
       "native/Abi.cs": "f4f408e58bb1b74690a01530331f8903e0392321fdb3573b2194d3cfb3a7beee",
-      "native/Adapter/Flatten.Faces.cs": "5fc63d3467f61491c3e9109260ac7eaa93c86141ba7a752435acdfed0a1b3276",
-      "native/Adapter/Flattener.cs": "199e119609dcd88d9f63a970d8fd760929151e9711a1d1351d2da60ed8528439",
+      "native/Adapter/Flatten.Faces.cs": "51f46b8ccfbb37d9878a803d486406abe9a3d334e1ff76efd0c90ca960e5fe45",
+      "native/Adapter/Flattener.cs": "1900618057113e4e206c0529a5910eb1fd469b2c4659e24970e879d36e886512",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
       "native/Adapter/RefusedKinds.cs": "b11345339f2b00b75e4e655c78bc133692252ffb0bef68f920310d178b96a2c4",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
-      "native/Adapter/WarningCodes.cs": "90d5f3600c8d88a05b6ef40abc10084a9e87359f91337bdd3774fca0a5b7eff6",
+      "native/Adapter/WarningCodes.cs": "bf35f9f867f93a3cb93539a53addc90af09e4b6d2e91db209eaafe3498cca18f",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "88cf9187a712cf558e840b0947178e0df158fa97ef20442f9858ec9973d9d3c6",
       "native/Sources/IDocumentSource.cs": "ef09d143be8d02dc498336f770ae1c939862107ba044fc5692b0e0ec2f10f871",
