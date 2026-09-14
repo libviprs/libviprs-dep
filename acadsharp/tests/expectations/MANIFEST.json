@@ -210,6 +210,26 @@
       ],
       "views_without_extents": 0
     },
+    "g13_face3d.dwg": {
+      "batches": 1,
+      "bytes": 10923,
+      "decode_code": "OK",
+      "kinds": {
+        "Polygon": 6,
+        "Warning": 5
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1964,
+      "records": 11,
+      "sha256": "025e5769c0efcedaca4e0286e69e7848539c681ede41854ae1a30da18df4c3f5",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_hatch.dwg": {
       "batches": 1,
       "bytes": 10827,
@@ -245,6 +265,26 @@
       "output_bytes": 972,
       "records": 6,
       "sha256": "c8c1fcb0bdbd34c634c64ffc36421ffac7c59332e310018d9549986f7d5c86d1",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_leader.dwg": {
+      "batches": 1,
+      "bytes": 10923,
+      "decode_code": "OK",
+      "kinds": {
+        "Polyline": 5,
+        "Warning": 8
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 2256,
+      "records": 13,
+      "sha256": "6fbf1b031622a8df6bdff1d755e139391f29fe38575d81a0453dc4f58bb5603a",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
@@ -345,6 +385,26 @@
       "output_bytes": 980,
       "records": 5,
       "sha256": "4f947ae65e647dbca558eb1d67ba961a38733718f20c8be66b8e197ffd39faaf",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_mline.dwg": {
+      "batches": 1,
+      "bytes": 11531,
+      "decode_code": "OK",
+      "kinds": {
+        "Polyline": 21,
+        "Warning": 6
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3892,
+      "records": 27,
+      "sha256": "68b999799207002f2ed1ca3c60654e8c109bc01a3b31111938929da23349ce55",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
@@ -471,6 +531,25 @@
       "output_bytes": 1608,
       "records": 8,
       "sha256": "5d5242f2914922521e9bafff42e98700a2f3d62f64f1158fdffa2204747a8c90",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_point.dwg": {
+      "batches": 1,
+      "bytes": 10828,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 13
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1520,
+      "records": 13,
+      "sha256": "80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
@@ -677,6 +756,25 @@
       ],
       "views_without_extents": 0
     },
+    "g13_tolerance.dwg": {
+      "batches": 1,
+      "bytes": 10889,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 9
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1216,
+      "records": 9,
+      "sha256": "28f3d76765aaf05bac62a0cb7d5fbd9652756fa1caed0506211d3c8a4918f799",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_two_entities.dwg": {
       "batches": 1,
       "bytes": 10571,
@@ -737,6 +835,26 @@
       ],
       "views_without_extents": 0
     },
+    "g13_wipeout.dwg": {
+      "batches": 1,
+      "bytes": 10923,
+      "decode_code": "OK",
+      "kinds": {
+        "Polygon": 5,
+        "Warning": 9
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3608,
+      "records": 14,
+      "sha256": "272b7d95c2e3fb8923087866353ecf8a2e967fb96a29eb42667e9f643ee45d22",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_xref.dwg": {
       "batches": 1,
       "bytes": 10667,
@@ -765,16 +883,16 @@
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
-        "Polygon": 158,
-        "Polyline": 24,
+        "Polygon": 160,
+        "Polyline": 31,
         "Spline": 2,
         "Text": 78,
-        "Warning": 97
+        "Warning": 93
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 57532,
-      "records": 468,
+      "output_bytes": 58924,
+      "records": 473,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4,
       "view_extents": [
@@ -794,16 +912,16 @@
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
-        "Polygon": 158,
-        "Polyline": 24,
+        "Polygon": 160,
+        "Polyline": 31,
         "Spline": 2,
         "Text": 78,
-        "Warning": 104
+        "Warning": 100
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 58712,
-      "records": 475,
+      "output_bytes": 60104,
+      "records": 480,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
       "view_extents": [
@@ -818,15 +936,18 @@
   "recorded": "2026-09-13",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "1d365427d4d4b712e1656bb0ae950db6cb93f7e7aff53e9060c05cea8071b65f",
+    "sha256": "4548ce440d9ed332d1702b4909a842f97754898c54f8bbf9fcd7932baee4f271",
     "sources": {
       "native/Abi.cs": "f4f408e58bb1b74690a01530331f8903e0392321fdb3573b2194d3cfb3a7beee",
-      "native/Adapter/Flatten.Faces.cs": "51f46b8ccfbb37d9878a803d486406abe9a3d334e1ff76efd0c90ca960e5fe45",
-      "native/Adapter/Flattener.cs": "1900618057113e4e206c0529a5910eb1fd469b2c4659e24970e879d36e886512",
+      "native/Adapter/Flatten.Faces.cs": "44e9a9ba519779f8f52ae47dbbbf7b9b05216436182d07674f8ad67eb3913dbb",
+      "native/Adapter/Flatten.Leaders.cs": "6209dfe1ef72a247bc971e354b1fbe3f095fa747bb76c084eaf240da68a43abc",
+      "native/Adapter/Flatten.MLine.cs": "b06a2f46de4c456c1462a9d36ef46fc4a5f46d109ab25cb55325b5a642639dff",
+      "native/Adapter/Flatten.Masks.cs": "fda3c48a0d0edd3ac437572092bb556bdcccb7dd8ac019e25d1fcc09550ad3e1",
+      "native/Adapter/Flattener.cs": "31a54e6f84bc895f4fe41e6f5f77cea934aa583e0a660b6114daa761d793bda0",
       "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
-      "native/Adapter/RefusedKinds.cs": "b11345339f2b00b75e4e655c78bc133692252ffb0bef68f920310d178b96a2c4",
+      "native/Adapter/RefusedKinds.cs": "1b4d93096331a6a68c68afcc9981bbd427c06c78833112908dae2fed8beb97fe",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
-      "native/Adapter/WarningCodes.cs": "bf35f9f867f93a3cb93539a53addc90af09e4b6d2e91db209eaafe3498cca18f",
+      "native/Adapter/WarningCodes.cs": "be4ff1006ba60ee227463479d39e41458f509a8cf28d524498daf5a9ebed55cc",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "88cf9187a712cf558e840b0947178e0df158fa97ef20442f9858ec9973d9d3c6",
       "native/Sources/IDocumentSource.cs": "ef09d143be8d02dc498336f770ae1c939862107ba044fc5692b0e0ec2f10f871",

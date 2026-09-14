@@ -113,7 +113,7 @@ SOURCE_COMMIT = {
 # the shim revision instead, because that is what the revision is for.
 SHIM_DIGESTS = {
     "3.7.1-viprs.1": "4d00f97ca7d7e7fdeedece16e5875b30be4b30d0ae6ceaa9f5cf248245b4aa6c",
-    "3.7.1-viprs.2": "1d365427d4d4b712e1656bb0ae950db6cb93f7e7aff53e9060c05cea8071b65f",
+    "3.7.1-viprs.2": "4548ce440d9ed332d1702b4909a842f97754898c54f8bbf9fcd7932baee4f271",
 }
 
 # What this build changes about the pinned source before compiling it.
