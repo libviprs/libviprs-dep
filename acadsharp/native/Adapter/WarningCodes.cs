@@ -82,6 +82,7 @@ namespace Viprs.Cad
 		// decoder that will never render a 3DSOLID and a decoder that has not
 		// got round to MLINE looked identical on the wire.
 		public const uint EntityRefusedByDesign = 109u;
+
 		// A MESH whose subdivision level is not zero. The Polygon records
 		// beside it are the base mesh the file stores, one per face.
 		// Evaluating the subdivision would invent vertices the drawing does
@@ -111,9 +112,9 @@ namespace Viprs.Cad
 				case NonUniformBlockScale: return "NON_UNIFORM_BLOCK_SCALE";
 				case NonFiniteGeometry: return "NON_FINITE_GEOMETRY";
 				case EmptyView: return "EMPTY_VIEW";
+				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
-				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				default: return "WARNING_" + code;
 			}
 		}
