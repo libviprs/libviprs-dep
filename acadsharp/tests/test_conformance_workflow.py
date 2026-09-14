@@ -522,6 +522,70 @@ class TestTheBuilderImageIsAskedForRatherThanSpelled:
         )
 
 
+class TestTheCorpusIsReplayed:
+    """The step that turns the committed dumps back into evidence.
+
+    Everything under acadsharp/tests that checks adapter behaviour reads a
+    dump somebody recorded once. `test_shim_digest.py` binds those dumps to
+    the sources that produced them, and that binding is forgeable in four
+    lines of this repository's own helpers, because `regenerate.py` computes
+    the manifest's shim block with the same `g13_support.shim_digest` the test
+    verifies it with. It says nothing about whether a decode ever ran.
+
+    Neither consumer below closes it: both drive `SyntheticSource` through
+    `open_memory`, so neither opens a fixture or reads an expectation. Until
+    this step nothing on any runner decoded a committed DWG at all.
+    """
+
+    REPLAY = "tests/fixtures/gen/replay.py"
+
+    def replay_steps(self):
+        return [
+            (name, job, step)
+            for name, job, job_steps in jobs_with_steps()
+            for step in job_steps
+            if self.REPLAY in step.get("run", "")
+        ]
+
+    def test_something_replays_the_corpus(self):
+        assert self.replay_steps(), (
+            "no job replays the committed expectations, so a change to the flattener "
+            "can land with every adapter test green against a recording of the old one"
+        )
+
+    def test_it_runs_in_the_image_the_archive_build_made(self):
+        # Not a fresh SDK container: that image already holds the SDK, the
+        # patched upstream checkout and a warm package cache, which is what
+        # makes the replay a fifteen second step rather than a second build.
+        for name, _job, step in self.replay_steps():
+            builder = step.get("env", {}).get("BUILDER", "")
+            assert "steps.builder.outputs.image" in builder, (
+                f"{name}'s replay does not take the builder image the build left behind"
+            )
+
+    def test_it_runs_after_the_image_is_named(self):
+        for name, _job, job_steps in jobs_with_steps():
+            bodies = [s.get("run", "") for s in job_steps]
+            named = [i for i, b in enumerate(bodies) if "builder_image_tag(" in b]
+            replays = [i for i, b in enumerate(bodies) if self.REPLAY in b]
+            if not replays:
+                continue
+            assert named and min(named) < min(replays), (
+                f"{name} replays the corpus before anything has named the image to replay it in"
+            )
+
+    def test_it_runs_on_the_platform_the_job_declares(self):
+        for name, _job, step in self.replay_steps():
+            assert "VIPRS_CONFORMANCE_PLATFORM" in step.get("run", ""), (
+                f"{name}'s replay picks its own architecture rather than the job's, so "
+                "it can ask for an image the runner cannot run"
+            )
+
+    def test_the_driver_it_names_is_in_the_tree(self):
+        path = os.path.join(REPO_ROOT, "acadsharp", self.REPLAY)
+        assert os.path.isfile(path), f"{path} is not there, so the step cannot run"
+
+
 class TestNothingIsEmulated:
     """ADR 0001 measured the cross-architecture link failing and .NET
     documents qemu-user-static as unsupported, so every cell here runs on a
