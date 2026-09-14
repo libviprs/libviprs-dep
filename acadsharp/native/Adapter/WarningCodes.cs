@@ -99,6 +99,22 @@ namespace Viprs.Cad
 		// face and which fault.
 		public const uint MeshFaceUnreadable = 111u;
 
+		// A 3DFACE that marks one or more of its edges invisible. Record 9 has
+		// no per-edge visibility, so there are three things this could have
+		// been and this is the one it is: the face crosses whole, carrying
+		// every edge, and this says which flags were dropped.
+		//
+		// The other two are worse. Dropping them silently means a consumer
+		// cannot tell a face that asked for a hidden edge from one that did
+		// not, and there is nothing in the record to go and look at. Splitting
+		// the face into its visible edges as Lines loses the face: a filled
+		// quad becomes a run of segments, the fill goes away, and the handle
+		// then names several records that are not the entity. 110 is the
+		// precedent, one code beside the geometry saying what was not
+		// evaluated, and the failure direction here is an edge drawn that the
+		// drawing wanted blank rather than an entity nobody can see.
+		public const uint FaceEdgeVisibilityIgnored = 113u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -115,6 +131,7 @@ namespace Viprs.Cad
 				case EntityRefusedByDesign: return "ENTITY_REFUSED_BY_DESIGN";
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
+				case FaceEdgeVisibilityIgnored: return "FACE_EDGE_VISIBILITY_IGNORED";
 				default: return "WARNING_" + code;
 			}
 		}
