@@ -98,10 +98,16 @@ def groups(fixture):
     """The polylines of one dump, grouped into consecutive runs of one handle.
 
     One MLINE emits several records under its own handle, which is MESH's
-    precedent, so a run is one entity. Grouping on consecutive equal handles
-    rather than on the handle alone is deliberate: two instances of one block
-    both carry the block entity's handle, and they are two insertions rather
-    than one entity with six lines.
+    precedent, so at top level a run of one handle is one entity.
+
+    Under block expansion that stops being true, and it is worth being precise
+    about why rather than papering over it. Every instance of a block carries
+    the block entity's own handle, so two insertions of a block holding one
+    three-element MLINE arrive as six consecutive records under one handle with
+    nothing between them saying where one insertion ends. That is the same
+    ambiguity a MESH already has and it is not new here; `block_runs` below is
+    how this file deals with it, by chunking on the element count the arm
+    promises rather than pretending the dump delimits them.
     """
     out = []
     for p in polylines(fixture):
@@ -114,6 +120,21 @@ def groups(fixture):
 
 def top_level(fixture):
     return [g for g in groups(fixture) if g[0]["flags"] == 0]
+
+
+def block_runs(fixture, elements):
+    """The `flags == 1` polylines chunked into one run per insertion.
+
+    The chunk size is the element count of the block MLINE's style, which is
+    what the arm promises and what the fixture sets, because the dump itself
+    carries no delimiter between two insertions of one block.
+    """
+    flat = [p for p in polylines(fixture) if p["flags"] == 1]
+    assert len(flat) % elements == 0, (
+        f"{len(flat)} block polylines do not divide into runs of {elements}, so either "
+        "an element went missing or an insertion did"
+    )
+    return [flat[i : i + elements] for i in range(0, len(flat), elements)]
 
 
 def close(a, b, tol=TOL):
@@ -380,7 +401,7 @@ class TestStyleFeaturesThisVersionDoesNotDraw:
             "mean nothing."
         )
         handle = said[0]["handle"]
-        group = [g for g in groups(MLINE) if g[0]["handle"] == handle]
+        group = [g for g in top_level(MLINE) if g[0]["handle"] == handle]
         assert group, f"warning 115 names handle {handle} and no polyline carries it"
         assert len(group[0]) == 3, (
             "the entity that asked for fill and caps still emits its element lines; "
@@ -399,19 +420,22 @@ class TestBlockCopies:
     """Two insertions of one block, neither the identity, so the records carry
     flags bit 0 and the block entity's own handle."""
 
-    def test_block_copies_cross_and_stay_parallel(self):
-        blocks = [g for g in groups(MLINE) if g[0]["flags"] == 1]
-        assert len(blocks) == 2, (
-            f"{len(blocks)} block groups crossed and AddBlockInstances makes two "
-            "insertions. One group means the two insertions were merged into one run "
-            "under the shared handle, which loses instance identity."
+    def test_both_insertions_emit_every_element(self):
+        flat = [p for p in polylines(MLINE) if p["flags"] == 1]
+        assert len(flat) == 6, (
+            f"{len(flat)} polylines crossed at flags 1. AddBlockInstances makes two "
+            "insertions of a block holding one MLINE whose style carries three "
+            "elements, so three is one insertion losing its copy and two is an arm "
+            "that emitted the centre line per instance."
         )
-        for group in blocks:
-            assert len(group) == 3, (
-                f"a block copy emitted {len(group)} polylines and the block MLINE's "
-                "style carries three elements"
-            )
-            spans = [direction(p["pts"][0], p["pts"][1]) for p in group]
+        assert len({p["handle"] for p in flat}) == 1, (
+            "the block copies carry more than one handle, and every instance of a "
+            "block carries the block entity's own"
+        )
+
+    def test_block_copies_cross_and_stay_parallel(self):
+        for run in block_runs(MLINE, 3):
+            spans = [direction(p["pts"][0], p["pts"][1]) for p in run]
             for i in range(1, len(spans)):
                 c = cross(spans[0], spans[i])
                 assert max(abs(v) for v in c) <= 1e-5, (
@@ -421,13 +445,21 @@ class TestBlockCopies:
                     "recomputed a miter in world space, shows up here."
                 )
 
+    def test_the_two_insertions_are_different_insertions(self):
+        first, second = block_runs(MLINE, 3)
+        a = direction(first[0]["pts"][0], first[0]["pts"][1])
+        b = direction(second[0]["pts"][0], second[0]["pts"][1])
+        assert not close(a, b, 1e-5), (
+            f"both insertions run {a}, and the second is mirrored in X, so an arm that "
+            "emitted one insertion twice would look exactly like this"
+        )
+
     def test_the_block_path_is_not_axis_aligned(self):
         # The control. Three horizontal lines are parallel whatever the arm
         # does with them, so the block MLINE's path is slanted on purpose and
         # this is what says so.
-        blocks = [g for g in groups(MLINE) if g[0]["flags"] == 1]
-        for group in blocks:
-            span = direction(group[0]["pts"][0], group[0]["pts"][1])
+        for run in block_runs(MLINE, 3):
+            span = direction(run[0]["pts"][0], run[0]["pts"][1])
             assert min(abs(span[0]), abs(span[1])) > 0.1, (
                 f"a block copy's span runs {span}, which is close enough to an axis "
                 "that the parallelism assertion above could not fail"
