@@ -91,6 +91,14 @@ DUMPED = (
     "g13_dimension.dwg",
     "g13_hatch.dwg",
     "g13_unsupported.dwg",
+    # The last two of #94's refused-kind corpus, recorded so the refusals they
+    # witness are evidenced on an input carrying nothing else rather than only
+    # in the middle of a real drawing. Recording is not implementing: POINT
+    # stays on code 100 until a wire 3 defines a record that can hold a marker
+    # (docs/adr/0003) and TOLERANCE stays on it until a feature-control frame
+    # is something this boundary can compute and stand behind.
+    "g13_point.dwg",
+    "g13_tolerance.dwg",
     # The refused-kind corpus PR #94 added. A fixture that is in
     # tests/fixtures and not in here is never dumped and never reaches
     # MANIFEST.json, so it is a file the suite cannot read: the entry is

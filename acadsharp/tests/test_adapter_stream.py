@@ -52,20 +52,26 @@ DUMPED = tuple(load_script(os.path.join(FIXTURES, "gen", "regenerate.py"), "rege
 # bytes, and nothing notices when it changes: it is a file the repository
 # carries and does not check.
 #
-# These came in with #94 ahead of the refusal work that will record them,
+# Seven came in with #94 ahead of the refusal work that would record them,
 # which is a reasonable thing to do once and a bad thing to be able to do by
 # accident. A name leaves this list the moment its fixture joins DUMPED, which
 # is a one-line edit in the branch that adds it and does not wait for a
 # regeneration.
-CARRIED_NOT_RECORDED = (
-    # Five names left here during this campaign, each in the branch that put
-    # its fixture into DUMPED: g13_solid and g13_mesh when SOLID and MESH
-    # landed, g13_polyface_mesh and g13_polygon_mesh when the IPolyline arm
-    # stopped swallowing them, g13_ray_xline when RAY and XLINE became an
-    # explicit refusal. What is left is the two kinds nothing implements yet.
-    "g13_point.dwg",
-    "g13_tolerance.dwg",
-)
+#
+# All seven left that way: g13_solid and g13_mesh when SOLID and MESH landed,
+# g13_polyface_mesh and g13_polygon_mesh when the IPolyline arm stopped
+# swallowing them, g13_ray_xline when RAY and XLINE became an explicit refusal,
+# and g13_point and g13_tolerance when the two refusals they witness were
+# recorded rather than implemented. Recording is not implementing: both kinds
+# are still refused, and tests/test_refused_point_tolerance.py is what says so
+# on an input that carries nothing else.
+#
+# So it is empty, and it stays here rather than going away. The guard that
+# reads it is the one that catches the next DWG arriving without a DUMPED
+# line, and empty is the state that guard is meant to be in: nothing in
+# tests/fixtures is excused from being checked today. A name going back on is
+# a decision somebody writes a reason beside, which is the whole shape of it.
+CARRIED_NOT_RECORDED = ()
 
 # Every fixture that has ever had a committed dump.
 #
@@ -125,6 +131,7 @@ ONCE_RECORDED = (
     "g13_ocs_plane.dwg",
     "g13_ocs_rotated.dwg",
     "g13_ocs_skew.dwg",
+    "g13_point.dwg",
     "g13_polyface_mesh.dwg",
     "g13_polygon_mesh.dwg",
     "g13_polyline.dwg",
@@ -135,6 +142,7 @@ ONCE_RECORDED = (
     "g13_solid.dwg",
     "g13_spline.dwg",
     "g13_text.dwg",
+    "g13_tolerance.dwg",
     "g13_two_entities.dwg",
     "g13_unsupported.dwg",
     "g13_wide_polyline.dwg",
