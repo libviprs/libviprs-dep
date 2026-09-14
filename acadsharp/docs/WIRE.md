@@ -294,6 +294,8 @@ it is finite. A consumer computing a bounding box over record 9s should expect
 a contribution of no width, no height and no area, and not treat it as a parse
 failure.
 
+A `WIPEOUT` lands here as well, as the boundary it masks, with warning 112 immediately before it under the same `item_handle`. Its vertices are the clip boundary mapped out of the image's own pixel space, `insert + u·(px + 0.5) + v·(size_y − py − 0.5)`, which is the convention every raster-image consumer already applies: pixel rows run the opposite way from `v` and the pixel origin sits half a pixel outside the first pixel. Its normal is measured off the emitted points, because the entity carries none of its own. Stream order is draw order, so a mask hides what precedes it and not what follows.
+
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
 UTF-8, padded with zeroes to a multiple of four. Not terminated.
@@ -397,6 +399,7 @@ and 105 with these meanings, whatever it is built on.
 | 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
 | 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
 | 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
+| 112 | `POLYGON_MASKS` | The `Polygon` record that follows with the same `item_handle` is a mask rather than a face: it hides whatever the stream drew before it, inside its boundary. A `WIPEOUT` is one. A consumer that knows this code paints the boundary in its background colour over what it has already drawn, or clips against it; a consumer that does not fills it like any other record 9, which still hides what is under it and at worst shows a coloured face where a blank belongs. Neither of those reveals the content, which is the failure direction this code exists to choose. `item_handle` is the wipeout's. |
 
 ### Reserved ranges
 

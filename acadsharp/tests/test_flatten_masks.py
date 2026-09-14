@@ -211,11 +211,7 @@ class TestTheMaskIsSaidToBeAMask:
             )
 
     def test_the_code_says_what_to_do_with_it(self):
-        for _i, _h, _flags in masks(WIPEOUT):
-            pass
-        messages = {
-            w["message"] for w in warnings(WIPEOUT) if w["code"] == "POLYGON_MASKS"
-        }
+        messages = {w["message"] for w in warnings(WIPEOUT) if w["code"] == "POLYGON_MASKS"}
         assert len(messages) == 1, f"{len(messages)} different sentences on one code"
         message = messages.pop()
         assert message.startswith("WIPEOUT"), (
