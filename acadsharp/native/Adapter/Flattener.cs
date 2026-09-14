@@ -782,8 +782,16 @@ namespace Viprs.Cad
 					yield break;
 				}
 
-				// Arc before Circle: ACadSharp's Arc derives from Circle, so
-				// the other order silently turns every arc into a full circle.
+				// Arc before Circle: ACadSharp's Arc derives from Circle.
+				//
+				// This used to say the other order silently turns every arc
+				// into a full circle. It does not: a subtype after its base is
+				// CS8120, the arm is unreachable, and the build fails. The
+				// order of the arms that exist is the one thing the compiler
+				// does hold. What it cannot see is a kind with no arm at all,
+				// which is what POLYFACE_MESH and POLYGON_MESH were until the
+				// two arms below, and what test_shim_source_rules.py reads
+				// this switch as text to check.
 				case Arc arc:
 				{
 					// The centre is in the arc's own plane and the angles are
@@ -984,6 +992,41 @@ namespace Viprs.Cad
 						basis.Mirrored,
 						basis.Normal
 					);
+					yield break;
+				}
+
+				// PolyfaceMesh and PolygonMesh before IPolyline. Both derive
+				// from Polyline<T>, Polyline<T> implements IPolyline, so both
+				// used to reach the arm below and go out as one open polyline
+				// threaded through their own vertices: a wandering line
+				// through real coordinates, no warning, and byte-identical in
+				// shape to the polylines beside it. A consumer holding that
+				// record has no way to know it is not a polyline, which is the
+				// one outcome docs/WIRE.md's contract exists to prevent
+				// (libviprs-dep#82).
+				//
+				// Neither is a polyline. A polyface mesh is a set of faces
+				// indexed into a vertex list, kept in its own Faces collection
+				// here, and a polygon mesh is an M by N grid. Emitting the
+				// faces and the grid is a feature and it is not this change;
+				// refusing is what turns silent wrong geometry into something
+				// a consumer is told about.
+				//
+				// The message is the DXF subclass marker rather than
+				// ObjectName. All four kinds under Polyline<T> are the entity
+				// POLYLINE in DXF and are told apart by the subclass alone, so
+				// ObjectName would refuse POLYFACE_MESH by saying POLYLINE and
+				// a census of what this build refuses would gain a row that
+				// names neither kind.
+				case PolyfaceMesh mesh:
+				{
+					yield return Refused(h, flags, mesh.SubclassMarker);
+					yield break;
+				}
+
+				case PolygonMesh grid:
+				{
+					yield return Refused(h, flags, grid.SubclassMarker);
 					yield break;
 				}
 
@@ -1203,6 +1246,25 @@ namespace Viprs.Cad
 				normal.Y,
 				normal.Z
 			);
+		}
+
+		// An entity kind this version does not flatten, named by whatever the
+		// caller has that identifies it in the source format.
+		//
+		// The switch's default arm still says the same sentence inline, and it
+		// should fold onto this the next time anything touches that arm. One
+		// sentence in two places is how the two drift, and a consumer that
+		// grepped its logs for the wording would then be reading half of what
+		// this build refuses.
+		private static Primitive Refused(ulong handle, uint flags, string what)
+		{
+			Primitive w = Primitive.Warning(
+				WarningCodes.UnsupportedEntity,
+				handle,
+				what + " is not a primitive this version flattens"
+			);
+			w.Flags = flags;
+			return w;
 		}
 
 		// What the warning says, which used to be false on the input it was
