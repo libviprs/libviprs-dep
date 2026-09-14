@@ -123,6 +123,7 @@ public static class Corpus
 		yield return Pair("g13_mesh.dwg", WriteMesh);
 		yield return Pair("g13_mesh_bad_faces.dwg", WriteMeshBadFaces);
 		yield return Pair("g13_tolerance.dwg", WriteTolerance);
+		yield return Pair("g13_wipeout.dwg", WriteWipeout);
 		yield return Pair("g13_xref.dwg", WriteXref);
 		yield return Pair("g13_xref_long.dwg", WriteXrefLong);
 		yield return Pair("g13_nonuniform.dwg", WriteNonUniform);
@@ -749,6 +750,145 @@ public static class Corpus
 			tol.Layer = layer;
 		}
 		return tol;
+	}
+
+	// WIPEOUT: a mask, given as a clip boundary in the image's own pixel space.
+	//
+	// A wipeout is an image with no image. Its frame is an insertion point and
+	// the two vectors U and V, and its boundary is a list of vertices in pixel
+	// coordinates. Getting from one to the other is the whole of what an
+	// implementation can get wrong here, because pixel rows run the other way
+	// from V and the pixel origin sits half a pixel outside the first pixel:
+	// insert + u*(px + 0.5) + v*(size_y - py - 0.5) is the convention, and an
+	// implementation that drops the flip produces a boundary with the right
+	// corners reflected about the middle of the frame.
+	//
+	// So the boundaries here are asymmetric about that axis and about the other
+	// one too. A rectangle is not, as a set, a shape the flip moves, so the
+	// rectangular entities are here for the two-corners-become-four rule and
+	// the polygonal ones are what tell the two mappings apart.
+	//
+	// The third one carries a U and a V that are neither axis-aligned nor the
+	// same length, because an implementation that reads them as a width and a
+	// height and draws an upright box is right about the first two entities.
+	public static void WriteWipeout(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(NewWipeout(
+			L(doc),
+			new XYZ(0, 0, 0),
+			new XYZ(10, 0, 0),
+			new XYZ(0, 4, 0),
+			ClipType.Rectangular,
+			new XY(-0.5, -0.5),
+			new XY(0.5, 0.5)));
+		doc.Entities.Add(NewWipeout(
+			L(doc),
+			new XYZ(20, 0, 0),
+			new XYZ(10, 0, 0),
+			new XYZ(0, 6, 0),
+			ClipType.Polygonal,
+			new XY(-0.5, -0.5),
+			new XY(0.5, -0.5),
+			new XY(0.1, 0.5)));
+		doc.Entities.Add(NewWipeout(
+			L(doc),
+			new XYZ(40, 0, 0),
+			new XYZ(6, 8, 0),
+			new XYZ(-4, 3, 0),
+			ClipType.Rectangular,
+			new XY(-0.5, -0.5),
+			new XY(0.5, 0.5)));
+		AddBlockInstances(doc, "VIPRS_G13_WIPEOUT_BLK",
+			NewWipeout(
+				null,
+				new XYZ(0, 0, 0),
+				new XYZ(10, 0, 0),
+				new XYZ(0, 5, 0),
+				ClipType.Polygonal,
+				new XY(0.2, 0.5),
+				new XY(0.5, -0.3),
+				new XY(-0.5, -0.5)));
+		Write(doc, path);
+	}
+
+	// A WIPEOUT the writer will actually write.
+	//
+	// This override is the whole reason the class exists and it is worth being
+	// exact about what it changes, because "the fixture overrides validation"
+	// is the kind of sentence that should stop a reader.
+	//
+	// CadWipeoutBase.IsValid refuses any instance whose Definition or
+	// DefinitionReactor is null, and DwgObjectWriter.isEntitySupported calls
+	// it and drops the entity from the block's entity list when it says no.
+	// Not an exception: the file writes, and it comes back with no entities in
+	// it at all. Measured on this pin, in the pinned SDK container: a Wipeout
+	// with both null wrote 10507 bytes and read back zero entities, and one
+	// carrying a throwaway ImageDefinition wrote 10604 bytes and read back
+	// zero as well, because DefinitionReactor is still null and its setter and
+	// both of its constructors are internal to ACadSharp.dll, so nothing out
+	// here can fill it in.
+	//
+	// That rule is RasterImage's rule. A raster image without a definition is
+	// an image with nowhere to get its pixels from; a wipeout has no pixels by
+	// definition, which is what makes it a wipeout, and AutoCAD writes one
+	// with a zero definition handle. CadWipeoutBase applies the rule to both
+	// because it is the shared base. So the override is not loosening a check
+	// on the bytes this writes, and nothing downstream of it is relaxed: the
+	// DWG carries a real WIPEOUT object written by writeCadImage, and the
+	// reader gives back a plain Wipeout with the insert point, the two
+	// vectors, the size, the clip type and the vertices this set, which is
+	// what the expectation is a dump of.
+	private sealed class RasterlessWipeout : Wipeout
+	{
+		public override bool IsValid(
+			CadFileFormat format,
+			ACadVersion version,
+			out IList<string> errors)
+		{
+			errors = new List<string>();
+			return true;
+		}
+	}
+
+	// One wipeout, with the size that makes U and V span the whole frame.
+	//
+	// Size is the image's size in pixels and U and V are one pixel each, so a
+	// size of one pixel each way is a frame of exactly U by V and the clip
+	// boundary's default corners, (-0.5, -0.5) and (size - 0.5), are its two
+	// opposite corners. That is the smallest thing that exercises the mapping
+	// without also making every expected coordinate a product of two numbers.
+	//
+	// Definition and DefinitionReactor are both null, which is what a wipeout
+	// is: there is no raster behind it and the writer puts a zero handle in
+	// both slots. The flattener never reads either, because the geometry a
+	// wipeout carries is its boundary and nothing else.
+	private static Wipeout NewWipeout(
+		Layer layer,
+		XYZ insert,
+		XYZ u,
+		XYZ v,
+		ClipType clip,
+		params XY[] vertices)
+	{
+		Wipeout wipeout = new RasterlessWipeout
+		{
+			InsertPoint = insert,
+			UVector = u,
+			VVector = v,
+			Size = new XY(1, 1),
+			ClipType = clip,
+			ClippingState = true,
+		};
+		foreach (XY vertex in vertices)
+		{
+			wipeout.ClipBoundaryVertices.Add(vertex);
+		}
+		if (layer != null)
+		{
+			wipeout.Layer = layer;
+		}
+		return wipeout;
 	}
 
 	public static void WriteXref(string path)

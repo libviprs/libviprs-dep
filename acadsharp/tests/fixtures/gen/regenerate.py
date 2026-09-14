@@ -102,6 +102,11 @@ DUMPED = (
     # whole value is the dump: four faults, four sentences, and the good face
     # still crossing beside them.
     "g13_mesh_bad_faces.dwg",
+    # WIPEOUT, whose boundary is in the image's own pixel space and whose
+    # mapping out of it is a convention no round trip through this generator
+    # can check. The dump is what an ezdxf reading of the same drawing was
+    # compared against.
+    "g13_wipeout.dwg",
     "g13_xref.dwg",
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",
