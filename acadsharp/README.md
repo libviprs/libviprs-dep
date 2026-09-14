@@ -26,19 +26,40 @@ on Linux. `tests/test_release_workflow.py` holds the two halves together, so a
 download link with no digest beside it fails, and so does a digest with nothing
 saying what it hashed.
 
+**`acadsharp/VERSION` says 3.7.1-viprs.2, and the tag `acadsharp-3.7.1-viprs.2`
+is not cut yet.** Everything in the table is `viprs.1`, which is the newest
+thing there is to download: those URLs resolve and those digests are that
+release's, and both stay right whatever this directory does next. What they are
+not is a build of the tree you are reading. The shim moved after that tag went
+up, so the archives below flatten a drawing differently from the source beside
+them, and the run that publishes `viprs.2` replaces every row here with its own
+digests.
+
 `static_certified` says whether the static half of that archive was measured to
 link **and run**. It is false for mac, where NativeAOT emits Mach-O and the
 driver has never attempted a static build. On the two musl targets it records
 the C recipe, which was measured; the cargo recipe is not usable there yet, and
 `docs/LINKINFO.md` in the archive says why.
 
-| archive | target | static_certified | sha256 |
-| --- | --- | --- | --- |
-| [`acadsharp-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-x64.tgz) | `x86_64-unknown-linux-gnu` | true | `b8a674b989b6dfdd64ca26d917ad67b7bdf12c38adf557914c6d7b03e71bd180` |
-| [`acadsharp-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-arm64.tgz) | `aarch64-unknown-linux-gnu` | true | `4b41113b4a9c5b001d20740be09989a2d1850e78990936a897b74583e95e7cb3` |
-| [`acadsharp-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-x64.tgz) | `x86_64-unknown-linux-musl` | true | `9674c971d83bf977729bbba5c7e15ab4d86c7ffe6df95dcefc47d336d4b9b4a3` |
-| [`acadsharp-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-arm64.tgz) | `aarch64-unknown-linux-musl` | true | `2412c178df33214336504c62156763862b5628f44261bd4e37b66c95068240e1` |
-| [`acadsharp-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-mac-arm64.tgz) | `aarch64-apple-darwin` | false | `bced75cdea2451215a1f78524233c206c35637736630389bace2a3d5ca371471` |
+| archive | target | static_certified | sha256 | notes |
+| --- | --- | --- | --- | --- |
+| [`acadsharp-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-x64.tgz) | `x86_64-unknown-linux-gnu` | true | `b8a674b989b6dfdd64ca26d917ad67b7bdf12c38adf557914c6d7b03e71bd180` | |
+| [`acadsharp-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-arm64.tgz) | `aarch64-unknown-linux-gnu` | true | `4b41113b4a9c5b001d20740be09989a2d1850e78990936a897b74583e95e7cb3` | |
+| [`acadsharp-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-x64.tgz) | `x86_64-unknown-linux-musl` | true | `9674c971d83bf977729bbba5c7e15ab4d86c7ffe6df95dcefc47d336d4b9b4a3` | |
+| [`acadsharp-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-arm64.tgz) | `aarch64-unknown-linux-musl` | true | `2412c178df33214336504c62156763862b5628f44261bd4e37b66c95068240e1` | |
+| [`acadsharp-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-mac-arm64.tgz) | `aarch64-apple-darwin` | false | `bced75cdea2451215a1f78524233c206c35637736630389bace2a3d5ca371471` | **does not load, see below** |
+
+**The mac archive in that table cannot be linked against.**
+`lib/libacadsharp_native.dylib` in `acadsharp-3.7.1-viprs.1` records its own
+name as `@rpath/viprs_acadsharp.dylib`, which is the assembly name NativeAOT
+writes into `LC_ID_DYLIB` at link time, and no file of that name is anywhere in
+the archive. The linker copies that string into your binary, so the loader has
+nothing to expand and the process dies before `main`. Nothing caught it because
+the only mac check was a `dlopen` on an absolute path, and `dlopen` by absolute
+path never reads the recorded name. `docs/LINKINFO.md`'s mac paragraph
+describes the fixed archive rather than this one, and says so. The fix is in the
+tree (#95) and it ships with `viprs.2`; until that tag is cut there is no mac
+archive here worth downloading.
 
 Five archives, not six: there is no Microsoft-platform artifact here, and the
 mac slice is Apple Silicon only. The Rust triple lives in each archive's
@@ -57,13 +78,18 @@ a library and never learns that the code started life as C#.
 
 ## Version
 
-`acadsharp/VERSION` is the single source of truth, and it says **3.7.1-viprs.1**.
+`acadsharp/VERSION` is the single source of truth, and it says **3.7.1-viprs.2**.
 
 Two numbers, one file. `3.7.1` is the upstream ACadSharp release, and decides
 what source the driver fetches and which pinned sha256 it checks against.
-`viprs.1` is the shim revision, and moves when this directory changes without
+`viprs.2` is the shim revision, and moves when this directory changes without
 upstream moving, so two different shims over one ACadSharp release never
-produce the same artifact name.
+produce the same artifact name. That only holds if somebody moves it, and for
+one campaign nobody did: seven flattener changes landed on a published
+`viprs.1`. `SHIM_DIGESTS` in `build_acadsharp.py` now records which shim each
+version is and `tests/test_acadsharp_version.py` holds the tree against the row
+for the version in `VERSION`, so a change under `native/` with the number left
+still is a red test rather than a second library under an old name.
 
 Bumping the upstream half means adding the new tarball's sha256 to
 `SOURCE_SHA256` in `build_acadsharp.py`. The driver refuses to build a version
@@ -188,7 +214,7 @@ coverage section says why.
 ```
 acadsharp/
   build_acadsharp.py        # pins, target list, and the publish commands
-  VERSION                   # 3.7.1-viprs.1
+  VERSION                   # 3.7.1-viprs.2
   include/                  # viprs_acadsharp.h, the frozen C ABI
   docs/                     # ABI.md, WIRE.md and LINKINFO.md, the three frozen
                             # contracts; every one ships inside the archive
