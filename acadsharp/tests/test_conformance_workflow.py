@@ -556,7 +556,7 @@ class TestTheCorpusIsReplayed:
     def test_it_runs_in_the_image_the_archive_build_made(self):
         # Not a fresh SDK container: that image already holds the SDK, the
         # patched upstream checkout and a warm package cache, which is what
-        # makes the replay a fifteen second step rather than a second build.
+        # makes the replay a few seconds rather than a second build.
         for name, _job, step in self.replay_steps():
             builder = step.get("env", {}).get("BUILDER", "")
             assert "steps.builder.outputs.image" in builder, (
