@@ -67,6 +67,92 @@ CARRIED_NOT_RECORDED = (
     "g13_tolerance.dwg",
 )
 
+# Every fixture that has ever had a committed dump.
+#
+# CARRIED_NOT_RECORDED's mirror, and the direction nothing else in this
+# repository looks in. That list catches a DWG that arrived and was never
+# recorded; this one catches a DWG that was recorded and stopped being. They
+# are different failures and only the second one is an attack: the first is
+# somebody forgetting a line, the second is somebody removing the only witness
+# to a behaviour and taking the red test with it.
+#
+# It closes a real hole, measured on this tree. Take g13_polygon_mesh.dwg out
+# of DUMPED, delete its MANIFEST.json entry and its dump, and put the name on
+# CARRIED_NOT_RECORDED, and pytest is 2954 passed, 0 failed while the replay
+# drops to 37 fixtures and says "37 of 37 replay identical", exit 0. That
+# fixture is the whole of the corpus's evidence that a POLYGON_MESH is refused
+# rather than emitted as a polyline (libviprs-dep#82): neither real drawing
+# carries one. Every guard in the chain gets easier to satisfy as you trim,
+# because they are all parametrised over what is on disk, and
+# test_the_guard_would_see_a_new_fixture asserts len(COMMITTED) > len(DUMPED),
+# which a removal makes more true.
+#
+# Against this list the same trim is a one-line diff whose only purpose is
+# deleting evidence, in a file a reviewer reads.
+#
+# Two edits keep it honest and both are one line, in the branch that does the
+# thing rather than in a later cleanup:
+#
+#   - A fixture joining DUMPED joins this tuple in the same commit.
+#     test_every_recorded_fixture_is_on_the_ratchet is what says so, and
+#     without it the list goes stale and the next trim is invisible again.
+#   - Retiring a fixture for real (the kind it witnesses is implemented, so
+#     the refusal it records is gone) means deleting its name from here on
+#     purpose, next to the change that made it obsolete. That is the edit this
+#     is asking for: a deliberate one, with a reason beside it, rather than a
+#     removal nothing notices.
+ONCE_RECORDED = (
+    "g11_codepage.dwg",
+    "g11_shapes.dwg",
+    "g13_arc.dwg",
+    "g13_bad_extents.dwg",
+    "g13_circle.dwg",
+    "g13_deep_blocks.dwg",
+    "g13_dimension.dwg",
+    "g13_dimension_shallow.dwg",
+    "g13_ellipse.dwg",
+    "g13_empty_view.dwg",
+    "g13_hatch.dwg",
+    "g13_insert.dwg",
+    "g13_line.dwg",
+    "g13_long_text.dwg",
+    "g13_mesh.dwg",
+    "g13_mirrored_bulge.dwg",
+    "g13_nan_bulge.dwg",
+    "g13_nonuniform.dwg",
+    "g13_ocs_mirror.dwg",
+    "g13_ocs_plane.dwg",
+    "g13_ocs_rotated.dwg",
+    "g13_ocs_skew.dwg",
+    "g13_polyface_mesh.dwg",
+    "g13_polygon_mesh.dwg",
+    "g13_polyline.dwg",
+    "g13_ray_xline.dwg",
+    "g13_scale_1x.dwg",
+    "g13_slot.dwg",
+    "g13_slot_block.dwg",
+    "g13_solid.dwg",
+    "g13_spline.dwg",
+    "g13_text.dwg",
+    "g13_two_entities.dwg",
+    "g13_unsupported.dwg",
+    "g13_wide_polyline.dwg",
+    "g13_xref.dwg",
+    "real_AC1018.dwg",
+    "real_AC1032.dwg",
+)
+
+
+def no_longer_recorded(once, dumped):
+    """Every name that had a committed dump and does not have one now.
+
+    A function rather than an expression inside the test, so the ratchet's own
+    failure path can be run on input that is not the tree. A guard nobody has
+    watched fail is the thing this file exists to stop.
+    """
+    return sorted(set(once) - set(dumped))
+
+
 # Named by a capture that did not record which file it measured. The streaming
 # benchmark decodes these two and test_adapter_benchmarks.py asserts on the
 # numbers, including that the 16x point is sixteen times the 1x one, and the
@@ -210,6 +296,66 @@ class TestNoFixtureIsOutsideEveryCheck:
             "is either true or a broken listing, and this guard cannot tell"
         )
         assert "a_fixture_nobody_committed.dwg" not in RECORDED
+
+
+class TestNoFixtureStopsBeingEvidence:
+    """The ratchet. Everything above is about a fixture that never got in.
+
+    This is about one that was in and left, which is the direction that looks
+    like housekeeping and reads green: fewer parametrised cases, all passing,
+    a smaller replay that still says every fixture it ran is identical. The
+    suite gets 17 tests shorter and nothing says so.
+    """
+
+    def test_no_fixture_stops_being_recorded(self):
+        gone = no_longer_recorded(ONCE_RECORDED, DUMPED)
+        assert not gone, (
+            f"{gone} had a committed dump and no longer does, so the corpus replay "
+            "has stopped covering it. Nothing else in this repository would notice. "
+            "If the fixture is genuinely retired, take its name off ONCE_RECORDED in "
+            "this commit and say beside it what made it obsolete"
+        )
+
+    def test_every_recorded_fixture_is_on_the_ratchet(self):
+        # The other half, and the one that keeps the list from going stale. A
+        # fixture recorded after this list was written and never added to it
+        # is a fixture the ratchet cannot protect, and the day somebody trims
+        # it we are back where we started.
+        new = sorted(set(DUMPED) - set(ONCE_RECORDED))
+        assert not new, (
+            f"{new} is dumped and is not on ONCE_RECORDED, so removing it again later "
+            "would be invisible. Add the name, in the commit that adds it to DUMPED"
+        )
+
+    def test_a_name_is_never_both_recorded_and_excused(self):
+        # The signature of the trim: a name that had a dump, does not have one
+        # now, and has acquired a reason for not having one. Caught by the
+        # first case too, and named separately because this combination is not
+        # a mistake anybody makes by accident.
+        both = sorted(set(ONCE_RECORDED) & set(CARRIED_NOT_RECORDED))
+        assert not both, (
+            f"{both} is on ONCE_RECORDED and on CARRIED_NOT_RECORDED at once, which "
+            "says a fixture that used to be recorded is now excused from being. That "
+            "is what deleting evidence looks like as a diff"
+        )
+
+    def test_the_ratchet_catches_the_trim_it_was_written_for(self):
+        # The positive control, and it pins the measured attack rather than a
+        # generic one: g13_polygon_mesh.dwg is the only fixture in the corpus
+        # that witnesses POLYGON_MESH being refused instead of emitted as a
+        # polyline, so it is the single removal that costs the most and shows
+        # the least.
+        trimmed = [name for name in DUMPED if name != "g13_polygon_mesh.dwg"]
+        assert no_longer_recorded(ONCE_RECORDED, trimmed) == ["g13_polygon_mesh.dwg"]
+
+    def test_an_emptied_ratchet_would_say_nothing(self):
+        # The other control, and the reason the length is pinned rather than
+        # left implicit: `set() - set(anything)` is empty, so a ratchet that
+        # lost its names passes every case above by having nothing to say. The
+        # second line is that failure mode, spelled out; the first is what
+        # stops it, since the list can never be shorter than DUMPED.
+        assert len(ONCE_RECORDED) == len(set(ONCE_RECORDED)) >= len(DUMPED)
+        assert no_longer_recorded((), DUMPED) == []
 
 
 class TestTheExpectationIsOfTheFixtureInTheTree:
