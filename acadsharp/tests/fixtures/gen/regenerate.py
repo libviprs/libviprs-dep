@@ -75,6 +75,13 @@ BATCH_BYTES = 65536
 DUMPED = (
     "g13_line.dwg",
     "g13_polyline.dwg",
+    # The two kinds the IPolyline arm used to swallow. The DWGs and their
+    # PROVENANCE.md rows landed without these two lines, and `expectations()`
+    # iterates this tuple and nothing else, so they produced no dump, got no
+    # MANIFEST.json entry, and were files the suite could not read
+    # (libviprs-dep#82).
+    "g13_polyface_mesh.dwg",
+    "g13_polygon_mesh.dwg",
     "g13_arc.dwg",
     "g13_circle.dwg",
     "g13_ellipse.dwg",
