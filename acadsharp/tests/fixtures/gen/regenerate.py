@@ -105,6 +105,11 @@ DUMPED = (
     "g13_xref.dwg",
     "g13_nonuniform.dwg",
     "g13_two_entities.dwg",
+    # LEADER, whose vertices are the geometry and whose arrowhead is not.
+    # The refusal it used to leave is one line on each real drawing and says
+    # nothing about vertex order, the arrowhead flag or a spline-fit path,
+    # which is what an isolated fixture is for.
+    "g13_leader.dwg",
     "g13_deep_blocks.dwg",
     "g13_slot.dwg",
     "g13_slot_block.dwg",

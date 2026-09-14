@@ -118,6 +118,7 @@ public static class Corpus
 		yield return Pair("g13_point.dwg", WritePoint);
 		yield return Pair("g13_solid.dwg", WriteSolidQuad);
 		yield return Pair("g13_ray_xline.dwg", WriteRayXline);
+		yield return Pair("g13_leader.dwg", WriteLeader);
 		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
 		yield return Pair("g13_mesh.dwg", WriteMesh);
@@ -568,6 +569,94 @@ public static class Corpus
 			new Ray { StartPoint = new XYZ(0, 1, 0), Direction = new XYZ(2, 1, 0) },
 			new XLine { FirstPoint = new XYZ(0, -1, 0), Direction = new XYZ(1, 3, 0) });
 		Write(doc, path);
+	}
+
+	// LEADER, whose vertices are already the geometry and whose arrowhead is
+	// not.
+	//
+	// Four at top level, each answering one question a plausible wrong arm
+	// gets wrong. The first is a three-vertex run with the arrowhead on, which
+	// is the one the arrowhead warning has to name; the second is a two-vertex
+	// run with it off, which is the control that says the warning is about the
+	// flag rather than about LEADER. The third is spline-fit, and its four
+	// vertices are fit points rather than a path: an arm that threads a
+	// polyline through them has tessellated a curve the file never stored, so
+	// the fixture needs a spline-fit leader whose fit points are not collinear
+	// for that to be visible. The fourth carries a non-Z extrusion with a z on
+	// its second vertex, because a LEADER's vertices are world coordinates and
+	// an arm that lifted them through the arbitrary axis algorithm would move
+	// both points a long way while still producing a plausible two-point run.
+	//
+	// The block half carries the arrowhead on as well, so the code is
+	// evidenced under a transform and not only at the identity.
+	public static void WriteLeader(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(NewLeader(
+			L(doc),
+			true,
+			LeaderPathType.StraightLineSegments,
+			XYZ.AxisZ,
+			new XYZ(0, 0, 0),
+			new XYZ(5, 3, 0),
+			new XYZ(9, 3, 0)));
+		doc.Entities.Add(NewLeader(
+			L(doc),
+			false,
+			LeaderPathType.StraightLineSegments,
+			XYZ.AxisZ,
+			new XYZ(20, 0, 0),
+			new XYZ(24, 5, 0)));
+		doc.Entities.Add(NewLeader(
+			L(doc),
+			false,
+			LeaderPathType.Spline,
+			XYZ.AxisZ,
+			new XYZ(50, 0, 0),
+			new XYZ(52, 4, 0),
+			new XYZ(56, 4, 0),
+			new XYZ(58, 0, 0)));
+		doc.Entities.Add(NewLeader(
+			L(doc),
+			false,
+			LeaderPathType.StraightLineSegments,
+			SkewNormal,
+			new XYZ(30, 0, 0),
+			new XYZ(34, 2, 1)));
+		AddBlockInstances(doc, "VIPRS_G13_LEADER_BLK",
+			NewLeader(
+				null,
+				true,
+				LeaderPathType.StraightLineSegments,
+				XYZ.AxisZ,
+				new XYZ(0, 0, 0),
+				new XYZ(3, 2, 0),
+				new XYZ(6, 2, 0)));
+		Write(doc, path);
+	}
+
+	private static Leader NewLeader(
+		Layer layer,
+		bool arrowhead,
+		LeaderPathType pathType,
+		XYZ normal,
+		params XYZ[] vertices)
+	{
+		Leader leader = new Leader
+		{
+			ArrowHeadEnabled = arrowhead,
+			PathType = pathType,
+			Normal = normal,
+		};
+		foreach (XYZ v in vertices)
+		{
+			leader.Vertices.Add(v);
+		}
+		if (layer != null)
+		{
+			leader.Layer = layer;
+		}
+		return leader;
 	}
 
 	// POLYFACE_MESH, which the flattener emits as a Polyline today because

@@ -43,6 +43,16 @@ Six refused kinds are absent here and stay on the real drawing, because ACadShar
 `DwgObjectWriter` has no case for them and its final arm throws `NotImplementedException`:
 MULTILEADER, MLINE, 3DFACE, 3DSOLID, REGION and PDFUNDERLAY.
 
+MULTILEADER is one of those names and the reason given for it is not the real one. The
+pinned 3.7.1 writer does carry `case MultiLeader multiLeader:` with a real `writeMultiLeader`
+(`src/ACadSharp/IO/DWG/DwgStreamWriters/DwgObjectWriter.Entities.cs`, lines 569 and 1611), so
+it can forge one. What keeps a MULTILEADER fixture out of this directory is the thing
+recorded on libviprs-dep#86: the reader that would read it back is the same 3.7.1
+context-data path the fifteen instances on `real_AC1032.dwg` go through, and it is the
+least trusted reader in the pin, so a fixture this writer forges round-trips one
+implementation against itself and says nothing about those fifteen. Whoever adds one runs an
+independent oracle over the real drawing first.
+
 Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 
 | File | sha256 | What it holds |
@@ -50,6 +60,7 @@ Licence: the writer is ACadSharp (MIT), the content is ours, so these are ours.
 | `g13_point.dwg` | `80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e` | AC1032. Four POINTs at top level, one at the origin, one off it, one with a Z, one on a non-Z extrusion; then two more inside a block, inserted non-uniformly and mirrored. |
 | `g13_solid.dwg` | `dea64a63b283585bb38b4d5a311ff1aadb9eb57cb399380e180294fe7ceafca1` | AC1032. Three SOLIDs at top level: an asymmetric quad whose corner order distinguishes a bow-tie from a correct polygon, a triangle (fourth corner equal to the third), and one on a non-Z extrusion. A fourth, also asymmetric, inside a block. |
 | `g13_ray_xline.dwg` | `332411ca8ee2e05fce04520594ac87952ff7c36d18c3c279ff5abda03a49cdae` | AC1032. A RAY and an XLINE with non-axis-aligned directions plus a bounded LINE that gives the drawing finite extents, then one of each inside a block. The mirrored insertion reverses the half line a RAY covers. |
+| `g13_leader.dwg` | `6fbf1b031622a8df6bdff1d755e139391f29fe38575d81a0453dc4f58bb5603a` | AC1032. Four LEADERs at top level: a three-vertex run with the arrowhead on, a two-vertex run with it off, a spline-fit one whose four fit points are not collinear, and one on a non-Z extrusion with a z on its second vertex, because a LEADER's vertices are world coordinates and an arm that lifted them would move both while still drawing a plausible leader. A fifth inside a block, arrowhead on, so the warning is evidenced under a transform too. |
 | `g13_polyface_mesh.dwg` | `ccd27150f2a135ded937e02b2ca10a04c58ce250850267e8537839026e1d3c8e` | AC1032. Two POLYFACE_MESHes of six vertices and two non-coplanar faces, one on +Z and one on a non-Z extrusion, vertices ordered so a line threaded through them in storage order self-intersects. A third inside a block. |
 | `g13_polygon_mesh.dwg` | `de3286f404c9a39f707a33b4294f0bdbd433ebdc8f821c3a93afa6535170f322` | AC1032. Two 3x4 POLYGON_MESHes with alternating elevation, one on +Z and one on a non-Z extrusion, so an M/N transposition changes the record. A third inside a block. |
 | `g13_mesh.dwg` | `962b4ecde6653787467fc4467e2eb7b08a60027f20a85141c1e6f829e1f12517` | AC1032. A MESH of two non-coplanar faces at subdivision level 2, and a second inside a block. The mirrored insertion is what makes face winding testable. |

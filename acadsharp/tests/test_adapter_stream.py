@@ -114,6 +114,7 @@ ONCE_RECORDED = (
     "g13_empty_view.dwg",
     "g13_hatch.dwg",
     "g13_insert.dwg",
+    "g13_leader.dwg",
     "g13_line.dwg",
     "g13_long_text.dwg",
     "g13_mesh.dwg",
