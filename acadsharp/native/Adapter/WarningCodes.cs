@@ -115,6 +115,15 @@ namespace Viprs.Cad
 		// drawing wanted blank rather than an entity nobody can see.
 		public const uint FaceEdgeVisibilityIgnored = 113u;
 
+		// A LEADER whose arrowhead flag is set. The Polyline beside it is the
+		// vertex run and nothing else: an arrowhead is a glyph the dimension
+		// style names, at a size the style sets, and neither the glyph nor the
+		// size is geometry this file holds, so drawing one would be this layer
+		// deciding what the drawing looks like. A consumer that never hears
+		// about it draws a leader pointing at nothing and has no way to know
+		// that is what happened, which is what this code is for.
+		public const uint ArrowheadNotDrawn = 114u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -132,6 +141,7 @@ namespace Viprs.Cad
 				case MeshSubdivisionIgnored: return "MESH_SUBDIVISION_IGNORED";
 				case MeshFaceUnreadable: return "MESH_FACE_UNREADABLE";
 				case FaceEdgeVisibilityIgnored: return "FACE_EDGE_VISIBILITY_IGNORED";
+				case ArrowheadNotDrawn: return "ARROWHEAD_NOT_DRAWN";
 				default: return "WARNING_" + code;
 			}
 		}

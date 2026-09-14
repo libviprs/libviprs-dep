@@ -36,6 +36,7 @@ CODE_FIXTURES = {
     "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
     "MESH_FACE_UNREADABLE": "g13_mesh_bad_faces.dwg",
     "FACE_EDGE_VISIBILITY_IGNORED": "g13_face3d.dwg",
+    "ARROWHEAD_NOT_DRAWN": "g13_leader.dwg",
 }
 
 # A code the corpus cannot produce, and the C# constant that has to still be

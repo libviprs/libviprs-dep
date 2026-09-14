@@ -168,6 +168,16 @@ UTF-8, padded with zeroes to a multiple of four. The name is not terminated.
 
 `length` is `64 + 24n + 8bc`.
 
+A `LEADER` lands here as one open polyline through the vertices the file holds,
+hook line included where the file recorded one, and nothing synthesised. Its
+vertices are world coordinates even though the entity carries an extrusion
+direction, so they are not lifted through it; the normal on the record is still
+the entity's own plane, because that is what an in-plane measurement is made
+against. Its arrowhead is a glyph the dimension style names and is not drawn,
+and warning 114 beside it under the same handle says so. A spline-fit leader
+carries fit points rather than a curve, so it is refused on 100 rather than
+straightened into a polyline through them.
+
 `bulge[i]` is the bulge of the span from vertex `i` to vertex `i + 1`. For a
 closed polyline `bulge[n - 1]` is the closing span's, from the last vertex
 back to the first; for an open one it has no span and a consumer ignores it.
@@ -403,6 +413,7 @@ and 105 with these meanings, whatever it is built on.
 | 110 | `MESH_SUBDIVISION_IGNORED` | A `MESH` whose subdivision level is not zero. The `Polygon` records beside it are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that invents vertices the drawing does not hold, so the level is ignored rather than approximated and this is where a consumer learns it. `item_handle` is the mesh's. |
 | 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
 | 113 | `FACE_EDGE_VISIBILITY_IGNORED` | A `3DFACE` that marks one or more of its edges invisible. The `Polygon` beside it, same `item_handle`, carries all of its edges: record 9 has no per-edge visibility, so the flags are ignored rather than the face being split into lines. `item_handle` is the face's. |
+| 114 | `ARROWHEAD_NOT_DRAWN` | A `LEADER` whose arrowhead flag is set. The `Polyline` beside it, same `item_handle`, is the vertex run and nothing else. An arrowhead is a glyph the drawing's dimension style names, at a size that style sets, and neither the glyph nor the size is in the file as geometry, so it is not drawn and nothing is invented in its place. A consumer that wants one draws it itself at the first vertex, pointing along the first span; a consumer that does not know this code draws a leader whose tip is bare, which is the failure direction this code exists to make visible rather than silent. `item_handle` is the leader's. |
 
 ### Reserved ranges
 
