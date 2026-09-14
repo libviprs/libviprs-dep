@@ -344,7 +344,8 @@ FLATTENER = os.path.join(NATIVE, "Adapter", "Flattener.cs")
 MODEL_VERSION = "3.7.1"
 
 # Every type an arm could name that matches more than itself, and what else it
-# matches, read off the pinned tarball's src/ACadSharp/Entities.
+# matches, read off the pinned tarball's src/ACadSharp (the interfaces live at
+# the root of it, and one of them is implemented outside Entities).
 #
 # Leaves are not here and do not need to be: `case Line line:` matches a LINE
 # and nothing else, so an arm on one raises no question and a lane adding one
@@ -352,7 +353,8 @@ MODEL_VERSION = "3.7.1"
 # purpose. `Polyline<T>` is the abstract base and cannot be a case without a
 # type argument, and `PolyLinePlaceholder` is internal to upstream's reader
 # and replaced before a document is handed out, so the shim cannot name it in
-# a case at all.
+# a case at all. A generic base is left out for the same reason wherever it
+# turns up, which is what took the `UnderlayEntity` row out below.
 ENTITY_SUBTYPES = {
     "AttributeBase": ("AttributeDefinition", "AttributeEntity"),
     "CadWipeoutBase": ("RasterImage", "Wipeout"),
@@ -370,7 +372,12 @@ ENTITY_SUBTYPES = {
     ),
     "DimensionAligned": ("DimensionLinear",),
     "IPolyline": ("LwPolyline", "PolyfaceMesh", "PolygonMesh", "Polyline2D", "Polyline3D"),
-    "IProxy": ("ProxyEntity",),
+    # ProxyObject is a NonGraphicalObject rather than an Entity, so it can
+    # never reach the switch and an arm on IProxy would not in fact swallow it.
+    # It is here because the table is a copy of part of upstream's model and a
+    # row that is wrong about the model is a row nobody can check the next one
+    # against.
+    "IProxy": ("ProxyEntity", "ProxyObject"),
     "IText": ("AttributeBase", "AttributeDefinition", "AttributeEntity", "MText", "TextEntity"),
     "IVertex": (
         "PolygonMeshVertex",
@@ -385,7 +392,11 @@ ENTITY_SUBTYPES = {
     "MechanicalEntity": ("AcmBalloon", "AcmPartList", "AcmPartRef"),
     "ModelerGeometry": ("CadBody", "Region", "Solid3D"),
     "TextEntity": ("AttributeBase", "AttributeDefinition", "AttributeEntity"),
-    "UnderlayEntity": ("PdfUnderlay",),
+    # UnderlayEntity was a row here and is gone. Upstream's type is
+    # `UnderlayEntity<T>`, so `case UnderlayEntity x:` does not compile without
+    # a type argument and no arm can ever name it: the row could not have
+    # matched anything and was checking nothing. PDFUNDERLAY reaches the
+    # default arm, which is where RefusedKinds decides about it.
     "Vertex": (
         "PolygonMeshVertex",
         "Vertex2D",
@@ -534,6 +545,55 @@ class TestNoArmSwallowsAKindNobodyWroteItFor:
         # the tree.
         assert swallowed_without_an_arm(["Arc", "Circle"]) == []
         assert swallowed_without_an_arm(["Circle", "Arc"]) == [("Circle", "Arc")]
+
+    def test_the_table_agrees_with_itself_about_what_derives_from_what(self):
+        # Nothing in this job can validate ENTITY_SUBTYPES against the model,
+        # and it is worth saying so plainly: these tests run with no .NET (ADR
+        # 0001), so the table is a hand copy of part of upstream's entity model
+        # and a row that is wrong about upstream is wrong here too. Two of them
+        # were, and both were found by reflecting over the pinned assembly
+        # rather than by anything in this file: `IProxy` was missing
+        # `ProxyObject`, and `UnderlayEntity` named a type that is generic and
+        # that no `case` can spell.
+        #
+        # What the table can be held to is itself, and this is the half of the
+        # error that shows up there. Derivation is transitive: if a `case X`
+        # swallows Y and a `case Y` would swallow Z, then `case X` swallows Z,
+        # so Z belongs in X's row. An omission in one row is visible from the
+        # other, which is the shape of every miss in the table so far.
+        missing = []
+        for base, kinds in sorted(ENTITY_SUBTYPES.items()):
+            assert base not in kinds, f"{base} lists itself as one of its own subtypes"
+            assert len(set(kinds)) == len(kinds), f"{base} lists a kind twice"
+            for kind in kinds:
+                for deeper in ENTITY_SUBTYPES.get(kind, ()):
+                    if deeper != base and deeper not in kinds:
+                        missing.append((base, kind, deeper))
+        assert not missing, (
+            "these rows disagree: "
+            + ", ".join(
+                f"`case {base}` matches {kind}, {kind} matches {deeper}, and {base}'s "
+                f"row does not list {deeper}"
+                for base, kind, deeper in missing
+            )
+            + ". A kind an arm swallows through two steps is swallowed just as quietly "
+            "as one it swallows directly."
+        )
+
+    def test_the_transitivity_check_catches_an_omission(self):
+        # The control. Without it a table nobody could parse would pass the
+        # rule above, and the rule is the only thing standing between a hand
+        # copy of the model and the day somebody adds one name and not the
+        # other.
+        table = {"Base": ("Middle",), "Middle": ("Leaf",)}
+        missing = [
+            (base, kind, deeper)
+            for base, kinds in table.items()
+            for kind in kinds
+            for deeper in table.get(kind, ())
+            if deeper != base and deeper not in kinds
+        ]
+        assert missing == [("Base", "Middle", "Leaf")]
 
     def test_every_carried_pair_is_one_the_model_has(self):
         # A reason written for a pair that cannot happen is a reason nobody

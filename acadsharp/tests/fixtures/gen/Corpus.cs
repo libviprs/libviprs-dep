@@ -121,6 +121,7 @@ public static class Corpus
 		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
 		yield return Pair("g13_mesh.dwg", WriteMesh);
+		yield return Pair("g13_mesh_bad_faces.dwg", WriteMeshBadFaces);
 		yield return Pair("g13_tolerance.dwg", WriteTolerance);
 		yield return Pair("g13_xref.dwg", WriteXref);
 		yield return Pair("g13_xref_long.dwg", WriteXrefLong);
@@ -673,6 +674,48 @@ public static class Corpus
 		mesh.Faces.Add(new int[] { 0, 1, 2 });
 		mesh.Faces.Add(new int[] { 0, 2, 3 });
 		return mesh;
+	}
+
+	// A MESH whose face list contradicts the vertex list beside it.
+	//
+	// Warning 111, MESH_FACE_UNREADABLE, is the only hostile-input handling in
+	// the flattener's own C#: everything else malformed is refused at the door
+	// by the reader or by a bound. It was declared, documented and reachable
+	// with nothing in the corpus producing it, so both branches of Unreadable
+	// and the sentence they build had never run on a real file.
+	//
+	// A file controls the face list and the vertex list independently, so
+	// every fault below is one a drawing can actually carry, and all four are
+	// here because they are two different branches and two different ends of
+	// each: an index past the end, an index below zero, a face of two vertices
+	// and a face of none. The negative one is the half a bounds check written
+	// as `>= vertices.Count` misses entirely, and it fails as an array index
+	// rather than as a warning.
+	//
+	// The good face is first and it is the point of the file rather than
+	// decoration. The claim behind code 111 is that one entity's worth of bad
+	// data drops a face and lets the rest of the mesh cross, and a file of
+	// nothing but bad faces cannot tell that apart from a decoder that gave up
+	// quietly. It is deliberately off the +Z plane too, so a normal that was
+	// fabricated rather than measured off the face shows up in the record.
+	//
+	// One entity, no block, and subdivision level 0: the interesting thing
+	// here is the face list, and a second copy of it under an insertion would
+	// only double every warning.
+	public static void WriteMeshBadFaces(string path)
+	{
+		CadDocument doc = NewDoc();
+		Mesh mesh = new Mesh { Layer = L(doc) };
+		mesh.Vertices.Add(new XYZ(0, 0, 0));
+		mesh.Vertices.Add(new XYZ(10, 0, 0));
+		mesh.Vertices.Add(new XYZ(10, 10, 4));
+		mesh.Faces.Add(new int[] { 0, 1, 2 });
+		mesh.Faces.Add(new int[] { 0, 1, 99 });
+		mesh.Faces.Add(new int[] { 0, 1 });
+		mesh.Faces.Add(new int[] { 0, 1, -1 });
+		mesh.Faces.Add(new int[] { });
+		doc.Entities.Add(mesh);
+		Write(doc, path);
 	}
 
 	// TOLERANCE: a feature-control frame, whose geometry is computed from the
