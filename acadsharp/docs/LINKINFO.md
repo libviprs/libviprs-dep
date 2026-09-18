@@ -88,6 +88,8 @@ and they appear together or not at all.
 | `artifact_version` | string | always | The full artifact version, `<upstream>-viprs.<revision>`, e.g. `3.7.1-viprs.1`. The revision moves when the shim changes without upstream moving. | Report it, pin against it, print it in a diagnostic. Nothing is emitted from it. |
 | `acadsharp_version` | string | always | The upstream library version alone, e.g. `3.7.1`. Never carries the `-viprs.` suffix. | Provenance only. |
 | `acadsharp_commit` | string | always | 40 lowercase hex characters: the upstream commit the source tarball was taken from. | Provenance only. |
+| `viprs_dep_commit` | string | always | 40 lowercase hex characters: the commit of `libviprs/libviprs-dep`, the tree that produced this archive. `acadsharp_commit` is upstream's tree; this is the one that wrote the shim around it and packed the archive. | Provenance, and the one identity `artifact_version` cannot give: see below. |
+| `shim_sha256` | string | always | 64 lowercase hex characters: one sha256 over the shim's sources, paths and contents both. The exact same number `acadsharp/tests/expectations/MANIFEST.json` records as `shim.sha256`. | Compare against another archive's, or against a recording's, to establish whether two decodes came from the same flattener. Nothing is emitted from it. |
 | `dotnet_sdk` | string | always | The SDK version that published the binaries, e.g. `10.0.401`. | Provenance only. No .NET runtime is needed to consume the archive. |
 | `target` | string | always | The Rust target triple this archive is for: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl` or `aarch64-apple-darwin`. | Compare against the target being built for and refuse a mismatch. A glibc archive linked into a musl binary is a link that succeeds and a binary that does not load. |
 | `platform` | string | always | `linux`, `musl` or `mac`. The same fact as `target`, in this repo's own vocabulary. | Usually nothing; `target` is the precise one. |
@@ -137,6 +139,50 @@ leading zero. Parse, then compare numbers.
 `abi_header_sha256` is a plain sha256 of the header file's bytes, all 64
 characters, same lowercase-hex-no-prefix rule. Nothing canonicalises the header
 before hashing it: comments and whitespace are in.
+
+### `viprs_dep_commit` and `shim_sha256` say which decoder this is
+
+Everything else in this file is about getting the library onto a link line.
+These two are about telling one build of it from another, and they are here
+because nothing in the archive could.
+
+The problem they solve is concrete. Two archives decode the same drawing and
+disagree about what a piece of text says. One of them may be built from an
+older flattener; or the two may really read the file differently. Before these
+fields there was no way to tell from the archives: `acadsharp_version` and
+`acadsharp_commit` describe upstream's tree, which is pinned and identical
+across shim revisions, and `artifact_version` is a name the release workflow
+uploads with `--clobber`, so the same name can have been published twice from
+different sources. A consumer comparing two decodes had nothing to compare.
+
+`shim_sha256` is one sha256 over the shim's sources: for each file, its
+archive-relative path and the hex sha256 of its contents, each followed by a
+NUL, in sorted path order. The path is in the hash as well as the bytes, so
+moving a file without editing it still moves the number. Two archives with the
+same `shim_sha256` were built from the same flattener, and two that differ were
+not. Nothing more is inferable from it: it is not ordered, so a number cannot
+tell you which of two is newer, and the sources it covers are not in the
+archive, so it cannot be recomputed from what you have — it is an identity to
+compare, not a digest to verify.
+
+What it covers is the set of sources the fixture generator compiles, which is
+every source of the flattener, the wire encoder and the data sources. The
+shipped library compiles one file more, `native/Exports.cs`, the entry points
+themselves. So a change confined to that file moves the library without moving
+this number. That is the same split `tests/expectations/MANIFEST.json` uses,
+and deliberately: the two numbers are only worth comparing while they are over
+one set, and what proves the entry points is a consumer calling them, which
+`abi_fingerprint` and the ABI handshake already cover.
+
+`viprs_dep_commit` is the producing tree, and it is the field with no such
+caveat: every byte that went into the archive is under it. `metadata/BUILDINFO.json`
+records the same commit as `driver_commit`, which is not an accident and is not
+a second source of truth — one run of one driver writes both and
+`scripts/verify_archive.sh` refuses an archive whose two manifests disagree
+about it. It is stated here as well because this file is the one with a schema
+document, a `schema_version` and a rule for what a consumer does with an
+unrecognised key; `BUILDINFO.json` has none of those, so nothing can be read
+out of it by contract.
 
 ### The two linking modes have separate fields
 

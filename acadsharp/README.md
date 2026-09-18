@@ -113,13 +113,24 @@ one has to happen: publishing a version that is already committed changes no
 file, so there is nothing to push.
 
 The shape is the same as `release-zstd.yml`. A `resolve-version` job reads
-`VERSION`, asks the driver for the pinned source digest and proves the SDK
-`native/global.json` names is installable, so a bad pin dies there rather than
-on five claimed runners. `create-release` makes the tag up front so the fan-out
-never races on `gh release create`. Each cell then builds, runs
-`scripts/verify_archive.sh` over the archive it just made, and only then
-uploads, with `--clobber` so a re-run replaces its own assets. `fail-fast` is
-off, so one cell flaking does not discard four good archives.
+`VERSION`, asks the driver for the pinned source digest, asks it which shim
+the tree is and refuses a version pinned to a different one, and proves the
+SDK `native/global.json` names is installable, so a bad pin dies there rather
+than on five claimed runners. `create-release` makes the tag up front so the
+fan-out never races on `gh release create`. Each cell then builds, runs
+`scripts/verify_archive.sh` over the archive it just made, links the archive
+the way a consumer would, and only then uploads, with `--clobber` so a re-run
+replaces its own assets. `fail-fast` is off, so one cell flaking does not
+discard four good archives.
+
+That consumer step is not symmetric, because the two lanes cannot run the
+same thing. The four container cells run the C and Rust conformance consumers
+through `docker run`; `macos-15` has no docker, so the mac cell runs
+`scripts/link_consumer_smoke.sh`, which links the unpacked archive through the
+two-crate cargo recipe MANUAL.md documents and runs the binary. Before that
+step existed the mac cell published an archive nothing had ever linked, which
+is #95: its only shared check was a `dlopen` on an absolute path, and `dlopen`
+never reads the name a dylib records for itself.
 
 One thing is deliberately different from the zstd workflow: nothing is emulated.
 ADR 0001 measured a cross-architecture publish producing the object file and

@@ -51,6 +51,8 @@ FROZEN_LINKINFO_FIELDS = (
     "static_link_args",
     "dwg_version_min",
     "dwg_version_max",
+    "viprs_dep_commit",
+    "shim_sha256",
 )
 
 # The four that describe the static link. They are present together when
@@ -133,6 +135,66 @@ class TestTheFieldNamesAreFrozen:
     def test_it_round_trips_through_json(self):
         info = ba.make_linkinfo("linux", "arm64", **_shared_only())
         assert json.loads(json.dumps(info)) == info
+
+
+class TestTheArchiveSaysWhichShimIsInIt:
+    """The pair that tells a stale flattener from a real disagreement.
+
+    `3.7.1-viprs.1` shipped without them, and the consequence was concrete:
+    two archives could decode one drawing into two different strings with
+    no field in either that differed. `acadsharp_commit` is upstream's tree
+    and is identical across shim revisions; `artifact_version` is a name the
+    release workflow re-uploads with `--clobber`.
+    """
+
+    def test_the_digest_is_the_one_the_recording_carries(self):
+        # The whole point of the field: a consumer holds an archive beside
+        # `tests/expectations/` and asks whether the recording is of this
+        # flattener. That is one subtraction only while both numbers are the
+        # same rollup over the same set, which is why `g13_support` delegates
+        # to the driver instead of computing its own.
+        with open(os.path.join(ACAD_DIR, "tests", "expectations", "MANIFEST.json")) as f:
+            recorded = json.load(f)["shim"]["sha256"]
+        info = ba.linkinfo_skeleton("mac", "arm64")
+        assert info["shim_sha256"] == recorded
+
+    def test_it_is_measured_off_the_tree_not_looked_up_by_name(self, monkeypatch):
+        # A dispatch override naming a published version is the trap. Pinning
+        # the field to SHIM_DIGESTS[version] would have put viprs.1's digest
+        # into an archive built from these sources, stating a flattener that
+        # is not in it, which is the exact confusion the field is here to end.
+        monkeypatch.setitem(ba.SHIM_DIGESTS, "3.7.1-viprs.1", ba.shim_digest())
+        info = ba.linkinfo_skeleton("linux", "amd64", version="3.7.1-viprs.1")
+        assert info["shim_sha256"] == ba.shim_digest()
+
+    def test_a_version_pinned_to_another_shim_cannot_be_packaged(self):
+        # The row for a published version is frozen, so a tree that does not
+        # match it is either an unbumped revision or an override naming
+        # somebody else's build. Both publish one name meaning two libraries.
+        with pytest.raises(ValueError, match="pinned to shim"):
+            ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.1", **_shared_only())
+
+    def test_a_version_with_no_row_is_packaged_with_what_it_measured(self):
+        # The documented throwaway (`--version 3.7.1-viprs.0`, deleted with
+        # `--cleanup-tag`). A rehearsal that cannot run is not a rehearsal,
+        # and its manifest still states the shim it really built.
+        assert "3.7.1-viprs.0" not in ba.SHIM_DIGESTS
+        info = ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.0", **_shared_only())
+        assert info["shim_sha256"] == ba.shim_digest()
+
+    def test_moving_a_shim_source_moves_the_digest(self, tmp_path):
+        # The control. A rollup over a set the reader could not find agrees
+        # with itself just as well as a real one does.
+        sources = ba.shim_sources()
+        assert any(s.startswith("native/Adapter/") for s in sources)
+        assert ba.shim_digest(sources[:-1]) != ba.shim_digest(sources)
+
+    def test_both_manifests_state_the_same_producing_commit(self):
+        # verify_archive.sh refuses a disagreement, and it can only do that
+        # while one run of one driver writes both.
+        link = ba.linkinfo_skeleton("mac", "arm64")
+        assert re.fullmatch(r"[0-9a-f]{40}", link["viprs_dep_commit"])
+        assert link["viprs_dep_commit"] == ba.driver_commit()
 
 
 class TestTargetIdentity:

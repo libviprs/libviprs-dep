@@ -261,6 +261,16 @@ LINKINFO_FIELDS = (
     # order sees exactly what it saw before plus two keys at the end.
     "dwg_version_min",
     "dwg_version_max",
+    # Appended for the same reason, and they answer a different question
+    # from everything above them. The fields up to here say how to link
+    # this archive; these two say *which* build of the shim is inside it,
+    # which is what nothing in the archive said. `acadsharp_commit` is
+    # upstream's tree and `artifact_version` is a name a re-run can reuse
+    # (the release workflow uploads with `--clobber`), so a consumer
+    # looking at two archives that disagree about a decoded drawing had
+    # no field that could tell a stale flattener from a real difference.
+    "viprs_dep_commit",
+    "shim_sha256",
 )
 
 # The four that describe the static link appear together or not at all,
@@ -431,21 +441,116 @@ def source_commit(version):
         ) from None
 
 
-def shim_digest_for(version):
-    """The shim rollup an artifact version is, out of ``SHIM_DIGESTS``.
+# The fixture generator's project, which is what defines *which* sources
+# "the shim" means. Read by `shim_sources` below rather than listed here,
+# for the reason that function gives.
+SHIM_GEN_PROJECT = os.path.join(
+    HERE, "tests", "fixtures", "gen", "Viprs.ACadSharp.FixtureGen.csproj"
+)
 
-    Same shape as ``source_sha256`` and for the same reason: a version with no
-    row is a version nobody wrote down what the shim was for, and guessing is
-    how a published name comes to mean two different libraries.
+# One <Compile Include="..."/> line of it.
+SHIM_COMPILE_INCLUDE = re.compile(r'<Compile\s+Include="([^"]+)"\s*/>')
+
+
+def shim_sources():
+    """Every source the shim is, relative to `acadsharp/`.
+
+    The set comes out of the fixture generator's csproj rather than being
+    listed here, because that csproj is what `SHIM_DIGESTS` already means:
+    every row in it is the `shim.sha256` block
+    `tests/expectations/MANIFEST.json` carries, and that block is a rollup
+    over exactly this list. A second list here would be a second answer to
+    "which files are the shim", and the one number a consumer compares
+    across an archive and a recording would stop being one number.
+
+    That the driver reads a path under `tests/` is deliberate and is the
+    smaller coupling of the two available: the alternative is the driver
+    hand-copying a digest whose definition lives there anyway, which is
+    what it did until this function existed.
+
+    An include this reader does not understand is an error rather than a
+    skip. A pattern silently dropped is a source file silently outside the
+    digest, and a digest that quietly covers less is worse than no digest.
     """
-    try:
-        return SHIM_DIGESTS[version]
-    except KeyError:
-        raise KeyError(
-            f"no shim digest for {version} in SHIM_DIGESTS in "
-            f"{os.path.relpath(__file__, REPO_ROOT)}. Every artifact version records "
-            "which shim it is, so bumping acadsharp/VERSION means adding the row too"
-        ) from None
+    gen_dir = os.path.dirname(SHIM_GEN_PROJECT)
+    with open(SHIM_GEN_PROJECT) as f:
+        includes = SHIM_COMPILE_INCLUDE.findall(f.read())
+    if not includes:
+        raise ValueError(
+            f"{os.path.relpath(SHIM_GEN_PROJECT, REPO_ROOT)} compiles nothing this "
+            "reader can see, so the shim digest would be a rollup over the empty set "
+            "and every comparison against it would pass"
+        )
+
+    found = []
+    for include in includes:
+        pattern = include.replace("\\", "/")
+        if pattern.endswith("/**/*.cs"):
+            root = os.path.normpath(os.path.join(gen_dir, pattern[: -len("/**/*.cs")]))
+            for dirpath, dirs, files in os.walk(root):
+                dirs[:] = sorted(dirs)
+                found += [os.path.join(dirpath, f) for f in files if f.endswith(".cs")]
+        elif pattern.endswith(".cs") and "*" not in pattern:
+            found.append(os.path.normpath(os.path.join(gen_dir, pattern)))
+        else:
+            raise ValueError(
+                f"{pattern!r} is a <Compile Include> this reader does not understand, "
+                "so the shim digest would quietly stop covering it. Teach "
+                "build_acadsharp.shim_sources() the shape before shipping it."
+            )
+
+    return sorted(os.path.relpath(p, HERE).replace(os.sep, "/") for p in found)
+
+
+def shim_digest(sources=None):
+    """One sha256 over the sorted source paths and the bytes behind them.
+
+    The path goes into the hash as well as the contents, so moving a file
+    without changing a byte of it still moves the number.
+
+    Measured, never looked up by name. `SHIM_DIGESTS` says what the shim
+    was when a version was cut; this says what the shim being packaged is,
+    and `linkinfo_skeleton` needs the second one. A dispatch override
+    naming a published version -- `--version 3.7.1-viprs.1` on today's
+    tree -- would otherwise put viprs.1's digest into an archive built
+    from viprs.2's sources, which is the exact confusion the field exists
+    to end.
+    """
+    h = hashlib.sha256()
+    for rel in shim_sources() if sources is None else sources:
+        h.update(rel.encode())
+        h.update(b"\0")
+        with open(os.path.join(HERE, rel), "rb") as f:
+            h.update(hashlib.sha256(f.read()).hexdigest().encode())
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def packaged_shim_digest(version):
+    """The shim going into an archive, held to the row that names it.
+
+    Two facts, and the manifest carries the measurement rather than the
+    pin. When the version has a row they have to agree: a release job
+    runs neither pytest nor `test_acadsharp_version.py`, so until this
+    check existed the only thing holding `SHIM_DIGESTS` to the tree was a
+    suite the publishing workflow never invokes.
+
+    A version with no row is not refused. That is the documented
+    throwaway (`--version 3.7.1-viprs.0`, deleted with `--cleanup-tag`
+    afterwards), and a rehearsal whose manifest states the shim it really
+    built is more use than a rehearsal that cannot run.
+    """
+    measured = shim_digest()
+    pinned = SHIM_DIGESTS.get(version)
+    if pinned is not None and pinned != measured:
+        raise ValueError(
+            f"{version} is pinned to shim {pinned} in SHIM_DIGESTS and the sources "
+            f"under native/ roll up to {measured}. Either this tree is a change to the "
+            "shim, in which case bump the revision in acadsharp/VERSION and add its "
+            "row, or the override names a version that was cut from different sources. "
+            "Packaging it either way publishes one artifact name meaning two libraries."
+        )
+    return measured
 
 
 def verify_digest(path, expected):
@@ -788,6 +893,14 @@ def linkinfo_skeleton(plat, arch, version=None):
     Deliberately without any of the measured link facts: those come off
     the target and are passed to `make_linkinfo`. The example in issue
     #48 is an example, not a default.
+
+    The two shim-identity fields are known here for the same reason the
+    upstream ones are: they are facts about the tree this driver is being
+    run from, not about the link. Both are measured rather than declared
+    -- `packaged_shim_digest` rolls up the sources and refuses a tree that
+    is not the shim the version's row names, and `driver_commit` asks git
+    -- because a field describing what is inside the archive has to come
+    from what went into it.
     """
     version = version or read_version()
     upstream, _shim = split_version(version)
@@ -806,6 +919,8 @@ def linkinfo_skeleton(plat, arch, version=None):
         "abi_header_sha256": header_sha256(),
         "abi_fingerprint": abi_fingerprint(),
         "shared_library": f"lib/{shared_library_name(plat)}",
+        "viprs_dep_commit": driver_commit(),
+        "shim_sha256": packaged_shim_digest(version),
     }
 
 

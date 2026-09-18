@@ -490,6 +490,50 @@ class TestVersionPreflight:
             "empty or malformed acadsharp/VERSION fails here and not five jobs later"
         )
 
+    def test_a_version_whose_shim_has_moved_is_refused_here(self):
+        assert "packaged_shim_digest" in run_text(self.job), (
+            "resolve-version must ask build_acadsharp which shim this tree is, so a "
+            "dispatch naming a published version on moved sources fails in this job "
+            "rather than after five runners have compiled a library for nothing"
+        )
+
+    def test_that_refusal_really_refuses_and_really_accepts(self):
+        # The step's own script, run twice. Asserting that it names the
+        # function leaves the case where it names it and ignores what it
+        # says, and a refusal that has never been watched refusing is a
+        # refusal nobody has seen work.
+        script = None
+        for step in self.job["steps"]:
+            run = step.get("run") or ""
+            if "packaged_shim_digest" in run:
+                script = run.split("<<'PY'", 1)[1].rsplit("PY", 1)[0]
+                break
+        assert script, "no step in resolve-version runs the shim refusal"
+
+        def preflight(version):
+            return subprocess.run(
+                [sys.executable, "-c", script, version],
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+                check=False,
+            )
+
+        accepted = preflight(ba.read_version())
+        assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+        assert ba.shim_digest() in accepted.stdout
+
+        # A published version this tree is not. `3.7.1-viprs.1` is the one
+        # in the tree's own SHIM_DIGESTS, and #110 moved the shim past it.
+        stale = [v for v in ba.SHIM_DIGESTS if ba.SHIM_DIGESTS[v] != ba.shim_digest()]
+        assert stale, (
+            "every row in SHIM_DIGESTS matches the tree, so there is no published "
+            "version for this to be refused against and the control is hollow"
+        )
+        refused = preflight(stale[0])
+        assert refused.returncode != 0, refused.stdout + refused.stderr
+        assert "pinned to shim" in refused.stdout + refused.stderr
+
     def test_the_sdk_pin_is_proved_installable_here(self):
         # actions/setup-dotnet reading global.json is the only cheap way to
         # find out that the pinned SDK is gone before five build jobs each
@@ -797,6 +841,93 @@ class TestEveryContainerCellIsRunAndNotOnlyLinked:
         assert self.job_env("VIPRS_CONFORMANCE_PLATFORM") == "linux/${{ matrix.arch }}", (
             "build-linux does not take the container architecture from the cell it is "
             "building, so an arm64 cell can run its consumers on an x64 image"
+        )
+
+
+class TestTheMacCellLinksWhatItPublishes:
+    """The gap that shipped #95, held shut.
+
+    `build-linux` runs two consumers against the tarball it is about to
+    upload. `build-mac` ran none, and every check it did have passed on an
+    archive no consumer could link: the build's shared smoke is `dlopen`
+    on an absolute path and `dlopen` never consults `LC_ID_DYLIB`, and
+    `verify_archive.sh`'s link-and-run probe is gated on
+    `static_certified`, which is false on mac and is not going to change.
+    So the one target where shared is the only link mode was the one
+    target where nothing linked anything, five releases running.
+
+    It cannot run the linux consumers: both go through `docker run`, and
+    macos-15 runners have no docker. What it can run is the cargo recipe
+    MANUAL.md documents, which needs cargo and python3 and nothing else,
+    and which is the path a consumer actually takes.
+    """
+
+    SMOKE = "acadsharp/scripts/link_consumer_smoke.sh"
+
+    def setup_method(self):
+        self.wf = load_workflow()
+        self.job = self.wf["jobs"]["build-mac"]
+        self.steps = self.job["steps"]
+
+    def test_it_links_the_archive_through_the_documented_recipe(self):
+        step = step_named(self.job, "Link the unpacked archive")
+        assert self.SMOKE in step.get("run", ""), (
+            "build-mac's consumer step does not call "
+            f"{self.SMOKE}, which is the only thing in this repository that links a "
+            "shared-only archive and runs the binary"
+        )
+
+    def test_it_links_the_unpacked_tarball_and_not_the_build_tree(self):
+        unpack = step_index(self.job, "Unpack")
+        link = step_index(self.job, "Link the unpacked archive")
+        assert unpack >= 0, "build-mac never unpacks the archive it just verified"
+        assert unpack < link, "the consumer runs before anything unpacked an archive for it"
+        run = self.steps[link].get("run", "")
+        assert "bin/unpacked/" in run, (
+            f"build-mac's consumer step reads {run!r}. The premise of the epic is that "
+            "a consumer links what we publish, and the build tree is not what anybody "
+            "downloads"
+        )
+
+    def test_it_names_the_cell_rather_than_globbing(self):
+        run = step_named(self.job, "Link the unpacked archive").get("run", "")
+        for key in ("${{ matrix.platform }}", "${{ matrix.cpu }}"):
+            assert key in run, (
+                f"build-mac's consumer step does not carry {key}, so it could link an "
+                "archive this cell did not build"
+            )
+        assert "*" not in run, (
+            "a glob that matches nothing links nothing and still exits 0, which is a "
+            "pass reported for a check that never ran"
+        )
+
+    def test_it_sits_between_verify_and_upload(self):
+        verify = step_index(self.job, "Verify")
+        upload = step_index(self.job, "Upload release")
+        link = step_index(self.job, "Link the unpacked archive")
+        assert verify < link < upload, (
+            f"Verify/Link/Upload are at {verify}/{link}/{upload}. An archive that "
+            "cannot be linked has to stay off the release page, not be explained "
+            "afterwards"
+        )
+
+    def test_nothing_conditions_it_away(self):
+        for name in ("Unpack", "Link the unpacked archive"):
+            assert "if" not in step_named(self.job, name), (
+                f"build-mac's {name!r} step carries an `if:`, so whether the archive "
+                "gets linked is a second decision that can drift from the matrix"
+            )
+
+    def test_the_script_it_calls_exists_and_is_the_consumer_path(self):
+        # A workflow naming a script that is not there fails on the runner,
+        # by which time five jobs have claimed machines.
+        path = os.path.join(REPO_ROOT, self.SMOKE)
+        assert os.path.isfile(path), f"{self.SMOKE} is not in the tree"
+        with open(path) as f:
+            body = f.read()
+        assert "link_consumer" in body and "cargo run" in body, (
+            f"{self.SMOKE} no longer links the two-crate workspace and runs the "
+            "binary, so the step above is not the check this class is about"
         )
 
 

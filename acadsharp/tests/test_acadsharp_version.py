@@ -70,8 +70,15 @@ class TestTheShimRevisionMovesWhenTheShimDoes:
     `tests/expectations/MANIFEST.json` at the published tag, so putting VERSION
     back to `3.7.1-viprs.1` fails here with the two digests side by side.
 
-    It needs no git and no .NET: `g13_support.shim_digest()` reads the sources
-    the fixture generator compiles, which is every `.cs` under `native/Adapter`,
+    Asked through `packaged_shim_digest`, which is the function the release
+    runs: `resolve-version` calls it before anything builds and
+    `linkinfo_skeleton` calls it again when it writes the manifest. A test
+    comparing the dict to the tree by itself would hold the same property and
+    would stop being evidence about the release the day the release stopped
+    asking.
+
+    It needs no git and no .NET: the digest is a walk over the sources the
+    fixture generator compiles, which is every `.cs` under `native/Adapter`,
     `native/Sources` and `native/Wire` plus `Abi.cs` and `Probe.cs`.
     """
 
@@ -85,15 +92,9 @@ class TestTheShimRevisionMovesWhenTheShimDoes:
 
     def test_the_shim_in_the_tree_is_the_one_that_version_names(self):
         version = ba.read_version()
-        assert ba.shim_digest_for(version) == shim_digest(), (
-            f"the sources under native/ are not the shim {version} names. Either this "
-            "is a change to the shim, in which case bump the revision in "
-            "acadsharp/VERSION and add its row to SHIM_DIGESTS, or it is a change to "
-            "an unpublished revision, in which case move that revision's row in the "
-            "same commit. What is not on offer is leaving the number still: a "
-            "published artifact name that means two different libraries is a consumer "
-            "pinning a version and getting whichever build it happened to download."
-        )
+        # Raises with both digests in the message when they disagree, which
+        # is the same refusal a dispatched release would get.
+        assert ba.packaged_shim_digest(version) == shim_digest()
 
     def test_a_change_under_the_adapter_would_be_seen(self, tmp_path):
         # The control. Everything above compares two values that happen to

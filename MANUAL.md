@@ -1128,10 +1128,43 @@ fn stem(value: &serde_json::Value) -> String {
 
 `acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs
 exactly that recipe through a two-crate workspace and executes the
-binary, and `acadsharp/scripts/verify_archive.sh` runs it too when the
-host can build for the archive's target. That copy hand-parses the
-manifest instead of pulling in `serde_json`, because it has to build
-offline inside a container; the directives it emits are the same four.
+binary, in whichever mode the archive certifies, and
+`acadsharp/scripts/verify_archive.sh` runs it too when the host can build
+for the archive's target. That copy hand-parses the manifest instead of
+pulling in `serde_json`, because it has to build offline inside a
+container; the directives it emits are the same ones.
+
+The shared branch above is not the whole shared recipe, and the part it is
+missing cannot go in a `-sys` crate's build script. A binary linked
+against the shared library needs an rpath, because cargo does not put a
+build script's `rustc-link-search` directory on the loader's path, and an
+rpath is a link argument: `cargo:rustc-link-arg` binds to the emitting
+package's own targets, so one emitted here reaches this crate's tests and
+never the binary. The route that does work is metadata. This package
+declares `links = "acadsharp_native"`, so
+
+    println!("cargo:rpath={}", root.join("lib").display());
+
+arrives in a dependent's build script as `DEP_ACADSHARP_NATIVE_RPATH`, and
+the binary's own build script turns it into the flag:
+
+    if let Ok(dir) = std::env::var("DEP_ACADSHARP_NATIVE_RPATH") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
+    }
+
+On the shared branch only. `lib/` holds the shared library and the static
+archives side by side and a bare `-l` prefers the shared one, so an rpath
+left on the static path produces a binary that was supposed to be
+self-contained, links, and runs correctly on the build machine by quietly
+using the `.so` next to it.
+
+`acadsharp/tests/link_consumer/` is that arrangement in two crates, and
+`build-mac` in the release workflow runs it against the tarball it is
+about to upload. It is the only thing in this repository that links a
+shared-only archive: the build's own shared smoke is `dlopen` on an
+absolute path, `dlopen` never consults the name a dylib records for
+itself, and `3.7.1-viprs.1` shipped a mac archive that no consumer could
+link because of it (#95).
 
 ### Examples
 

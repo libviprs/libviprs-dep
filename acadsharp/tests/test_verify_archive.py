@@ -1244,6 +1244,57 @@ class TestTheMachOInstallName:
         assert "empty" in _output(result)
 
 
+class TestTheShimIdentityFields:
+    """`shim_sha256` and `viprs_dep_commit`, which say which build this is.
+
+    On the mac fixture rather than the ELF one, and not because either
+    field is a mac fact: the Mach-O tree is written from bytes and needs
+    no compiler, so these run on every host. Nothing in the two checks is
+    platform-dependent, and a check that only executes on one runner is
+    the shape this file exists to stop.
+
+    Neither number can be recomputed from the archive -- the sources they
+    cover are the producer's, and are not in it. So what is held here is
+    the presentation, because the fields are compared between archives by
+    string equality, and the agreement between the two manifests that both
+    state the producing commit.
+    """
+
+    def test_a_shim_digest_in_another_presentation_is_refused(self, tmp_path, mac_tree):
+        # Uppercase is the same number and a different string. Two archives
+        # built from one tree would read as differing, which is the question
+        # the field exists to answer and the wrong answer to it.
+        root = _clone(mac_tree, tmp_path)
+        _edit_json(
+            root, "LINKINFO.json", lambda doc: doc.update(shim_sha256=doc["shim_sha256"].upper())
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "shim_sha256" in _output(result)
+
+    def test_an_abbreviated_producing_commit_is_refused(self, tmp_path, mac_tree):
+        root = _clone(mac_tree, tmp_path)
+        _edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(viprs_dep_commit=doc["viprs_dep_commit"][:12]),
+        )
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        assert "viprs_dep_commit" in _output(result)
+
+    def test_two_manifests_naming_two_producing_commits_are_refused(self, tmp_path, mac_tree):
+        # One run of one driver writes both, so this cannot happen by
+        # accident. Once it has, neither file establishes the provenance and
+        # preferring one of them is a guess.
+        root = _clone(mac_tree, tmp_path)
+        _edit_json(root, "BUILDINFO.json", lambda doc: doc.update(driver_commit="b" * 40))
+        result = _verify(_repack(root))
+        assert result.returncode == 1
+        out = _output(result)
+        assert "viprs_dep_commit" in out and "driver_commit" in out
+
+
 class TestTheMachOLoadCommandWalk:
     """The guards on the walk itself, each one watched failing.
 

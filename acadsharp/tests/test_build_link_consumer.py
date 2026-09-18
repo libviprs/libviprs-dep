@@ -13,6 +13,15 @@ runtime's initialiser forced, the obvious way to force it is
 `-Wl,-u,<symbol>`, and a manifest froze with exactly that in it. These
 tests run the real recipe against a real archive through a real two-crate
 workspace, and one of them puts the broken recipe back to show it fails.
+
+Both link modes, because on `aarch64-apple-darwin` there is only one of
+them and it is not the static one. `static_certified` is false there, so
+the smoke used to refuse every mac archive outright and nothing in this
+repository linked one -- which is how a dylib recording a name no file in
+the archive had got published (#95). The shared mode has the same
+propagation problem in a different place: the rpath it needs is a link
+argument, so it goes out of the `-sys` crate as `cargo:rpath` metadata and
+becomes the flag in the binary's own build script.
 """
 
 import json
@@ -95,6 +104,33 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         # It may say the words, at length, in the panic explaining why.
         # What it must never do is emit one.
         assert 'println!("cargo:rustc-link-arg' not in source
+
+    def test_the_shared_branch_publishes_the_rpath_as_metadata(self):
+        # It cannot emit the flag: `cargo:rustc-link-arg` binds to this
+        # package's own targets. `cargo:rpath` reaches a dependent's build
+        # script as DEP_ACADSHARP_NATIVE_RPATH, which is the only route a
+        # `-sys` crate has for something the dependent must express as an
+        # argument, and it exists because the package declares `links`.
+        source = read(BUILD_RS)
+        assert 'println!("cargo:rpath=' in source
+
+    def test_the_link_argument_lives_in_the_binary_that_needs_it(self):
+        consumer = read(os.path.join(WORKSPACE, "consumer", "build.rs"))
+        assert "DEP_ACADSHARP_NATIVE_RPATH" in consumer
+        assert 'println!("cargo:rustc-link-arg=-Wl,-rpath,' in consumer
+
+    def test_the_rpath_is_scoped_to_the_shared_branch(self):
+        # `lib/` holds the shared library and the static archives together
+        # and a bare `-l` prefers the shared one, so an rpath on the static
+        # path yields a binary that was meant to be self-contained and that
+        # quietly runs against the `.so` beside it on the build machine.
+        source = read(BUILD_RS)
+        shared_branch = source.index('if !json_bool(&text, "static_certified")')
+        static_path = source.index("static:-bundle,+whole-archive=")
+        rpath = source.index('println!("cargo:rpath=')
+        assert shared_branch < rpath < static_path, (
+            "the rpath is emitted outside the shared branch, so a static link would carry it too"
+        )
 
     def _manual_build_script(self):
         """The worked `build.rs` out of MANUAL.md, code only.
@@ -204,23 +240,100 @@ class TestTheRecipeReallyLinksAndRuns:
         assert result.returncode == 1, output
         assert "exited 134" in output
 
-    def test_an_uncertified_archive_is_refused_rather_than_half_linked(
-        self, tmp_path, inert_archive
-    ):
+
+@pytest.fixture(scope="session")
+def shared_only_archive(tmp_path_factory):
+    """A real, loadable library in an archive that certifies no static half.
+
+    Which is what every mac archive is, and what no test here used to
+    link. Built by dropping the static archives and their four manifest
+    fields off a certified tree, so the library inside is the same one the
+    static tests link and the difference is only which recipe applies.
+    """
+    fixtures._require_toolchain()
+    root = fixtures._build_linux_tree(str(tmp_path_factory.mktemp("consumer-shared")))
+    for name in ("libacadsharp_native.a", "libacadsharp_native_init.a"):
+        os.remove(os.path.join(root, "lib", name))
+
+    def drop(doc):
+        for field in fixtures.ba.STATIC_LINKINFO_FIELDS:
+            doc.pop(field, None)
+        doc["static_certified"] = False
+
+    fixtures._edit_json(root, "LINKINFO.json", drop)
+    return root
+
+
+class TestTheSharedOnlyRecipeLinksAndRuns:
+    """The other link mode, which is the only one on one target.
+
+    `static_certified` is false on `aarch64-apple-darwin`, so until the
+    build script grew this branch the smoke refused every mac archive and
+    nothing in the repository linked one. That is how `3.7.1-viprs.1`
+    published a dylib recording a name no file in the archive had: the
+    shared smoke is `dlopen` on an absolute path, and `dlopen` never
+    consults the recorded name.
+    """
+
+    def test_a_shared_only_archive_links_and_runs(self, shared_only_archive):
         _require_cargo()
-        root = fixtures._clone(inert_archive, tmp_path)
-        for name in ("libacadsharp_native.a", "libacadsharp_native_init.a"):
-            os.remove(os.path.join(root, "lib", name))
+        result = subprocess.run(
+            ["bash", SMOKE, shared_only_archive], capture_output=True, text=True, check=False
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 0, output
+        assert "the documented recipe links and runs" in output
 
-        def drop(doc):
-            for field in fixtures.ba.STATIC_LINKINFO_FIELDS:
-                doc.pop(field, None)
-            doc["static_certified"] = False
+    def test_the_fingerprint_comes_back_through_the_shared_link(self, shared_only_archive):
+        _require_cargo()
+        result = subprocess.run(
+            ["bash", SMOKE, shared_only_archive], capture_output=True, text=True, check=False
+        )
+        with open(os.path.join(shared_only_archive, "metadata", "LINKINFO.json")) as f:
+            expected = json.load(f)["abi_fingerprint"]
+        assert f"ABI_FINGERPRINT={expected}" in result.stdout, result.stdout + result.stderr
 
-        fixtures._edit_json(root, "LINKINFO.json", drop)
-        result = subprocess.run(["bash", SMOKE, root], capture_output=True, text=True, check=False)
-        assert result.returncode != 0
-        assert "static_certified is false" in (result.stdout + result.stderr)
+    def test_without_the_consumer_s_own_rpath_the_binary_does_not_load(
+        self, tmp_path, shared_only_archive
+    ):
+        # The propagation rule again, from the other side. The sys crate
+        # publishes the library's directory as `cargo:rpath` and the binary's
+        # own build script turns it into `-Wl,-rpath`, because a link
+        # argument emitted by a dependency never reaches the dependent.
+        # Cargo does not put `rustc-link-search` on the loader's path, so
+        # with that one file gone the binary links clean and dies before
+        # `main` -- which is what a consumer who followed a recipe that
+        # omitted the rpath would see.
+        _require_cargo()
+        broken = str(tmp_path / "ws")
+        shutil.copytree(WORKSPACE, broken)
+        os.remove(os.path.join(broken, "consumer", "build.rs"))
+
+        result = subprocess.run(
+            [
+                "cargo",
+                "run",
+                "--offline",
+                "--quiet",
+                "--manifest-path",
+                os.path.join(broken, "Cargo.toml"),
+                "-p",
+                "consumer",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=dict(
+                os.environ,
+                ACADSHARP_ARCHIVE=shared_only_archive,
+                CARGO_TARGET_DIR=str(tmp_path / "target"),
+            ),
+        )
+        assert result.returncode != 0, (
+            "the binary ran without an rpath of its own, which would mean cargo now "
+            "puts a build script's link-search directory on the loader's path and the "
+            "consumer/build.rs could go"
+        )
 
 
 class TestTheBrokenRecipeStillFails:

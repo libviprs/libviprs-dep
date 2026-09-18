@@ -76,11 +76,23 @@ jobs:
           echo "tag=acadsharp-$V" >> "$GITHUB_OUTPUT"
 
       - name: Refuse a version the driver has no pinned source for
-        # Two refusals in one step, both asked of the driver rather than
+        # Three refusals in one step, all asked of the driver rather than
         # re-implemented here. split_version rejects an empty or
         # malformed VERSION; source_sha256 rejects a bump whose upstream
         # half has no SOURCE_SHA256 entry, which would otherwise mean
-        # downloading whatever GitHub serves that day.
+        # downloading whatever GitHub serves that day; and
+        # packaged_shim_digest rejects a tree that is not the shim this
+        # version claims to be.
+        #
+        # That last one is refused twice on purpose. `linkinfo_skeleton`
+        # asks it again in every build job, because that is where the
+        # manifest is written and a check somewhere else can be skipped.
+        # But by then five runners have compiled a library for nothing, and
+        # the case it catches is the ordinary one: a dispatch naming a
+        # published version on a tree whose shim has moved since. The
+        # digest needs no .NET, no network and no runner of any particular
+        # architecture -- it is a walk over `native/*.cs` -- so there is no
+        # reason for it to cost a build.
         env:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
@@ -103,8 +115,13 @@ jobs:
               digest = driver.source_sha256(upstream)
           except (KeyError, ValueError) as exc:
               sys.exit(str(exc).strip("'"))
+          try:
+              packaged = driver.packaged_shim_digest(sys.argv[1])
+          except ValueError as exc:
+              sys.exit(str(exc))
           print(f"ACadSharp {upstream}, shim revision {shim}")
           print(f"pinned sha256: {digest}")
+          print(f"shim sha256:   {packaged}")
           PY
 
       - name: Refuse a global.json with no SDK pin
@@ -466,6 +483,49 @@ jobs:
           bash acadsharp/scripts/verify_archive.sh \
             "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
             ${{ matrix.platform }} ${{ matrix.cpu }}
+
+      - name: Unpack it the way a consumer would
+        # The same step the linux cells have, for the same reason: what a
+        # consumer downloads is the tarball, not the build tree beside it.
+        run: |
+          set -eu
+          mkdir -p bin/unpacked
+          tar -xzf "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
+            -C bin/unpacked
+          find bin/unpacked -maxdepth 2
+
+      - name: Link the unpacked archive through the documented recipe
+        # The step this lane did not have, and #95 is what it cost. This
+        # cell built, verified and uploaded a mac archive that no consumer
+        # could link, five times, and nothing here was wrong: the build's
+        # shared smoke is `dlopen` on an absolute path, `dlopen` never
+        # consults `LC_ID_DYLIB`, and the verifier's link-and-run probe is
+        # gated on `static_certified`, which is false on mac and always
+        # will be. On the one target where shared is the only link mode,
+        # nothing linked anything.
+        #
+        # So: the cargo recipe MANUAL.md documents, against the tarball
+        # that is about to be uploaded. It links the `.dylib` the ordinary
+        # way, adds the rpath the mac paragraph of docs/LINKINFO.md calls
+        # for, runs the binary and checks the fingerprint it reports
+        # against the manifest. Measured against the published viprs.1
+        # archive it fails with `Library not loaded: @rpath/viprs_acadsharp.dylib`
+        # and exit 134; against the same bytes with the name corrected it
+        # passes.
+        #
+        # Between Verify and Upload, like the linux consumers: an archive
+        # that cannot be linked stays off the release page rather than
+        # being explained afterwards.
+        #
+        # Not folded into verify_archive.sh, which would cover local
+        # builds too, because that script is exercised by
+        # tests/test_verify_archive.py against a Mach-O written from bytes
+        # that is deliberately not loadable. A link-and-run check in there
+        # would fail on every one of those fixtures, and gating it on
+        # "is this library real" is a gate with no honest predicate.
+        run: |
+          bash acadsharp/scripts/link_consumer_smoke.sh \
+            "bin/unpacked/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}"
 
       - name: Upload release asset ${{ matrix.platform }}/${{ matrix.cpu }}
         env:

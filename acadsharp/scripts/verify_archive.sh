@@ -25,7 +25,16 @@
 #      defect as one whose digest is wrong.
 #   3. Both manifests parse and carry every frozen field. `acadsharp-rs`
 #      reads LINKINFO.json by those names, so a missing one is a
-#      downstream break rather than cosmetic.
+#      downstream break rather than cosmetic. Two of those fields say
+#      which build of the shim is in the archive rather than how to link
+#      it: `shim_sha256`, the rollup over the sources the flattener is
+#      compiled from, and `viprs_dep_commit`, this repo's tree. Neither
+#      can be recomputed from the archive -- the sources are not in it --
+#      so what is checked here is their shape and, for the commit, that
+#      it is the one BUILDINFO.json's `driver_commit` already records.
+#      Two manifests in one archive naming two different commits is the
+#      state where neither can be trusted, and it is the only part of
+#      this pair the bytes can settle.
 #   4. `abi_header_sha256` is the hash of the header shipped beside it,
 #      and `abi_fingerprint` is that hash's first eight bytes, which is
 #      what `viprs_acad_abi_fingerprint()` is defined to return. The live
@@ -578,7 +587,14 @@ LINKINFO_FIELDS = (
     "static_library", "static_init_library", "static_certified",
     "static_system_libraries", "static_link_args",
     "dwg_version_min", "dwg_version_max",
+    "viprs_dep_commit", "shim_sha256",
 )
+# The two shim-identity fields, as `(field, length)`. Lowercase hex of a
+# fixed width, the same rule `abi_header_sha256` follows: a git object
+# name is 40 and a sha256 is 64. Checked for shape rather than for value
+# because the sources they are over are not in the archive, and a field
+# a consumer cannot parse is worse than one it can compare and reject.
+HEX_IDENTITY_FIELDS = (("viprs_dep_commit", 40), ("shim_sha256", 64))
 # The four digits behind the AC in a drawing's first six bytes. A shape
 # check and not a list of the codes this build reads: the range is
 # measured off the library rather than known here, and a check that knew
@@ -787,6 +803,31 @@ if link is not None:
                     f"LINKINFO.json {field} is {link.get(field)!r} but the shipped "
                     f"header defines {macro} as {stated}"
                 )
+
+    # Which build of the shim this archive holds. Nothing here can
+    # recompute either number: `native/` is the producer's tree and is
+    # not in the archive. What it can do is refuse a value a consumer
+    # cannot use, and hold the commit against the other manifest that
+    # already states it.
+    for field, width in HEX_IDENTITY_FIELDS:
+        value = link.get(field)
+        if not isinstance(value, str) or not re.fullmatch(rf"[0-9a-f]{{{width}}}", value):
+            problems.append(
+                f"LINKINFO.json {field} is {value!r}, which is not {width} lowercase "
+                "hex characters. Same rule as abi_header_sha256: no 0x, no uppercase, "
+                "no abbreviation. A consumer compares it against another archive's, so "
+                "a value in a second presentation is two archives reported as differing "
+                "when they do not."
+            )
+
+    if build is not None and link.get("viprs_dep_commit") != build.get("driver_commit"):
+        problems.append(
+            f"LINKINFO.json viprs_dep_commit is {link.get('viprs_dep_commit')!r} and "
+            f"BUILDINFO.json driver_commit is {build.get('driver_commit')!r}. Both are "
+            "the commit of the tree that produced this archive, written by one run of "
+            "one driver, so a disagreement is not a stale field to prefer over the "
+            "other -- it is an archive whose provenance neither file establishes."
+        )
 
     facts["shared_library"] = str(link.get("shared_library", ""))
     facts["static_library"] = str(static_library or "")
