@@ -15,6 +15,31 @@
 //! and is pulled in with `static:+whole-archive` rather than forced with
 //! `-Wl,-u,...`, and why a non-empty `static_link_args` is a hard error
 //! here rather than something to pass along and hope about.
+//!
+//! It handles both link modes, because on one target there is only one of
+//! them. `static_certified` is false on `aarch64-apple-darwin` and always
+//! has been, so until this script grew a shared branch there was nothing
+//! that linked a mac archive at all: the build's own shared smoke is
+//! `dlopen` on an absolute path, and `dlopen` never consults the name a
+//! dylib records for itself. That is how `3.7.1-viprs.1` published a mac
+//! archive no consumer could link (#95). The recorded name is checked
+//! from the bytes now, by `scripts/verify_archive.sh`; this is the half
+//! that asks the loader instead of asking us.
+//!
+//! The rpath the shared mode needs cannot be emitted from here, for the
+//! `rustc-link-arg` reason above: it would reach this crate's own targets
+//! and not the binary. So it goes out as `cargo:lib_dir`, which cargo
+//! hands to a dependent's build script as `DEP_ACADSHARP_NATIVE_LIB_DIR`
+//! because this package declares `links = "acadsharp_native"`, and
+//! `consumer`'s build script turns it into the flag. That is the
+//! propagation route a real consumer has, and it is why the two crates
+//! are separate here.
+//!
+//! The key name is `lib_dir` because that is the one the shipped
+//! `acadsharp-rs` publishes (`build.rs:282`, `cargo::metadata=lib_dir=`).
+//! A fixture that demonstrates the route under a different name teaches a
+//! `DEP_*` variable no consumer's build script will ever see, which is a
+//! binary that links against a correct archive and dies before `main`.
 
 use std::path::PathBuf;
 
@@ -29,12 +54,36 @@ fn main() {
     let text = std::fs::read_to_string(&manifest)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", manifest.display()));
 
+    let lib_dir = root.join("lib");
+
     if !json_bool(&text, "static_certified") {
-        panic!(
-            "{} says static_certified is false, so this archive ships no static \
-             libraries and there is nothing to link statically",
-            manifest.display()
-        );
+        // The shared recipe, which is the whole recipe on mac. Nothing
+        // here is subtle the way the static one is: a shared library runs
+        // its own initialisers when the loader brings it in, so there is
+        // no archive to force and no order to get right.
+        //
+        // `shared_system_libraries` still goes on the line. Those are the
+        // library's own `NEEDED`/`LC_LOAD_DYLIB` entries, which the loader
+        // resolves for it, so the link would succeed without them; naming
+        // them is what LINKINFO.md documents and what `acadsharp-rs` does,
+        // and a recipe measured in two shapes is a recipe measured in
+        // neither.
+        let shared = json_string(&text, "shared_library").expect("shared_library");
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        println!("cargo:rustc-link-lib={}", link_name(&shared));
+        for lib in json_string_array(&text, "shared_system_libraries") {
+            println!("cargo:rustc-link-lib={lib}");
+        }
+        // Out as metadata, not as a flag: see the note at the top. A
+        // dependent reads it as DEP_ACADSHARP_NATIVE_LIB_DIR.
+        //
+        // Only on this branch. `lib/` holds the shared library and the
+        // static archives together, a bare `-l` prefers the shared one,
+        // so an rpath on the static path produces a binary that was meant
+        // to be self-contained, links, and then quietly runs against the
+        // `.dylib` next to it on the build machine.
+        println!("cargo:lib_dir={}", lib_dir.display());
+        return;
     }
 
     let static_lib = json_string(&text, "static_library").expect("static_library");
@@ -49,7 +98,7 @@ fn main() {
         );
     }
 
-    println!("cargo:rustc-link-search=native={}", root.join("lib").display());
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
 
     // Three modifiers, and all three are load-bearing.
     //
@@ -80,10 +129,27 @@ fn main() {
     }
 }
 
-/// `lib/libacadsharp_native_init.a` -> `acadsharp_native_init`
+/// `lib/libacadsharp_native_init.a` -> `acadsharp_native_init`, and
+/// `lib/libacadsharp_native.dylib` -> `acadsharp_native`.
+///
+/// The same transformation `-l` has always done: drop the `lib` prefix and
+/// the extension. All three extensions, because the manifest names the
+/// file and the file is a `.a` on the static path, a `.so` on Linux and a
+/// `.dylib` on mac; a stem left with its extension on becomes
+/// `-lacadsharp_native.dylib`, which the linker looks for as
+/// `libacadsharp_native.dylib.dylib` and does not find.
+///
+/// `strip_prefix`/`strip_suffix` rather than `trim_*_matches`, which strip
+/// every repeated occurrence: `liblibfoo.a` must be `libfoo`, not `foo`.
 fn link_name(path: &str) -> String {
     let file = path.rsplit('/').next().unwrap_or(path);
-    file.trim_start_matches("lib").trim_end_matches(".a").to_string()
+    let stem = file.strip_prefix("lib").unwrap_or(file);
+    for ext in [".a", ".so", ".dylib"] {
+        if let Some(cut) = stem.strip_suffix(ext) {
+            return cut.to_string();
+        }
+    }
+    stem.to_string()
 }
 
 fn field<'a>(text: &'a str, key: &str) -> Option<&'a str> {

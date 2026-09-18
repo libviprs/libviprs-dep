@@ -8,7 +8,11 @@ a run of the file in the tree, so every capture carries the sha256 of its
 fixture and every test that uses one checks it. The other half of "provably a
 run of" is the code: ``shim_sources`` and ``shim_digest`` below are what
 ``tests/expectations/MANIFEST.json`` records the shim with, and
-``test_shim_digest.py`` is what refuses a stale one.
+``test_shim_digest.py`` is what refuses a stale one. Both of those now come
+out of ``build_acadsharp.py`` rather than being computed here, because the
+same rollup is a field of every published ``LINKINFO.json``: a consumer
+holding an archive beside a recording compares the two numbers, and that is
+only worth doing while there is one implementation of the number.
 
 Regenerating all of it is ``tests/fixtures/gen/regenerate.py``.
 """
@@ -28,8 +32,6 @@ ACAD_ROOT = os.path.dirname(TESTS_DIR)
 FIXTURES = os.path.join(TESTS_DIR, "fixtures")
 EXPECTATIONS = os.path.join(TESTS_DIR, "expectations")
 BENCHMARKS = os.path.join(TESTS_DIR, "benchmarks")
-GEN_DIR = os.path.join(FIXTURES, "gen")
-GEN_PROJECT = os.path.join(GEN_DIR, "Viprs.ACadSharp.FixtureGen.csproj")
 
 MANIFEST = os.path.join(EXPECTATIONS, "MANIFEST.json")
 SCENARIOS = os.path.join(EXPECTATIONS, "g13_scenarios.json")
@@ -105,41 +107,42 @@ COMPILE_INCLUDE = re.compile(r'<Compile\s+Include="([^"]+)"\s*/>')
 COMPILE_REMOVE = re.compile(r'<Compile\s+Remove="([^"]+)"')
 
 
+def _driver():
+    """`acadsharp/build_acadsharp.py`, however this module was reached.
+
+    Under pytest, `conftest.py` has already loaded it by path and registered
+    it in `sys.modules`, so this returns that one instance. Under
+    `tests/fixtures/gen/regenerate.py`, which imports this module as a
+    standalone script, nothing has, so it is loaded here the same way. The
+    driver is a script rather than a package, which is why neither path can
+    be a plain top-level import.
+
+    The direction matters: the packaging driver cannot import a test module,
+    so what the two share lives in the driver and is read from here.
+    """
+    if "build_acadsharp" not in sys.modules:
+        load_script(os.path.join(ACAD_ROOT, "build_acadsharp.py"), "build_acadsharp")
+    return sys.modules["build_acadsharp"]
+
+
 def shim_sources():
     """Every source the fixture generator compiles, relative to acadsharp/.
 
-    Read out of the generator's csproj rather than listed here. The set that
-    matters is the set that actually compiled into the run that recorded the
-    captures, and a file added to the shim is picked up by the same glob the
-    generator uses, so it lands in the digest the day it lands in the tree.
+    The driver's, not a second reader. `build_acadsharp.shim_sources` reads
+    the same csproj because `LINKINFO.json`'s `shim_sha256` and
+    `MANIFEST.json`'s `shim.sha256` are compared against each other by
+    whoever is holding an archive next to a recording, and two readers of
+    "which files are the shim" is how those two numbers come to be over
+    two different sets while both look like digests.
 
-    An include this reader does not understand is an error rather than a
-    skip: a pattern silently dropped here is a source file silently outside
-    the digest, which is the failure this whole file exists to stop.
+    Read out of the csproj rather than listed anywhere: the set that
+    matters is the set that actually compiled into the run that recorded
+    the captures, and a file added to the shim is picked up by the same
+    glob the generator uses, so it lands in the digest the day it lands in
+    the tree. An include the reader does not understand is an error rather
+    than a skip, for the same reason.
     """
-    with open(GEN_PROJECT) as f:
-        includes = COMPILE_INCLUDE.findall(f.read())
-    if not includes:
-        raise AssertionError(f"{GEN_PROJECT} compiles nothing this reader can see")
-
-    found = []
-    for include in includes:
-        pattern = include.replace("\\", "/")
-        if pattern.endswith("/**/*.cs"):
-            root = os.path.normpath(os.path.join(GEN_DIR, pattern[: -len("/**/*.cs")]))
-            for dirpath, dirs, files in os.walk(root):
-                dirs[:] = sorted(dirs)
-                found += [os.path.join(dirpath, f) for f in files if f.endswith(".cs")]
-        elif pattern.endswith(".cs") and "*" not in pattern:
-            found.append(os.path.normpath(os.path.join(GEN_DIR, pattern)))
-        else:
-            raise AssertionError(
-                f"{pattern!r} is a <Compile Include> this reader does not understand, "
-                "so the shim digest would quietly stop covering it. Teach "
-                "g13_support.shim_sources() the shape before shipping it."
-            )
-
-    return sorted(os.path.relpath(p, ACAD_ROOT).replace(os.sep, "/") for p in found)
+    return _driver().shim_sources()
 
 
 NATIVE_PROJECT = os.path.join(ACAD_ROOT, "native", "Viprs.ACadSharp.Native.csproj")
@@ -196,14 +199,12 @@ def shim_digest(sources=None):
 
     The path goes into the hash as well as the contents, so moving a file
     without changing a byte of it still moves the number.
+
+    The driver's arithmetic, for the reason `shim_sources` gives: this is
+    the number `MANIFEST.json` records and `LINKINFO.json` now ships, and
+    they are only worth comparing while there is one of them.
     """
-    h = hashlib.sha256()
-    for rel in shim_sources() if sources is None else sources:
-        h.update(rel.encode())
-        h.update(b"\0")
-        h.update(sha256_file(os.path.join(ACAD_ROOT, rel)).encode())
-        h.update(b"\0")
-    return h.hexdigest()
+    return _driver().shim_digest(sources)
 
 
 def load_json(path):

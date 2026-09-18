@@ -25,7 +25,24 @@
 #      defect as one whose digest is wrong.
 #   3. Both manifests parse and carry every frozen field. `acadsharp-rs`
 #      reads LINKINFO.json by those names, so a missing one is a
-#      downstream break rather than cosmetic.
+#      downstream break rather than cosmetic. Two of those fields say
+#      which build of the shim is in the archive rather than how to link
+#      it: `shim_sha256`, the rollup over the sources the flattener is
+#      compiled from, and `viprs_dep_commit`, this repo's tree. Neither
+#      can be recomputed from the archive -- the sources are not in it --
+#      so what is checked here is their shape and, for the commit, that
+#      it is the one BUILDINFO.json's `driver_commit` already records.
+#      Two manifests in one archive naming two different commits is the
+#      state where neither can be trusted, and it is the only part of
+#      this pair the bytes can settle.
+#      Those two fields arrived in 3.7.1-viprs.2, and `acadsharp-latest`
+#      still points at 3.7.1-viprs.1, which the README of that archive
+#      tells its consumer to verify with this script. So an archive whose
+#      `artifact_version` is below that floor may omit them and gets one
+#      NOTE saying so; at or above the floor they are required as any
+#      other frozen field; and a value that is present but malformed is
+#      refused at every version, because absent is a fact a consumer can
+#      act on and unparseable is not.
 #   4. `abi_header_sha256` is the hash of the header shipped beside it,
 #      and `abi_fingerprint` is that hash's first eight bytes, which is
 #      what `viprs_acad_abi_fingerprint()` is defined to return. The live
@@ -578,7 +595,28 @@ LINKINFO_FIELDS = (
     "static_library", "static_init_library", "static_certified",
     "static_system_libraries", "static_link_args",
     "dwg_version_min", "dwg_version_max",
+    "viprs_dep_commit", "shim_sha256",
 )
+# The two shim-identity fields, as `(field, length)`. Lowercase hex of a
+# fixed width, the same rule `abi_header_sha256` follows: a git object
+# name is 40 and a sha256 is 64. Checked for shape rather than for value
+# because the sources they are over are not in the archive, and a field
+# a consumer cannot parse is worse than one it can compare and reject.
+HEX_IDENTITY_FIELDS = (("viprs_dep_commit", 40), ("shim_sha256", 64))
+# The release those two fields first appeared in. Every archive published
+# before it carries neither -- including the bytes `acadsharp-latest`
+# points at, which are `3.7.1-viprs.1` -- and the archive's own README
+# tells a consumer to run this script on it, from a checkout of this
+# repository rather than from the archive. So refusing those is refusing a
+# good archive for a field that is absent rather than wrong, on the one
+# path the documentation prescribes. Below the floor their absence is one
+# NOTE and nothing else; at or above it their absence is a defect and is
+# refused as before; and a value that is present and malformed is refused
+# at every version, because that is the one a consumer cannot parse. A
+# version this cannot parse at all is not below the floor: an archive that
+# will not say how old it is does not get the tolerance.
+SHIM_FIELDS_FLOOR = "3.7.1-viprs.2"
+SHIM_IDENTITY_FIELDS = tuple(field for field, _width in HEX_IDENTITY_FIELDS)
 # The four digits behind the AC in a drawing's first six bytes. A shape
 # check and not a list of the codes this build reads: the range is
 # measured off the library rather than known here, and a check that knew
@@ -614,6 +652,9 @@ TRIPLES = {
 }
 
 problems = []
+# What the archive is not being refused for. A note is a fact the reader
+# needs and not a defect, so it prints and the exit status does not move.
+notes = []
 facts = {}
 
 
@@ -629,16 +670,43 @@ def load(name):
     return None
 
 
+def _revision(version):
+    """`3.7.1-viprs.2` -> `(3, 7, 1, 2)`; unparseable -> None."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)-viprs\.(\d+)", str(version or ""))
+    return tuple(int(g) for g in m.groups()) if m else None
+
+
+def _below_shim_floor(link):
+    here = _revision(link.get("artifact_version"))
+    floor = _revision(SHIM_FIELDS_FLOOR)
+    return here is not None and floor is not None and here < floor
+
+
 link = load("LINKINFO.json")
 build = load("BUILDINFO.json")
 
 if link is not None:
     certified = bool(link.get("static_certified"))
+    below_shim_floor = _below_shim_floor(link)
+    absent_shim_fields = []
     for field in LINKINFO_FIELDS:
         if field in STATIC_FIELDS:
             continue
         if field not in link:
+            if below_shim_floor and field in SHIM_IDENTITY_FIELDS:
+                absent_shim_fields.append(field)
+                continue
             problems.append(f"LINKINFO.json is missing the frozen field {field!r}")
+    if absent_shim_fields:
+        notes.append(
+            f"LINKINFO.json is artifact_version "
+            f"{str(link.get('artifact_version'))!r}, which predates\n"
+            f"      {', '.join(absent_shim_fields)} (added in {SHIM_FIELDS_FLOOR}). "
+            "Absent rather\n"
+            "      than wrong: this archive does not say which shim is in it, and "
+            "nothing\n"
+            "      else about it is in question."
+        )
 
     static_library = link.get("static_library")
     static_init_library = link.get("static_init_library")
@@ -788,6 +856,46 @@ if link is not None:
                     f"header defines {macro} as {stated}"
                 )
 
+    # Which build of the shim this archive holds. Nothing here can
+    # recompute either number: `native/` is the producer's tree and is
+    # not in the archive. What it can do is refuse a value a consumer
+    # cannot use, and hold the commit against the other manifest that
+    # already states it.
+    #
+    # Absent below the floor is the case the note above covers, and
+    # restating it here as "None is not 40 lowercase hex characters"
+    # reports one absence three times and calls it a defect. Present and
+    # malformed is refused at every version.
+    for field, width in HEX_IDENTITY_FIELDS:
+        value = link.get(field)
+        if value is None and below_shim_floor:
+            continue
+        if not isinstance(value, str) or not re.fullmatch(rf"[0-9a-f]{{{width}}}", value):
+            problems.append(
+                f"LINKINFO.json {field} is {value!r}, which is not {width} lowercase "
+                "hex characters. Same rule as abi_header_sha256: no 0x, no uppercase, "
+                "no abbreviation. A consumer compares it against another archive's, so "
+                "a value in a second presentation is two archives reported as differing "
+                "when they do not."
+            )
+
+    # An archive below the floor names no viprs_dep_commit, so this
+    # comparison would read "None and BUILDINFO says <sha>. Both are the
+    # commit of the tree that produced this archive ... a disagreement" --
+    # and nothing disagrees. One manifest predates the field.
+    if (
+        build is not None
+        and not (link.get("viprs_dep_commit") is None and below_shim_floor)
+        and link.get("viprs_dep_commit") != build.get("driver_commit")
+    ):
+        problems.append(
+            f"LINKINFO.json viprs_dep_commit is {link.get('viprs_dep_commit')!r} and "
+            f"BUILDINFO.json driver_commit is {build.get('driver_commit')!r}. Both are "
+            "the commit of the tree that produced this archive, written by one run of "
+            "one driver, so a disagreement is not a stale field to prefer over the "
+            "other -- it is an archive whose provenance neither file establishes."
+        )
+
     facts["shared_library"] = str(link.get("shared_library", ""))
     facts["static_library"] = str(static_library or "")
     facts["static_init_library"] = str(static_init_library or "")
@@ -849,6 +957,13 @@ with open(facts_path, "w") as f:
     for key, value in facts.items():
         f.write(f"{key}\t{value}\n")
 
+# Notes first, and flushed: stdout and stderr land in the same captured
+# file, and a block-buffered stdout would print the explanation after the
+# refusals it explains.
+for note in notes:
+    print(f"NOTE: {note}")
+sys.stdout.flush()
+
 for problem in problems:
     print(f"FAIL: {problem}", file=sys.stderr)
 sys.exit(1 if problems else 0)
@@ -858,7 +973,8 @@ then
   FAIL=1
 else
   cat "$WORK/py.out"
-  echo "  manifests parse, carry every frozen field, and CHECKSUMS.txt covers the archive"
+  echo "  manifests parse, carry every frozen field their version requires, and \
+CHECKSUMS.txt covers the archive"
 fi
 
 mfact() { awk -F'\t' -v k="$1" '$1 == k { print $2; exit }' "$FACTS"; }
@@ -1274,6 +1390,62 @@ if [ -f "$STATIC_INIT_LIB" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Which target this host can actually build for. Hoisted out of the
+# `static_certified` block below because it is now two checks' predicate
+# and not one's.
+# ---------------------------------------------------------------------------
+
+HOST_CPU=unknown
+case "$(uname -m)" in
+  x86_64|amd64) HOST_CPU=x64 ;;
+  arm64|aarch64) HOST_CPU=arm64 ;;
+esac
+# musl's ldd exits 1 for --version, and under `pipefail` that made the
+# test below false on every Alpine host, so a musl archive was never
+# link-tested even on the one machine that could do it.
+LIBC_LINE=$(ldd --version 2>&1 | sed -n 1p || true)
+HOST_PLATFORM=linux
+if [ "$(uname -s)" = "Darwin" ]; then
+  HOST_PLATFORM=mac
+elif printf '%s' "$LIBC_LINE" | grep -qi musl; then
+  HOST_PLATFORM=musl
+fi
+
+# ---------------------------------------------------------------------------
+# The documented cargo recipe, for EVERY archive and not only a
+# static-certified one. On a shared-only target -- which is every mac
+# archive -- the static block below never runs, so before this ran here
+# nothing linked a mac archive and `VIPRS_REQUIRE_LINK_TEST=1` could not
+# refuse: the flag lived inside the static gate and a flag that cannot
+# refuse is worse than no flag.
+#
+# Gated on VIPRS_REQUIRE_LINK_TEST for the shared path deliberately: the
+# synthetic Mach-O fixtures in test_verify_archive.py are hand-assembled
+# bytes, not linkable libraries, and they do not set the variable.
+# ---------------------------------------------------------------------------
+if [ "$STATIC_CERTIFIED" != "1" ]; then
+  CONSUMER_SMOKE="$(dirname "$0")/link_consumer_smoke.sh"
+  if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \
+     && [ -x "$CONSUMER_SMOKE" ] && command -v cargo >/dev/null 2>&1 \
+     && [ "${VIPRS_REQUIRE_LINK_TEST:-0}" = "1" ]; then
+    if bash "$CONSUMER_SMOKE" "$ROOT" > "$WORK/consumer_shared.log" 2>&1; then
+      echo "  the documented cargo recipe links and runs against this shared-only archive"
+    else
+      fail "the documented cargo recipe fails against this shared-only archive:
+$(tail -25 "$WORK/consumer_shared.log")"
+    fi
+  elif [ "${VIPRS_REQUIRE_LINK_TEST:-0}" = "1" ]; then
+    fail "VIPRS_REQUIRE_LINK_TEST is set, this archive is shared-only
+    ($PLATFORM/$CPU) and this host is $HOST_PLATFORM/$HOST_CPU with
+    $(command -v cargo >/dev/null 2>&1 && echo cargo || echo 'no cargo'), so
+    nothing linked it. Run it through scripts/verify_archive_matched_host.sh."
+  else
+    echo "  shared-only archive: cargo recipe not run"
+    echo "  set VIPRS_REQUIRE_LINK_TEST=1 on a matched host to make that a failure"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # `static_certified: true` is a claim that the static smoke linked and
 # ran. When this host can build for this target, hold the claim to it,
 # and to running rather than only linking. An archive without the forced
@@ -1282,22 +1454,6 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ "$STATIC_CERTIFIED" = "1" ] && [ -f "$STATIC_LIB" ] && [ -f "$STATIC_INIT_LIB" ]; then
-  HOST_CPU=unknown
-  case "$(uname -m)" in
-    x86_64|amd64) HOST_CPU=x64 ;;
-    arm64|aarch64) HOST_CPU=arm64 ;;
-  esac
-  # musl's ldd exits 1 for --version, and under `pipefail` that made the
-  # test below false on every Alpine host, so a musl archive was never
-  # link-tested even on the one machine that could do it.
-  LIBC_LINE=$(ldd --version 2>&1 | sed -n 1p || true)
-  HOST_PLATFORM=linux
-  if [ "$(uname -s)" = "Darwin" ]; then
-    HOST_PLATFORM=mac
-  elif printf '%s' "$LIBC_LINE" | grep -qi musl; then
-    HOST_PLATFORM=musl
-  fi
-
   if [ "$HOST_CPU" = "$CPU" ] && [ "$HOST_PLATFORM" = "$PLATFORM" ] \
      && command -v cc >/dev/null 2>&1; then
     # The header the archive ships, not one from this checkout: the
