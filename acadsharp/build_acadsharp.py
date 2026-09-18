@@ -1680,11 +1680,91 @@ def run_checked(cmd, log_file, prefix, **kwargs):
 
 
 def driver_commit():
-    """The commit this driver was run from, for BUILDINFO.json."""
-    result = subprocess.run(
+    """The commit this driver was run from, for BUILDINFO.json.
+
+    Refuses rather than guesses. This is the commit `LINKINFO.json`
+    publishes as `viprs_dep_commit` and the one
+    `scripts/verify_archive.sh` holds the two manifests to, so a value
+    that does not describe the tree is worse than an absent one: the
+    field exists to be trusted, and a consumer reading it has nothing
+    else to check it against. Without git the old answer was
+    `"unknown"`, which is a value the verifier's own shape rule rejects
+    -- a whole build spent to reach a refusal that was decidable before
+    it started.
+
+    The other half of the same guarantee -- that the commit describes
+    the bytes being packaged and not just the last commit before
+    somebody edited a csproj -- is `refuse_uncommitted_source_tree`
+    below, which every cell runs before it builds anything.
+    """
+    head = subprocess.run(
         ["git", "-C", REPO_ROOT, "rev-parse", "HEAD"], capture_output=True, text=True
     )
-    return result.stdout.strip() if result.returncode == 0 else "unknown"
+    if head.returncode != 0:
+        detail = (
+            head.stderr.strip().splitlines()[-1]
+            if head.stderr.strip()
+            else f"exit {head.returncode}"
+        )
+        raise SourceTreeError(
+            f"no git commit for this tree: git rev-parse HEAD failed in {REPO_ROOT} "
+            f"({detail}). LINKINFO.json's viprs_dep_commit and BUILDINFO.json's "
+            "driver_commit are the commit of the tree that produced the archive, and an "
+            "archive cannot state a commit this tree does not have. Build from a git "
+            "checkout."
+        )
+    return head.stdout.strip()
+
+
+def refuse_uncommitted_source_tree():
+    """The precondition the archive's provenance fields rest on.
+
+    `git rev-parse HEAD` cannot see an uncommitted edit, so on a dirty
+    tree `viprs_dep_commit` and `BUILDINFO.json`'s `driver_commit` both
+    name a commit that does not describe what was packaged, while
+    `docs/LINKINFO.md` tells a consumer every byte in the archive is
+    under it. A tree with a modified csproj or patch is exactly the
+    state a tree is in when someone is changing what the library does,
+    which is when that claim matters most.
+
+    Checked where an archive is produced rather than inside
+    `driver_commit`, because that is the point the fact is lost: reading
+    the commit is not what makes the claim, writing it into an archive
+    is. Every manifest-shape test in `tests/` calls `linkinfo_skeleton`
+    and packages nothing, and a check that turned those red in any tree
+    with an unfinished edit would be a check people learn to ignore.
+
+    Returns the commit, so a caller that needs both facts asks once.
+    """
+    commit = driver_commit()
+    status = subprocess.run(
+        ["git", "-C", REPO_ROOT, "status", "--porcelain"], capture_output=True, text=True
+    )
+    if status.returncode != 0:
+        detail = (
+            status.stderr.strip().splitlines()[-1]
+            if status.stderr.strip()
+            else f"exit {status.returncode}"
+        )
+        raise SourceTreeError(
+            f"cannot tell whether this tree is committed: git status --porcelain failed "
+            f"in {REPO_ROOT} ({detail}), so whether {commit} describes what would be "
+            "packaged is unknown, and viprs_dep_commit may not be a guess."
+        )
+    entries = status.stdout.splitlines()
+    if entries:
+        listing = "\n".join(f"  {line}" for line in entries[:10])
+        if len(entries) > 10:
+            listing += f"\n  ... and {len(entries) - 10} more"
+        raise SourceTreeError(
+            f"this tree has uncommitted changes, so {commit} does not describe what would "
+            f"be packaged -- {len(entries)} path(s) in {REPO_ROOT} differ from it:\n"
+            f"{listing}\n"
+            "LINKINFO.json's viprs_dep_commit and BUILDINFO.json's driver_commit would "
+            "state that commit anyway, and docs/LINKINFO.md says every byte in the "
+            "archive is under it. Commit or stash the changes and build again."
+        )
+    return commit
 
 
 def read_facts(path):
@@ -1910,7 +1990,12 @@ def build_for_job(version, plat, arch, output_dir):
     flag that no caller ever passed, so the branch behind it was a documented
     behaviour the driver did not have: a reader of this signature would think a
     failed cell could come back as None and write a caller that handled it.
+
+    The first thing it does is refuse a tree it could not describe: both
+    manifests state the producing commit, and that is decidable before any
+    work rather than after a build.
     """
+    refuse_uncommitted_source_tree()
     job = f"{plat}/{arch}"
     log_dir = os.path.join(output_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
