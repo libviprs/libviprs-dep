@@ -1040,7 +1040,9 @@ own package, not by a dependency.
 
 Worked, as a `-sys` crate's `build.rs`. The crate needs
 `links = "acadsharp_native"` in its `Cargo.toml`, or cargo will not pass
-this metadata to dependents at all:
+this metadata to dependents at all, and `static = []` in its
+`[features]` table, or the `cfg!(feature = "static")` below warns
+`unexpected_cfgs` and always takes the shared branch:
 
 ```rust
 use std::path::PathBuf;
@@ -1111,44 +1113,70 @@ fn main() {
             println!("cargo:rustc-link-lib={}", lib.as_str().unwrap());
         }
     } else {
-        println!("cargo:rustc-link-lib=acadsharp_native");
+        println!(
+            "cargo:rustc-link-lib={}",
+            stem(&link["shared_library"])
+        );
         for lib in link["shared_system_libraries"].as_array().unwrap() {
             println!("cargo:rustc-link-lib={}", lib.as_str().unwrap());
         }
+        // The shared library needs an rpath in the FINAL BINARY, and an
+        // rpath is a link argument, which `cargo:rustc-link-arg` binds to
+        // this package's own targets. So publish the directory as metadata
+        // and let the binary's build script turn it into the flag. The key
+        // name is the one `acadsharp-rs` publishes.
+        println!("cargo:lib_dir={}", root.join("lib").display());
     }
 }
 
-/// `lib/libacadsharp_native_init.a` -> `acadsharp_native_init`
+/// `lib/libacadsharp_native_init.a` -> `acadsharp_native_init`,
+/// `lib/libacadsharp_native.dylib` -> `acadsharp_native`.
+///
+/// `strip_prefix`/`strip_suffix` rather than `trim_*_matches`, which strip
+/// every repeated occurrence: `liblibfoo.a` must be `libfoo`, not `foo`.
 fn stem(value: &serde_json::Value) -> String {
     let path = value.as_str().expect("path");
     let file = path.rsplit('/').next().unwrap_or(path);
-    file.trim_start_matches("lib").trim_end_matches(".a").to_string()
+    let file = file.strip_prefix("lib").unwrap_or(file);
+    for ext in [".a", ".so", ".dylib"] {
+        if let Some(base) = file.strip_suffix(ext) {
+            return base.to_string();
+        }
+    }
+    file.to_string()
 }
 ```
 
-`acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs
-exactly that recipe through a two-crate workspace and executes the
-binary, in whichever mode the archive certifies, and
+`acadsharp/scripts/link_consumer_smoke.sh <unpacked-archive>` runs the
+same directives through a two-crate workspace and executes the binary,
+in whichever mode the archive certifies, and
 `acadsharp/scripts/verify_archive.sh` runs it too when the host can build
-for the archive's target. That copy hand-parses the manifest instead of
-pulling in `serde_json`, because it has to build offline inside a
-container; the directives it emits are the same ones.
+for the archive's target: unconditionally for a static-certified archive,
+and for a shared-only one when `VIPRS_REQUIRE_LINK_TEST=1` is set — which
+`scripts/verify_archive_matched_host.sh` and the release lane both do.
+That copy hand-parses the manifest instead of pulling in `serde_json`,
+because it has to build offline inside a container, and it selects the
+mode from the manifest's `static_certified` rather than from a cargo
+feature, so what it runs is the same directives rather than exactly the
+block above.
 
-The shared branch above is not the whole shared recipe, and the part it is
-missing cannot go in a `-sys` crate's build script. A binary linked
-against the shared library needs an rpath, because cargo does not put a
-build script's `rustc-link-search` directory on the loader's path, and an
-rpath is a link argument: `cargo:rustc-link-arg` binds to the emitting
-package's own targets, so one emitted here reaches this crate's tests and
-never the binary. The route that does work is metadata. This package
-declares `links = "acadsharp_native"`, so
+The `cargo:lib_dir=` line in that shared branch is only half of the
+rpath, and the other half cannot go in a `-sys` crate's build script at
+all. A binary linked against the shared library needs an rpath, because
+cargo does not put a build script's `rustc-link-search` directory on the
+loader's path, and an rpath is a link argument: `cargo:rustc-link-arg`
+binds to the emitting package's own targets, so one emitted here reaches
+this crate's tests and never the binary. The route that does work is
+metadata. This package declares `links = "acadsharp_native"`, so
 
-    println!("cargo:rpath={}", root.join("lib").display());
+    println!("cargo:lib_dir={}", root.join("lib").display());
 
-arrives in a dependent's build script as `DEP_ACADSHARP_NATIVE_RPATH`, and
-the binary's own build script turns it into the flag:
+arrives in a dependent's build script as `DEP_ACADSHARP_NATIVE_LIB_DIR`,
+which is the key the shipped `acadsharp-rs` publishes, and the binary's
+own build script turns it into the flag:
 
-    if let Ok(dir) = std::env::var("DEP_ACADSHARP_NATIVE_RPATH") {
+    println!("cargo:rerun-if-env-changed=DEP_ACADSHARP_NATIVE_LIB_DIR");
+    if let Ok(dir) = std::env::var("DEP_ACADSHARP_NATIVE_LIB_DIR") {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
     }
 

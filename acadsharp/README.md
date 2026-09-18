@@ -132,6 +132,13 @@ step existed the mac cell published an archive nothing had ever linked, which
 is #95: its only shared check was a `dlopen` on an absolute path, and `dlopen`
 never reads the name a dylib records for itself.
 
+The two lanes also differ in where their cargo comes from. The mac cell takes
+whatever the `macos-15` image ships, unpinned; the four container cells pin
+theirs with the image (`rust:1.98.1`, and `rust:1.98.1-alpine` on musl). An
+image with no cargo in it fails that step rather than skipping it:
+`link_consumer_smoke.sh` exits 2 when `cargo` or `python3` is missing, so an
+unlinked archive is never reported as a linked one.
+
 One thing is deliberately different from the zstd workflow: nothing is emulated.
 ADR 0001 measured a cross-architecture publish producing the object file and
 then failing at the native link, and the .NET runtime documents
