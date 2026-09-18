@@ -38,8 +38,11 @@ second.
 ## Reading the file
 
 It is a single JSON object, UTF-8, no comments, no trailing commas, no nesting
-beyond arrays of strings. The key order is the order of the table below and
-happens to be stable, but nothing should depend on that: read by name.
+beyond arrays of strings. The key order in the file is not the order of the
+table below: the table groups fields by what they are for, while the file has
+only ever appended, so `dwg_version_min`, `dwg_version_max`,
+`viprs_dep_commit` and `shim_sha256` come last in the JSON and earlier in the
+table. Nothing should depend on either order: read by name.
 
 Paths are relative to the root of the unpacked archive and always use `/`. So
 `lib/libacadsharp_native.so` means exactly that, joined onto wherever the
@@ -79,8 +82,12 @@ matches the header the consumer was built against. A consumer checks both.
 
 Every field marked always present is present in every archive this repo
 publishes, on every target, and its absence is a malformed manifest rather than
-a fact about the build. The four static link fields are the only optional ones
-and they appear together or not at all.
+a fact about the build. Two kinds of field are not marked that way. The four
+static link fields appear together or not at all, on the value of
+`static_certified`. And two carry a version instead of `always`: they were
+added in `3.7.1-viprs.2`, so an archive published before that does not have
+them, and `scripts/verify_archive.sh` reads an older archive's absence as an
+absence rather than as a defect while requiring them from that version onward.
 
 | Field | JSON type | Presence | Meaning | What a build script does with it |
 | --- | --- | --- | --- | --- |
@@ -88,18 +95,20 @@ and they appear together or not at all.
 | `artifact_version` | string | always | The full artifact version, `<upstream>-viprs.<revision>`, e.g. `3.7.1-viprs.1`. The revision moves when the shim changes without upstream moving. | Report it, pin against it, print it in a diagnostic. Nothing is emitted from it. |
 | `acadsharp_version` | string | always | The upstream library version alone, e.g. `3.7.1`. Never carries the `-viprs.` suffix. | Provenance only. |
 | `acadsharp_commit` | string | always | 40 lowercase hex characters: the upstream commit the source tarball was taken from. | Provenance only. |
+| `viprs_dep_commit` | string | from `3.7.1-viprs.2` | 40 lowercase hex characters: the commit of `libviprs/libviprs-dep`, the tree that produced this archive. `acadsharp_commit` is upstream's tree; this is the one that wrote the shim around it and packed the archive. | Provenance, and the one identity `artifact_version` cannot give: see below. |
+| `shim_sha256` | string | from `3.7.1-viprs.2` | 64 lowercase hex characters: one sha256 over the flattener sources the fixture generator compiles, paths and contents both. The exact same number `acadsharp/tests/expectations/MANIFEST.json` records as `shim.sha256`. | Compare against another archive's, or against a recording's, to establish whether two decodes came from the same flattener sources. It does not cover everything that decides a decode; see below before inferring more. Nothing is emitted from it. |
 | `dotnet_sdk` | string | always | The SDK version that published the binaries, e.g. `10.0.401`. | Provenance only. No .NET runtime is needed to consume the archive. |
 | `target` | string | always | The Rust target triple this archive is for: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl` or `aarch64-apple-darwin`. | Compare against the target being built for and refuse a mismatch. A glibc archive linked into a musl binary is a link that succeeds and a binary that does not load. |
 | `platform` | string | always | `linux`, `musl` or `mac`. The same fact as `target`, in this repo's own vocabulary. | Usually nothing; `target` is the precise one. |
 | `cpu` | string | always | `x64` or `arm64`. | Usually nothing, same reason. |
-| `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `1` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
+| `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `2` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
 | `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `2` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
 | `dwg_version_min` | integer | always | The lowest DWG format this build reads, as the four digits behind the `AC` in a drawing's first six bytes. Measured: the build asks the library it is about to pack, through `viprs_acad_get_capabilities_v1`, and records the answer. The header never states it, because the range is a fact about the backing reader rather than part of the ABI, and it can move without `abi_version` moving. | Refuse a drawing whose signature is below it, or report the range. Read it from the archive rather than pinning the number: a consumer that hardcodes it refuses a format the next archive reads. |
 | `dwg_version_max` | integer | always | The highest, in the same form and measured the same way. Never below `dwg_version_min`. | The same, at the other end. |
 | `abi_header_sha256` | string | always | 64 lowercase hex characters: the sha256 of `include/viprs_acadsharp.h` as shipped in this same archive. | Verify the shipped header is the one this manifest describes, before generating bindings from it. |
 | `abi_fingerprint` | string | always | 16 lowercase hex characters. See below: this one has a format, and the format is load-bearing. | Parse as a base-16 integer and compare against `viprs_acad_abi_fingerprint()` at run time. |
 | `shared_library` | string | always | Archive-relative path to the shared library, `lib/libacadsharp_native.so` or `lib/libacadsharp_native.dylib`. | For a dynamic link: a link-search directive for its directory and `cargo:rustc-link-lib=acadsharp_native`. For `dlopen`, the path itself. |
-| `shared_system_libraries` | array of strings | always | Bare library names the shared library needs at load time, taken from its own `NEEDED` list with libc and the loader dropped. Frequently empty. | One `cargo:rustc-link-lib=<name>` each, when linking the shared library. Names are bare: no `-l`, no path, no extension. |
+| `shared_system_libraries` | array of strings | always | Bare library names the shared library needs at load time, read off the shipped library itself rather than assumed. Empty in every Linux archive published so far; five entries in the mac one. What the measurement keeps and drops is below. | One `cargo:rustc-link-lib=<name>` each, when linking the shared library. Names are bare: no `-l`, no path, no extension. |
 | `static_library` | string | only when `static_certified` | Archive-relative path to the merged static archive, `lib/libacadsharp_native.a`. | `cargo:rustc-link-lib=static:-bundle=acadsharp_native`, second. See the recipe. |
 | `static_init_library` | string | only when `static_certified` | Archive-relative path to the runtime's static initialiser, on its own, `lib/libacadsharp_native_init.a`. One small object and nothing else. | `cargo:rustc-link-lib=static:-bundle,+whole-archive=acadsharp_native_init`, first. See the recipe. |
 | `static_certified` | boolean | always | `true` only when the static archive was linked **and run** on this target during the build. `false` otherwise, including on every target that never attempts one. | Gate the whole static path on it. When it is `false` there is no static archive in the file and nothing to link. |
@@ -138,6 +147,72 @@ leading zero. Parse, then compare numbers.
 characters, same lowercase-hex-no-prefix rule. Nothing canonicalises the header
 before hashing it: comments and whitespace are in.
 
+### `viprs_dep_commit` and `shim_sha256` say which decoder this is
+
+Everything else in this file is about getting the library onto a link line.
+These two are about telling one build of it from another, and they are here
+because nothing in the archive could.
+
+The problem they solve is identity. `acadsharp_version` and `acadsharp_commit`
+describe upstream's tree, which is pinned and identical across shim revisions,
+and `artifact_version` is a name the release workflow uploads with
+`--clobber`, so the same name can have been published twice from different
+sources. Nothing in the archive said which build of the shim was inside it.
+These two do.
+
+`shim_sha256` is one sha256 over the shim's sources: for each file, its
+repo-relative path and the hex sha256 of its contents, each followed by a
+NUL, in sorted path order. The paths are the producing repository's —
+`native/Abi.cs`, and no `native/` exists in an archive — so what was hashed
+is not in front of you. The path is in the hash as well as the bytes, so
+moving a file without editing it still moves the number. Two archives with
+the same `shim_sha256` were built from the same **flattener sources**, and
+two that differ were not. Nothing more is inferable from it: it is not
+ordered, so a number cannot tell you which of two is newer, and the sources
+it covers are not in the archive, so it cannot be recomputed from what you
+have — it is an identity to compare, not a digest to verify.
+
+**What it does not cover.** The set is the sources the fixture generator
+compiles, 20 files. The shipped library is built from more than that, and
+three of the extra inputs change what a drawing decodes to while leaving this
+number alone: `native/Exports.cs` (the entry points themselves — handle
+table, struct validation, exception mapping),
+`native/Viprs.ACadSharp.Native.csproj` (which carries
+`InvariantGlobalization`, and ADR 0001 records what that costs DWG code-page
+text), and `patches/allocation_ceiling.py` (which bounds the reader's
+allocations and therefore decides which drawings decode at all). So two
+archives agreeing on `shim_sha256` can still disagree about what a piece of
+text says. Use it for the question it answers — is this the same build of the
+flattener as the one `tests/expectations/MANIFEST.json` was recorded from —
+and read `metadata/BUILDINFO.json` for the rest.
+
+`viprs_dep_commit` is the producing tree: the commit
+`scripts/verify_archive.sh` holds against `BUILDINFO.json`'s `driver_commit`,
+so an archive whose two manifests disagree about its provenance is refused.
+It is the commit and not a content digest — a build from a tree with
+uncommitted changes would state a commit that does not describe what was
+built, which is why the driver refuses to package one at all, with no
+override.
+The commit is stated in this file as well as in `BUILDINFO.json` because this
+one has a schema document, a `schema_version` and a rule for what a consumer
+does with an unrecognised key; `BUILDINFO.json` has none of those, so nothing
+can be read out of it by contract.
+
+Three things about `BUILDINFO.json` follow from that, and all three are worth
+knowing before reading a field out of it anyway. Part of what it records is
+shaped by the host rather than by the build: `linker_version` is
+`GNU ld (GNU Binutils for Debian) 2.40` in a published Linux archive and the
+empty string in the mac one, because Apple's `ld` has no `--version` to
+answer, while `clang_version` is populated on both. Part of it is asserted
+rather than measured: `invariant_globalization` is written as a literal
+`true` by the driver, which never reads the csproj that sets the property, so
+it states the intended setting and not the one the library was built with. And
+the codegen is in neither manifest: `native/packages.lock.json` pins
+`Microsoft.DotNet.ILCompiler`, which is what turns the IL into the object code
+in `lib/`, and neither `LINKINFO.json` nor `BUILDINFO.json` names it or its
+version. `dotnet_sdk` is the nearest thing either file has, and it is the SDK
+rather than the compiler.
+
 ### The two linking modes have separate fields
 
 `shared_system_libraries` describes the shared library. `static_system_libraries`
@@ -146,6 +221,32 @@ list: the shared library's `NEEDED` entries are what the loader resolves for a
 `.so`, and a static link pulls in a different and usually longer set. A consumer
 that reads the wrong one gets undefined symbols at the end of a static link with
 nothing pointing at why.
+
+### What `shared_system_libraries` is measured from, and what it misses
+
+The list is read off the shipped library rather than derived from a list of
+names: `readelf -d` NEEDED on ELF, `otool -L` on Mach-O, each entry reduced to
+its bare stem, with the loader, a bare `c` and a bare `System` dropped —
+nothing links those by name. On the four Linux archives published so far that
+leaves an empty list.
+
+On mac it leaves five names, and two things about that are worth stating
+rather than leaving to be rediscovered. The reader recognises a dependency by
+its `/lib<name>.dylib` path, so the library's six framework dependencies —
+`CoreFoundation`, `CryptoKit`, `Foundation`, `Network`, `Security` and `GSS`,
+which `otool -L` reports as
+`/System/Library/Frameworks/<name>.framework/Versions/<v>/<name>` — are not in
+the list at all. And the one it keeps that the drop list was meant to remove is
+libc: the entry is `libSystem.B.dylib`, whose stem is `System.B`, and the drop
+list matches a bare `System`. So the mac list reads
+`["icucore.A", "objc.A", "swiftCore", "swiftFoundation", "System.B"]`, and a
+consumer emitting one `-l` per entry passes `-lSystem.B`, which the Apple
+linker resolves.
+
+Read it as the measurement it is. A consumer that assumes the mac list is
+framework-complete, or that it excludes libc, is wrong on both counts; and a
+framework this library needs is one the loader resolves for it, not one the
+consumer has to name.
 
 ### Absent, not empty
 
@@ -407,14 +508,14 @@ a consumer checks. A certified Linux x86-64 target:
 ```json
 {
   "schema_version": 1,
-  "artifact_version": "3.7.1-viprs.1",
+  "artifact_version": "3.7.1-viprs.2",
   "acadsharp_version": "3.7.1",
   "acadsharp_commit": "0f1e2d3c4b5a69788796a5b4c3d2e1f0abcdef01",
   "dotnet_sdk": "10.0.401",
   "target": "x86_64-unknown-linux-gnu",
   "platform": "linux",
   "cpu": "x64",
-  "abi_version": 1,
+  "abi_version": 2,
   "wire_version": 2,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
@@ -426,7 +527,9 @@ a consumer checks. A certified Linux x86-64 target:
   "static_system_libraries": ["m", "rt", "dl", "pthread", "stdc++"],
   "static_link_args": [],
   "dwg_version_min": 1014,
-  "dwg_version_max": 1032
+  "dwg_version_max": 1032,
+  "viprs_dep_commit": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+  "shim_sha256": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 }
 ```
 
@@ -436,22 +539,24 @@ And an uncertified one, which is the same file with five differences and no
 ```json
 {
   "schema_version": 1,
-  "artifact_version": "3.7.1-viprs.1",
+  "artifact_version": "3.7.1-viprs.2",
   "acadsharp_version": "3.7.1",
   "acadsharp_commit": "0f1e2d3c4b5a69788796a5b4c3d2e1f0abcdef01",
   "dotnet_sdk": "10.0.401",
   "target": "aarch64-apple-darwin",
   "platform": "mac",
   "cpu": "arm64",
-  "abi_version": 1,
+  "abi_version": 2,
   "wire_version": 2,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.dylib",
-  "shared_system_libraries": [],
+  "shared_system_libraries": ["icucore.A", "objc.A", "swiftCore", "swiftFoundation", "System.B"],
   "static_certified": false,
   "dwg_version_min": 1014,
-  "dwg_version_max": 1032
+  "dwg_version_max": 1032,
+  "viprs_dep_commit": "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+  "shim_sha256": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 }
 ```
 

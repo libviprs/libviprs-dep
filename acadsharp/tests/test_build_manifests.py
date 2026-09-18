@@ -51,6 +51,8 @@ FROZEN_LINKINFO_FIELDS = (
     "static_link_args",
     "dwg_version_min",
     "dwg_version_max",
+    "viprs_dep_commit",
+    "shim_sha256",
 )
 
 # The four that describe the static link. They are present together when
@@ -133,6 +135,70 @@ class TestTheFieldNamesAreFrozen:
     def test_it_round_trips_through_json(self):
         info = ba.make_linkinfo("linux", "arm64", **_shared_only())
         assert json.loads(json.dumps(info)) == info
+
+
+class TestTheArchiveSaysWhichShimIsInIt:
+    """The pair that tells a stale flattener from a real disagreement.
+
+    `3.7.1-viprs.1` shipped without them, and the consequence was concrete:
+    two archives could decode one drawing into two different strings with
+    no field in either that differed. `acadsharp_commit` is upstream's tree
+    and is identical across shim revisions; `artifact_version` is a name the
+    release workflow re-uploads with `--clobber`.
+    """
+
+    def test_the_digest_is_the_one_the_recording_carries(self):
+        # The whole point of the field: a consumer holds an archive beside
+        # `tests/expectations/` and asks whether the recording is of this
+        # flattener. That is one subtraction only while both numbers are the
+        # same rollup over the same set, which is why `g13_support` delegates
+        # to the driver instead of computing its own.
+        with open(os.path.join(ACAD_DIR, "tests", "expectations", "MANIFEST.json")) as f:
+            recorded = json.load(f)["shim"]["sha256"]
+        info = ba.linkinfo_skeleton("mac", "arm64")
+        assert info["shim_sha256"] == recorded
+
+    def test_a_version_pinned_to_another_shim_cannot_be_packaged(self):
+        # The row for a published version is frozen, so a tree that does not
+        # match it is either an unbumped revision or an override naming
+        # somebody else's build. Both publish one name meaning two libraries.
+        #
+        # This is also the whole of what holds the field to the tree rather
+        # than to the table. A dispatch override naming a published version is
+        # the trap: pinning the field to SHIM_DIGESTS[version] would have put
+        # viprs.1's digest into an archive built from these sources, stating a
+        # flattener that is not in it, which is the exact confusion the field
+        # is here to end. There is no second test of that, and there cannot
+        # usefully be one: while this refusal stands, "pinned" and "measured"
+        # are the same string for every version with a row, so a test asking
+        # which of them was written can only assert what this one asserts.
+        # The one that used to sit here monkeypatched the row to equal the
+        # measurement in its own setup and then stayed green with the field
+        # literally looked up by name.
+        with pytest.raises(ValueError, match="pinned to shim"):
+            ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.1", **_shared_only())
+
+    def test_a_version_with_no_row_is_packaged_with_what_it_measured(self):
+        # The documented throwaway (`--version 3.7.1-viprs.0`, deleted with
+        # `--cleanup-tag`). A rehearsal that cannot run is not a rehearsal,
+        # and its manifest still states the shim it really built.
+        assert "3.7.1-viprs.0" not in ba.SHIM_DIGESTS
+        info = ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.0", **_shared_only())
+        assert info["shim_sha256"] == ba.shim_digest()
+
+    def test_moving_a_shim_source_moves_the_digest(self, tmp_path):
+        # The control. A rollup over a set the reader could not find agrees
+        # with itself just as well as a real one does.
+        sources = ba.shim_sources()
+        assert any(s.startswith("native/Adapter/") for s in sources)
+        assert ba.shim_digest(sources[:-1]) != ba.shim_digest(sources)
+
+    def test_both_manifests_state_the_same_producing_commit(self):
+        # verify_archive.sh refuses a disagreement, and it can only do that
+        # while one run of one driver writes both.
+        link = ba.linkinfo_skeleton("mac", "arm64")
+        assert re.fullmatch(r"[0-9a-f]{40}", link["viprs_dep_commit"])
+        assert link["viprs_dep_commit"] == ba.driver_commit()
 
 
 class TestTargetIdentity:
@@ -649,17 +715,54 @@ class TestTheContractDocumentsShip:
             f"{sorted(rows - set(ba.LINKINFO_FIELDS))} describe a field nothing writes"
         )
 
-    def test_the_spec_marks_exactly_the_static_fields_optional(self):
+    def test_the_spec_marks_exactly_the_fields_a_consumer_may_find_missing(self):
+        # Two reasons a key can be absent, and a consumer cannot discover
+        # either from the one archive it holds. The four static link fields
+        # move on `static_certified`. The two shim-identity fields move on
+        # the artifact version: they were added in 3.7.1-viprs.2, a
+        # `-viprs.1` archive has neither, and `verify_archive.sh` reports
+        # that absence below its floor instead of refusing it. So the `from`
+        # rows are held to the floor the script actually tolerates and to the
+        # fields it tolerates there: a document promising a key in archives
+        # the verifier lets through without it is exactly the claim a
+        # consumer cannot check for itself.
         with open(os.path.join(self.DOCS_DIR, "LINKINFO.md")) as f:
             spec = f.read()
-        optional = set()
-        for name, presence in re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M):
-            if "always" not in presence:
-                optional.add(name)
-        assert optional == set(ba.STATIC_LINKINFO_FIELDS), (
-            "the four static link fields are the only optional ones, and which "
-            "fields a consumer may find missing is the thing it cannot discover "
-            "from one archive"
+        presence = dict(re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M))
+        optional = {name for name, cell in presence.items() if "always" not in cell}
+        # Keyed on the version a `from` cell names, not on how it is
+        # punctuated: repunctuating a cell is a presentation change and must
+        # not move this, naming a different version is a contract change and
+        # must.
+        versioned = {}
+        for name in sorted(optional):
+            found = re.match(r"from\b[^0-9]*([0-9][0-9A-Za-z.+-]*)", presence[name].strip())
+            if found:
+                versioned[name] = found.group(1)
+        assert optional - set(versioned) == set(ba.STATIC_LINKINFO_FIELDS), (
+            "the four static link fields are the only ones whose presence moves on "
+            "the link mode, and which fields a consumer may find missing is the "
+            "thing it cannot discover from one archive"
+        )
+
+        with open(ba.VERIFY_ARCHIVE_SCRIPT) as f:
+            code = f.read()
+        floor = re.search(r'^SHIM_FIELDS_FLOOR = "([^"]+)"', code, re.M)
+        tolerated = re.search(r"^HEX_IDENTITY_FIELDS = \((.*)\)$", code, re.M)
+        assert floor and tolerated, (
+            "verify_archive.sh no longer declares SHIM_FIELDS_FLOOR and "
+            "HEX_IDENTITY_FIELDS where this reads them, so nothing holds the table's "
+            "`from` rows to the version an archive may omit those keys below"
+        )
+        assert set(versioned) == set(re.findall(r'"([a-z0-9_]+)"', tolerated.group(1))), (
+            f"LINKINFO.md marks {sorted(versioned)} as present from a version and "
+            "verify_archive.sh tolerates the absence of a different set, so one of "
+            "them is wrong about which archives are missing which keys"
+        )
+        assert set(versioned.values()) == {floor.group(1)}, (
+            f"LINKINFO.md says {sorted(versioned.items())} and verify_archive.sh "
+            f"tolerates their absence below {floor.group(1)}, so the document and the "
+            "verifier disagree about which archives carry them"
         )
 
     def test_the_verifier_requires_exactly_the_documents_that_ship(self):
