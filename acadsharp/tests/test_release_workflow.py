@@ -119,16 +119,28 @@ TAG_PREFIX = "acadsharp-"
 PUBLISHING_JOBS = ("create-release", "build-linux", "build-mac", "release-notes")
 BUILD_JOBS = ("build-linux", "build-mac")
 
-VERIFIER = "acadsharp/scripts/verify_archive.sh"
-# The container cells go through the wrapper instead. Both musl cells run
-# on glibc runners, and verify_archive.sh link-tests `static_certified`
-# only when the host can build for the target, so those two got a "not
-# link-tested" line in a log and a green job while shipping a cargo recipe
-# nothing had run. The wrapper puts a musl archive in front of a musl
-# host, in a container on the same runner, and exports
-# VIPRS_REQUIRE_LINK_TEST so a skip is a failure.
+# Every build cell goes through the wrapper, and for two different
+# reasons that land on the same script. Both musl cells run on glibc
+# runners, and verify_archive.sh link-tests `static_certified` only when
+# the host can build for the target, so those two got a "not link-tested"
+# line in a log and a green job while shipping a cargo recipe nothing had
+# run; the wrapper puts a musl archive in front of a musl host, in a
+# container on the same runner. The mac cell already *is* the matched
+# host, so the wrapper runs the script straight through -- what it adds
+# there is the exported VIPRS_REQUIRE_LINK_TEST, which is what makes
+# verify_archive.sh run the documented cargo recipe against a shared-only
+# archive and refuse when nothing linked it. Called directly, the script
+# prints "cargo recipe not run" and exits 0, which on the one target
+# where shared is the only link mode is #95's shape again.
 MATCHED_HOST_VERIFIER = "acadsharp/scripts/verify_archive_matched_host.sh"
-VERIFIER_FOR = {"build-linux": MATCHED_HOST_VERIFIER, "build-mac": VERIFIER}
+# Per job, and asserted per job. Collapsing this to "the wrapper appears
+# somewhere" once both rows agree would stop noticing a single cell
+# regressing to the bare script, which is the defect this mapping exists
+# to catch.
+VERIFIER_FOR = {
+    "build-linux": MATCHED_HOST_VERIFIER,
+    "build-mac": MATCHED_HOST_VERIFIER,
+}
 DRIVER = "acadsharp/build_acadsharp.py"
 
 # The two conformance consumers. The C one compiles against the header the
@@ -851,7 +863,7 @@ class TestTheMacCellLinksWhatItPublishes:
     upload. `build-mac` ran none, and every check it did have passed on an
     archive no consumer could link: the build's shared smoke is `dlopen`
     on an absolute path and `dlopen` never consults `LC_ID_DYLIB`, and
-    `verify_archive.sh`'s link-and-run probe is gated on
+    `verify_archive.sh`'s link-and-run probe was gated on
     `static_certified`, which is false on mac and is not going to change.
     So the one target where shared is the only link mode was the one
     target where nothing linked anything, five releases running.
@@ -860,6 +872,14 @@ class TestTheMacCellLinksWhatItPublishes:
     macos-15 runners have no docker. What it can run is the cargo recipe
     MANUAL.md documents, which needs cargo and python3 and nothing else,
     and which is the path a consumer actually takes.
+
+    `verify_archive.sh` now runs that recipe for a shared-only archive as
+    well, when the host matches and `VIPRS_REQUIRE_LINK_TEST=1` is set,
+    which is why this cell's Verify step goes through
+    `verify_archive_matched_host.sh`. This step stays anyway: it is the
+    one that links the unpacked tree between Verify and Upload, and the
+    premise of the epic is that a check living in exactly one lane is how
+    #95 shipped.
     """
 
     SMOKE = "acadsharp/scripts/link_consumer_smoke.sh"

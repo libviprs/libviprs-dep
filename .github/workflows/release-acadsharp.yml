@@ -479,8 +479,23 @@ jobs:
             --arch ${{ matrix.arch }}
 
       - name: Verify the ${{ matrix.platform }}/${{ matrix.cpu }} archive
+        # Through verify_archive_matched_host.sh, like the four linux
+        # cells, and not because a mac archive ever needs a container:
+        # this runner is the matched host, so the wrapper runs the script
+        # straight through. What it adds is `VIPRS_REQUIRE_LINK_TEST=1`,
+        # and on a shared-only archive that is now the difference between
+        # a line in a log and a refusal. verify_archive.sh runs the
+        # documented cargo recipe for a shared-only archive only when the
+        # host matches, cargo is present and that flag is set; unset, it
+        # says "cargo recipe not run" and exits 0. Calling the script
+        # directly here left the one target where shared is the only link
+        # mode with the recipe unrun, which is #95's shape.
+        #
+        # The platform and cpu go in explicitly, and the archive is named
+        # rather than globbed: a glob that matches nothing verifies
+        # nothing and still exits 0.
         run: |
-          bash acadsharp/scripts/verify_archive.sh \
+          bash acadsharp/scripts/verify_archive_matched_host.sh \
             "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
             ${{ matrix.platform }} ${{ matrix.cpu }}
 
@@ -517,12 +532,27 @@ jobs:
         # that cannot be linked stays off the release page rather than
         # being explained afterwards.
         #
-        # Not folded into verify_archive.sh, which would cover local
-        # builds too, because that script is exercised by
-        # tests/test_verify_archive.py against a Mach-O written from bytes
-        # that is deliberately not loadable. A link-and-run check in there
-        # would fail on every one of those fixtures, and gating it on
-        # "is this library real" is a gate with no honest predicate.
+        # This is not the only place the recipe runs any more, and the
+        # argument that it had to be is wrong. It ran: "folding it into
+        # verify_archive.sh would fail on every synthetic Mach-O fixture
+        # in tests/test_verify_archive.py, and gating it on 'is this
+        # library real' is a gate with no honest predicate." The honest
+        # predicate exists and it is not about the library: run the recipe
+        # when the host matches the archive's platform and cpu, cargo is
+        # present, and the caller asked for it with
+        # VIPRS_REQUIRE_LINK_TEST=1. The hand-assembled fixtures satisfy
+        # none of those, the release lane and
+        # verify_archive_matched_host.sh satisfy all three. So the recipe
+        # now lives outside the `static_certified` gate in the script too,
+        # which is what makes VIPRS_REQUIRE_LINK_TEST refuse a mac archive
+        # rather than print a line about one -- a flag that cannot refuse
+        # is the bug the wrapper's own header says this repo stopped
+        # accepting.
+        #
+        # This step stays because it is the only one that runs the recipe
+        # against the unpacked tree a consumer actually downloads, between
+        # Verify and Upload, and because two checks of the same fact in
+        # two lanes is the arrangement #95 argued for.
         run: |
           bash acadsharp/scripts/link_consumer_smoke.sh \
             "bin/unpacked/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}"

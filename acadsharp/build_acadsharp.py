@@ -1722,10 +1722,10 @@ def refuse_uncommitted_source_tree():
     `git rev-parse HEAD` cannot see an uncommitted edit, so on a dirty
     tree `viprs_dep_commit` and `BUILDINFO.json`'s `driver_commit` both
     name a commit that does not describe what was packaged, while
-    `docs/LINKINFO.md` tells a consumer every byte in the archive is
-    under it. A tree with a modified csproj or patch is exactly the
-    state a tree is in when someone is changing what the library does,
-    which is when that claim matters most.
+    `docs/LINKINFO.md` tells a consumer that commit is the tree the
+    archive was built from. A tree with a modified csproj or patch is
+    exactly the state a tree is in when someone is changing what the
+    library does, which is when that claim matters most.
 
     Checked where an archive is produced rather than inside
     `driver_commit`, because that is the point the fact is lost: reading
@@ -1761,8 +1761,8 @@ def refuse_uncommitted_source_tree():
             f"be packaged -- {len(entries)} path(s) in {REPO_ROOT} differ from it:\n"
             f"{listing}\n"
             "LINKINFO.json's viprs_dep_commit and BUILDINFO.json's driver_commit would "
-            "state that commit anyway, and docs/LINKINFO.md says every byte in the "
-            "archive is under it. Commit or stash the changes and build again."
+            "state that commit anyway, and docs/LINKINFO.md tells a consumer it is the "
+            "tree the archive was built from. Commit or stash the changes and build again."
         )
     return commit
 
