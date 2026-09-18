@@ -1716,6 +1716,11 @@ def driver_commit():
     return head.stdout.strip()
 
 
+# The one measurement of `refuse_uncommitted_source_tree`, kept because a
+# run builds several archives and its own output can dirty the tree.
+_SOURCE_TREE_COMMIT = None
+
+
 def refuse_uncommitted_source_tree():
     """The precondition the archive's provenance fields rest on.
 
@@ -1734,8 +1739,22 @@ def refuse_uncommitted_source_tree():
     and packages nothing, and a check that turned those red in any tree
     with an unfinished edit would be a check people learn to ignore.
 
+    Measured once per process rather than once per cell, and the answer
+    remembered. `build_for_job` runs per job, and a build writes into
+    `--output-dir`, which may be a path inside the repository that is
+    not ignored: measured, the second of two jobs with `--output-dir
+    ./out` refused for `?? out/`, the first job's own archive, blaming
+    the operator for a tree the driver dirtied. The field describes the
+    sources as they were when the run started, so that is when the
+    question is asked. Threads racing it under `--parallel` duplicate
+    the measurement and agree on the answer.
+
     Returns the commit, so a caller that needs both facts asks once.
     """
+    global _SOURCE_TREE_COMMIT
+    if _SOURCE_TREE_COMMIT is not None:
+        return _SOURCE_TREE_COMMIT
+
     commit = driver_commit()
     status = subprocess.run(
         ["git", "-C", REPO_ROOT, "status", "--porcelain"], capture_output=True, text=True
@@ -1764,6 +1783,8 @@ def refuse_uncommitted_source_tree():
             "state that commit anyway, and docs/LINKINFO.md tells a consumer it is the "
             "tree the archive was built from. Commit or stash the changes and build again."
         )
+
+    _SOURCE_TREE_COMMIT = commit
     return commit
 
 
