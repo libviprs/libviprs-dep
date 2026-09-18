@@ -20,7 +20,8 @@ the smoke used to refuse every mac archive outright and nothing in this
 repository linked one -- which is how a dylib recording a name no file in
 the archive had got published (#95). The shared mode has the same
 propagation problem in a different place: the rpath it needs is a link
-argument, so it goes out of the `-sys` crate as `cargo:rpath` metadata and
+argument, so the library's directory goes out of the `-sys` crate as
+`cargo:lib_dir` metadata -- the key the shipped crate publishes -- and
 becomes the flag in the binary's own build script.
 """
 
@@ -42,6 +43,7 @@ ACAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 REPO_ROOT = os.path.dirname(ACAD_DIR)
 WORKSPACE = os.path.join(ACAD_DIR, "tests", "link_consumer")
 BUILD_RS = os.path.join(WORKSPACE, "acadsharp-sys", "build.rs")
+CONSUMER_RS = os.path.join(WORKSPACE, "consumer", "build.rs")
 SMOKE = os.path.join(ACAD_DIR, "scripts", "link_consumer_smoke.sh")
 MANUAL = os.path.join(REPO_ROOT, "MANUAL.md")
 
@@ -105,18 +107,25 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         # What it must never do is emit one.
         assert 'println!("cargo:rustc-link-arg' not in source
 
-    def test_the_shared_branch_publishes_the_rpath_as_metadata(self):
+    def test_the_shared_branch_publishes_the_lib_dir_as_metadata(self):
         # It cannot emit the flag: `cargo:rustc-link-arg` binds to this
-        # package's own targets. `cargo:rpath` reaches a dependent's build
-        # script as DEP_ACADSHARP_NATIVE_RPATH, which is the only route a
-        # `-sys` crate has for something the dependent must express as an
-        # argument, and it exists because the package declares `links`.
+        # package's own targets. `cargo:lib_dir` reaches a dependent's
+        # build script as DEP_ACADSHARP_NATIVE_LIB_DIR, which is the only
+        # route a `-sys` crate has for something the dependent must
+        # express as an argument, and it exists because the package
+        # declares `links`.
+        #
+        # `lib_dir` and not some private name of this fixture's own: it is
+        # the key the shipped `acadsharp-rs` publishes (`build.rs:282`),
+        # and a fixture that demonstrates the route under a name no
+        # consumer will ever read teaches a recipe that links against a
+        # correct archive and dies before `main`.
         source = read(BUILD_RS)
-        assert 'println!("cargo:rpath=' in source
+        assert 'println!("cargo:lib_dir=' in source
 
     def test_the_link_argument_lives_in_the_binary_that_needs_it(self):
-        consumer = read(os.path.join(WORKSPACE, "consumer", "build.rs"))
-        assert "DEP_ACADSHARP_NATIVE_RPATH" in consumer
+        consumer = read(CONSUMER_RS)
+        assert "DEP_ACADSHARP_NATIVE_LIB_DIR" in consumer
         assert 'println!("cargo:rustc-link-arg=-Wl,-rpath,' in consumer
 
     def test_the_rpath_is_scoped_to_the_shared_branch(self):
@@ -127,7 +136,7 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         source = read(BUILD_RS)
         shared_branch = source.index('if !json_bool(&text, "static_certified")')
         static_path = source.index("static:-bundle,+whole-archive=")
-        rpath = source.index('println!("cargo:rpath=')
+        rpath = source.index('println!("cargo:lib_dir=')
         assert shared_branch < rpath < static_path, (
             "the rpath is emitted outside the shared branch, so a static link would carry it too"
         )
@@ -195,6 +204,29 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         assert init in manual
         assert main in manual
         assert manual.index(init) < manual.index(main)
+
+        # And the shared branch, by name, in both directions. This half
+        # was held to nothing: the test that used to live here asserted
+        # the shared-only archive was *refused*, so when the fixture grew
+        # a branch that links instead, renaming the metadata key in
+        # MANUAL.md left the suite at `400 passed` with no status change.
+        # A key the consumer's build script never reads is a binary that
+        # links against a correct archive and then dies before `main`,
+        # which is exactly #95, so each token has to appear in the doc
+        # *and* in the build script that owns it.
+        for token, owner in (
+            ("cargo:lib_dir=", BUILD_RS),
+            ("DEP_ACADSHARP_NATIVE_LIB_DIR", CONSUMER_RS),
+            ("cargo:rustc-link-arg=-Wl,-rpath,", CONSUMER_RS),
+        ):
+            assert token in manual, (
+                f"MANUAL.md does not document {token!r}; a consumer following it "
+                "gets a dead binary on a correct archive"
+            )
+            assert token in read(owner), (
+                f"{os.path.relpath(owner, REPO_ROOT)} does not emit {token!r}, so "
+                "the doc and the recipe it claims to work have diverged"
+            )
 
 
 @pytest.fixture(scope="session")
@@ -297,9 +329,10 @@ class TestTheSharedOnlyRecipeLinksAndRuns:
         self, tmp_path, shared_only_archive
     ):
         # The propagation rule again, from the other side. The sys crate
-        # publishes the library's directory as `cargo:rpath` and the binary's
-        # own build script turns it into `-Wl,-rpath`, because a link
-        # argument emitted by a dependency never reaches the dependent.
+        # publishes the library's directory as `cargo:lib_dir` and the
+        # binary's own build script turns it into `-Wl,-rpath`, because a
+        # link argument emitted by a dependency never reaches the
+        # dependent.
         # Cargo does not put `rustc-link-search` on the loader's path, so
         # with that one file gone the binary links clean and dies before
         # `main` -- which is what a consumer who followed a recipe that

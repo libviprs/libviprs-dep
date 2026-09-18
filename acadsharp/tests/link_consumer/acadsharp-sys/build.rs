@@ -28,11 +28,18 @@
 //!
 //! The rpath the shared mode needs cannot be emitted from here, for the
 //! `rustc-link-arg` reason above: it would reach this crate's own targets
-//! and not the binary. So it goes out as `cargo:rpath`, which cargo hands
-//! to a dependent's build script as `DEP_ACADSHARP_NATIVE_RPATH` because
-//! this package declares `links = "acadsharp_native"`, and `consumer`'s
-//! build script turns it into the flag. That is the propagation route a
-//! real consumer has, and it is why the two crates are separate here.
+//! and not the binary. So it goes out as `cargo:lib_dir`, which cargo
+//! hands to a dependent's build script as `DEP_ACADSHARP_NATIVE_LIB_DIR`
+//! because this package declares `links = "acadsharp_native"`, and
+//! `consumer`'s build script turns it into the flag. That is the
+//! propagation route a real consumer has, and it is why the two crates
+//! are separate here.
+//!
+//! The key name is `lib_dir` because that is the one the shipped
+//! `acadsharp-rs` publishes (`build.rs:282`, `cargo::metadata=lib_dir=`).
+//! A fixture that demonstrates the route under a different name teaches a
+//! `DEP_*` variable no consumer's build script will ever see, which is a
+//! binary that links against a correct archive and dies before `main`.
 
 use std::path::PathBuf;
 
@@ -68,14 +75,14 @@ fn main() {
             println!("cargo:rustc-link-lib={lib}");
         }
         // Out as metadata, not as a flag: see the note at the top. A
-        // dependent reads it as DEP_ACADSHARP_NATIVE_RPATH.
+        // dependent reads it as DEP_ACADSHARP_NATIVE_LIB_DIR.
         //
         // Only on this branch. `lib/` holds the shared library and the
         // static archives together, a bare `-l` prefers the shared one,
         // so an rpath on the static path produces a binary that was meant
         // to be self-contained, links, and then quietly runs against the
         // `.dylib` next to it on the build machine.
-        println!("cargo:rpath={}", lib_dir.display());
+        println!("cargo:lib_dir={}", lib_dir.display());
         return;
     }
 
@@ -131,9 +138,12 @@ fn main() {
 /// `.dylib` on mac; a stem left with its extension on becomes
 /// `-lacadsharp_native.dylib`, which the linker looks for as
 /// `libacadsharp_native.dylib.dylib` and does not find.
+///
+/// `strip_prefix`/`strip_suffix` rather than `trim_*_matches`, which strip
+/// every repeated occurrence: `liblibfoo.a` must be `libfoo`, not `foo`.
 fn link_name(path: &str) -> String {
     let file = path.rsplit('/').next().unwrap_or(path);
-    let stem = file.trim_start_matches("lib");
+    let stem = file.strip_prefix("lib").unwrap_or(file);
     for ext in [".a", ".so", ".dylib"] {
         if let Some(cut) = stem.strip_suffix(ext) {
             return cut.to_string();
