@@ -77,6 +77,17 @@ class TestTheShimRevisionMovesWhenTheShimDoes:
     would stop being evidence about the release the day the release stopped
     asking.
 
+    Both readers, and that is the point rather than belt-and-braces.
+    `packaged_shim_digest` *returns* `shim_digest()` on the path where the two
+    agree, so asked through it alone the comparison is `measured == measured`
+    and only the function's own raise can fail it: put the row to 64 zeroes
+    and gut the refusal and the test stays green. That is the
+    self-certification `test_shim_digest.py` names for `MANIFEST.json`, where
+    the block and the number it is checked with come out of one function. The
+    committed row is the only independent witness in the repository, so one
+    assertion reads it directly and the other keeps the release's own path in
+    the test.
+
     It needs no git and no .NET: the digest is a walk over the sources the
     fixture generator compiles, which is every `.cs` under `native/Adapter`,
     `native/Sources` and `native/Wire` plus `Abi.cs` and `Probe.cs`.
@@ -92,8 +103,9 @@ class TestTheShimRevisionMovesWhenTheShimDoes:
 
     def test_the_shim_in_the_tree_is_the_one_that_version_names(self):
         version = ba.read_version()
-        # Raises with both digests in the message when they disagree, which
-        # is the same refusal a dispatched release would get.
+        # The table against the tree, independent of the driver's internals.
+        assert ba.SHIM_DIGESTS[version] == shim_digest()
+        # And the path a release actually takes.
         assert ba.packaged_shim_digest(version) == shim_digest()
 
     def test_a_change_under_the_adapter_would_be_seen(self, tmp_path):

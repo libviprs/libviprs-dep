@@ -158,19 +158,23 @@ class TestTheArchiveSaysWhichShimIsInIt:
         info = ba.linkinfo_skeleton("mac", "arm64")
         assert info["shim_sha256"] == recorded
 
-    def test_it_is_measured_off_the_tree_not_looked_up_by_name(self, monkeypatch):
-        # A dispatch override naming a published version is the trap. Pinning
-        # the field to SHIM_DIGESTS[version] would have put viprs.1's digest
-        # into an archive built from these sources, stating a flattener that
-        # is not in it, which is the exact confusion the field is here to end.
-        monkeypatch.setitem(ba.SHIM_DIGESTS, "3.7.1-viprs.1", ba.shim_digest())
-        info = ba.linkinfo_skeleton("linux", "amd64", version="3.7.1-viprs.1")
-        assert info["shim_sha256"] == ba.shim_digest()
-
     def test_a_version_pinned_to_another_shim_cannot_be_packaged(self):
         # The row for a published version is frozen, so a tree that does not
         # match it is either an unbumped revision or an override naming
         # somebody else's build. Both publish one name meaning two libraries.
+        #
+        # This is also the whole of what holds the field to the tree rather
+        # than to the table. A dispatch override naming a published version is
+        # the trap: pinning the field to SHIM_DIGESTS[version] would have put
+        # viprs.1's digest into an archive built from these sources, stating a
+        # flattener that is not in it, which is the exact confusion the field
+        # is here to end. There is no second test of that, and there cannot
+        # usefully be one: while this refusal stands, "pinned" and "measured"
+        # are the same string for every version with a row, so a test asking
+        # which of them was written can only assert what this one asserts.
+        # The one that used to sit here monkeypatched the row to equal the
+        # measurement in its own setup and then stayed green with the field
+        # literally looked up by name.
         with pytest.raises(ValueError, match="pinned to shim"):
             ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.1", **_shared_only())
 
