@@ -715,18 +715,48 @@ class TestTheContractDocumentsShip:
             f"{sorted(rows - set(ba.LINKINFO_FIELDS))} describe a field nothing writes"
         )
 
-    def test_the_spec_marks_exactly_the_static_fields_optional(self):
+    def test_the_spec_marks_exactly_the_fields_a_consumer_may_find_missing(self):
+        # Two reasons a key can be absent, and a consumer cannot discover
+        # either from the one archive it holds. The four static link fields
+        # move on `static_certified`. The two shim-identity fields move on
+        # the artifact version: they were added in 3.7.1-viprs.2, a
+        # `-viprs.1` archive has neither, and `verify_archive.sh` reports
+        # that absence below its floor instead of refusing it. So the `from`
+        # rows are held to the floor the script actually tolerates and to the
+        # fields it tolerates there: a document promising a key in archives
+        # the verifier lets through without it is exactly the claim a
+        # consumer cannot check for itself.
         with open(os.path.join(self.DOCS_DIR, "LINKINFO.md")) as f:
             spec = f.read()
-        optional = set()
-        for name, presence in re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M):
-            if "always" not in presence:
-                optional.add(name)
-        assert optional == set(ba.STATIC_LINKINFO_FIELDS), (
-            "the four static link fields are the only optional ones, and which "
-            "fields a consumer may find missing is the thing it cannot discover "
-            "from one archive"
+        presence = dict(re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M))
+        optional = {name for name, cell in presence.items() if "always" not in cell}
+        versioned = {name for name in optional if "from `" in presence[name]}
+        assert optional - versioned == set(ba.STATIC_LINKINFO_FIELDS), (
+            "the four static link fields are the only ones whose presence moves on "
+            "the link mode, and which fields a consumer may find missing is the "
+            "thing it cannot discover from one archive"
         )
+
+        with open(ba.VERIFY_ARCHIVE_SCRIPT) as f:
+            code = f.read()
+        floor = re.search(r'^SHIM_FIELDS_FLOOR = "([^"]+)"', code, re.M)
+        tolerated = re.search(r"^HEX_IDENTITY_FIELDS = \((.*)\)$", code, re.M)
+        assert floor and tolerated, (
+            "verify_archive.sh no longer declares SHIM_FIELDS_FLOOR and "
+            "HEX_IDENTITY_FIELDS where this reads them, so nothing holds the table's "
+            "`from` rows to the version an archive may omit those keys below"
+        )
+        assert versioned == set(re.findall(r'"([a-z0-9_]+)"', tolerated.group(1))), (
+            f"LINKINFO.md marks {sorted(versioned)} as present from a version and "
+            "verify_archive.sh tolerates the absence of a different set, so one of "
+            "them is wrong about which archives are missing which keys"
+        )
+        for name in sorted(versioned):
+            assert presence[name].strip() == f"from `{floor.group(1)}`", (
+                f"LINKINFO.md says {name} is present {presence[name].strip()!r} and "
+                f"verify_archive.sh tolerates its absence below {floor.group(1)}, so "
+                "the two disagree about which archives carry it"
+            )
 
     def test_the_verifier_requires_exactly_the_documents_that_ship(self):
         # Comments come out first: the script's own header paragraph
