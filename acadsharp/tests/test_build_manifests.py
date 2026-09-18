@@ -730,8 +730,16 @@ class TestTheContractDocumentsShip:
             spec = f.read()
         presence = dict(re.findall(r"^\| `([a-z0-9_]+)` \| [^|]+ \| ([^|]+) \|", spec, re.M))
         optional = {name for name, cell in presence.items() if "always" not in cell}
-        versioned = {name for name in optional if "from `" in presence[name]}
-        assert optional - versioned == set(ba.STATIC_LINKINFO_FIELDS), (
+        # Keyed on the version a `from` cell names, not on how it is
+        # punctuated: repunctuating a cell is a presentation change and must
+        # not move this, naming a different version is a contract change and
+        # must.
+        versioned = {}
+        for name in sorted(optional):
+            found = re.match(r"from\b[^0-9]*([0-9][0-9A-Za-z.+-]*)", presence[name].strip())
+            if found:
+                versioned[name] = found.group(1)
+        assert optional - set(versioned) == set(ba.STATIC_LINKINFO_FIELDS), (
             "the four static link fields are the only ones whose presence moves on "
             "the link mode, and which fields a consumer may find missing is the "
             "thing it cannot discover from one archive"
@@ -746,17 +754,16 @@ class TestTheContractDocumentsShip:
             "HEX_IDENTITY_FIELDS where this reads them, so nothing holds the table's "
             "`from` rows to the version an archive may omit those keys below"
         )
-        assert versioned == set(re.findall(r'"([a-z0-9_]+)"', tolerated.group(1))), (
+        assert set(versioned) == set(re.findall(r'"([a-z0-9_]+)"', tolerated.group(1))), (
             f"LINKINFO.md marks {sorted(versioned)} as present from a version and "
             "verify_archive.sh tolerates the absence of a different set, so one of "
             "them is wrong about which archives are missing which keys"
         )
-        for name in sorted(versioned):
-            assert presence[name].strip() == f"from `{floor.group(1)}`", (
-                f"LINKINFO.md says {name} is present {presence[name].strip()!r} and "
-                f"verify_archive.sh tolerates its absence below {floor.group(1)}, so "
-                "the two disagree about which archives carry it"
-            )
+        assert set(versioned.values()) == {floor.group(1)}, (
+            f"LINKINFO.md says {sorted(versioned.items())} and verify_archive.sh "
+            f"tolerates their absence below {floor.group(1)}, so the document and the "
+            "verifier disagree about which archives carry them"
+        )
 
     def test_the_verifier_requires_exactly_the_documents_that_ship(self):
         # Comments come out first: the script's own header paragraph
