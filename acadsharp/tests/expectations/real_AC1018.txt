@@ -222,7 +222,7 @@
 00221 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
 00222 Polygon handle=632 flags=1 n=3 closed=1 pts=[(472.578479,5.658233,0.000000);(471.778922,5.893082,0.000000);(471.474155,3.376988,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00223 Polygon handle=633 flags=1 n=3 closed=1 pts=[(449.278421,46.881641,0.000000);(449.509551,47.682281,0.000000);(446.992067,47.975350,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00224 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00224 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94°"
 00225 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00226 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00227 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
@@ -232,7 +232,7 @@
 00231 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
 00232 Polygon handle=63C flags=1 n=3 closed=1 pts=[(528.882361,5.889541,0.000000);(528.082623,6.123770,0.000000);(527.779805,3.607440,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00233 Polygon handle=63D flags=1 n=3 closed=1 pts=[(506.097832,46.172874,0.000000);(506.329582,46.973334,0.000000);(503.812326,47.268354,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00234 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94\\U+00B0"
+00234 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94°"
 00235 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00236 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00237 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
@@ -253,7 +253,7 @@
 00252 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00253 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00254 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
-00255 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="\\U+220545,6"
+00255 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="∅45,6"
 00256 Polygon handle=64C flags=1 n=3 closed=1 pts=[(646.972306,26.156649,0.000000);(646.972306,25.323316,0.000000);(649.472306,25.739983,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00257 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
 00258 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"

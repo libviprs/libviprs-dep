@@ -342,6 +342,20 @@ failure.
 (radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
 UTF-8, padded with zeroes to a multiple of four. Not terminated.
 
+The bytes are the text the drawing shows, which is not always the string its
+file holds, and a producer does two things to get there. A MIF escape,
+`\U+` and exactly four hex digits of either case, is the way a pre-2007 DWG
+spells a character its code page cannot hold, and it is resolved to that
+character: a pair of escapes that is a UTF-16 surrogate pair becomes the one
+code point it means, while a lone surrogate, a control character, U+FFFE and
+U+FFFF stay as written, and so does anything that is not four hex digits. In
+MTEXT a doubled backslash is an escaped backslash, so `\\U+2205` is a
+backslash and the letters and is not resolved. Every other MTEXT format code is
+left for the consumer, and a TEXT has no backslash escape of its own. The text
+of a multiline block attribute is the text of its embedded MTEXT when that
+holds anything, and its legacy value otherwise, because a drawing saved before
+R2018 has only the second and one saved after it has the first.
+
 **11 `Warning`**: `uint32 code`, `uint32 reserved0`, `uint64 item_handle`
 (0 when the warning is about the document rather than one item), `uint32
 message_len`, `uint32 reserved1`, then `message_len` bytes of UTF-8, padded
