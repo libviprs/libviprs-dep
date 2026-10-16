@@ -431,6 +431,25 @@
       ],
       "views_without_extents": 0
     },
+    "g13_nonfinite_records.dwg": {
+      "batches": 1,
+      "bytes": 11148,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 19
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3244,
+      "records": 19,
+      "sha256": "554faca10e6a214d876525df8af7beeb9a32110dfee21a2e64d0cea9054ddd51",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_nonuniform.dwg": {
       "batches": 1,
       "bytes": 10699,
@@ -531,6 +550,25 @@
       "output_bytes": 1608,
       "records": 8,
       "sha256": "5d5242f2914922521e9bafff42e98700a2f3d62f64f1158fdffa2204747a8c90",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_placement.dwg": {
+      "batches": 1,
+      "bytes": 11499,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 20
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3544,
+      "records": 20,
+      "sha256": "1f7475967ef5590a077c05f5d59ce00f419ff32e22faa1b2661972aae6ed6de0",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",

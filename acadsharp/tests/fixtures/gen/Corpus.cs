@@ -120,6 +120,8 @@ public static class Corpus
 		yield return Pair("g13_solid.dwg", WriteSolidQuad);
 		yield return Pair("g13_face3d.dwg", WriteFace3D);
 		yield return Pair("g13_ray_xline.dwg", WriteRayXline);
+		yield return Pair("g13_placement.dwg", WritePlacement);
+		yield return Pair("g13_nonfinite_records.dwg", WriteNonFiniteRecords);
 		yield return Pair("g13_leader.dwg", WriteLeader);
 		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
@@ -576,11 +578,13 @@ public static class Corpus
 
 	// POINT, which is 40 of the 88 entities refused on real_AC1032.dwg.
 	//
-	// The fourth point is the one that earns the file. A point's location is in
-	// the plane its normal defines, so an implementation that emits the stored
-	// coordinate without the arbitrary-axis lift is right about the first three
-	// and wrong about the last. The origin is here deliberately AND deliberately
-	// not alone: it is a fixed point of every transform.
+	// The fourth point is the one that earns the file, and it earns it the other
+	// way round from what this comment used to say. A POINT's location is
+	// documented WCS (DXF group 10, and ACadSharp's own comment on the field),
+	// and its extrusion only orients the marker, so an implementation that
+	// lifted the location through the arbitrary-axis algorithm is right about
+	// the first three and wrong about the last. The origin is here deliberately
+	// AND deliberately not alone: it is a fixed point of every transform.
 	public static void WritePoint(string path)
 	{
 		CadDocument doc = NewDoc();
@@ -1068,6 +1072,250 @@ public static class Corpus
 		AddBlockInstances(doc, "VIPRS_G13_RAY_BLK",
 			new Ray { StartPoint = new XYZ(0, 1, 0), Direction = new XYZ(2, 1, 0) },
 			new XLine { FirstPoint = new XYZ(0, -1, 0), Direction = new XYZ(1, 3, 0) });
+		Write(doc, path);
+	}
+
+	// IMAGE and PDFUNDERLAY, which wire version 3 carries as a frame, a clip and
+	// a name, and which this decoder must never open.
+	//
+	// Every name here is an absolute path to a directory that does not exist,
+	// and one has a character outside ASCII in it. A decode that went looking
+	// for the file would fail on the first and a decode that mangled the
+	// second would show in the dump, and tests/test_placement_records.py reads
+	// them back unchanged.
+	//
+	// The frames are the cases a plausible wrong arm gets wrong. The first is
+	// unclipped and axis-aligned, which is the control. The second is turned
+	// and carries a polygonal clip that is asymmetric both ways, because pixel
+	// rows run the opposite way from V and a clip that is symmetric about the
+	// middle of the picture cannot tell a flipped row from an unflipped one.
+	// The third is a rectangular clip, which stores two corners and means four.
+	// The underlays are rotated and scaled differently along each axis, because
+	// an arm that treats XScale as a uniform scale is right about a square one.
+	// The block half is inserted twice, once mirrored, so the frame's vectors
+	// are checked under a transform that reverses handedness.
+	public static void WritePlacement(string path)
+	{
+		CadDocument doc = NewDoc();
+		ImageDefinition raster = new ImageDefinition
+		{
+			Name = "VIPRS_G13_RASTER",
+			FileName = "/viprs-g13-never-opened/dr\u00E4wing raster.png",
+			Size = new XY(100, 60),
+		};
+		doc.ImageDefinitions.Add(raster);
+		PdfUnderlayDefinition pdf = new PdfUnderlayDefinition
+		{
+			Name = "VIPRS_G13_SHEET",
+			File = "/viprs-g13-never-opened/sheet.pdf",
+			Page = "1",
+		};
+		doc.PdfDefinitions.Add(pdf);
+
+		AddPlacements(raster, pdf, e => doc.Entities.Add(e), L(doc), 0.0);
+		BlockRecord block = new BlockRecord("VIPRS_G13_PLACEMENT_BLK");
+		doc.BlockRecords.Add(block);
+		AddPlacements(raster, pdf, e => block.Entities.Add(e), null, 1000.0);
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(40, 500, 0),
+			XScale = 3.0,
+			YScale = 1.5,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(80, 500, 0),
+			XScale = -2.0,
+			YScale = 2.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+		Write(doc, path);
+	}
+
+	private static void AddPlacements(
+		ImageDefinition raster,
+		PdfUnderlayDefinition pdf,
+		Action<Entity> add,
+		Layer layer,
+		double y)
+	{
+		WritableImage plain = new WritableImage(raster)
+		{
+			InsertPoint = new XYZ(0, y, 0),
+			UVector = new XYZ(0.5, 0, 0),
+			VVector = new XYZ(0, 0.5, 0),
+			Size = new XY(100, 60),
+			ClippingState = false,
+		};
+		// The writer indexes the first two vertices of a rectangular clip
+		// whether or not clipping is on, so even an unclipped image carries the
+		// default ones, which are the whole picture.
+		plain.ClipBoundaryVertices.Add(new XY(-0.5, -0.5));
+		plain.ClipBoundaryVertices.Add(new XY(99.5, 59.5));
+		WritableImage polygon = new WritableImage(raster)
+		{
+			InsertPoint = new XYZ(100, y, 0),
+			UVector = new XYZ(0.3, 0.4, 0),
+			VVector = new XYZ(-0.4, 0.3, 0),
+			Size = new XY(80, 40),
+			ClippingState = true,
+			ClipType = ClipType.Polygonal,
+		};
+		polygon.ClipBoundaryVertices.Add(new XY(-0.5, -0.5));
+		polygon.ClipBoundaryVertices.Add(new XY(60.5, 10.25));
+		polygon.ClipBoundaryVertices.Add(new XY(20.25, 39.5));
+		WritableImage rectangle = new WritableImage(raster)
+		{
+			InsertPoint = new XYZ(200, y, 0),
+			UVector = new XYZ(0.25, 0, 0),
+			VVector = new XYZ(0, 0.75, 0),
+			Size = new XY(80, 40),
+			ClippingState = true,
+			ClipType = ClipType.Rectangular,
+		};
+		rectangle.ClipBoundaryVertices.Add(new XY(-0.5, -0.5));
+		rectangle.ClipBoundaryVertices.Add(new XY(40.5, 19.5));
+
+		PdfUnderlay turned = new PdfUnderlay(pdf)
+		{
+			InsertPoint = new XYZ(300, y, 0),
+			Rotation = 0.5,
+			XScale = 2.0,
+			YScale = 3.0,
+			ZScale = 1.0,
+			Flags = UnderlayDisplayFlags.Default | UnderlayDisplayFlags.ClippingOn,
+		};
+		turned.ClipBoundaryVertices.Add(new XY(0, 0));
+		turned.ClipBoundaryVertices.Add(new XY(100, 0));
+		turned.ClipBoundaryVertices.Add(new XY(50, 80));
+		PdfUnderlay tilted = new PdfUnderlay(pdf)
+		{
+			InsertPoint = new XYZ(400, y, 2),
+			Normal = SkewNormal,
+			XScale = 1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+		};
+
+		foreach (Entity e in new Entity[] { plain, polygon, rectangle, turned, tilted })
+		{
+			if (layer != null)
+			{
+				e.Layer = layer;
+			}
+			add(e);
+		}
+	}
+
+	// A RasterImage the writer will write. The same override and for the same
+	// reason as RasterlessWipeout: DwgObjectWriter drops any entity whose
+	// IsValid says no, silently, and a RasterImage's says no because its
+	// DefinitionReactor is internal to ACadSharp and cannot be filled in from
+	// here. The bytes this writes are a real IMAGE object with a real
+	// definition handle, and the reader gives back a plain RasterImage.
+	private sealed class WritableImage : RasterImage
+	{
+		public WritableImage WithDefaultClip(double maxX, double maxY)
+		{
+			ClipBoundaryVertices.Add(new XY(-0.5, -0.5));
+			ClipBoundaryVertices.Add(new XY(maxX, maxY));
+			return this;
+		}
+
+		public WritableImage(ImageDefinition definition) : base(definition)
+		{
+		}
+
+		public override bool IsValid(
+			CadFileFormat format,
+			ACadVersion version,
+			out IList<string> errors)
+		{
+			errors = new List<string>();
+			return true;
+		}
+	}
+
+	// Values that are not numbers, in the three records wire version 3 adds.
+	//
+	// docs/WIRE.md promises no geometry record carries a NaN or an infinity,
+	// and Flattener.Finite() keeps the promise only for the types IsGeometry
+	// names. Every record here is numbered past 13, which is exactly the case
+	// the old contiguous range left uncovered, so each bad entity must come out
+	// as warning 107 and no record, and each good one beside it as a record.
+	// The good ones are the control: a decode that refused everything would
+	// satisfy the first half for the wrong reason.
+	public static void WriteNonFiniteRecords(string path)
+	{
+		CadDocument doc = NewDoc();
+		double nan = double.NaN;
+		double inf = double.PositiveInfinity;
+
+		doc.Entities.Add(new Point { Location = new XYZ(nan, 1, 1), Layer = L(doc) });
+		doc.Entities.Add(new Point { Location = new XYZ(1, 1, 1), Normal = new XYZ(inf, 0, 0), Layer = L(doc) });
+		doc.Entities.Add(new Point { Location = new XYZ(2, 2, 2), Rotation = inf, Layer = L(doc) });
+		doc.Entities.Add(new Point { Location = new XYZ(3, 3, 3), Layer = L(doc) });
+
+		doc.Entities.Add(new Ray { StartPoint = new XYZ(nan, 0, 0), Direction = new XYZ(1, 1, 0), Layer = L(doc) });
+		doc.Entities.Add(new Ray { StartPoint = new XYZ(0, 0, 0), Direction = new XYZ(1, 1, 0), Layer = L(doc) });
+		doc.Entities.Add(new XLine { FirstPoint = new XYZ(0, 0, 0), Direction = new XYZ(inf, 1, 0), Layer = L(doc) });
+		doc.Entities.Add(new XLine { FirstPoint = new XYZ(0, 0, 0), Direction = new XYZ(0, 1, 0), Layer = L(doc) });
+
+		// Not a number's fault, and reported as what it is: a direction of
+		// length zero has no line to carry.
+		doc.Entities.Add(new Ray { StartPoint = new XYZ(5, 5, 0), Direction = new XYZ(0, 0, 0), Layer = L(doc) });
+		doc.Entities.Add(new XLine { FirstPoint = new XYZ(5, 5, 0), Direction = new XYZ(0, 0, 0), Layer = L(doc) });
+
+		ImageDefinition raster = new ImageDefinition
+		{
+			Name = "VIPRS_G13_NONFINITE_RASTER",
+			FileName = "/viprs-g13-never-opened/nonfinite.png",
+			Size = new XY(10, 10),
+		};
+		doc.ImageDefinitions.Add(raster);
+		doc.Entities.Add(new WritableImage(raster)
+		{
+			InsertPoint = new XYZ(nan, 0, 0),
+			UVector = new XYZ(1, 0, 0),
+			VVector = new XYZ(0, 1, 0),
+			Size = new XY(10, 10),
+			Layer = L(doc),
+		}.WithDefaultClip(9.5, 9.5));
+		doc.Entities.Add(new WritableImage(raster)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			UVector = new XYZ(1, 0, 0),
+			VVector = new XYZ(0, 1, 0),
+			Size = new XY(10, 10),
+			Layer = L(doc),
+		}.WithDefaultClip(9.5, 9.5));
+
+		PdfUnderlayDefinition pdf = new PdfUnderlayDefinition
+		{
+			Name = "VIPRS_G13_NONFINITE_SHEET",
+			File = "/viprs-g13-never-opened/nonfinite.pdf",
+			Page = "1",
+		};
+		doc.PdfDefinitions.Add(pdf);
+		doc.Entities.Add(new PdfUnderlay(pdf)
+		{
+			InsertPoint = new XYZ(nan, 0, 0),
+			XScale = 1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+		doc.Entities.Add(new PdfUnderlay(pdf)
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			XScale = 1.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
 		Write(doc, path);
 	}
 

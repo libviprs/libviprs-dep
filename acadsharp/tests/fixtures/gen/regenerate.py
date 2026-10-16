@@ -154,6 +154,8 @@ DUMPED = (
     # tuple and nothing else, so until now it was a DWG the suite could not
     # read: no dump, no MANIFEST entry, green and inert.
     "g13_ray_xline.dwg",
+    "g13_placement.dwg",
+    "g13_nonfinite_records.dwg",
     # MLINE, one per justification plus a closed one, a style with no
     # elements and a style that asks for fill and caps. The dump is the only
     # place the element offsets and the miters are visible: the real drawings
