@@ -193,6 +193,14 @@ records exists:
 Do that first, with its own commit, so the three records land on a guard that
 already covers them.
 
+**Status of the three steps.** Steps 1 and 2 landed ahead of everything else as
+libviprs-dep#134: `IsGeometry` is a `switch` over the eight wire 2 geometry
+types, `FirstGeometryType` and `LastGeometryType` are gone, and WIRE.md's
+finiteness section names the records instead of a range. Step 3 needs a record
+past 13 to exist, so its fixture arrives with record 14, and until then
+`tests/test_isgeometry_set.py` fails if a type constant is added that is in
+neither the set nor that file's list of types that are not geometry.
+
 ## What a wire 3 touches in this repository
 
 In dependency order, because most of these will not compile until the one above

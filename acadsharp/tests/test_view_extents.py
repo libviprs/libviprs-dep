@@ -1,8 +1,8 @@
 """A view's extents are four numbers, or they are the box that says "none".
 
-``docs/WIRE.md`` promises that no record of type 3 to 10 carries an ``f64``
+``docs/WIRE.md`` promises that no geometry record carries an ``f64``
 that is ``NaN`` or infinite, and ``Flattener.Finite`` enforces it.
-``ViewBegin`` is record 2 and is deliberately outside that range: its extents
+``ViewBegin`` is record 2 and is deliberately outside that set: its extents
 are a bounding box the source reports rather than a shape anybody draws, and a
 view holding nothing has no finite one, so promising a number there would mean
 inventing one.

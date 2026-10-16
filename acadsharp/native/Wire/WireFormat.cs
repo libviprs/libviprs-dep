@@ -61,21 +61,44 @@ namespace Viprs.Wire
 
 		internal const ushort ForwardProbe = (ushort)ForwardProbeFirst;
 
-		// The geometry records, 3 to 10, which are the ones docs/WIRE.md's
-		// finiteness guarantee covers.
+		// The geometry records, which are the ones docs/WIRE.md's finiteness
+		// guarantee covers.
 		//
-		// Named as a range rather than listed, because the numbering is frozen
-		// and the range is contiguous by construction. ViewBegin is outside it
-		// on purpose: its extents are a bounding box the source reports rather
-		// than a shape somebody draws, and a view holding nothing reports one
-		// that is not finite. Promising a finite extent would mean inventing a
-		// number for the empty case, which is worse than saying nothing.
-		public const ushort FirstGeometryType = TypeLine;
-		public const ushort LastGeometryType = TypeText;
-
+		// A set, listed one type at a time, and not a range. The numbering is
+		// frozen, but "frozen" does not make the geometry records contiguous:
+		// 11, 12 and 13 are Warning, ViewEnd and DocumentEnd, so the first
+		// geometry record wire 3 adds is numbered 14 and a range from Line to
+		// Text would have left it outside. Flattener.Finite() returns early for
+		// anything this refuses, so a NaN in such a record would have crossed
+		// the wire while the guarantee stayed literally true (ADR 0002 and
+		// ADR 0003 both describe the trap).
+		//
+		// So a new geometry record is added here, in the same change that
+		// gives it a constant, and tests/test_isgeometry_set.py fails when a
+		// constant is in neither this set nor its list of types that are not
+		// geometry.
+		//
+		// ViewBegin is outside it on purpose: its extents are a bounding box
+		// the source reports rather than a shape somebody draws, and a view
+		// holding nothing reports one that is not finite. Promising a finite
+		// extent would mean inventing a number for the empty case, which is
+		// worse than saying nothing.
 		public static bool IsGeometry(ushort type)
 		{
-			return type >= FirstGeometryType && type <= LastGeometryType;
+			switch (type)
+			{
+				case TypeLine:
+				case TypePolyline:
+				case TypeArc:
+				case TypeCircle:
+				case TypeEllipse:
+				case TypeSpline:
+				case TypePolygon:
+				case TypeText:
+					return true;
+				default:
+					return false;
+			}
 		}
 
 		public static int PadTo4(int n)

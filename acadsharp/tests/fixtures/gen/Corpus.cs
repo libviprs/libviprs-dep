@@ -1790,7 +1790,7 @@ public static class Corpus
 
 	// A drawing whose view extents are not numbers.
 	//
-	// docs/WIRE.md's finiteness guarantee covers records 3 to 10 and stops
+	// docs/WIRE.md's finiteness guarantee covers the geometry records and stops
 	// short of ViewBegin, on the grounds that its extents are a bounding box
 	// the source reports rather than a shape anybody draws, and a view holding
 	// nothing has no finite one. That is defensible and it is also a hole: a

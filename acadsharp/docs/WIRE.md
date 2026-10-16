@@ -385,8 +385,10 @@ rather than emitted with a length that has wrapped.
 
 ## Every number in a geometry record is finite
 
-A producer never emits a record of type 3 to 10 carrying an `f64` that is
-`NaN` or infinite. Not in a coordinate, not in a radius, not in an angle, not
+A producer never emits a geometry record carrying an `f64` that is `NaN` or
+infinite. The geometry records are `Line`, `Polyline`, `Arc`, `Circle`,
+`Ellipse`, `Spline`, `Polygon` and `Text`, and a record type a later wire
+version adds is one of them only if its own section says so. Not in a coordinate, not in a radius, not in an angle, not
 in a normal and not in a bulge. A drawing that holds one produces a `Warning`
 record naming the handle instead, and the rest of the drawing still crosses.
 
@@ -630,7 +632,7 @@ than the insertion point on its own.
 | `reserved` in a record header is not zero | `VIPRS_ACAD_CORRUPT_INPUT` |
 | A `Polyline` or `Polygon` whose `bulge_count` is neither 0 nor `point_count` | `VIPRS_ACAD_CORRUPT_INPUT` |
 | A `Polyline` or `Polygon` whose `length` is not `64 + 24n + 8bc` | `VIPRS_ACAD_CORRUPT_INPUT` |
-| An `f64` in a geometry record, types 3 to 10, that is `NaN` or infinite | `VIPRS_ACAD_CORRUPT_INPUT` |
+| An `f64` in a geometry record (the set the finiteness section names) that is `NaN` or infinite | `VIPRS_ACAD_CORRUPT_INPUT` |
 
 Refusing on an unknown `wire_version` rather than trying is the important
 one. A consumer that parses a version it does not know is reading a layout
