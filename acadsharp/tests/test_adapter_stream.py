@@ -138,6 +138,8 @@ ONCE_RECORDED = (
     "g13_polyface_mesh.dwg",
     "g13_polygon_mesh.dwg",
     "g13_polyline.dwg",
+    "g13_nonfinite_records.dwg",
+    "g13_placement.dwg",
     "g13_ray_xline.dwg",
     "g13_scale_1x.dwg",
     "g13_slot.dwg",

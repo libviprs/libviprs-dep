@@ -26,14 +26,16 @@ on Linux. `tests/test_release_workflow.py` holds the two halves together, so a
 download link with no digest beside it fails, and so does a digest with nothing
 saying what it hashed.
 
-**`acadsharp/VERSION` says 3.7.1-viprs.2, and the tag `acadsharp-3.7.1-viprs.2`
+**`acadsharp/VERSION` says 3.7.1-viprs.3, and the tag `acadsharp-3.7.1-viprs.3`
 is not cut yet.** Everything in the table is `viprs.1`, which is the newest
 thing there is to download: those URLs resolve and those digests are that
 release's, and both stay right whatever this directory does next. What they are
 not is a build of the tree you are reading. The shim moved after that tag went
 up, so the archives below flatten a drawing differently from the source beside
-them, and the run that publishes `viprs.2` replaces every row here with its own
-digests.
+them, and the run that publishes `viprs.3` replaces every row here with its own
+digests. `viprs.2` was a revision of this tree that was never tagged: wire
+version 3 landed before it was cut, and a wire bump wants a revision of its
+own, so its changes ship in `viprs.3`.
 
 `static_certified` says whether the static half of that archive was measured to
 link **and run**. It is false for mac, where NativeAOT emits Mach-O and the
@@ -58,7 +60,7 @@ nothing to expand and the process dies before `main`. Nothing caught it because
 the only mac check was a `dlopen` on an absolute path, and `dlopen` by absolute
 path never reads the recorded name. `docs/LINKINFO.md`'s mac paragraph
 describes the fixed archive rather than this one, and says so. The fix is in the
-tree (#95) and it ships with `viprs.2`; until that tag is cut there is no mac
+tree (#95) and it ships with `viprs.3`; until that tag is cut there is no mac
 archive here worth downloading.
 
 Five archives, not six: there is no Microsoft-platform artifact here, and the
@@ -78,11 +80,11 @@ a library and never learns that the code started life as C#.
 
 ## Version
 
-`acadsharp/VERSION` is the single source of truth, and it says **3.7.1-viprs.2**.
+`acadsharp/VERSION` is the single source of truth, and it says **3.7.1-viprs.3**.
 
 Two numbers, one file. `3.7.1` is the upstream ACadSharp release, and decides
 what source the driver fetches and which pinned sha256 it checks against.
-`viprs.2` is the shim revision, and moves when this directory changes without
+`viprs.3` is the shim revision, and moves when this directory changes without
 upstream moving, so two different shims over one ACadSharp release never
 produce the same artifact name. That only holds if somebody moves it, and for
 one campaign nobody did: seven flattener changes landed on a published
@@ -232,7 +234,7 @@ coverage section says why.
 ```
 acadsharp/
   build_acadsharp.py        # pins, target list, and the publish commands
-  VERSION                   # 3.7.1-viprs.2
+  VERSION                   # 3.7.1-viprs.3
   include/                  # viprs_acadsharp.h, the frozen C ABI
   docs/                     # ABI.md, WIRE.md and LINKINFO.md, the three frozen
                             # contracts; every one ships inside the archive

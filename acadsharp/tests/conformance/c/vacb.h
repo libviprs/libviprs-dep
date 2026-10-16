@@ -21,7 +21,7 @@
 #define VACB_MAGIC_2 0x43 /* 'C' */
 #define VACB_MAGIC_3 0x42 /* 'B' */
 
-#define VACB_WIRE_VERSION 2
+#define VACB_WIRE_VERSION 3
 
 #define VACB_BATCH_HEADER_BYTES 12
 #define VACB_RECORD_HEADER_BYTES 8
@@ -50,6 +50,9 @@
 #define VACB_TYPE_WARNING 11
 #define VACB_TYPE_VIEW_END 12
 #define VACB_TYPE_DOCUMENT_END 13
+#define VACB_TYPE_POINT 14
+#define VACB_TYPE_UNBOUNDED 15
+#define VACB_TYPE_PLACEMENT 16
 
 typedef struct vacb_record {
 	uint16_t type;

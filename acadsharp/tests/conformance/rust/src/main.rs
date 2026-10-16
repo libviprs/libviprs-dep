@@ -1014,6 +1014,7 @@ fn fixed_bytes(kind: u16) -> Option<usize> {
         wire::TYPE_ARC => Some(96),
         wire::TYPE_CIRCLE => Some(80),
         wire::TYPE_ELLIPSE => Some(120),
+        wire::TYPE_POINT | wire::TYPE_UNBOUNDED => Some(80),
         wire::TYPE_VIEW_END => Some(24),
         wire::TYPE_DOCUMENT_END => Some(24),
         _ => None,
@@ -1031,7 +1032,7 @@ fn decode_and_parse(t: &mut Tally) {
     let mut done: u8 = 0;
     let mut buf = vec![0u8; wire::MAX_BATCH_BYTES];
 
-    let mut seen = [false; 16];
+    let mut seen = [false; 32];
     let mut probes = 0;
     let mut batches = 0;
     let mut expect_after_probe = false;
@@ -1118,7 +1119,7 @@ fn decode_and_parse(t: &mut Tally) {
     }
 
     println!("      {batches} batches, {probes} forward probes skipped");
-    for kind in 1..=13usize {
+    for kind in 1..=16usize {
         t.check(seen[kind], &format!("record type {kind} appeared in the stream"));
     }
     t.check(batches > 1, "the stream spanned more than one batch, so the loop ran");

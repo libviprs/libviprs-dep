@@ -31,6 +31,9 @@ namespace Viprs.Cad
 				case WireFormat.TypeWarning: return "Warning";
 				case WireFormat.TypeViewEnd: return "ViewEnd";
 				case WireFormat.TypeDocumentEnd: return "DocumentEnd";
+				case WireFormat.TypePoint: return "Point";
+				case WireFormat.TypeUnbounded: return "Unbounded";
+				case WireFormat.TypePlacement: return "Placement";
 
 				// The forward probe, and anything a later wire version adds.
 				default: return "Type" + type.ToString(CultureInfo.InvariantCulture);

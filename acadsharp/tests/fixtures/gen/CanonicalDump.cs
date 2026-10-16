@@ -206,6 +206,47 @@ namespace Viprs.Cad
 					sb.Append(" value=").Append(Q(p.Text));
 					break;
 
+				case WireFormat.TypePoint:
+					Triples(sb, "p", p.Values, 0, 1);
+					Triples(sb, "normal", p.Values, 3, 1);
+					sb.Append(" rot=").Append(N(p.Values[6]));
+					break;
+
+				case WireFormat.TypeUnbounded:
+					Triples(sb, "base", p.Values, 0, 1);
+					Triples(sb, "dir", p.Values, 3, 1);
+					sb.Append(" kind=").Append(p.Counts[0] == 0u ? "ray" : "xline");
+					break;
+
+				// The clip prints even when it is empty, for the reason a
+				// polyline's bulges do: `clip=[]` says "not clipped" and its
+				// absence says nothing.
+				case WireFormat.TypePlacement:
+				{
+					Triples(sb, "i", p.Values, 0, 1);
+					Triples(sb, "u", p.Values, 3, 1);
+					Triples(sb, "v", p.Values, 6, 1);
+					sb.Append(" size=[").Append(N(p.Values[9])).Append(',')
+						.Append(N(p.Values[10])).Append(']');
+					sb.Append(" kind=").Append(p.Counts[0] == 0u ? "image" : "pdf");
+					int clip = (int)p.Counts[1];
+					sb.Append(" clip=[");
+					for (int i = 0; i < clip; i++)
+					{
+						if (i > 0)
+						{
+							sb.Append(';');
+						}
+
+						sb.Append('(').Append(N(p.Values[11 + (i * 2)])).Append(',')
+							.Append(N(p.Values[12 + (i * 2)])).Append(')');
+					}
+
+					sb.Append(']');
+					sb.Append(" name=").Append(Q(p.Text));
+					break;
+				}
+
 				case WireFormat.TypeWarning:
 					sb.Append(" code=").Append(WarningCodes.Name(p.Counts[0]));
 					sb.Append(" message=").Append(Q(p.Text));

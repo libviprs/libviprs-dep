@@ -181,7 +181,7 @@ class TestTheTableIsReadable:
         )
 
     def test_the_consumers_state_a_fixed_prefix(self):
-        for record in ("ViewBegin", "Text", "Warning"):
+        for record in ("ViewBegin", "Text", "Warning", "Placement"):
             assert fixed_prefix(record) > 0
 
 
@@ -211,15 +211,29 @@ class TestTheCeilingsAreTheArithmetic:
         assert polyline_formula(n + 1, n + 1) > MAX_RECORD_BYTES
 
     @pytest.mark.parametrize(
-        "field,record",
-        (("name_len", "ViewBegin"), ("byte_len", "Text"), ("message_len", "Warning")),
+        "field,record,which",
+        (
+            ("name_len", "ViewBegin", "record 2"),
+            ("byte_len", "Text", None),
+            ("message_len", "Warning", None),
+            ("name_len", "Placement", "record 16"),
+        ),
     )
-    def test_the_string_ceilings(self, ceilings, field, record):
-        stated = ceiling_for(ceilings, field)
+    def test_the_string_ceilings(self, ceilings, field, record, which):
+        stated = ceiling_for(ceilings, field, which)
         assert stated == largest_string_len(fixed_prefix(record)), (
             f"WIRE.md says {field} reaches {stated:,}, and record {record} has "
             f"{fixed_prefix(record)} fixed bytes plus a string padded to a multiple of "
             "four. The padding comes out of the same budget as the bytes."
+        )
+
+    def test_the_placement_clip_ceiling(self, ceilings):
+        # Record 16 is `128 + 16n` plus its name, and the ceiling is the n that
+        # still fits with no name at all.
+        n = ceiling_for(ceilings, "clip_count", "record 16")
+        assert 128 + 16 * n <= MAX_RECORD_BYTES
+        assert 128 + 16 * (n + 1) > MAX_RECORD_BYTES, (
+            f"WIRE.md says {n:,} clip vertices is the ceiling, but one more still fits"
         )
 
     def test_a_limit_above_a_ceiling_is_called_what_it_is(self, wire_flat):

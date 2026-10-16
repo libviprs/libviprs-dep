@@ -1,0 +1,18 @@
+00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Warning handle=49 flags=0 code=NON_FINITE_GEOMETRY message="Point value 0 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00005 Warning handle=4A flags=0 code=NON_FINITE_GEOMETRY message="Point value 3 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00006 Warning handle=4B flags=0 code=NON_FINITE_GEOMETRY message="Point value 6 is Infinity, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00007 Point handle=4C flags=0 p=[(3.000000,3.000000,3.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00008 Warning handle=4D flags=0 code=NON_FINITE_GEOMETRY message="Unbounded value 0 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00009 Unbounded handle=4E flags=0 base=[(0.000000,0.000000,0.000000)] dir=[(0.707107,0.707107,0.000000)] kind=ray
+00010 Warning handle=4F flags=0 code=NON_FINITE_GEOMETRY message="Unbounded value 3 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00011 Unbounded handle=50 flags=0 base=[(0.000000,0.000000,0.000000)] dir=[(0.000000,1.000000,0.000000)] kind=xline
+00012 Warning handle=51 flags=0 code=UNSUPPORTED_ENTITY message="RAY has a direction of length zero, so there is no line to carry"
+00013 Warning handle=52 flags=0 code=UNSUPPORTED_ENTITY message="XLINE has a direction of length zero, so there is no line to carry"
+00014 Warning handle=54 flags=0 code=NON_FINITE_GEOMETRY message="Placement value 0 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00015 Placement handle=55 flags=0 i=[(0.000000,0.000000,0.000000)] u=[(10.000000,0.000000,0.000000)] v=[(0.000000,10.000000,0.000000)] size=[10.000000,10.000000] kind=image clip=[] name="/viprs-g13-never-opened/nonfinite.png"
+00016 Warning handle=57 flags=0 code=NON_FINITE_GEOMETRY message="Placement value 0 is NaN, and docs/WIRE.md promises no geometry record carries a value that is not finite, so this entity is not emitted"
+00017 Placement handle=58 flags=0 i=[(0.000000,0.000000,0.000000)] u=[(1.000000,0.000000,0.000000)] v=[(0.000000,1.000000,0.000000)] size=[0.000000,0.000000] kind=pdf clip=[] name="/viprs-g13-never-opened/nonfinite.pdf"

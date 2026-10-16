@@ -34,7 +34,7 @@ ACADSHARP = os.path.dirname(HERE)
 WIRE_MD = os.path.join(ACADSHARP, "docs", "WIRE.md")
 
 MAGIC = b"VACB"
-WIRE_VERSION = 2
+WIRE_VERSION = 3
 BATCH_HEADER_BYTES = 12
 RECORD_HEADER_BYTES = 8
 FLAG_LAST = 1
@@ -59,6 +59,11 @@ RECORD_TYPES = {
     "Warning": 11,
     "ViewEnd": 12,
     "DocumentEnd": 13,
+    # Wire version 3. Numbered past the framing records, so they were never in
+    # the range IsGeometry used to be.
+    "Point": 14,
+    "Unbounded": 15,
+    "Placement": 16,
 }
 
 # Records whose length never varies, as docs/WIRE.md states them. The number
@@ -74,6 +79,8 @@ FIXED_RECORD_BYTES = {
     "Ellipse": 120,
     "ViewEnd": 24,
     "DocumentEnd": 24,
+    "Point": 80,
+    "Unbounded": 80,
 }
 
 # Types at or above this carry no meaning in wire_version 1 and exist so a

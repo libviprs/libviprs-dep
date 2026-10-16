@@ -985,6 +985,7 @@ static void verify_payload(const vacb_record *r)
 	uint32_t knots;
 	uint32_t controls;
 	uint32_t weights;
+	uint32_t clip;
 
 	switch (r->type) {
 	case VACB_TYPE_DOCUMENT_BEGIN:
@@ -1081,6 +1082,36 @@ static void verify_payload(const vacb_record *r)
 		want_len(len, 8u + 64u + bytes + pad4(bytes), "Text length");
 		break;
 
+	/* Wire version 3. Point and Unbounded are fixed at 80 bytes; Placement's
+	 * length is 128 + 16 * clip_count + the name padded to four, and the clip
+	 * pairs are read as their own run of probes after the fixed fields so
+	 * that a producer which wrote them before the counts is told. */
+	case VACB_TYPE_POINT:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_POINT, 0, 7, "Point");
+		want_len(len, 80, "Point length");
+		break;
+
+	case VACB_TYPE_UNBOUNDED:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_UNBOUNDED, 0, 6, "Unbounded");
+		want_u32(r->payload, 64, 1, "Unbounded kind");
+		want_u32(r->payload, 68, 0, "Unbounded reserved1");
+		want_len(len, 80, "Unbounded length");
+		break;
+
+	case VACB_TYPE_PLACEMENT:
+		want_prologue(r);
+		want_probes(r->payload, 16, VACB_TYPE_PLACEMENT, 0, 11, "Placement frame");
+		want_u32(r->payload, 104, 1, "Placement kind");
+		clip = vacb_u32(r->payload + 108);
+		bytes = vacb_u32(r->payload + 112);
+		want_u32(r->payload, 116, 0, "Placement reserved1");
+		want_probes(r->payload, 120, VACB_TYPE_PLACEMENT, 11, 2u * clip, "Placement clip");
+		want_bytes(r->payload, 120 + (16u * clip), "VIPRS-NAME-PROBE-", "Placement name");
+		want_len(len, 8u + 120u + (16u * clip) + bytes + pad4(bytes), "Placement length");
+		break;
+
 	case VACB_TYPE_WARNING:
 		want_u32(r->payload, 0, 1100, "Warning code");
 		want_u32(r->payload, 4, 0, "Warning reserved0");
@@ -1125,6 +1156,9 @@ static uint32_t fixed_bytes(uint16_t type)
 		return 80;
 	case VACB_TYPE_ELLIPSE:
 		return 120;
+	case VACB_TYPE_POINT:
+	case VACB_TYPE_UNBOUNDED:
+		return 80;
 	case VACB_TYPE_VIEW_END:
 		return 24;
 	case VACB_TYPE_DOCUMENT_END:
@@ -1143,7 +1177,7 @@ static void test_decode_and_parse(void)
 	viprs_acad_decode_handle *dec = NULL;
 	uint64_t written = 0;
 	uint8_t done = 0;
-	int seen[16];
+	int seen[32];
 	int probes = 0;
 	int after_probe_was_view_end = 0;
 	int expect_view_end = 0;
@@ -1215,7 +1249,7 @@ static void test_decode_and_parse(void)
 				after_probe_was_view_end = record.type == VACB_TYPE_VIEW_END;
 			}
 
-			if (record.type < 16) {
+			if (record.type < 32) {
 				seen[record.type] = 1;
 			}
 
@@ -1236,7 +1270,7 @@ static void test_decode_and_parse(void)
 	}
 
 	printf("      %d batches, %d forward probes skipped\n", batches, probes);
-	for (i = 1; i <= 13; i++) {
+	for (i = 1; i <= 16; i++) {
 		char label[64];
 		snprintf(label, sizeof label, "record type %d appeared in the stream", i);
 		check(seen[i] == 1, label);

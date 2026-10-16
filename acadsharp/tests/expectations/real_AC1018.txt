@@ -22,12 +22,12 @@
 00021 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 360|4079"
 00022 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 360|3430"
 00023 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: XRecord reference not found 360|3435"
-00024 Warning handle=28E flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00025 Warning handle=298 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00026 Warning handle=299 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00027 Warning handle=29A flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00028 Warning handle=29B flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00029 Warning handle=29C flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00024 Point handle=28E flags=0 p=[(1.494404,1.491326,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00025 Point handle=298 flags=0 p=[(1.494404,2.241473,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00026 Point handle=299 flags=0 p=[(1.494404,3.005016,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00027 Point handle=29A flags=0 p=[(1.494404,3.714977,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00028 Point handle=29B flags=0 p=[(1.494404,4.411542,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00029 Point handle=29C flags=0 p=[(1.494404,5.121503,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00030 Line handle=2C7 flags=0 pts=[(3.592534,1.477242,0.000000);(6.863547,1.477242,0.000000)]
 00031 Line handle=2CF flags=0 pts=[(3.592534,2.297710,0.000000);(6.863547,2.297710,0.000000)]
 00032 Polyline handle=2E2 flags=0 n=5 closed=0 pts=[(12.140516,1.379831,0.000000);(10.946378,4.053467,0.000000);(12.781813,5.047794,0.000000);(15.324886,3.258005,0.000000);(12.914495,2.771890,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
@@ -183,8 +183,8 @@
 00182 Polygon handle=380 flags=0 n=4 closed=1 pts=[(94.445035,17.291390,-1.069136);(95.514170,17.291390,-1.511986);(94.318474,14.404723,-1.511986);(93.562481,15.160716,-1.069136)] bulges=[] normal=[(-0.377964,0.156558,-0.912487)]
 00183 Polygon handle=380 flags=0 n=4 closed=1 pts=[(95.514170,17.291390,-1.511986);(96.583306,17.291390,-1.069136);(95.074467,13.648730,-1.069136);(94.318474,14.404723,-1.511986)] bulges=[] normal=[(0.377964,-0.156558,-0.912487)]
 00184 Polygon handle=380 flags=0 n=4 closed=1 pts=[(96.583306,17.291390,-1.069136);(97.026157,17.291390,0.000000);(95.387610,13.335587,0.000000);(95.074467,13.648730,-1.069136)] bulges=[] normal=[(0.862856,-0.357407,-0.357407)]
-00185 Warning handle=389 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="XLINE runs both ways from its base point forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00186 Warning handle=38A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="RAY runs from its base point in one direction forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
+00185 Unbounded handle=389 flags=0 base=[(-6.805688,-5.110573,0.000000)] dir=[(0.000000,1.000000,0.000000)] kind=xline
+00186 Unbounded handle=38A flags=0 base=[(-15.417610,-4.203542,0.000000)] dir=[(0.000000,1.000000,0.000000)] kind=ray
 00187 Polyline handle=38B flags=0 n=8 closed=0 pts=[(137.078615,1.014578,0.000000);(137.078615,9.681727,0.000000);(141.399128,9.681727,0.000000);(141.399128,13.432720,0.000000);(132.866598,13.432720,0.000000);(132.866598,20.773427,0.000000);(140.858641,20.773427,0.000000);(140.858641,26.682650,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00188 Polyline handle=38B flags=0 n=8 closed=0 pts=[(138.578615,1.014578,0.000000);(138.578615,8.181727,0.000000);(142.899128,8.181727,0.000000);(142.899128,14.932720,0.000000);(134.366598,14.932720,0.000000);(134.366598,19.273427,0.000000);(142.358641,19.273427,0.000000);(142.358641,26.682650,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00189 Polyline handle=3A5 flags=0 n=2 closed=0 pts=[(132.546888,37.540635,0.000000);(132.546888,46.064408,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
@@ -214,30 +214,30 @@
 00213 Polygon handle=629 flags=1 n=3 closed=1 pts=[(321.857920,22.544342,0.000000);(322.274586,21.822654,0.000000);(319.901189,20.933498,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00214 Polygon handle=62A flags=1 n=3 closed=1 pts=[(357.984703,43.402150,0.000000);(358.401370,42.680463,0.000000);(360.358100,44.291307,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00215 Text handle=62B flags=1 p=[(339.065951,34.454774,0.000000)] h=2.500000 rot=0.523599 value="46,72"
-00216 Warning handle=62C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00217 Warning handle=62D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00218 Warning handle=62E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00216 Point handle=62C flags=1 p=[(330.289059,2.941179,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00217 Point handle=62D flags=1 p=[(364.487264,37.139384,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00218 Point handle=62E flags=1 p=[(360.358100,44.291307,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00219 Line handle=62F flags=1 pts=[(456.275405,8.443238,0.000000);(472.660010,2.981703,0.000000)]
 00220 Line handle=630 flags=1 pts=[(444.434661,37.745723,0.000000);(447.295237,49.188028,0.000000)]
 00221 Arc handle=631 flags=1 c=[(438.583375,14.340581,0.000000)] r=34.669927 a0=6.033559 a1=1.253693 normal=[(0.000000,0.000000,1.000000)]
 00222 Polygon handle=632 flags=1 n=3 closed=1 pts=[(472.578479,5.658233,0.000000);(471.778922,5.893082,0.000000);(471.474155,3.376988,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00223 Polygon handle=633 flags=1 n=3 closed=1 pts=[(449.278421,46.881641,0.000000);(449.509551,47.682281,0.000000);(446.992067,47.975350,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00224 Text handle=634 flags=1 p=[(470.642041,31.939054,0.000000)] h=2.500000 rot=-1.068763 value="94°"
-00225 Warning handle=635 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00226 Warning handle=636 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00227 Warning handle=637 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00228 Warning handle=638 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00225 Point handle=635 flags=1 p=[(438.583375,14.340581,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00226 Point handle=636 flags=1 p=[(455.682478,8.640880,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00227 Point handle=637 flags=1 p=[(444.283076,37.139384,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00228 Point handle=638 flags=1 p=[(472.360450,22.158063,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00229 Line handle=639 flags=1 pts=[(513.272413,8.443238,0.000000);(528.965660,3.212156,0.000000)]
 00230 Line handle=63A flags=1 pts=[(501.431669,37.745723,0.000000);(504.115496,48.481032,0.000000)]
 00231 Arc handle=63B flags=1 c=[(495.580383,14.340581,0.000000)] r=33.941171 a0=6.035108 a1=1.252144 normal=[(0.000000,0.000000,1.000000)]
 00232 Polygon handle=63C flags=1 n=3 closed=1 pts=[(528.882361,5.889541,0.000000);(528.082623,6.123770,0.000000);(527.779805,3.607440,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00233 Polygon handle=63D flags=1 n=3 closed=1 pts=[(506.097832,46.172874,0.000000);(506.329582,46.973334,0.000000);(503.812326,47.268354,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00234 Text handle=63E flags=1 p=[(527.000218,31.588370,0.000000)] h=2.500000 rot=-1.068763 value="94°"
-00235 Warning handle=63F flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00236 Warning handle=640 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00237 Warning handle=641 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00238 Warning handle=642 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00239 Warning handle=643 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00235 Point handle=63F flags=1 p=[(528.647470,21.993741,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00236 Point handle=640 flags=1 p=[(495.580383,14.340581,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00237 Point handle=641 flags=1 p=[(495.580383,14.340581,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00238 Point handle=642 flags=1 p=[(501.280084,37.139384,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00239 Point handle=643 flags=1 p=[(512.679486,8.640880,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00240 Line handle=517 flags=0 pts=[(330.289059,2.941179,0.000000);(364.487264,37.139384,0.000000)]
 00241 Line handle=518 flags=0 pts=[(381.586367,8.640880,0.000000);(415.784572,42.839085,0.000000)]
 00242 Line handle=519 flags=0 pts=[(438.583375,14.340581,0.000000);(444.283076,37.139384,0.000000)]
@@ -250,34 +250,34 @@
 00249 Text handle=667 flags=1 p=[(583.348482,42.420551,0.000000)] h=2.500000 rot=0.785398 value="R11,4"
 00250 Line handle=668 flags=1 pts=[(569.676494,25.739983,0.000000);(577.737088,33.800577,0.000000)]
 00251 Polygon handle=669 flags=1 n=3 closed=1 pts=[(579.210227,35.862972,0.000000);(579.799483,35.273716,0.000000);(577.737088,33.800577,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00252 Warning handle=66A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00253 Warning handle=66B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00252 Point handle=66A flags=1 p=[(577.737088,33.800577,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00253 Point handle=66B flags=1 p=[(569.676494,25.739983,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00254 Line handle=64A flags=1 pts=[(621.442431,25.739983,0.000000);(646.972306,25.739983,0.000000)]
 00255 Text handle=64B flags=1 p=[(626.673502,27.908298,0.000000)] h=2.500000 rot=0.000000 value="∅45,6"
 00256 Polygon handle=64C flags=1 n=3 closed=1 pts=[(646.972306,26.156649,0.000000);(646.972306,25.323316,0.000000);(649.472306,25.739983,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00257 Warning handle=64D flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00258 Warning handle=64E flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00257 Point handle=64D flags=1 p=[(649.472306,25.739983,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00258 Point handle=64E flags=1 p=[(603.874699,25.739983,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00259 Line handle=64F flags=1 pts=[(661.496707,8.640880,0.000000);(690.769613,8.640880,0.000000)]
 00260 Line handle=650 flags=1 pts=[(690.769613,8.640880,0.000000);(695.769613,14.340581,0.000000)]
 00261 Line handle=651 flags=1 pts=[(695.769613,14.340581,0.000000);(711.542976,14.340581,0.000000)]
 00262 Text handle=652 flags=1 p=[(706.468794,16.467969,0.000000)] h=2.500000 rot=0.000000 value="102,59"
-00263 Warning handle=653 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00264 Warning handle=654 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00265 Warning handle=655 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00263 Point handle=653 flags=1 p=[(660.871707,8.640880,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00264 Point handle=654 flags=1 p=[(700.769613,14.340581,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00265 Point handle=655 flags=1 p=[(313.189957,111.235495,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00266 Line handle=656 flags=1 pts=[(666.571408,3.566179,0.000000);(666.571408,32.839085,0.000000)]
 00267 Line handle=657 flags=1 pts=[(666.571408,32.839085,0.000000);(677.970810,37.839085,0.000000)]
 00268 Line handle=658 flags=1 pts=[(677.970810,37.839085,0.000000);(677.970810,53.846077,0.000000)]
 00269 Text handle=659 flags=1 p=[(675.843422,48.655081,0.000000)] h=2.500000 rot=1.570796 value="353,38"
-00270 Warning handle=65A flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00271 Warning handle=65B flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00272 Warning handle=65C flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00270 Point handle=65A flags=1 p=[(666.571408,2.941179,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00271 Point handle=65B flags=1 p=[(677.970810,42.839085,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00272 Point handle=65C flags=1 p=[(313.189957,111.235495,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00273 Line handle=65D flags=1 pts=[(381.144425,9.082822,0.000000);(374.472452,15.754795,0.000000)]
 00274 Line handle=65E flags=1 pts=[(415.342630,43.281027,0.000000);(408.670657,49.953000,0.000000)]
 00275 Line handle=65F flags=1 pts=[(374.472452,12.926368,0.000000);(411.499085,49.953000,0.000000)]
 00276 Text handle=662 flags=1 p=[(390.757369,33.668083,0.000000)] h=2.500000 rot=0.785398 value="4'-0{\\H1x;\\S1#4;}\""
-00277 Warning handle=663 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00278 Warning handle=664 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00279 Warning handle=665 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00277 Point handle=663 flags=1 p=[(381.586367,8.640880,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00278 Point handle=664 flags=1 p=[(415.784572,42.839085,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00279 Point handle=665 flags=1 p=[(410.084871,48.538786,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00280 Polygon handle=571 flags=1 n=4 closed=1 pts=[(774.865724,21.994465,0.000000);(774.865724,9.170138,0.000000);(877.460338,9.170138,0.000000);(877.460338,21.994465,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00281 Text handle=572 flags=1 p=[(826.163031,44.793268,0.000000)] h=4.000000 rot=0.000000 value="Table sample"
 00282 Text handle=573 flags=1 p=[(791.964826,37.872203,0.000000)] h=4.000000 rot=0.000000 value="Text"
@@ -350,7 +350,7 @@
 00349 Warning handle=823 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
 00350 Warning handle=824 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
 00351 Warning handle=889 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="SHAPE draws a glyph out of an external SHX file and carries only the placement and the name, and this decoder opens no path a drawing names, so the outline is not in this file and is not fetched"
-00352 Warning handle=8C6 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="IMAGE shows an external raster the drawing only names, and this decoder opens no path a drawing names, so what it displays is not in this file"
+00352 Placement handle=8C6 flags=0 i=[(0.000000,15.000000,0.000000)] u=[(10.354167,0.000000,0.000000)] v=[(0.000000,10.052083,0.000000)] size=[994.000000,965.000000] kind=image clip=[] name=".\\image.JPG"
 00353 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
 00354 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
 00355 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
@@ -378,9 +378,9 @@
 00377 Polygon handle=9D8 flags=1 n=3 closed=1 pts=[(35.260903,-122.045502,0.000000);(35.303330,-122.087929,0.000000);(35.154837,-122.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00378 Polygon handle=9D9 flags=1 n=3 closed=1 pts=[(40.006345,-117.300061,0.000000);(40.048771,-117.342487,0.000000);(40.154837,-117.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00379 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
-00380 Warning handle=9DB flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00381 Warning handle=9DC flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00382 Warning handle=9DD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00380 Point handle=9DB flags=1 p=[(35.999870,-123.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00381 Point handle=9DC flags=1 p=[(40.999870,-118.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00382 Point handle=9DD flags=1 p=[(40.154837,-117.193995,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00383 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
 00384 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
 00385 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
@@ -445,9 +445,9 @@
 00444 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
 00445 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
 00446 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
-00447 Warning handle=CA1 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00448 Warning handle=CA2 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00449 Warning handle=CA3 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
+00447 Point handle=CA1 flags=1 p=[(313.773325,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00448 Point handle=CA2 flags=1 p=[(348.896656,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00449 Point handle=CA3 flags=1 p=[(348.896656,-11.724072,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
 00450 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
 00451 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
 00452 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
@@ -455,10 +455,10 @@
 00454 Polygon handle=CDA flags=1 n=3 closed=1 pts=[(314.084306,-21.584004,0.000000);(314.084306,-21.644004,0.000000);(313.904306,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00455 Polygon handle=CDB flags=1 n=3 closed=1 pts=[(348.669638,-21.584004,0.000000);(348.669638,-21.644004,0.000000);(348.849638,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00456 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
-00457 Warning handle=CDD flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00458 Warning handle=CDE flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00459 Warning handle=CDF flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00460 Warning handle=D07 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="PDFUNDERLAY shows an external PDF the drawing only names, and this decoder opens no path a drawing names, so what it displays is not in this file"
+00457 Point handle=CDD flags=1 p=[(313.904306,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00458 Point handle=CDE flags=1 p=[(348.849638,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00459 Point handle=CDF flags=1 p=[(348.849638,-21.614004,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00460 Placement handle=D07 flags=0 i=[(16.286926,15.000000,0.000000)] u=[(1.000000,0.000000,0.000000)] v=[(0.000000,1.000000,0.000000)] size=[0.000000,0.000000] kind=pdf clip=[] name="..\\pdf-definition.pdf"
 00461 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
 00462 Warning handle=D65 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
 00463 Warning handle=D69 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="REGION keeps its geometry as an embedded ACIS stream, the same as 3DSOLID, so there is no outline here to flatten and producing one means evaluating a proprietary boundary representation"

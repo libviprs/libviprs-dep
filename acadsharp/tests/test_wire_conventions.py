@@ -451,7 +451,7 @@ class TestEveryHeadingIsItsOwn:
     def test_the_reader_finds_the_headings_at_all(self, wire):
         found = headings(wire)
         assert len(found) > 10, f"WIRE.md parsed to {found}, which is not its outline"
-        assert (1, "The VACB batch protocol, wire version 2") in found
+        assert (1, "The VACB batch protocol, wire version 3") in found
 
     def test_no_two_headings_carry_the_same_text(self, wire):
         seen = {}

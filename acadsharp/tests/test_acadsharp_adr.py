@@ -156,23 +156,20 @@ class TestTheCensusIsRecomputed:
             f"{stated['code_100']} and {stated['code_109']}"
         )
 
-    def test_the_point_bullet_counts_the_same_refusals(self):
-        # The wire-3 section leans on POINT being the biggest single gap,
-        # and it quotes the same denominator from the other end of the
-        # document. Two places holding one number is two places to drift.
-        m = re.search(
-            r"\*\*(\d+)\*\* of the \*\*(\d+)\*\* refusals on `real_AC1032\.dwg` are POINT",
-            adr_0002_flat(),
+    def test_the_point_bullet_is_history_and_the_corpus_agrees(self):
+        # The wire-3 section used to lean on POINT being 40 of the refusals on
+        # the real drawing, quoted against a denominator that moved every time
+        # the flattener did. Wire version 3 took all of them, so the bullet says
+        # what it was and the corpus is asked whether it is true that none is
+        # left, which is the one claim in it that can still go wrong.
+        flat = adr_0002_flat()
+        assert re.search(r"\*\*40\*\* of the refusals on `real_AC1032\.dwg` were POINT", flat), (
+            "ADR 0002's Point bullet no longer says how many refusals POINT was"
         )
-        assert m, (
-            "ADR 0002's Point bullet no longer states how many of the refusals are "
-            "POINT, which is the whole argument for putting it on a wire 3 first"
-        )
-        point, total = int(m.group(1)), int(m.group(2))
-        actual = census()
-        assert (point, total) == (actual["point"], actual["refusals"]), (
-            f"ADR 0002 says {point} of {total} refusals are POINT and the expectation "
-            f"for {CENSUS_FIXTURE} holds {actual['point']} of {actual['refusals']}"
+        assert "wire version 3 took all of them" in flat
+        assert census()["point"] == 0, (
+            f"{CENSUS_FIXTURE} still carries {census()['point']} POINT refusals, so wire "
+            "version 3 did not take all of them"
         )
 
 
@@ -221,17 +218,27 @@ class TestAdr0003:
             "only place in either repository the three record shapes are written down"
         )
 
-    def test_the_second_line_says_it_is_proposed(self):
+    def test_the_second_line_carries_the_status(self):
         # ADR 0001 puts its verdict on the same line, for the same reason: a
         # reader who stops after two lines has to come away with the status.
-        # This one is not decided, and a document that reads as decided is the
-        # one that gets implemented by somebody who never reached the section
-        # saying a release sits in the middle of it.
+        # It said PROPOSED until phase 1 of the epic cut the records, and what
+        # it says now is that it was accepted and implemented, which a reader
+        # who stops after two lines must not mistake for a proposal.
         lines = [ln.strip() for ln in adr_0003_text().splitlines() if ln.strip()]
         assert lines[0].startswith("# ")
-        assert "PROPOSED" in lines[1], (
+        assert "ACCEPTED" in lines[1], (
             f"the second line has to carry the status, it says {lines[1]!r}"
         )
+
+    def test_it_records_where_the_implementation_departs_from_it(self):
+        # A decision record is not edited to agree with what happened, so the
+        # places the implementation differs are written at the end instead, and
+        # the three that exist are named so a reader of the layouts above is told
+        # to go and look.
+        flat = adr_0003_flat()
+        assert "Amendments made while implementing it" in flat
+        for token in ("not lifted", "no size", "units"):
+            assert token in flat, f"the amendments never mention {token!r}"
 
     def test_it_pins_three_layouts_with_their_numbers(self):
         flat = adr_0003_flat()

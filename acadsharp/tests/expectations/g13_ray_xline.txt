@@ -3,9 +3,9 @@
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00004 Line handle=49 flags=0 pts=[(-10.000000,-10.000000,0.000000);(10.000000,10.000000,0.000000)]
-00005 Warning handle=4A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="RAY runs from its base point in one direction forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00006 Warning handle=4B flags=0 code=ENTITY_REFUSED_BY_DESIGN message="XLINE runs both ways from its base point forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00007 Warning handle=4F flags=1 code=ENTITY_REFUSED_BY_DESIGN message="RAY runs from its base point in one direction forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00008 Warning handle=50 flags=1 code=ENTITY_REFUSED_BY_DESIGN message="XLINE runs both ways from its base point forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00009 Warning handle=4F flags=1 code=ENTITY_REFUSED_BY_DESIGN message="RAY runs from its base point in one direction forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
-00010 Warning handle=50 flags=1 code=ENTITY_REFUSED_BY_DESIGN message="XLINE runs both ways from its base point forever and every record wire version 2 defines is bounded, so it is refused rather than clipped to the drawing's extents and passed off as a line"
+00005 Unbounded handle=4A flags=0 base=[(1.000000,2.000000,0.000000)] dir=[(0.948683,0.316228,0.000000)] kind=ray
+00006 Unbounded handle=4B flags=0 base=[(-2.000000,3.000000,0.000000)] dir=[(0.242536,0.970143,0.000000)] kind=xline
+00007 Unbounded handle=4F flags=1 base=[(40.000000,1.500000,0.000000)] dir=[(0.970143,0.242536,0.000000)] kind=ray
+00008 Unbounded handle=50 flags=1 base=[(40.000000,-1.500000,0.000000)] dir=[(0.554700,0.832050,0.000000)] kind=xline
+00009 Unbounded handle=4F flags=1 base=[(80.000000,2.000000,0.000000)] dir=[(-0.894427,0.447214,0.000000)] kind=ray
+00010 Unbounded handle=50 flags=1 base=[(80.000000,-2.000000,0.000000)] dir=[(-0.316228,0.948683,0.000000)] kind=xline

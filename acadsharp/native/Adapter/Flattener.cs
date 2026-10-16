@@ -1218,6 +1218,62 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// POINT, RAY, XLINE, IMAGE and PDFUNDERLAY are wire version 3's
+				// three records: Point, Unbounded and Placement. The bodies are in
+				// Flatten.Points.cs, Flatten.Unbounded.cs and Flatten.Placements.cs,
+				// and the reasoning for each lives next to its body.
+				case Point point:
+				{
+					foreach (Primitive p in PointRecord(point, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case Ray ray:
+				{
+					foreach (Primitive p in UnboundedRecord(
+						"RAY", 0u, ray.StartPoint, ray.Direction, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case XLine xline:
+				{
+					foreach (Primitive p in UnboundedRecord(
+						"XLINE", 1u, xline.FirstPoint, xline.Direction, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case RasterImage image:
+				{
+					foreach (Primitive p in ImagePlacement(image, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
+				case PdfUnderlay underlay:
+				{
+					foreach (Primitive p in UnderlayPlacement(underlay, h, flags, place))
+					{
+						yield return p;
+					}
+
+					yield break;
+				}
+
 				// DIMENSION and HATCH are not here. They are composites: they
 				// expand into other entities, and expanding them from inside
 				// Map is what put a file-controlled recursion on the CLR
@@ -1227,10 +1283,9 @@ namespace Viprs.Cad
 				// existed they left the identical warning.
 				//
 				// A kind in that table is one somebody looked at and decided
-				// against: the geometry is not in the drawing (SHAPE, IMAGE,
-				// PDFUNDERLAY), or it is in a form nothing here evaluates
-				// (3DSOLID, REGION), or no record in wire 2 can hold it (RAY,
-				// XLINE). Those get code 109 and a sentence saying which.
+				// against: the geometry is not in the drawing (SHAPE), or it is
+				// in a form nothing here evaluates (3DSOLID, REGION). Those get
+				// code 109 and a sentence saying which.
 				// Everything else is a gap nobody has got to, which is what 100
 				// has always meant, and the difference is the whole reason a
 				// consumer has a second number to branch on.

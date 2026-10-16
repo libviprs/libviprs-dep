@@ -235,7 +235,7 @@ class TestEveryRowIsEvidencedByADecodeSomebodyRan:
         # direction, but a dict holding only READER_NOTIFICATION lines would
         # not, so what is asserted is that refusals reached it.
         refusals = [pair for pair in evidenced if pair[0] == "ENTITY_REFUSED_BY_DESIGN"]
-        assert len(refusals) >= 7, (
+        assert len(refusals) >= 3, (
             f"the corpus reader found {len(refusals)} refusal sentences, which is not "
             "the corpus this repository carries, so every case above is passing over "
             "nothing"
@@ -246,13 +246,15 @@ class TestEveryRowIsEvidencedByADecodeSomebodyRan:
         # against. The match has to be on the whole sentence: a prefix, a
         # substring or a first-word comparison would all call the misspelling
         # evidenced by the dumps that carry the correct one.
-        sentence = messages.get("XLINE")
+        # XLINE was this control until wire version 3 gave it a record and took
+        # its row out of the table, which is the move the message below asks for.
+        sentence = messages.get("SHAPE")
         assert sentence, (
-            "RefusedKinds.cs carries no XLINE arm, so this control has nothing to be a "
+            "RefusedKinds.cs carries no SHAPE arm, so this control has nothing to be a "
             "near miss of. If the kind was renamed, the case above is the one to read; "
             "if it was genuinely retired, move this control onto another row"
         )
-        wrong = "XLINEE" + sentence[len("XLINE") :]
+        wrong = "SHAPEE" + sentence[len("SHAPE") :]
         assert ("ENTITY_REFUSED_BY_DESIGN", wrong) not in evidenced
         assert ("ENTITY_REFUSED_BY_DESIGN", sentence) in evidenced
 
@@ -262,17 +264,17 @@ class TestThereIsSomethingToCompare:
     empty ones agree about everything."""
 
     def test_the_adr_decides_a_set_of_kinds(self, decided):
-        # Seven and not eight since WIPEOUT was implemented: it was the one
-        # deferred row, it left the table when its arm landed, and a threshold
-        # that stayed at eight would be asking the ADR to keep a kind this
-        # decoder flattens.
-        assert len(decided) >= 7, (
+        # Three and not eight. WIPEOUT left when its arm landed, and IMAGE,
+        # PDFUNDERLAY, RAY and XLINE left with wire version 3 when their
+        # records did. A threshold that stayed higher would be asking the ADR
+        # to keep a kind this decoder flattens.
+        assert len(decided) >= 3, (
             f"ADR 0002's disposition table parsed to {sorted(decided)}. A table this "
             "reader cannot see makes every comparison in this file pass over nothing."
         )
 
     def test_the_shim_carries_the_same_kind_of_table(self, table):
-        assert len(table) >= 7, f"RefusedKinds.cs parsed to {sorted(table)}"
+        assert len(table) >= 3, f"RefusedKinds.cs parsed to {sorted(table)}"
 
 
 class TestTheDecisionAndTheCodeAgree:

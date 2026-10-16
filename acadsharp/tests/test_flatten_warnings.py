@@ -20,7 +20,7 @@ WARNING_CODES = os.path.join(NATIVE, "Adapter", "WarningCodes.cs")
 # code -> the fixture that produces it. Every code the adapter defines has to
 # be in here, and the last test in this file is what enforces that.
 CODE_FIXTURES = {
-    "UNSUPPORTED_ENTITY": "g13_unsupported.dwg",
+    "UNSUPPORTED_ENTITY": "g13_polyface_mesh.dwg",
     "READER_NOTIFICATION": "real_AC1032.dwg",
     "DIMENSION_WITHOUT_BLOCK": None,
     "HATCH_PATTERN_ONLY": "g13_hatch.dwg",
@@ -29,10 +29,10 @@ CODE_FIXTURES = {
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
-    # The real drawing carries all seven kinds in RefusedKinds.cs (3DSOLID,
-    # REGION, SHAPE, IMAGE, PDFUNDERLAY, RAY, XLINE), so it is the fixture
-    # this code is produced by. There were eight until WIPEOUT was flattened
-    # and its row came out of that table.
+    # The real drawing carries all three kinds in RefusedKinds.cs (3DSOLID,
+    # REGION, SHAPE), so it is the fixture this code is produced by. There were
+    # eight until WIPEOUT was flattened and four more left with wire version 3
+    # (IMAGE, PDFUNDERLAY, RAY, XLINE).
     "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
     "MESH_SUBDIVISION_IGNORED": "g13_mesh.dwg",
     "MESH_FACE_UNREADABLE": "g13_mesh_bad_faces.dwg",
@@ -61,35 +61,49 @@ def declared_codes():
 
 
 class TestUnsupportedEntities:
-    def test_the_fixture_carries_one_refusal_and_the_solid_beside_it(self):
-        # The SOLID in this file is flattened now, so the fixture is no longer
-        # only warnings. Keeping the Polygon in the assertion is the point: it
-        # is what tells "SOLID is implemented" apart from "the SOLID went
-        # missing", which a set of {"Warning"} could not.
-        counts = kinds("g13_unsupported.dwg")
-        assert set(counts) == {"Warning", "Polygon"}, (
-            f"expected one refusal and one solid, got {counts}"
-        )
+    """Code 100, on the one kind that is left to witness it that no other work
+    is about to take.
+
+    This used to be `g13_unsupported.dwg`, a POINT and a SOLID, and it stopped
+    being one twice: SOLID was flattened, and POINT became record 14 with wire
+    version 3. POLYFACE_MESH is refused on purpose by its own arm and is not in
+    RefusedKinds.cs, so it is the permanent answer to "what does code 100 look
+    like"; `g13_unsupported.dwg` stays in the corpus as the witness that both
+    of its entities cross now.
+    """
+
+    FIXTURE = "g13_polyface_mesh.dwg"
+
+    def test_the_fixture_is_only_refusals(self):
+        counts = kinds(self.FIXTURE)
+        assert set(counts) == {"Warning"}, f"expected only warnings, got {counts}"
 
     def test_each_one_names_the_entity_type(self):
         named = {
             w["message"].split(" ")[0]
-            for w in warnings("g13_unsupported.dwg")
+            for w in warnings(self.FIXTURE)
             if w["code"] == "UNSUPPORTED_ENTITY"
         }
-        assert named == {"POINT"}, (
+        assert named == {"POLYFACE_MESH"}, (
             f"the warnings name {sorted(named)}. A warning that does not say which "
             "entity type it could not flatten cannot be acted on"
         )
 
     def test_each_one_carries_the_entity_handle(self):
-        for w in warnings("g13_unsupported.dwg"):
+        for w in warnings(self.FIXTURE):
             if w["code"] != "UNSUPPORTED_ENTITY":
                 continue
             assert w["handle"] != "0", (
                 "an unsupported-entity warning with no handle cannot be traced back to "
                 "the thing in the drawing that caused it"
             )
+
+    def test_the_old_witness_crosses_as_records_now(self):
+        counts = kinds("g13_unsupported.dwg")
+        assert set(counts) == {"Warning", "Point", "Polygon"}, (
+            f"g13_unsupported.dwg holds a POINT and a SOLID and both are flattened, got {counts}"
+        )
+        assert not [w for w in warnings("g13_unsupported.dwg") if w["code"] == "UNSUPPORTED_ENTITY"]
 
 
 class TestReaderNotifications:

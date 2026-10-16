@@ -106,7 +106,7 @@ class TestTheSurfaceIsComplete:
 
     def test_the_abi_and_wire_versions_are_declared(self, code):
         assert re.search(r"#define\s+VIPRS_ACAD_ABI_VERSION\s+2u", code)
-        assert re.search(r"#define\s+VIPRS_ACAD_WIRE_VERSION\s+2u", code)
+        assert re.search(r"#define\s+VIPRS_ACAD_WIRE_VERSION\s+3u", code)
 
     def test_a_buffer_too_small_has_a_code_of_its_own(self, code):
         # The two outcomes used to share VIPRS_ACAD_LIMIT_EXCEEDED and were
