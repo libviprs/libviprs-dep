@@ -19,9 +19,7 @@ import re
 
 ACAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 NATIVE = os.path.join(ACAD_DIR, "native", "Viprs.ACadSharp.Native.csproj")
-FIXTUREGEN = os.path.join(
-    ACAD_DIR, "tests", "fixtures", "gen", "Viprs.ACadSharp.FixtureGen.csproj"
-)
+FIXTUREGEN = os.path.join(ACAD_DIR, "tests", "fixtures", "gen", "Viprs.ACadSharp.FixtureGen.csproj")
 
 SETTING = re.compile(r"<InvariantGlobalization>\s*([^<\s]*)\s*</InvariantGlobalization>")
 
