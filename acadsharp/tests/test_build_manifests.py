@@ -199,6 +199,31 @@ class TestTheArchiveSaysWhichShimIsInIt:
         assert any(s.startswith("native/Adapter/") for s in sources)
         assert ba.shim_digest(sources[:-1]) != ba.shim_digest(sources)
 
+
+    def test_changing_a_source_s_contents_moves_the_digest(self, tmp_path, monkeypatch):
+        # #117. The control above only proves the rollup depends on how many
+        # sources it is handed: a digest over len(sources) passes it. This one
+        # keeps the list the same length and changes what is behind one entry,
+        # which is the property the test is named for.
+        rels = ["native/Adapter/a.cs", "native/Adapter/b.cs"]
+        for rel in rels:
+            path = tmp_path / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"// {rel}\n")
+        monkeypatch.setattr(ba, "HERE", str(tmp_path))
+        before = ba.shim_digest(rels)
+        (tmp_path / rels[1]).write_text("// changed\n")
+        assert ba.shim_digest(rels) != before
+
+    def test_moving_a_source_moves_the_digest_without_changing_it(self, tmp_path, monkeypatch):
+        # The path goes into the hash too: same bytes, other name, other number.
+        for rel in ("native/Adapter/a.cs", "native/Adapter/b.cs"):
+            path = tmp_path / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("// same\n")
+        monkeypatch.setattr(ba, "HERE", str(tmp_path))
+        assert ba.shim_digest(["native/Adapter/a.cs"]) != ba.shim_digest(["native/Adapter/b.cs"])
+
     def test_both_manifests_state_the_same_producing_commit(self):
         # verify_archive.sh refuses a disagreement, and it can only do that
         # while one run of one driver writes both.
