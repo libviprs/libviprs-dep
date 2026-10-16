@@ -33,3 +33,18 @@ _toolchain = _load(os.path.join(HERE, "toolchain.py"), "toolchain")
 # instance above. It prints how many compiled fixtures did not run, which
 # is the half of this that a summary line hides.
 pytest_terminal_summary = _toolchain.pytest_terminal_summary
+
+
+# #119. Every manifest-shape test builds a LINKINFO through `linkinfo_skeleton`,
+# which raises when the shim pin disagrees with the tree, so a stale SHIM_DIGESTS
+# row fails dozens of tests that never mention the shim. The refusal stays. The
+# class that asserts the pin runs first, so the first failure named is the true
+# one. A stable partition: nothing else moves relative to anything else.
+FIRST = "TestTheArchiveSaysWhichShimIsInIt"
+
+
+def pytest_collection_modifyitems(items):
+    pinned = [item for item in items if item.cls is not None and item.cls.__name__ == FIRST]
+    if pinned:
+        rest = [item for item in items if item not in pinned]
+        items[:] = pinned + rest

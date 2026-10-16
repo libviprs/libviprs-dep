@@ -25,6 +25,7 @@ argument, so the library's directory goes out of the `-sys` crate as
 becomes the flag in the binary's own build script.
 """
 
+import inspect
 import json
 import os
 import re
@@ -273,27 +274,146 @@ class TestTheRecipeReallyLinksAndRuns:
         assert "exited 134" in output
 
 
+def _require_shared_only_toolchain():
+    """`cc` and `cargo`, and no platform check (#116).
+
+    The shared-only fixture is a `cc -shared -fPIC` stub and a manifest. It
+    needs no ELF reader and no .NET, so it has no reason to skip on the one
+    kind of host where shared-only is the only mode there is.
+    """
+    if not shutil.which("cc"):
+        toolchain.missing_tool("cc", "the shared-only stub library here is built with it")
+    _require_cargo()
+
+
 @pytest.fixture(scope="session")
 def shared_only_archive(tmp_path_factory):
-    """A real, loadable library in an archive that certifies no static half.
+    """A loadable stub library in an archive that certifies no static half.
 
-    Which is what every mac archive is, and what no test here used to
-    link. Built by dropping the static archives and their four manifest
-    fields off a certified tree, so the library inside is the same one the
-    static tests link and the difference is only which recipe applies.
+    Which is what every mac archive is. Built the same way on every host: a
+    `cc -shared` library answering the entry points, and a manifest from the
+    driver's own packaging path with `static_certified: false`. On darwin the
+    dylib records `@rpath/libacadsharp_native.dylib`, as a real mac archive
+    does, so the consumer's `-Wl,-rpath` is what lets it load.
     """
-    fixtures._require_toolchain()
-    root = fixtures._build_linux_tree(str(tmp_path_factory.mktemp("consumer-shared")))
-    for name in ("libacadsharp_native.a", "libacadsharp_native_init.a"):
-        os.remove(os.path.join(root, "lib", name))
+    _require_shared_only_toolchain()
+    return fixtures._build_shared_only_stub(str(tmp_path_factory.mktemp("consumer-shared")))
 
-    def drop(doc):
-        for field in fixtures.ba.STATIC_LINKINFO_FIELDS:
-            doc.pop(field, None)
-        doc["static_certified"] = False
 
-    fixtures._edit_json(root, "LINKINFO.json", drop)
-    return root
+def _smoke_tree(tmp_path):
+    """The smoke script and the workspace it builds, in a place a test can edit.
+
+    The script finds the workspace relative to itself, so the layout is kept.
+    """
+    tree = tmp_path / "acadsharp"
+    (tree / "scripts").mkdir(parents=True)
+    shutil.copy2(SMOKE, tree / "scripts" / os.path.basename(SMOKE))
+    shutil.copytree(WORKSPACE, tree / "tests" / "link_consumer")
+    shutil.copytree(
+        os.path.join(ACAD_DIR, "tests", "fixtures"),
+        tree / "tests" / "fixtures",
+        ignore=shutil.ignore_patterns("captures"),
+    )
+    return tree
+
+
+class TestTheSharedOnlyFixtureRunsOnEveryHost:
+    def test_its_gate_does_not_look_at_the_platform(self, monkeypatch):
+        # `_require_toolchain()` skips whenever sys.platform is not linux.
+        # The shared-only gate must come through on darwin if cc and cargo
+        # are there, or the three tests below are skipped on the only host
+        # that has no other recipe.
+        monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+        monkeypatch.setattr("sys.platform", "darwin")
+        _require_shared_only_toolchain()
+
+    def test_it_needs_no_elf_toolchain(self):
+        source = inspect.getsource(fixtures._build_shared_only_stub)
+        for tool in ("readelf", "objcopy", "nm", '"ar"', "retain_sections"):
+            assert tool not in source, f"{tool} makes the fixture an ELF-only one"
+
+    def test_breaking_the_extension_loop_turns_the_shared_link_red(
+        self, tmp_path, shared_only_archive
+    ):
+        # The mutation the issue names. `for ext in [".a", ".so", ".dylib"]`
+        # reduced to `[".a"]` leaves `-lacadsharp_native.so` (or `.dylib`)
+        # on the link line, which the linker does not find.
+        tree = _smoke_tree(tmp_path)
+        build_rs = tree / "tests" / "link_consumer" / "acadsharp-sys" / "build.rs"
+        text = build_rs.read_text()
+        assert '[".a", ".so", ".dylib"]' in text
+        build_rs.write_text(text.replace('[".a", ".so", ".dylib"]', '[".a"]'))
+        result = subprocess.run(
+            ["bash", str(tree / "scripts" / os.path.basename(SMOKE)), shared_only_archive],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode != 0, result.stdout + result.stderr
+
+
+class TestTheConsumerAsksTheLibraryMoreThanItsFingerprint:
+    """#120. A link that arrives is not a library that works.
+
+    The consumer used to call two constant-returning exports. A library that
+    loads, hands back the right fingerprint and aborts on the first drawing
+    passed the mac lane. It now asks for the capabilities and opens a small
+    drawing, so the two run-time failure modes the csproj documents as
+    load-bearing sit inside the window the gate covers.
+    """
+
+    def _run(self, archive, smoke=SMOKE):
+        return subprocess.run(["bash", smoke, archive], capture_output=True, text=True, check=False)
+
+    def test_the_read_range_comes_back_through_the_link(self, shared_only_archive):
+        result = self._run(shared_only_archive)
+        with open(os.path.join(shared_only_archive, "metadata", "LINKINFO.json")) as f:
+            doc = json.load(f)
+        want = f"DWG_VERSION_MIN={doc['dwg_version_min']}"
+        assert want in result.stdout, result.stdout + result.stderr
+        assert f"DWG_VERSION_MAX={doc['dwg_version_max']}" in result.stdout
+
+    def test_a_manifest_that_disagrees_with_the_library_is_refused(
+        self, tmp_path, shared_only_archive
+    ):
+        root = str(tmp_path / "lying")
+        shutil.copytree(shared_only_archive, root, symlinks=True)
+        fixtures._edit_json(
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(dwg_version_max=doc["dwg_version_max"] + 1),
+        )
+        result = self._run(root)
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "dwg_version" in output, output
+
+    def test_a_drawing_is_opened_and_closed(self, shared_only_archive):
+        result = self._run(shared_only_archive)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "DOCUMENT_OPENED=1" in result.stdout, result.stdout
+
+    def test_a_library_that_cannot_open_a_drawing_fails_the_gate(
+        self, tmp_path, shared_only_archive
+    ):
+        # The library loads and answers every constant correctly, then
+        # refuses the first drawing. Before this, that archive shipped.
+        root = str(tmp_path / "refuses")
+        shutil.copytree(shared_only_archive, root, symlinks=True)
+        fixtures._rebuild_shared_stub(root, open_memory_status=7)
+        result = self._run(root)
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, output
+        assert "open_memory" in output, output
+
+    def test_the_bindings_declare_what_the_consumer_calls(self):
+        lib = read(os.path.join(WORKSPACE, "acadsharp-sys", "src", "lib.rs"))
+        for name in (
+            "viprs_acad_get_capabilities_v1",
+            "viprs_acad_open_memory",
+            "viprs_acad_close",
+        ):
+            assert name in lib
 
 
 class TestAManifestThatNamesNoStaticCertifiedIsRefused:

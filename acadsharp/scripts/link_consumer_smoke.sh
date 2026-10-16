@@ -65,8 +65,29 @@ with open(sys.argv[1]) as f:
     print(json.load(f)["abi_fingerprint"])
 ' "$MANIFEST")
 
+EXPECTED_MIN=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
+    print(json.load(f)["dwg_version_min"])
+' "$MANIFEST")
+EXPECTED_MAX=$(python3 -c '
+import json, sys
+with open(sys.argv[1]) as f:
+    print(json.load(f)["dwg_version_max"])
+' "$MANIFEST")
+
+# A small drawing, so the consumer reaches managed code and not only the
+# loader (#120). Beside the workspace rather than inside the archive: the
+# archive ships no drawings.
+SMOKE_DWG="$WORKSPACE/../fixtures/g13_circle.dwg"
+if [ ! -f "$SMOKE_DWG" ]; then
+  echo "Error: $SMOKE_DWG does not exist" >&2
+  exit 2
+fi
+
 echo "Linking $ROOT through the documented cargo recipe"
 set +e
+ACADSHARP_SMOKE_DWG="$SMOKE_DWG" \
 ACADSHARP_ARCHIVE="$ROOT" \
   CARGO_TARGET_DIR="$WORK/target" \
   cargo run --offline --quiet --manifest-path "$WORK/ws/Cargo.toml" -p consumer \
@@ -87,6 +108,18 @@ sed 's/^/  /' "$WORK/out.txt"
 GOT=$(sed -n 's/^ABI_FINGERPRINT=//p' "$WORK/out.txt" | head -1)
 if [ "$GOT" != "$EXPECTED" ]; then
   echo "FAIL: the linked library reports fingerprint '$GOT', LINKINFO.json says '$EXPECTED'" >&2
+  exit 1
+fi
+
+GOT_MIN=$(sed -n 's/^DWG_VERSION_MIN=//p' "$WORK/out.txt" | head -1)
+GOT_MAX=$(sed -n 's/^DWG_VERSION_MAX=//p' "$WORK/out.txt" | head -1)
+if [ "$GOT_MIN" != "$EXPECTED_MIN" ] || [ "$GOT_MAX" != "$EXPECTED_MAX" ]; then
+  echo "FAIL: the linked library reads dwg_version $GOT_MIN..$GOT_MAX, LINKINFO.json says $EXPECTED_MIN..$EXPECTED_MAX" >&2
+  exit 1
+fi
+
+if ! grep -q '^DOCUMENT_OPENED=1$' "$WORK/out.txt"; then
+  echo "FAIL: the consumer never reported opening a drawing" >&2
   exit 1
 fi
 
