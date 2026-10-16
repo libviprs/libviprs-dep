@@ -134,7 +134,7 @@ never reads the name a dylib records for itself.
 
 The two lanes also differ in where their cargo comes from. The mac cell takes
 whatever the `macos-15` image ships, unpinned; the four container cells pin
-theirs with the image (`rust:1.98.1`, and `rust:1.98.1-alpine` on musl). An
+theirs with the image (`rust:1.99.1`, and `rust:1.99.1-alpine` on musl). An
 image with no cargo in it fails that step rather than skipping it:
 `link_consumer_smoke.sh` exits 2 when `cargo` or `python3` is missing, so an
 unlinked archive is never reported as a linked one.

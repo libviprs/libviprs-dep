@@ -113,7 +113,7 @@ fi
 # Pinned, and the same rust the conformance workflow runs. An image that
 # floats picks up a new rustc the day it is published, and whether rustc
 # links its self-contained libunwind is exactly what this is measuring.
-IMAGE=${VIPRS_MUSL_VERIFY_IMAGE:-rust:1.98.1-alpine}
+IMAGE=${VIPRS_MUSL_VERIFY_IMAGE:-rust:1.99.1-alpine}
 case "$CPU" in
   x64)   DOCKER_PLATFORM=linux/amd64 ;;
   arm64) DOCKER_PLATFORM=linux/arm64 ;;
