@@ -57,7 +57,11 @@ CAPTURES = EXPECTATIONS
 BENCHMARKS = os.path.join(ACAD_ROOT, "tests", "benchmarks")
 
 SDK_IMAGE = "mcr.microsoft.com/dotnet/sdk:10.0.401-noble"
-PLATFORM = "linux/arm64"
+# arm64 is what the committed recordings were made on. The dumps are the JIT's
+# decode of a fixture and do not depend on the CPU, so a host with no arm64
+# containers (MARS, the x86_64 docker host) sets this to record on its own
+# architecture, and the manifest's runner string says which one it was.
+PLATFORM = os.environ.get("FIXTUREGEN_PLATFORM", "linux/arm64")
 PROJECT = "tests/fixtures/gen/Viprs.ACadSharp.FixtureGen.csproj"
 DLL = "/out/artifacts/bin/Viprs.ACadSharp.FixtureGen/debug/fixturegen.dll"
 
