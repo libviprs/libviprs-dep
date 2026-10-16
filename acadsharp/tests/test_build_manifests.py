@@ -199,7 +199,6 @@ class TestTheArchiveSaysWhichShimIsInIt:
         assert any(s.startswith("native/Adapter/") for s in sources)
         assert ba.shim_digest(sources[:-1]) != ba.shim_digest(sources)
 
-
     def test_changing_a_source_s_contents_moves_the_digest(self, tmp_path, monkeypatch):
         # #117. The control above only proves the rollup depends on how many
         # sources it is handed: a digest over len(sources) passes it. This one

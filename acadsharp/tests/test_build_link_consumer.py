@@ -379,7 +379,9 @@ class TestTheConsumerAsksTheLibraryMoreThanItsFingerprint:
         root = str(tmp_path / "lying")
         shutil.copytree(shared_only_archive, root, symlinks=True)
         fixtures._edit_json(
-            root, "LINKINFO.json", lambda doc: doc.update(dwg_version_max=doc["dwg_version_max"] + 1)
+            root,
+            "LINKINFO.json",
+            lambda doc: doc.update(dwg_version_max=doc["dwg_version_max"] + 1),
         )
         result = self._run(root)
         output = result.stdout + result.stderr
@@ -406,7 +408,11 @@ class TestTheConsumerAsksTheLibraryMoreThanItsFingerprint:
 
     def test_the_bindings_declare_what_the_consumer_calls(self):
         lib = read(os.path.join(WORKSPACE, "acadsharp-sys", "src", "lib.rs"))
-        for name in ("viprs_acad_get_capabilities_v1", "viprs_acad_open_memory", "viprs_acad_close"):
+        for name in (
+            "viprs_acad_get_capabilities_v1",
+            "viprs_acad_open_memory",
+            "viprs_acad_close",
+        ):
             assert name in lib
 
 

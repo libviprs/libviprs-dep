@@ -112,7 +112,14 @@ STUB_ABI_VERSION, STUB_WIRE_VERSION = ba.header_versions()
 STUB_DWG_MIN, STUB_DWG_MAX = _abi_constants_dwg_range()
 
 
-def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False, abi_version=None):
+def _stub_source(
+    symbols,
+    pad_name="pad",
+    undefined=None,
+    guarded=False,
+    abi_version=None,
+    open_memory_status=0,
+):
     """A stand-in library. `guarded` makes it need its initialiser.
 
     The real archive's exports abort when the runtime was never brought
@@ -164,6 +171,18 @@ def _stub_source(symbols, pad_name="pad", undefined=None, guarded=False, abi_ver
             body.append(f"uint32_t {name}(void) {{{guard}\n\treturn {abi_version}u{tail};\n}}")
         elif name == ba.capabilities_entry_point():
             continue  # CAPABILITIES_SOURCE, compiled separately
+        elif name == "viprs_acad_open_memory":
+            # A consumer that opens a drawing needs a handle back, and a
+            # status it can be made to fail with (#120). The handle is any
+            # non-null pointer; nothing reads through it.
+            body.append(
+                f"uint32_t {name}(const uint8_t *data, uint64_t len, const void *limits,"
+                f" void **out) {{{guard}\n\t(void)data; (void)len; (void)limits;"
+                f"\n\tif (out && {open_memory_status}u == 0u) {{ *out = (void *)&{pad_name}; }}"
+                f"\n\treturn {open_memory_status}u;\n}}"
+            )
+        elif name == "viprs_acad_close":
+            body.append(f"void {name}(void *h) {{ (void)h; }}")
         else:
             body.append(f"uint32_t {name}(void) {{ return 0u; }}")
     return "\n".join(body) + "\n"
@@ -467,6 +486,67 @@ def _build_linux_tree(
     _build_init_archive(work, lib, effective=init_effective)
 
     return _finish(root, plat, HOST_ARCH, static_certified=True)
+
+
+def _compile_shared_stub(work, lib_path, plat, *, open_memory_status=0):
+    """The stand-in shared library, built the same way on every host.
+
+    Plain `cc -shared -fPIC`: no ELF reader, no archive tool. On darwin it
+    records `@rpath/libacadsharp_native.dylib` as its install name, which is
+    what a real mac archive's library does and what makes the consumer's own
+    `-Wl,-rpath` the thing that lets it load.
+    """
+    os.makedirs(work, exist_ok=True)
+    caps_src = os.path.join(work, "caps.c")
+    with open(caps_src, "w") as f:
+        f.write(
+            CAPABILITIES_SOURCE
+            % {
+                "name": ba.capabilities_entry_point(),
+                "abi": "VIPRS_ACAD_ABI_VERSION",
+                "wire": "VIPRS_ACAD_WIRE_VERSION",
+                "dwg_min": STUB_DWG_MIN,
+                "dwg_max": STUB_DWG_MAX,
+            }
+        )
+    shared_src = os.path.join(work, "shared.c")
+    with open(shared_src, "w") as f:
+        f.write(_stub_source(ENTRY_POINTS, open_memory_status=open_memory_status))
+    cmd = ["cc", "-shared", "-fPIC", "-I", os.path.join(ACAD_DIR, "include")]
+    if sys.platform == "darwin":
+        cmd += ["-Wl,-install_name,@rpath/" + ba.shared_library_name(plat)]
+    subprocess.run(cmd + ["-o", lib_path, shared_src, caps_src], check=True)
+
+
+def _build_shared_only_stub(work, *, open_memory_status=0):
+    """A shared-only archive any host with `cc` can build (#116).
+
+    The manifest comes through the driver's own packaging path with
+    `static_certified: false`, like every mac archive, and the library is a
+    stub with no ELF in it, so the same fixture runs on darwin.
+    """
+    plat = "mac" if sys.platform == "darwin" else "linux"
+    root = os.path.join(work, f"acadsharp-{plat}-{HOST_CPU}")
+    lib = os.path.join(root, "lib")
+    os.makedirs(lib)
+    _compile_shared_stub(
+        os.path.join(work, "stub"),
+        os.path.join(lib, ba.shared_library_name(plat)),
+        plat,
+        open_memory_status=open_memory_status,
+    )
+    return _finish(root, plat, HOST_ARCH, static_certified=False)
+
+
+def _rebuild_shared_stub(root, *, open_memory_status):
+    """Replace the library in an unpacked shared-only archive, same manifest."""
+    plat = "mac" if sys.platform == "darwin" else "linux"
+    _compile_shared_stub(
+        os.path.join(os.path.dirname(root), "rebuild"),
+        os.path.join(root, "lib", ba.shared_library_name(plat)),
+        plat,
+        open_memory_status=open_memory_status,
+    )
 
 
 # ---------------------------------------------------------------------------
