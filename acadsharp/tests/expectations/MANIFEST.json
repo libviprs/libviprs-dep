@@ -933,8 +933,8 @@
       "views_without_extents": 0
     }
   },
-  "recorded": "2026-09-13",
-  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
+  "recorded": "2026-10-16",
+  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
     "sha256": "4548ce440d9ed332d1702b4909a842f97754898c54f8bbf9fcd7932baee4f271",
     "sources": {

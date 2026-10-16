@@ -17,6 +17,13 @@
     <!-- The harness calls DecodeSession.NextBatch, which takes the caller's
          buffer as a byte* because that is what the export does. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Whatever the shipped library runs with, because this is the oracle for
+         it. native/Viprs.ACadSharp.Native.csproj sets the same value and
+         ADR 0001 records why it is load-bearing there. The two are held
+         together by tests/test_fixturegen_globalization.py, since flipping
+         either leaves shim_sha256 byte-identical and nothing else would
+         notice. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
