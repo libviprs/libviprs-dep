@@ -756,6 +756,27 @@
       ],
       "views_without_extents": 0
     },
+    "g13_text_forms.dwg": {
+      "batches": 1,
+      "bytes": 11723,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 1,
+        "Text": 14,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 2176,
+      "records": 19,
+      "sha256": "aceceed251f21bbab67aa224b0f3b20719b7fcab2b97b1c4f6d601dfac80aabf",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_tolerance.dwg": {
       "batches": 1,
       "bytes": 10889,

@@ -91,6 +91,7 @@ DUMPED = (
     "g13_ellipse.dwg",
     "g13_spline.dwg",
     "g13_text.dwg",
+    "g13_text_forms.dwg",
     "g13_insert.dwg",
     "g13_dimension.dwg",
     "g13_hatch.dwg",
