@@ -43,11 +43,11 @@ the C recipe, which was measured; the cargo recipe is not usable there yet, and
 
 | archive | target | static_certified | sha256 | notes |
 | --- | --- | --- | --- | --- |
-| [`acadsharp-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-x64.tgz) | `x86_64-unknown-linux-gnu` | true | `b8a674b989b6dfdd64ca26d917ad67b7bdf12c38adf557914c6d7b03e71bd180` | |
-| [`acadsharp-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-arm64.tgz) | `aarch64-unknown-linux-gnu` | true | `4b41113b4a9c5b001d20740be09989a2d1850e78990936a897b74583e95e7cb3` | |
-| [`acadsharp-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-x64.tgz) | `x86_64-unknown-linux-musl` | true | `9674c971d83bf977729bbba5c7e15ab4d86c7ffe6df95dcefc47d336d4b9b4a3` | |
-| [`acadsharp-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-arm64.tgz) | `aarch64-unknown-linux-musl` | true | `2412c178df33214336504c62156763862b5628f44261bd4e37b66c95068240e1` | |
-| [`acadsharp-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-mac-arm64.tgz) | `aarch64-apple-darwin` | false | `bced75cdea2451215a1f78524233c206c35637736630389bace2a3d5ca371471` | **does not load, see below** |
+| [`acadsharp-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-x64.tgz) | `x86_64-unknown-linux-gnu` | true | `4cbdbbdd03c4431780ddca80a1d660e6940ff561734d666e162d6fb50438136e` | |
+| [`acadsharp-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-linux-arm64.tgz) | `aarch64-unknown-linux-gnu` | true | `dd938ef919d437eedc1c243fd05c405c6b77a9343d3c478d3994e8c57808cf3d` | |
+| [`acadsharp-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-x64.tgz) | `x86_64-unknown-linux-musl` | true | `049964119a49fa9e71779bd00acf2b81a2be1faf78e5ea356656619346c2f149` | |
+| [`acadsharp-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-musl-arm64.tgz) | `aarch64-unknown-linux-musl` | true | `c39302d7de0bb2507130615e068465ab95851b1445b356faffb366c7831e48b3` | |
+| [`acadsharp-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/acadsharp-3.7.1-viprs.1/acadsharp-mac-arm64.tgz) | `aarch64-apple-darwin` | false | `b809dc5e8a488f6bb71a065386225be9e706225873a244969165c374b8c59347` | **does not load, see below** |
 
 **The mac archive in that table cannot be linked against.**
 `lib/libacadsharp_native.dylib` in `acadsharp-3.7.1-viprs.1` records its own
