@@ -108,7 +108,7 @@ absence rather than as a defect while requiring them from that version onward.
 | `abi_header_sha256` | string | always | 64 lowercase hex characters: the sha256 of `include/viprs_acadsharp.h` as shipped in this same archive. | Verify the shipped header is the one this manifest describes, before generating bindings from it. |
 | `abi_fingerprint` | string | always | 16 lowercase hex characters. See below: this one has a format, and the format is load-bearing. | Parse as a base-16 integer and compare against `viprs_acad_abi_fingerprint()` at run time. |
 | `shared_library` | string | always | Archive-relative path to the shared library, `lib/libacadsharp_native.so` or `lib/libacadsharp_native.dylib`. | For a dynamic link: a link-search directive for its directory and `cargo:rustc-link-lib=acadsharp_native`. For `dlopen`, the path itself. |
-| `shared_system_libraries` | array of strings | always | Bare library names the shared library needs at load time, read off the shipped library itself rather than assumed. Empty in every Linux archive published so far; five entries in the mac one. What the measurement keeps and drops is below. | One `cargo:rustc-link-lib=<name>` each, when linking the shared library. Names are bare: no `-l`, no path, no extension. |
+| `shared_system_libraries` | array of strings | always | Bare library names the shared library needs at load time, read off the shipped library itself rather than assumed. The ELF `NEEDED` list on Linux and the `/usr/lib/lib*.dylib` subset of `LC_LOAD_DYLIB` on mac, with libc and the loader dropped on both. Mach-O framework dependencies are deliberately not listed, because they cannot be expressed as a `-l`. Empty in every Linux archive published so far. What the measurement keeps and drops is below. | One `cargo:rustc-link-lib=<name>` each, when linking the shared library. Names are bare: no `-l`, no path, no extension. |
 | `static_library` | string | only when `static_certified` | Archive-relative path to the merged static archive, `lib/libacadsharp_native.a`. | `cargo:rustc-link-lib=static:-bundle=acadsharp_native`, second. See the recipe. |
 | `static_init_library` | string | only when `static_certified` | Archive-relative path to the runtime's static initialiser, on its own, `lib/libacadsharp_native_init.a`. One small object and nothing else. | `cargo:rustc-link-lib=static:-bundle,+whole-archive=acadsharp_native_init`, first. See the recipe. |
 | `static_certified` | boolean | always | `true` only when the static archive was linked **and run** on this target during the build. `false` otherwise, including on every target that never attempts one. | Gate the whole static path on it. When it is `false` there is no static archive in the file and nothing to link. |
@@ -198,20 +198,24 @@ one has a schema document, a `schema_version` and a rule for what a consumer
 does with an unrecognised key; `BUILDINFO.json` has none of those, so nothing
 can be read out of it by contract.
 
-Three things about `BUILDINFO.json` follow from that, and all three are worth
-knowing before reading a field out of it anyway. Part of what it records is
-shaped by the host rather than by the build: `linker_version` is
-`GNU ld (GNU Binutils for Debian) 2.40` in a published Linux archive and the
-empty string in the mac one, because Apple's `ld` has no `--version` to
-answer, while `clang_version` is populated on both. Part of it is asserted
-rather than measured: `invariant_globalization` is written as a literal
-`true` by the driver, which never reads the csproj that sets the property, so
-it states the intended setting and not the one the library was built with. And
-the codegen is in neither manifest: `native/packages.lock.json` pins
-`Microsoft.DotNet.ILCompiler`, which is what turns the IL into the object code
-in `lib/`, and neither `LINKINFO.json` nor `BUILDINFO.json` names it or its
-version. `dotnet_sdk` is the nearest thing either file has, and it is the SDK
-rather than the compiler.
+`BUILDINFO.json` is where the identity of what `shim_sha256` cannot see is
+recorded, so it is worth knowing what each field there is. `invariant_globalization`
+is read out of `native/Viprs.ACadSharp.Native.csproj` when the archive is
+packaged, so it is the setting the library was built with, and flipping the
+property changes it. `csproj_sha256` and `packages_lock_sha256` are the sha256
+of that csproj and of `native/packages.lock.json`, and `ilcompiler_version` is
+the `Microsoft.DotNet.ILCompiler` package the lock resolves, which is the
+codegen that turns the IL into the object code in `lib/` (`dotnet_sdk` is the
+SDK, not the compiler). None of these are folded into `shim_sha256`, which has
+to stay byte-equal to `MANIFEST.json`'s `shim.sha256`.
+
+Part of what it records is still shaped by the host: `linker_version` is
+`GNU ld (GNU Binutils for Debian) 2.40` in a Linux archive and, from the build
+that carries this change, the output of `ld -v` on mac (Apple's `ld` has no
+`--version`). A tool that answered nothing is recorded as `"unknown"` and never
+as an empty string. Archives published before that have an empty
+`linker_version` on mac, a literal `true` for `invariant_globalization`, and
+none of the three new fields.
 
 ### The two linking modes have separate fields
 
@@ -222,31 +226,31 @@ list: the shared library's `NEEDED` entries are what the loader resolves for a
 that reads the wrong one gets undefined symbols at the end of a static link with
 nothing pointing at why.
 
-### What `shared_system_libraries` is measured from, and what it misses
+### What `shared_system_libraries` is measured from, and what it leaves out
 
 The list is read off the shipped library rather than derived from a list of
 names: `readelf -d` NEEDED on ELF, `otool -L` on Mach-O, each entry reduced to
-its bare stem, with the loader, a bare `c` and a bare `System` dropped —
-nothing links those by name. On the four Linux archives published so far that
-leaves an empty list.
+its bare stem, with the loader, libc (`c` on Linux, `System` and its versioned
+form `System.B` on mac) and the library itself dropped, because nothing links
+those by name. On the four Linux archives published so far that leaves an empty
+list.
 
-On mac it leaves five names, and two things about that are worth stating
-rather than leaving to be rediscovered. The reader recognises a dependency by
-its `/lib<name>.dylib` path, so the library's six framework dependencies —
-`CoreFoundation`, `CryptoKit`, `Foundation`, `Network`, `Security` and `GSS`,
-which `otool -L` reports as
-`/System/Library/Frameworks/<name>.framework/Versions/<v>/<name>` — are not in
-the list at all. And the one it keeps that the drop list was meant to remove is
-libc: the entry is `libSystem.B.dylib`, whose stem is `System.B`, and the drop
-list matches a bare `System`. So the mac list reads
-`["icucore.A", "objc.A", "swiftCore", "swiftFoundation", "System.B"]`, and a
-consumer emitting one `-l` per entry passes `-lSystem.B`, which the Apple
-linker resolves.
+On mac the reader recognises a dependency by its `/lib<name>.dylib` path, so
+the library's framework dependencies (`CoreFoundation`, `CryptoKit`,
+`Foundation`, `Network`, `Security` and `GSS`, which `otool -L` reports as
+`/System/Library/Frameworks/<name>.framework/Versions/<v>/<name>`) are not in
+the list, and that is on purpose: a framework has no `-l` spelling. The
+loader resolves them for the library. What is left on mac is the
+`/usr/lib/lib*.dylib` dependencies, for example
+`["icucore.A", "objc.A", "swiftCore", "swiftFoundation"]`.
+
+Archives built before this change still
+carry `System.B` in the mac list, which the Apple linker resolves, so a
+consumer emitting one `-l` per entry keeps working against either.
 
 Read it as the measurement it is. A consumer that assumes the mac list is
-framework-complete, or that it excludes libc, is wrong on both counts; and a
-framework this library needs is one the loader resolves for it, not one the
-consumer has to name.
+framework-complete is wrong; and a framework this library needs is one the
+loader resolves for it, not one the consumer has to name.
 
 ### Absent, not empty
 
@@ -321,7 +325,10 @@ One extra step on mac, and only on mac. From artifact version `3.7.1-viprs.2`
 onward the `.dylib` records its own name as `@rpath/libacadsharp_native.dylib`,
 which is the file this archive ships, and that string is what your link copies
 into your binary, so the loader needs an rpath to expand it against: pass
-`-Wl,-rpath,<archive>/lib`, or whatever directory you install the library into.
+`-Wl,-rpath,<archive>/lib`, or whatever directory you install the library into. The rpath the recipe
+emits is absolute and points at the unpacked archive on the build machine, so a
+binary built that way stops loading when the archive moves; a consumer shipping a
+relocatable binary wants an `@loader_path`-relative rpath instead.
 The `.so` records no name at all, so on Linux the linker writes down the path it
 was handed and nothing else is needed. `dlopen` on an absolute path ignores the
 recorded name on both, which is worth knowing because it means a `dlopen` smoke

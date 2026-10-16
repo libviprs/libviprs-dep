@@ -65,15 +65,31 @@ fact() {
 
 # The bare names a consumer would pass to `-l`. libc and the loader are
 # dropped: nothing links those by name, and build.rs would emit a
-# cargo:rustc-link-lib for each one it is given.
+# cargo:rustc-link-lib for each one it is given. On mac that is
+# `libSystem.B.dylib`, whose stem is `System.B`, so the filter takes the
+# versioned form too (#124). Mach-O frameworks are not listed on purpose:
+# they have no `/lib<name>.dylib` path and cannot be expressed as `-l`; the
+# loader resolves them for the library.
 read_needed() {
     if [ "$PLAT" = "mac" ]; then
         otool -L "$1" 2>/dev/null | sed -n 's|.*/lib\([A-Za-z0-9_+.-]*\)\.dylib.*|\1|p'
     else
         readelf -d "$1" 2>/dev/null | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p' \
             | sed -e 's/^lib//' -e 's/\.so.*$//'
-    fi | grep -vE '^(c|System|acadsharp_native|ld-linux.*|c\.musl.*|ld-musl.*)$' \
+    fi | grep -vE '^(c|System(\.[A-Z])?|acadsharp_native|ld-linux.*|c\.musl.*|ld-musl.*)$' \
         | sort -u | tr '\n' ' '
+}
+
+# Apple's ld has no --version: it rejects the flag, and the 2>/dev/null that
+# keeps a Linux run quiet turned that into an empty fact (#115). It reports
+# through `ld -v`, on stderr. An empty answer is still empty here, and
+# build_acadsharp.py reads empty as "unknown" rather than as a measurement.
+read_linker_version() {
+    if [ "$PLAT" = "mac" ]; then
+        ld -v 2>&1 | head -1
+    else
+        ld --version 2>/dev/null | head -1
+    fi
 }
 
 mkdir -p "$STAGING/lib" "$STAGING/include" "$STAGING/LICENSES"
@@ -115,7 +131,7 @@ cp "$SRC/LICENSE" "$STAGING/LICENSES/ACadSharp-LICENSE"
 
 fact dotnet_version "$(dotnet --version)"
 fact clang_version "$(clang --version 2>/dev/null | head -1)"
-fact linker_version "$(ld --version 2>/dev/null | head -1)"
+fact linker_version "$(read_linker_version)"
 fact aot_warning_count "$(grep -cE 'warning IL[0-9]+' "$PUBLISH_LOG" || true)"
 
 # What the shared library actually needs at load time. libc and the

@@ -134,7 +134,7 @@ class TestTheBuildScriptImplementsTheDocumentedRecipe:
         # path yields a binary that was meant to be self-contained and that
         # quietly runs against the `.so` beside it on the build machine.
         source = read(BUILD_RS)
-        shared_branch = source.index('if !json_bool(&text, "static_certified")')
+        shared_branch = source.index('if !certified.starts_with("true")')
         static_path = source.index("static:-bundle,+whole-archive=")
         rpath = source.index('println!("cargo:lib_dir=')
         assert shared_branch < rpath < static_path, (
@@ -294,6 +294,36 @@ def shared_only_archive(tmp_path_factory):
 
     fixtures._edit_json(root, "LINKINFO.json", drop)
     return root
+
+
+class TestAManifestThatNamesNoStaticCertifiedIsRefused:
+    """#118. `json_bool` read an absent key as `false`, which is the shared branch.
+
+    This build script is the recipe MANUAL.md tells a consumer to copy, and a
+    consumer's hand-written or truncated manifest never goes through
+    `verify_archive.sh`. So a missing key has to say so rather than link.
+    """
+
+    def _without_the_key(self, tmp_path, archive):
+        root = str(tmp_path / "truncated")
+        shutil.copytree(archive, root, symlinks=True)
+        fixtures._edit_json(root, "LINKINFO.json", lambda doc: doc.pop("static_certified"))
+        return root
+
+    def test_the_missing_key_is_a_panic_with_a_message(self, tmp_path, shared_only_archive):
+        _require_cargo()
+        root = self._without_the_key(tmp_path, shared_only_archive)
+        result = subprocess.run(["bash", SMOKE, root], capture_output=True, text=True, check=False)
+        output = result.stdout + result.stderr
+        assert result.returncode != 0, "a manifest naming no static_certified linked"
+        assert "names no static_certified" in output, output
+
+    def test_a_false_one_still_takes_the_shared_branch(self, shared_only_archive):
+        _require_cargo()
+        result = subprocess.run(
+            ["bash", SMOKE, shared_only_archive], capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
 
 class TestTheSharedOnlyRecipeLinksAndRuns:

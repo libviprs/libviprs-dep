@@ -42,6 +42,8 @@ HOST_ARCH = "arm64" if HOST_CPU == "arm64" else "amd64"
 
 ENTRY_POINTS = tuple(ba.header_entry_points())
 
+BUILDINFO_ADDED_LATER = ("csproj_sha256", "packages_lock_sha256", "ilcompiler_version")
+
 # The floors the script enforces, matched by the fixture so a pass is not
 # an accident of the padding.
 PAD_BYTES = 130000
@@ -1523,13 +1525,32 @@ class TestManifestIntegrity:
         assert result.returncode == 1
         assert field in _output(result)
 
-    @pytest.mark.parametrize("field", list(ba.BUILDINFO_FIELDS))
+    # BUILDINFO has no schema contract, so the verifier freezes the fields every
+    # published archive carries and not the ones added since (#115): an archive
+    # built before them is a good archive, and the README tells a consumer to run
+    # this script on it.
+    ADDED_LATER = BUILDINFO_ADDED_LATER
+
+    @pytest.mark.parametrize(
+        "field", [f for f in ba.BUILDINFO_FIELDS if f not in BUILDINFO_ADDED_LATER]
+    )
     def test_a_buildinfo_missing_a_frozen_field_is_rejected(self, tmp_path, good_tree, field):
         root = _clone(good_tree, tmp_path)
         _edit_json(root, "BUILDINFO.json", lambda doc: doc.pop(field, None))
         result = _verify(_repack(root))
         assert result.returncode == 1
         assert field in _output(result)
+
+    def test_a_buildinfo_from_before_the_measured_fields_is_still_good(self, tmp_path, good_tree):
+        root = _clone(good_tree, tmp_path)
+
+        def drop(doc):
+            for field in self.ADDED_LATER:
+                doc.pop(field, None)
+
+        _edit_json(root, "BUILDINFO.json", drop)
+        result = _verify(_repack(root))
+        assert result.returncode == 0, _output(result)
 
     def test_a_mismatched_header_hash_is_rejected(self, tmp_path, good_tree):
         root = _clone(good_tree, tmp_path)
