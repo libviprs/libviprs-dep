@@ -1461,7 +1461,21 @@ public static class Corpus
 
 		if (kind == MultiLeaderKind.Empty)
 		{
-			ml.ContentType = LeaderContentType.None;
+			// One root with no lines and text content with nothing in it. A
+			// MULTILEADER with no roots at all does not survive ACadSharp's own
+			// round trip (the reader reports "Could not read MULTILEADER" and
+			// the entity is gone), and an entity that is not there cannot show
+			// what an empty one does.
+			ml.ContentType = LeaderContentType.MText;
+			ctx.HasTextContents = true;
+			ctx.TextLabel = string.Empty;
+			ctx.TextLocation = new XYZ(0, 0, 0);
+			ctx.LeaderRoots.Add(new MultiLeaderObjectContextData.LeaderRoot
+			{
+				ConnectionPoint = new XYZ(0, 0, 0),
+				Direction = new XYZ(1, 0, 0),
+				ContentValid = true,
+			});
 			return ml;
 		}
 

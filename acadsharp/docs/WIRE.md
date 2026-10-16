@@ -249,6 +249,23 @@ the path holds fewer than two vertices, emits warning 100 and no record at
 all: the centre path alone is the part that needed no lookup, and the section
 on that below is why it never crosses.
 
+A `MULTILEADER` lands here too, and it is the one annotation composite that
+really expands. Each leader line is an open polyline through the points the
+file holds, in world coordinates and not lifted; when the style enables a
+landing, one `Line` runs on from each root's connection point along its
+direction for its landing distance; text content is one `Text` at the stored
+location with the stored height and rotation; and block content is the block's
+own entities, each carrying bit 0 of `flags`, placed by the stored location,
+rotation and scale with the block's base point taken out first. That expansion
+is held to the same depth bound an `INSERT` is. The arrowhead is
+a glyph the style names, so warning 114 says it is not drawn, and a text frame,
+a break in a leader line or a block's attribute text are not drawn either, which
+warning 116 says by name. A spline-path leader is refused on 100 for the reason
+a spline-fit `LEADER` is, and a `MULTILEADER` that produced nothing at all says
+so on 100. The landing is the one part of this that has no second
+implementation behind it: it follows the format's description of the three
+fields, and the corpus holds it only from the writer and one real drawing.
+
 **5 `Arc`**: prologue, then `f64 cx, cy, cz`, `f64 radius`, `f64
 start_angle`, `f64 end_angle`, `f64 nx, ny, nz`. Angles are radians,
 counter-clockwise, measured in the plane the normal defines. 96 bytes.
@@ -546,8 +563,9 @@ and 105 with these meanings, whatever it is built on.
 | 111 | `MESH_FACE_UNREADABLE` | One face of a `MESH` that does not describe a polygon: fewer than three vertices, or an index outside the vertex list the same entity carries. A file controls both numbers, so the face is dropped and named and the rest of the mesh still crosses. `item_handle` is the mesh's. |
 | 112 | `POLYGON_MASKS` | The `Polygon` record that follows with the same `item_handle` is a mask rather than a face: it hides whatever the stream drew before it, inside its boundary. A `WIPEOUT` is one. A consumer that knows this code paints the boundary in its background colour over what it has already drawn, or clips against it; a consumer that does not fills it like any other record 9, which still hides what is under it and at worst shows a coloured face where a blank belongs. Neither of those reveals the content, which is the failure direction this code exists to choose. `item_handle` is the wipeout's. |
 | 113 | `FACE_EDGE_VISIBILITY_IGNORED` | A `3DFACE` that marks one or more of its edges invisible. The `Polygon` beside it, same `item_handle`, carries all of its edges: record 9 has no per-edge visibility, so the flags are ignored rather than the face being split into lines. `item_handle` is the face's. |
-| 114 | `ARROWHEAD_NOT_DRAWN` | A `LEADER` whose arrowhead flag is set. The `Polyline` beside it, same `item_handle`, is the vertex run and nothing else. An arrowhead is a glyph the drawing's dimension style names, at a size that style sets, and neither the glyph nor the size is in the file as geometry, so it is not drawn and nothing is invented in its place. A consumer that wants one draws it itself at the first vertex, pointing along the first span; a consumer that does not know this code draws a leader whose tip is bare, which is the failure direction this code exists to make visible rather than silent. `item_handle` is the leader's. |
+| 114 | `ARROWHEAD_NOT_DRAWN` | A `LEADER` or a `MULTILEADER` whose arrowhead is on. The `Polyline` beside it, same `item_handle`, is the vertex run and nothing else. An arrowhead is a glyph the drawing's dimension style names, at a size that style sets, and neither the glyph nor the size is in the file as geometry, so it is not drawn and nothing is invented in its place. A consumer that wants one draws it itself at the first vertex, pointing along the first span; a consumer that does not know this code draws a leader whose tip is bare, which is the failure direction this code exists to make visible rather than silent. `item_handle` is the leader's. |
 | 115 | `MLINE_STYLE_FEATURES_IGNORED` | An `MLINE` whose style asks for something this build does not draw: a filled area between its outermost elements, the joint lines a style can display at each inner vertex, or a cap closing either end. The `Polyline` records beside it, same `item_handle`, are the element lines, which is the whole of what the entity draws here. Like 110 this sits beside real geometry and says what is missing from it rather than refusing anything. `item_handle` is the MLINE's. |
+| 116 | `MULTILEADER_FEATURES_IGNORED` | A `MULTILEADER` that carries something this build does not draw: the frame round its text, a break in a leader line, the attribute text of its block, or tolerance content. The records beside it, same `item_handle` or the handles of the block's own entities, are the geometry the file holds: the leader lines as open `Polyline` records, the landing as a `Line`, the text as a `Text`, and the content block's entities. A frame or a gap is something AutoCAD works out from text extents and a style, none of which is in the file as geometry, so this says what is missing and refuses nothing. `item_handle` is the MULTILEADER's. |
 
 ### Reserved ranges
 

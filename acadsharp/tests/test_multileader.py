@@ -20,7 +20,7 @@ import re
 
 import pytest
 import wire3_reference as ref
-from g13_support import kinds, records
+from g13_support import records
 
 FIXTURE = "g13_multileader.dwg"
 REAL = "real_AC1032.dwg"
@@ -212,5 +212,17 @@ class TestTheRealDrawing:
         ]
         assert not left, f"{len(left)} MULTILEADERs are still refused on {REAL}"
 
-    def test_something_came_out_for_them(self):
-        assert kinds(REAL).get("Polyline", 0) > 31, kinds(REAL)
+    # The fifteen refused MULTILEADERs of the old recording, by handle.
+    HANDLES = "7B8 B1A B1B B1C B1D B1E B1F B20 B21 B22 B23 B24 B25 B26 B27".split()
+
+    def test_their_text_and_landings_came_out(self):
+        # Not their leader lines: the fifteen in this drawing carry a landing and
+        # a label and no leader line the reader hands back, which is a fact about
+        # the drawing (the landing runs 8 units and the text starts 2 past it,
+        # the gap the context stores), not about the arm.
+        by_handle = {}
+        for r in records(REAL):
+            by_handle.setdefault(r["handle"], []).append(r["kind"])
+        for h in self.HANDLES:
+            got = by_handle.get(h, [])
+            assert "Line" in got and "Text" in got, f"MULTILEADER {h} came out as {got}"
