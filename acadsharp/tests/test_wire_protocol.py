@@ -515,7 +515,7 @@ class TestWireMdMatchesTheParser:
         assert "tan" in section
 
     def test_the_finiteness_guarantee_is_documented(self, wire_md):
-        assert re.search(r"never emits a record of type 3 to 10 carrying", wire_md), (
+        assert re.search(r"never emits a geometry record carrying", wire_md), (
             "WIRE.md does not promise that geometry records carry finite values, and a "
             "consumer that cannot rely on it has to defend every field of every record"
         )
@@ -532,7 +532,7 @@ class TestWireMdMatchesTheParser:
         (
             r"`bulge_count` is neither 0 nor `point_count`",
             r"`length` is not `64 \+ 24n \+ 8bc`",
-            r"types 3 to 10, that is `NaN` or infinite",
+            r"the set the finiteness section names\) that is `NaN` or infinite",
         ),
     )
     def test_each_payload_refusal_has_a_row(self, wire_md, rule):

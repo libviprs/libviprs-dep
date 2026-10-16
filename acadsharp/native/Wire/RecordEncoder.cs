@@ -483,7 +483,7 @@ namespace Viprs.Wire
 			}
 
 			// The same, for a geometry record, plus docs/WIRE.md's producer
-			// guarantee: no record of type 3 to 10 carries an f64 that is NaN
+			// guarantee: no geometry record (WireFormat.IsGeometry) carries an f64 that is NaN
 			// or infinite.
 			//
 			// A backstop, not the check. The walk replaces a primitive carrying

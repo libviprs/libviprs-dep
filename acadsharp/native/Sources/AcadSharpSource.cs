@@ -301,7 +301,7 @@ namespace Viprs.Sources
 
 		// What a view reports when its extents are not four numbers.
 		//
-		// docs/WIRE.md's finiteness guarantee covers records 3 to 10 and leaves
+		// docs/WIRE.md's finiteness guarantee covers the geometry records and leaves
 		// ViewBegin out on purpose: its extents are a bounding box the source
 		// reports rather than a shape anybody draws, and a view holding nothing
 		// has no finite one, so promising a number there would mean inventing
