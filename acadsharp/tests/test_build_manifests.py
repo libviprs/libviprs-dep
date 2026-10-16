@@ -257,8 +257,19 @@ class TestTheAbiFieldsComeFromTheHeader:
         assert len(ba.abi_fingerprint()) == 16
 
     def test_abi_and_wire_versions_are_read_out_of_the_header(self):
+        # The header is the one source of truth, so the expectation is read
+        # from it here with a plain regex rather than typed as a literal that
+        # goes stale on every bump (it did, at the wire-3 merge). It does not
+        # go through ba.header_versions, or the test would compare the parser
+        # with itself.
+        with open(HEADER, encoding="utf-8") as f:
+            text = f.read()
+        expected = tuple(
+            int(re.search(rf"^#define\s+{name}\s+(\d+)u?\b", text, re.M).group(1))
+            for name in ("VIPRS_ACAD_ABI_VERSION", "VIPRS_ACAD_WIRE_VERSION")
+        )
         abi, wire = ba.header_versions()
-        assert (abi, wire) == (2, 2)
+        assert (abi, wire) == expected
         info = ba.linkinfo_skeleton("linux", "amd64")
         assert info["abi_version"] == abi
         assert info["wire_version"] == wire
