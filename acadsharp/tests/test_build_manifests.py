@@ -182,6 +182,12 @@ class TestTheArchiveSaysWhichShimIsInIt:
         # The documented throwaway (`--version 3.7.1-viprs.0`, deleted with
         # `--cleanup-tag`). A rehearsal that cannot run is not a rehearsal,
         # and its manifest still states the shim it really built.
+        #
+        # Scoped to the override path on purpose (#126). Packaging a version
+        # with no row is still allowed, because the packaging functions cannot
+        # tell a dispatch override from a bump. The release preflight can, and
+        # it refuses a version read from acadsharp/VERSION that has no row; the
+        # case that asserts that lives in test_release_workflow.py.
         assert "3.7.1-viprs.0" not in ba.SHIM_DIGESTS
         info = ba.make_linkinfo("linux", "amd64", version="3.7.1-viprs.0", **_shared_only())
         assert info["shim_sha256"] == ba.shim_digest()

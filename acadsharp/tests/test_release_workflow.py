@@ -624,6 +624,92 @@ class TestVersionPreflight:
         )
 
 
+class TestThePreflightHoldsTheRowAsWellAsTheTree:
+    """#126. `test_acadsharp_version.py` makes two claims and the preflight made one.
+
+    The version has a row in SHIM_DIGESTS, and the row matches the tree. A
+    release job runs no pytest, so until the preflight asked both, a VERSION
+    bump whose row was forgotten published an archive whose `shim_sha256` was
+    measured and pinned by nothing. The documented throwaway
+    (`--version 3.7.1-viprs.0`) is an override, not a bump, and stays allowed.
+    """
+
+    def _script(self):
+        job = load_workflow()["jobs"]["resolve-version"]
+        for step in job["steps"]:
+            run = step.get("run") or ""
+            if "packaged_shim_digest" in run:
+                return run.split("<<'PY'", 1)[1].rsplit("PY", 1)[0]
+        raise AssertionError("no step in resolve-version runs the shim refusal")
+
+    def _preflight(self, version, requested):
+        env = dict(os.environ, REQUESTED=requested)
+        return subprocess.run(
+            [sys.executable, "-c", textwrap.dedent(self._script()), version],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            env=env,
+            check=False,
+        )
+
+    def test_a_version_from_the_file_with_no_row_is_refused(self):
+        version = "3.7.1-viprs.3"
+        assert version not in ba.SHIM_DIGESTS
+        result = self._preflight(version, requested="")
+        assert result.returncode != 0, result.stdout + result.stderr
+        assert "SHIM_DIGESTS" in result.stdout + result.stderr
+
+    def test_the_same_version_named_by_a_dispatch_is_an_override_and_passes(self):
+        version = "3.7.1-viprs.3"
+        result = self._preflight(version, requested=version)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_documented_throwaway_still_runs(self):
+        result = self._preflight("3.7.1-viprs.0", requested="3.7.1-viprs.0")
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_version_in_the_tree_still_passes(self):
+        result = self._preflight(ba.read_version(), requested="")
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_step_hands_the_script_the_dispatch_input_through_env(self):
+        job = load_workflow()["jobs"]["resolve-version"]
+        step = next(s for s in job["steps"] if "packaged_shim_digest" in (s.get("run") or ""))
+        assert "REQUESTED" in step.get("env", {}), (
+            "the preflight cannot tell a bump from an override without the dispatch input"
+        )
+
+
+class TestTheMacLaneIsHeldToTheSameStandardAsTheLinuxOne:
+    """#121. Two asymmetries between lanes that #114's own reasoning argues against."""
+
+    def setup_method(self):
+        jobs = load_workflow()["jobs"]
+        self.linux = jobs["build-linux"]
+        self.mac = jobs["build-mac"]
+
+    def test_the_mac_timeout_is_not_below_the_linux_one(self):
+        # build-linux went 60 to 75 in the commit that gave it consumers, with
+        # a comment that a ceiling left put "turns a slow build into a
+        # cancelled release". build-mac grew a step and stayed at 60.
+        assert self.mac["timeout-minutes"] >= self.linux["timeout-minutes"]
+
+    def test_the_log_records_the_cargo_that_linked(self):
+        # The mac lane takes cargo from the runner image, unpinned. Either a
+        # pinned toolchain step, or the version echoed so the log says what
+        # actually linked.
+        link = step_index(self.mac, "documented recipe")
+        assert link >= 0
+        before = "\n".join(
+            (s.get("run") or "") + " " + (s.get("uses") or "")
+            for s in self.mac["steps"][: link + 1]
+        )
+        assert "cargo --version" in before or "rust-toolchain" in before, (
+            "nothing in build-mac pins cargo or prints which one the link used"
+        )
+
+
 class TestBuildJobsVerifyBeforeTheyUpload:
     def setup_method(self):
         self.wf = load_workflow()
