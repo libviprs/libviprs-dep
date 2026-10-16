@@ -538,6 +538,9 @@ class TestBuildInfo:
         "trimmer_single_warn",
         "aot_warning_count",
         "source_patches",
+        "csproj_sha256",
+        "packages_lock_sha256",
+        "ilcompiler_version",
         "built_utc",
     )
 

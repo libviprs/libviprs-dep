@@ -56,7 +56,12 @@ fn main() {
 
     let lib_dir = root.join("lib");
 
-    if !json_bool(&text, "static_certified") {
+    // An absent key is not a `false` one. This script is the recipe MANUAL.md
+    // tells a consumer to copy, and a hand-written or truncated manifest never
+    // passes through verify_archive.sh, so say so rather than guess shared.
+    let certified = field(&text, "static_certified")
+        .unwrap_or_else(|| panic!("{} names no static_certified", manifest.display()));
+    if !certified.starts_with("true") {
         // The shared recipe, which is the whole recipe on mac. Nothing
         // here is subtle the way the static one is: a shared library runs
         // its own initialisers when the loader brings it in, so there is
@@ -163,10 +168,6 @@ fn json_string(text: &str, key: &str) -> Option<String> {
     let rest = rest.strip_prefix('"')?;
     let end = rest.find('"')?;
     Some(rest[..end].to_string())
-}
-
-fn json_bool(text: &str, key: &str) -> bool {
-    field(text, key).is_some_and(|rest| rest.starts_with("true"))
 }
 
 fn json_string_array(text: &str, key: &str) -> Vec<String> {

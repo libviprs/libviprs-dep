@@ -302,6 +302,13 @@ BUILDINFO_FIELDS = (
     # this file by position, and the two fields that have always ended it
     # read better where they are.
     "source_patches",
+    # What the shim digest cannot see (#115): the csproj and the lock file
+    # decide the codegen and the runtime settings, and neither is one of the
+    # files `shim_sha256` covers. That number stays what it is, byte-equal to
+    # MANIFEST.json's, so the identity is recorded here instead.
+    "csproj_sha256",
+    "packages_lock_sha256",
+    "ilcompiler_version",
     "built_utc",
 )
 
@@ -1078,6 +1085,48 @@ def _check_bare_library_names(names, field):
             )
 
 
+def native_project_facts(native_dir=None):
+    """What the native project says about itself, read rather than asserted.
+
+    ``invariant_globalization`` comes out of the csproj, so flipping the
+    property changes BUILDINFO. The two digests and the ILCompiler version
+    record the inputs ``shim_sha256`` does not cover. Anything that cannot be
+    read is a refusal: an unmeasured value written as a default is the defect.
+    """
+    native_dir = native_dir or NATIVE_DIR
+    csproj_path = os.path.join(native_dir, "Viprs.ACadSharp.Native.csproj")
+    lock_path = os.path.join(native_dir, "packages.lock.json")
+    with open(csproj_path, "rb") as f:
+        csproj = f.read()
+    with open(lock_path, "rb") as f:
+        lock_bytes = f.read()
+
+    found = re.search(rb"<InvariantGlobalization>\s*(\w+)\s*</InvariantGlobalization>", csproj)
+    if not found or found.group(1).lower() not in (b"true", b"false"):
+        raise ValueError(
+            f"{csproj_path} does not set InvariantGlobalization to true or false, so "
+            "BUILDINFO.json would have to guess what the library was built with"
+        )
+
+    resolved = set()
+    for deps in json.loads(lock_bytes).get("dependencies", {}).values():
+        pkg = deps.get("Microsoft.DotNet.ILCompiler")
+        if pkg and pkg.get("resolved"):
+            resolved.add(pkg["resolved"])
+    if len(resolved) != 1:
+        raise ValueError(
+            f"{lock_path} resolves Microsoft.DotNet.ILCompiler to {sorted(resolved)}; "
+            "exactly one version is expected, and it is the codegen BUILDINFO.json records"
+        )
+
+    return {
+        "invariant_globalization": found.group(1).lower() == b"true",
+        "csproj_sha256": hashlib.sha256(csproj).hexdigest(),
+        "packages_lock_sha256": hashlib.sha256(lock_bytes).hexdigest(),
+        "ilcompiler_version": resolved.pop(),
+    }
+
+
 def make_buildinfo(
     *,
     driver_commit,
@@ -1087,6 +1136,7 @@ def make_buildinfo(
     linker_version,
     aot_warning_count,
     built_utc=None,
+    native_dir=None,
 ):
     """What produced the binaries, recorded next to them."""
     if not isinstance(aot_warning_count, int) or isinstance(aot_warning_count, bool):
@@ -1095,6 +1145,7 @@ def make_buildinfo(
             "an integer or the build has not been watched. ADR 0001's number was 16 "
             "for one configuration and is not a constant."
         )
+    native = native_project_facts(native_dir)
     stamp = built_utc or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     info = {
         "driver_commit": driver_commit,
@@ -1105,7 +1156,7 @@ def make_buildinfo(
         # The two settings ADR 0001 found load-bearing at run time, and the
         # one that makes the warning count above mean anything.
         "publish_aot": True,
-        "invariant_globalization": True,
+        "invariant_globalization": native["invariant_globalization"],
         "trimmer_roots": ["ACadSharp"],
         "trimmer_single_warn": False,
         "aot_warning_count": aot_warning_count,
@@ -1114,6 +1165,9 @@ def make_buildinfo(
         # itself disagreeing about which patches ran is the one failure this
         # field exists to prevent.
         "source_patches": patch_manifest(),
+        "csproj_sha256": native["csproj_sha256"],
+        "packages_lock_sha256": native["packages_lock_sha256"],
+        "ilcompiler_version": native["ilcompiler_version"],
         "built_utc": stamp,
     }
     return {k: info[k] for k in BUILDINFO_FIELDS}
@@ -1910,8 +1964,11 @@ def finish_archive(staging_root, plat, arch, facts, *, builder_image, version=No
         driver_commit=driver_commit(),
         builder_image=builder_image,
         dotnet_version=facts.get("dotnet_version", DOTNET_SDK_VERSION),
-        clang_version=facts.get("clang_version", "unknown"),
-        linker_version=facts.get("linker_version", "unknown"),
+        # Present-and-empty is "not measured" too: a tool that rejected the
+        # flag leaves an empty substitution in facts.txt, and `get`'s default
+        # only fires on an absent key.
+        clang_version=facts.get("clang_version", "").strip() or "unknown",
+        linker_version=facts.get("linker_version", "").strip() or "unknown",
         aot_warning_count=int(warnings) if warnings.isdigit() else 0,
     )
 

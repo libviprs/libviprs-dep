@@ -190,9 +190,7 @@ class TestTheLinkerVersionIsMeasuredOnAMac:
         assert got == "@(#)PROGRAM:ld PROJECT:ld-1115.7.3"
 
     def test_gnu_ld_still_answers_dash_dash_version(self, tmp_path):
-        got = _run(
-            tmp_path, "read_linker_version", "read_linker_version", "linux", {"ld": GNU_LD}
-        )
+        got = _run(tmp_path, "read_linker_version", "read_linker_version", "linux", {"ld": GNU_LD})
         assert got == "GNU ld (GNU Binutils for Debian) 2.40"
 
     def test_the_script_records_it_through_that_function(self):

@@ -1185,6 +1185,10 @@ own build script turns it into the flag:
         println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
     }
 
+That rpath is absolute: it is the unpacked archive's `lib/` on the build
+machine, so the binary stops loading if the archive moves. A consumer shipping
+a relocatable binary wants an `@loader_path`-relative rpath (on mac) instead.
+
 On the shared branch only. `lib/` holds the shared library and the static
 archives side by side and a bare `-l` prefers the shared one, so an rpath
 left on the static path produces a binary that was supposed to be
