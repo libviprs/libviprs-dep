@@ -30,6 +30,11 @@
 // beside it saying that the polygon masks. Flatten.Masks.cs is where that
 // lives now.
 //
+// TOLERANCE was code 100 for as long as it was unfinished work, and is a row
+// here since #86 because it is not: its frame is derived rather than stored,
+// and a promise to match AutoCAD's text layout is the kind of weaker promise
+// this table exists to say out loud.
+//
 // Wire version 3 emptied four more rows. IMAGE and PDFUNDERLAY are no longer
 // refused: their geometry, a frame, a clip and a name, crosses as record 16
 // Placement, and the file they name is still not opened (Flatten.Placements.cs).
@@ -72,6 +77,16 @@ namespace Viprs.Cad
 						"SHAPE draws a glyph out of an external SHX file and carries only the "
 						+ "placement and the name, and this decoder opens no path a drawing "
 						+ "names, so the outline is not in this file and is not fetched";
+					return true;
+
+				case "TOLERANCE":
+					code = WarningCodes.EntityRefusedByDesign;
+					reason =
+						"TOLERANCE is a feature-control frame whose boxes are computed from a "
+						+ "formatted string and the dimension style's text height rather than "
+						+ "read out of the file, so lowering it means implementing a text layout "
+						+ "and agreeing with AutoCAD's, which is a promise this boundary does "
+						+ "not make";
 					return true;
 
 				default:

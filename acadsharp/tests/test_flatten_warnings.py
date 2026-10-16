@@ -29,8 +29,8 @@ CODE_FIXTURES = {
     "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
-    # The real drawing carries all three kinds in RefusedKinds.cs (3DSOLID,
-    # REGION, SHAPE), so it is the fixture this code is produced by. There were
+    # The real drawing carries all four kinds in RefusedKinds.cs (3DSOLID,
+    # REGION, SHAPE, TOLERANCE), so it is the fixture this code is produced by. There were
     # eight until WIPEOUT was flattened and four more left with wire version 3
     # (IMAGE, PDFUNDERLAY, RAY, XLINE).
     "ENTITY_REFUSED_BY_DESIGN": "real_AC1032.dwg",
@@ -40,6 +40,7 @@ CODE_FIXTURES = {
     "FACE_EDGE_VISIBILITY_IGNORED": "g13_face3d.dwg",
     "ARROWHEAD_NOT_DRAWN": "g13_leader.dwg",
     "MLINE_STYLE_FEATURES_IGNORED": "g13_mline.dwg",
+    "MULTILEADER_FEATURES_IGNORED": "g13_multileader.dwg",
 }
 
 # A code the corpus cannot produce, and the C# constant that has to still be

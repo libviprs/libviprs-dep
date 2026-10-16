@@ -123,6 +123,7 @@ public static class Corpus
 		yield return Pair("g13_placement.dwg", WritePlacement);
 		yield return Pair("g13_nonfinite_records.dwg", WriteNonFiniteRecords);
 		yield return Pair("g13_leader.dwg", WriteLeader);
+		yield return Pair("g13_multileader.dwg", WriteMultiLeader);
 		yield return Pair("g13_polyface_mesh.dwg", WritePolyfaceMesh);
 		yield return Pair("g13_polygon_mesh.dwg", WritePolygonMesh);
 		yield return Pair("g13_mesh.dwg", WriteMesh);
@@ -1381,6 +1382,161 @@ public static class Corpus
 				new XYZ(3, 2, 0),
 				new XYZ(6, 2, 0)));
 		Write(doc, path);
+	}
+
+	// MULTILEADER, which is the one annotation composite that really does
+	// expand: leader lines, a landing, content that is text or a block, and an
+	// arrowhead that is a block the style names.
+	//
+	// Every case answers a question a plausible wrong arm gets wrong.
+	//
+	//  * The first has two leader lines off one root, a landing, text and an
+	//    arrowhead, so the lines, the landing, the text and warning 114 all show
+	//    up beside each other and a lowering that drops any one is visible. Its
+	//    text carries a MIF escape, which is the same rule record 10 always has.
+	//  * The second has block content with a uniform scale and a rotation, and
+	//    no arrowhead and no landing, which is the control that says the warning
+	//    and the landing are about the flags and not about MULTILEADER.
+	//  * The third is block content whose block holds an INSERT of another
+	//    block, which is the recursion case: it has to go through the walk's own
+	//    stack, under the depth bound, and not through Map.
+	//  * The fourth carries a text frame and a break in a leader line, neither
+	//    of which this decoder draws, so warning 116 has to say so.
+	//  * The fifth has no roots and no content, and says why nothing came out.
+	//  * The last is a MULTILEADER inside a block inserted twice, once
+	//    non-uniformly and once mirrored, so the flags bit and the transform
+	//    both show.
+	public static void WriteMultiLeader(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		BlockRecord content = new BlockRecord("VIPRS_G13_ML_CONTENT");
+		content.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 1.0 });
+		content.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(2, 0, 0)));
+		doc.BlockRecords.Add(content);
+
+		BlockRecord inner = new BlockRecord("VIPRS_G13_ML_INNER");
+		inner.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(0, 3, 0)));
+		doc.BlockRecords.Add(inner);
+		BlockRecord nested = new BlockRecord("VIPRS_G13_ML_NESTED");
+		nested.Entities.Add(new Insert(inner) { InsertPoint = new XYZ(1, 1, 0) });
+		doc.BlockRecords.Add(nested);
+
+		doc.Entities.Add(NewMultiLeader(L(doc), MultiLeaderKind.Text, 0));
+		doc.Entities.Add(NewMultiLeader(L(doc), MultiLeaderKind.Block, content));
+		doc.Entities.Add(NewMultiLeader(L(doc), MultiLeaderKind.Block, nested));
+		doc.Entities.Add(NewMultiLeader(L(doc), MultiLeaderKind.Framed, 0));
+		doc.Entities.Add(NewMultiLeader(L(doc), MultiLeaderKind.Empty, 0));
+
+		AddBlockInstances(doc, "VIPRS_G13_ML_BLK", NewMultiLeader(null, MultiLeaderKind.Plain, 0));
+		Write(doc, path);
+	}
+
+	private enum MultiLeaderKind
+	{
+		Text,
+		Block,
+		Framed,
+		Empty,
+		Plain,
+	}
+
+	private static MultiLeader NewMultiLeader(Layer layer, MultiLeaderKind kind, object block)
+	{
+		MultiLeader ml = new MultiLeader();
+		if (layer != null)
+		{
+			ml.Layer = layer;
+		}
+
+		MultiLeaderObjectContextData ctx = ml.ContextData;
+		ctx.ScaleFactor = 1.0;
+		ctx.TextHeight = 2.5;
+		ctx.LandingGap = 0.5;
+		ctx.TextNormal = XYZ.AxisZ;
+		ctx.Direction = XYZ.AxisX;
+		ctx.BlockContentNormal = XYZ.AxisZ;
+		ctx.BlockContentScale = new XYZ(1, 1, 1);
+		ml.PathType = MultiLeaderPathType.StraightLineSegments;
+
+		if (kind == MultiLeaderKind.Empty)
+		{
+			// One root with no lines and text content with nothing in it. A
+			// MULTILEADER with no roots at all does not survive ACadSharp's own
+			// round trip (the reader reports "Could not read MULTILEADER" and
+			// the entity is gone), and an entity that is not there cannot show
+			// what an empty one does.
+			ml.ContentType = LeaderContentType.MText;
+			ctx.HasTextContents = true;
+			ctx.TextLabel = string.Empty;
+			ctx.TextLocation = new XYZ(0, 0, 0);
+			ctx.LeaderRoots.Add(new MultiLeaderObjectContextData.LeaderRoot
+			{
+				ConnectionPoint = new XYZ(0, 0, 0),
+				Direction = new XYZ(1, 0, 0),
+				ContentValid = true,
+			});
+			return ml;
+		}
+
+		double x0 = kind == MultiLeaderKind.Text || kind == MultiLeaderKind.Framed ? 0 : 100;
+		MultiLeaderObjectContextData.LeaderRoot root = new MultiLeaderObjectContextData.LeaderRoot
+		{
+			ConnectionPoint = new XYZ(x0 + 8, 6, 0),
+			Direction = new XYZ(1, 0, 0),
+			LandingDistance = 2.0,
+			ContentValid = true,
+		};
+		MultiLeaderObjectContextData.LeaderLine one = new MultiLeaderObjectContextData.LeaderLine();
+		one.Points.Add(new XYZ(x0, 0, 0));
+		one.Points.Add(new XYZ(x0 + 4, 5, 0));
+		one.Points.Add(new XYZ(x0 + 8, 6, 0));
+		root.Lines.Add(one);
+
+		if (kind == MultiLeaderKind.Text)
+		{
+			MultiLeaderObjectContextData.LeaderLine two = new MultiLeaderObjectContextData.LeaderLine();
+			two.Points.Add(new XYZ(x0 + 12, 0, 0));
+			two.Points.Add(new XYZ(x0 + 8, 6, 0));
+			root.Lines.Add(two);
+		}
+
+		if (kind == MultiLeaderKind.Framed)
+		{
+			// A break in the first line: the gap between two points on it.
+			one.BreakInfoCount = 1;
+			root.BreakStartEndPointsPairs.Add(new MultiLeaderObjectContextData.StartEndPointPair(
+				new XYZ(x0 + 1, 1, 0), new XYZ(x0 + 2, 2, 0)));
+		}
+
+		ctx.LeaderRoots.Add(root);
+		ml.EnableLanding = kind != MultiLeaderKind.Block;
+		ml.EnableDogleg = ml.EnableLanding;
+		ml.LandingDistance = 2.0;
+		ml.ArrowheadSize = kind == MultiLeaderKind.Block ? 0.0 : 1.5;
+		ctx.ArrowheadSize = ml.ArrowheadSize;
+
+		if (kind == MultiLeaderKind.Block)
+		{
+			ml.ContentType = LeaderContentType.Block;
+			ml.BlockContent = (BlockRecord)block;
+			ctx.HasContentsBlock = true;
+			ctx.BlockContent = (BlockRecord)block;
+			ctx.BlockContentLocation = new XYZ(x0 + 10, 7, 0);
+			ctx.BlockContentRotation = 0.5;
+			ctx.BlockContentScale = new XYZ(2, 2, 2);
+		}
+		else
+		{
+			ml.ContentType = LeaderContentType.MText;
+			ml.TextFrame = kind == MultiLeaderKind.Framed;
+			ctx.HasTextContents = true;
+			ctx.TextLabel = kind == MultiLeaderKind.Text ? "Note \\U+2205 5" : "framed";
+			ctx.TextLocation = new XYZ(x0 + 10.5, 6.0, 0);
+			ctx.TextRotation = 0.25;
+		}
+
+		return ml;
 	}
 
 	private static Leader NewLeader(

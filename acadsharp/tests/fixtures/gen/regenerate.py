@@ -132,6 +132,7 @@ DUMPED = (
     # nothing about vertex order, the arrowhead flag or a spline-fit path,
     # which is what an isolated fixture is for.
     "g13_leader.dwg",
+    "g13_multileader.dwg",
     "g13_deep_blocks.dwg",
     "g13_slot.dwg",
     "g13_slot_block.dwg",

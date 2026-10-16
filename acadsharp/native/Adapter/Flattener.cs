@@ -537,6 +537,21 @@ namespace Viprs.Cad
 						continue;
 					}
 
+					// A MULTILEADER's block content is a block, so it goes the way
+					// an INSERT's does: one depth deeper, under the same bound,
+					// on this stack and never through Map.
+					if (item.Entity is MultiLeader multiLeader)
+					{
+						CheckDepth(
+							item.Depth + 1,
+							"MULTILEADER",
+							multiLeader.Handle,
+							multiLeader.ObjectName
+						);
+						stack.Push(new Frame { Items = MultiLeaderBody(multiLeader, item).GetEnumerator() });
+						continue;
+					}
+
 					if (item.Entity is Hatch hatch)
 					{
 						CheckDepth(item.Depth + 1, "HATCH", hatch.Handle, hatch.ObjectName);

@@ -1,10 +1,11 @@
 # ADR 0002: what this decoder refuses, and why each one
 
-**REFUSED by decision, not by backlog.** Three entity kinds leave a warning
-that says somebody looked, and all three carry the code 109 this document
+**REFUSED by decision, not by backlog.** Four entity kinds leave a warning
+that says somebody looked, and all four carry the code 109 this document
 added, `ENTITY_REFUSED_BY_DESIGN`, because the answer will not change by
 waiting: their geometry is outside the drawing, or it is in a form nothing on
-this boundary evaluates.
+this boundary evaluates, or it is derived from a layout rather than stored
+(TOLERANCE, since #86).
 
 **Four more rows left this table with wire version 3** (libviprs-dep#104):
 `IMAGE`, `PDFUNDERLAY`, `RAY` and `XLINE`. When this was written no record
@@ -54,6 +55,7 @@ table to the same kinds and the same codes.
 | `3DSOLID` | refused | `ENTITY_REFUSED_BY_DESIGN` | The geometry is an embedded ACIS stream, which is a boundary representation rather than a tessellation. ACadSharp surfaces the bytes and does not evaluate them, and neither does acadrust, the independent Rust reader #92 compared against. | A B-rep evaluator gets written or vendored, which is categorically larger than anything else on this list and is a project rather than an issue. |
 | `REGION` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same embedded ACIS stream as 3DSOLID, in two dimensions. | The same evaluator. If one ever lands, these two rows come back together. |
 | `SHAPE` | refused | `ENTITY_REFUSED_BY_DESIGN` | The outline lives in an external SHX file. The entity carries a placement, a size, a rotation and a name, and this decoder opens no path a drawing names. | Either a placement record lands on a later wire (see below), or the whole external-resource policy changes, which is a security boundary this repository does not have anywhere yet. |
+| `TOLERANCE` | refused | `ENTITY_REFUSED_BY_DESIGN` | A feature-control frame. Its geometry is derived, not stored: the boxes come from a formatted string and the dimension style's text height, so lowering it means implementing a text layout engine and then agreeing with AutoCAD's. Every other lowering in this decoder reads geometry the file already holds, and this is the one that would be a weaker promise (#86 said "possibly not at all"). It was code 100 while it was unfinished work, and is a decision now. | A layout this repository is prepared to be wrong about in public, which is a product question; or a drawing format that stores the frame. |
 
 The refusals are not symmetric with each other, and the codes say so. A consumer
 that wants to draw a placeholder box can do it for SHAPE from the handle and its
@@ -179,8 +181,8 @@ The numbers:
 * Of the 17 fixtures whose geometry can be compared without reimplementing the
   flattener, 15 match to 1e-6, including every OCS fixture, which is what says
   the arbitrary-axis lift is right.
-* On `real_AC1032.dwg` this adapter emits **424** geometry records and **56**
-  warnings, of which **23** are entity refusals: **19** on code 100 and **4** on
+* On `real_AC1032.dwg` this adapter emits **454** geometry records and **48**
+  warnings, of which **8** are entity refusals: **1** on code 100 and **7** on
   code 109. acadrust reads every one of them with matching counts, so none of
   these gaps are things ACadSharp cannot expose. They are flattener and
   wire-format work.

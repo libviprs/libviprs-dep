@@ -352,129 +352,151 @@
 00351 Text handle=797 flags=1 p=[(994.558291,41.709484,0.000000)] h=1.720654 rot=0.000000 value=""
 00352 Text handle=798 flags=1 p=[(976.421501,11.812983,0.000000)] h=1.720654 rot=0.000000 value=""
 00353 Text handle=799 flags=1 p=[(986.688245,1.554466,0.000000)] h=1.720654 rot=0.000000 value=""
-00354 Warning handle=7B8 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00355 Warning handle=822 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00356 Warning handle=823 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00357 Warning handle=824 flags=0 code=UNSUPPORTED_ENTITY message="TOLERANCE is not a primitive this version flattens"
-00358 Warning handle=889 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="SHAPE draws a glyph out of an external SHX file and carries only the placement and the name, and this decoder opens no path a drawing names, so the outline is not in this file and is not fetched"
-00359 Placement handle=8C6 flags=0 i=[(0.000000,15.000000,0.000000)] u=[(10.354167,0.000000,0.000000)] v=[(0.000000,10.052083,0.000000)] size=[994.000000,965.000000] kind=image clip=[] name=".\\image.JPG"
-00360 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
-00361 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
-00362 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
-00363 Text handle=918 flags=0 p=[(43.114061,-67.789053,0.000000)] h=1.000000 rot=0.000000 value="XData Dist"
-00364 Text handle=919 flags=0 p=[(51.735014,-72.544611,0.000000)] h=1.000000 rot=0.000000 value="XData Hand"
-00365 Text handle=91A flags=0 p=[(58.417607,-68.473283,0.000000)] h=1.000000 rot=0.000000 value="XData Int"
-00366 Text handle=91B flags=0 p=[(66.004472,-72.707045,0.000000)] h=1.000000 rot=0.000000 value="XData Layer"
-00367 Text handle=91C flags=0 p=[(77.360318,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Long"
-00368 Text handle=91D flags=0 p=[(83.289476,-73.409835,0.000000)] h=1.000000 rot=0.000000 value="XData Pos"
-00369 Text handle=91E flags=0 p=[(92.534944,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Real"
-00370 Text handle=91F flags=0 p=[(101.478928,-74.614616,0.000000)] h=1.000000 rot=0.000000 value="XData Scale"
-00371 Text handle=920 flags=0 p=[(112.453428,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Str"
-00372 Text handle=921 flags=0 p=[(118.675155,-75.214026,0.000000)] h=1.000000 rot=0.000000 value="XData All"
-00373 Polyline handle=923 flags=0 n=4 closed=1 pts=[(13.653829,-55.544191,0.000000);(13.653829,-84.056227,0.000000);(134.926240,-84.056227,0.000000);(134.926240,-55.544191,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00374 Text handle=924 flags=0 p=[(14.361669,-53.455675,0.000000)] h=1.000000 rot=0.000000 value="XDATA sample"
-00375 Polyline handle=993 flags=0 n=4 closed=1 pts=[(13.653829,-113.085058,0.000000);(13.653829,-128.633243,0.000000);(134.926240,-128.633243,0.000000);(134.926240,-113.085058,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00376 Line handle=99E flags=0 pts=[(18.961305,-124.774938,0.000000);(23.961305,-119.774938,0.000000)]
-00377 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
-00378 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
-00379 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
-00380 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
-00381 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
-00382 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
-00383 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
-00384 Polygon handle=9D8 flags=1 n=3 closed=1 pts=[(35.260903,-122.045502,0.000000);(35.303330,-122.087929,0.000000);(35.154837,-122.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00385 Polygon handle=9D9 flags=1 n=3 closed=1 pts=[(40.006345,-117.300061,0.000000);(40.048771,-117.342487,0.000000);(40.154837,-117.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00386 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
-00387 Point handle=9DB flags=1 p=[(35.999870,-123.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00388 Point handle=9DC flags=1 p=[(40.999870,-118.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00389 Point handle=9DD flags=1 p=[(40.154837,-117.193995,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00390 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
-00391 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
-00392 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
-00393 Text handle=A3A flags=1 p=[(24.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="CELL FORMAT 1"
-00394 Text handle=A3B flags=1 p=[(19.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.500000"
-00395 Text handle=A3C flags=1 p=[(22.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="60"
-00396 Text handle=A3D flags=1 p=[(24.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.000000, 0.000000, 0.000000"
-00397 Text handle=A3E flags=1 p=[(27.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="11/15/2024"
-00398 Text handle=A3F flags=1 p=[(29.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="5"
-00399 Text handle=A40 flags=1 p=[(19.640582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="35.00%"
-00400 Text handle=A41 flags=1 p=[(22.140582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="$100.00"
-00401 Circle handle=A0F flags=1 c=[(26.193958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00402 Text handle=E5C flags=1 p=[(29.784088,-141.217663,0.000000)] h=0.180000 rot=0.000000 value="Cell with 2 blocks"
-00403 Circle handle=A0F flags=1 c=[(28.693958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00404 Circle handle=A0F flags=1 c=[(29.360711,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
-00405 Line handle=A46 flags=1 pts=[(18.390582,-140.704330,0.000000);(30.890582,-140.704330,0.000000)]
-00406 Line handle=A47 flags=1 pts=[(18.390582,-141.157663,0.000000);(30.890582,-141.157663,0.000000)]
-00407 Line handle=A48 flags=1 pts=[(18.390582,-141.764416,0.000000);(30.890582,-141.764416,0.000000)]
-00408 Line handle=A49 flags=1 pts=[(18.390582,-142.368959,0.000000);(30.890582,-142.368959,0.000000)]
-00409 Line handle=A4A flags=1 pts=[(18.390582,-142.973502,0.000000);(30.890582,-142.973502,0.000000)]
-00410 Line handle=A4B flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-142.973502,0.000000)]
-00411 Line handle=A4C flags=1 pts=[(20.890582,-141.157663,0.000000);(20.890582,-142.973502,0.000000)]
-00412 Line handle=A4D flags=1 pts=[(23.390582,-141.157663,0.000000);(23.390582,-142.973502,0.000000)]
-00413 Line handle=A4E flags=1 pts=[(25.890582,-141.157663,0.000000);(25.890582,-142.973502,0.000000)]
-00414 Line handle=A4F flags=1 pts=[(28.390582,-141.157663,0.000000);(28.390582,-142.973502,0.000000)]
-00415 Line handle=A50 flags=1 pts=[(30.890582,-140.704330,0.000000);(30.890582,-142.973502,0.000000)]
-00416 Line handle=A51 flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-140.704330,0.000000)]
-00417 Polyline handle=A54 flags=0 n=4 closed=1 pts=[(13.653829,-137.480597,0.000000);(13.653829,-147.523764,0.000000);(37.822369,-147.523764,0.000000);(37.822369,-137.480597,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00418 Text handle=A55 flags=0 p=[(14.361669,-135.392081,0.000000)] h=1.000000 rot=0.000000 value="Table sample"
-00419 Polyline handle=A7A flags=0 n=4 closed=1 pts=[(13.653829,-155.952248,0.000000);(13.653829,-174.563083,0.000000);(41.305651,-174.563083,0.000000);(41.305651,-155.952248,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00420 Text handle=A7B flags=0 p=[(14.361669,-153.863732,0.000000)] h=1.000000 rot=0.000000 value="Dynamic blocks sample"
-00421 Circle handle=A94 flags=1 c=[(19.024708,-165.549631,0.000000)] r=0.999900 normal=[(0.000000,0.000000,1.000000)]
-00422 Circle handle=A99 flags=1 c=[(29.736907,-165.369992,0.000000)] r=7.349900 normal=[(0.000000,0.000000,1.000000)]
-00423 Warning handle=B1A flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00424 Warning handle=B1B flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00425 Warning handle=B1C flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00426 Warning handle=B1D flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00427 Warning handle=B1E flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00428 Warning handle=B1F flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00429 Warning handle=B20 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00430 Warning handle=B21 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00431 Warning handle=B22 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00432 Warning handle=B23 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00433 Warning handle=B24 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00434 Warning handle=B25 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00435 Warning handle=B26 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00436 Warning handle=B27 flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER is not a primitive this version flattens"
-00437 Polyline handle=B28 flags=0 n=4 closed=1 pts=[(52.691496,-312.361608,0.000000);(52.691496,-566.168582,0.000000);(1852.185634,-566.168582,0.000000);(1852.185634,-312.361608,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00438 Text handle=B29 flags=0 p=[(53.399335,-310.273092,0.000000)] h=1.000000 rot=0.000000 value="Multileader sample"
-00439 Polygon handle=BBB flags=0 n=4 closed=1 pts=[(18.382606,-191.583790,0.000000);(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00440 Polyline handle=BBF flags=0 n=4 closed=1 pts=[(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000);(18.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00441 Polygon handle=BC0 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00442 Polyline handle=BC1 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00443 Polygon handle=BC2 flags=0 n=4 closed=1 pts=[(28.382606,-191.583790,0.000000);(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00444 Polyline handle=BC3 flags=0 n=4 closed=1 pts=[(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000);(28.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00445 Polygon handle=BC4 flags=0 n=4 closed=1 pts=[(33.382606,-191.583790,0.000000);(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00446 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00447 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00448 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
-00449 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
-00450 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
-00451 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
-00452 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
-00453 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
-00454 Point handle=CA1 flags=1 p=[(313.773325,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00455 Point handle=CA2 flags=1 p=[(348.896656,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00456 Point handle=CA3 flags=1 p=[(348.896656,-11.724072,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00457 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
-00458 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
-00459 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
-00460 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
-00461 Polygon handle=CDA flags=1 n=3 closed=1 pts=[(314.084306,-21.584004,0.000000);(314.084306,-21.644004,0.000000);(313.904306,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00462 Polygon handle=CDB flags=1 n=3 closed=1 pts=[(348.669638,-21.584004,0.000000);(348.669638,-21.644004,0.000000);(348.849638,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00463 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
-00464 Point handle=CDD flags=1 p=[(313.904306,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00465 Point handle=CDE flags=1 p=[(348.849638,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00466 Point handle=CDF flags=1 p=[(348.849638,-21.614004,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
-00467 Placement handle=D07 flags=0 i=[(16.286926,15.000000,0.000000)] u=[(1.000000,0.000000,0.000000)] v=[(0.000000,1.000000,0.000000)] size=[0.000000,0.000000] kind=pdf clip=[] name="..\\pdf-definition.pdf"
-00468 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
-00469 Warning handle=D65 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
-00470 Warning handle=D69 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="REGION keeps its geometry as an embedded ACIS stream, the same as 3DSOLID, so there is no outline here to flatten and producing one means evaluating a proprietary boundary representation"
-00471 Warning handle=D6A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
-00472 Polyline handle=D70 flags=0 n=4 closed=1 pts=[(10.160533,-211.015865,0.000000);(10.160533,-229.626700,0.000000);(37.812355,-229.626700,0.000000);(37.812355,-211.015865,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00473 Text handle=D71 flags=0 p=[(10.868373,-208.927349,0.000000)] h=1.000000 rot=0.000000 value="3D Solid region and body"
-00474 Polyline handle=DFC flags=0 n=4 closed=1 pts=[(10.160533,-236.841524,0.000000);(10.160533,-255.452359,0.000000);(37.812355,-255.452359,0.000000);(37.812355,-236.841524,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00475 Text handle=DFD flags=0 p=[(10.868373,-234.753008,0.000000)] h=1.000000 rot=0.000000 value="Materials"
-00476 Circle handle=E00 flags=0 c=[(15.269596,-241.455888,0.000000)] r=2.586142 normal=[(0.000000,0.000000,1.000000)]
-00477 Circle handle=E01 flags=0 c=[(17.625983,-248.517347,0.000000)] r=4.143953 normal=[(0.000000,0.000000,1.000000)]
-00478 Circle handle=E02 flags=0 c=[(26.199179,-241.956699,0.000000)] r=4.742908 normal=[(0.000000,0.000000,1.000000)]
-00479 Circle handle=E03 flags=0 c=[(28.104337,-250.170028,0.000000)] r=2.989063 normal=[(0.000000,0.000000,1.000000)]
+00354 Line handle=7B8 flags=0 pts=[(1083.321045,23.239244,0.000000);(1083.681045,23.239244,0.000000)]
+00355 Text handle=7B8 flags=0 p=[(1083.771045,23.347047,0.000000)] h=0.180000 rot=0.000000 value="MLeader text, hello!"
+00356 Warning handle=822 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="TOLERANCE is a feature-control frame whose boxes are computed from a formatted string and the dimension style's text height rather than read out of the file, so lowering it means implementing a text layout and agreeing with AutoCAD's, which is a promise this boundary does not make"
+00357 Warning handle=823 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="TOLERANCE is a feature-control frame whose boxes are computed from a formatted string and the dimension style's text height rather than read out of the file, so lowering it means implementing a text layout and agreeing with AutoCAD's, which is a promise this boundary does not make"
+00358 Warning handle=824 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="TOLERANCE is a feature-control frame whose boxes are computed from a formatted string and the dimension style's text height rather than read out of the file, so lowering it means implementing a text layout and agreeing with AutoCAD's, which is a promise this boundary does not make"
+00359 Warning handle=889 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="SHAPE draws a glyph out of an external SHX file and carries only the placement and the name, and this decoder opens no path a drawing names, so the outline is not in this file and is not fetched"
+00360 Placement handle=8C6 flags=0 i=[(0.000000,15.000000,0.000000)] u=[(10.354167,0.000000,0.000000)] v=[(0.000000,10.052083,0.000000)] size=[994.000000,965.000000] kind=image clip=[] name=".\\image.JPG"
+00361 Text handle=915 flags=0 p=[(21.232080,-70.793260,0.000000)] h=1.000000 rot=0.000000 value="XData 3Real"
+00362 Text handle=916 flags=0 p=[(29.871992,-67.050685,0.000000)] h=1.000000 rot=0.000000 value="XData Dir"
+00363 Text handle=917 flags=0 p=[(35.389384,-71.999082,0.000000)] h=1.000000 rot=0.000000 value="XData Disp"
+00364 Text handle=918 flags=0 p=[(43.114061,-67.789053,0.000000)] h=1.000000 rot=0.000000 value="XData Dist"
+00365 Text handle=919 flags=0 p=[(51.735014,-72.544611,0.000000)] h=1.000000 rot=0.000000 value="XData Hand"
+00366 Text handle=91A flags=0 p=[(58.417607,-68.473283,0.000000)] h=1.000000 rot=0.000000 value="XData Int"
+00367 Text handle=91B flags=0 p=[(66.004472,-72.707045,0.000000)] h=1.000000 rot=0.000000 value="XData Layer"
+00368 Text handle=91C flags=0 p=[(77.360318,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Long"
+00369 Text handle=91D flags=0 p=[(83.289476,-73.409835,0.000000)] h=1.000000 rot=0.000000 value="XData Pos"
+00370 Text handle=91E flags=0 p=[(92.534944,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Real"
+00371 Text handle=91F flags=0 p=[(101.478928,-74.614616,0.000000)] h=1.000000 rot=0.000000 value="XData Scale"
+00372 Text handle=920 flags=0 p=[(112.453428,-68.992299,0.000000)] h=1.000000 rot=0.000000 value="XData Str"
+00373 Text handle=921 flags=0 p=[(118.675155,-75.214026,0.000000)] h=1.000000 rot=0.000000 value="XData All"
+00374 Polyline handle=923 flags=0 n=4 closed=1 pts=[(13.653829,-55.544191,0.000000);(13.653829,-84.056227,0.000000);(134.926240,-84.056227,0.000000);(134.926240,-55.544191,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00375 Text handle=924 flags=0 p=[(14.361669,-53.455675,0.000000)] h=1.000000 rot=0.000000 value="XDATA sample"
+00376 Polyline handle=993 flags=0 n=4 closed=1 pts=[(13.653829,-113.085058,0.000000);(13.653829,-128.633243,0.000000);(134.926240,-128.633243,0.000000);(134.926240,-113.085058,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00377 Line handle=99E flags=0 pts=[(18.961305,-124.774938,0.000000);(23.961305,-119.774938,0.000000)]
+00378 Circle handle=99F flags=0 c=[(30.203572,-119.966866,0.000000)] r=2.382842 normal=[(0.000000,0.000000,1.000000)]
+00379 Text handle=9A0 flags=0 p=[(14.361669,-110.996542,0.000000)] h=1.000000 rot=0.000000 value="Color sample"
+00380 Line handle=9CD flags=0 pts=[(35.999870,-123.039027,0.000000);(40.999870,-118.039027,0.000000)]
+00381 Line handle=9D4 flags=1 pts=[(35.955676,-122.994833,0.000000);(35.027558,-122.066716,0.000000)]
+00382 Line handle=9D5 flags=1 pts=[(40.955676,-117.994833,0.000000);(40.027558,-117.066716,0.000000)]
+00383 Line handle=9D6 flags=1 pts=[(35.282117,-122.066716,0.000000);(37.472934,-119.875898,0.000000)]
+00384 Line handle=9D7 flags=1 pts=[(40.027558,-117.321274,0.000000);(37.836740,-119.512092,0.000000)]
+00385 Polygon handle=9D8 flags=1 n=3 closed=1 pts=[(35.260903,-122.045502,0.000000);(35.303330,-122.087929,0.000000);(35.154837,-122.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00386 Polygon handle=9D9 flags=1 n=3 closed=1 pts=[(40.006345,-117.300061,0.000000);(40.048771,-117.342487,0.000000);(40.154837,-117.193995,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00387 Text handle=9DA flags=1 p=[(37.654837,-119.693995,0.000000)] h=0.180000 rot=0.000000 value="\\A1;7.0711"
+00388 Point handle=9DB flags=1 p=[(35.999870,-123.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00389 Point handle=9DC flags=1 p=[(40.999870,-118.039027,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00390 Point handle=9DD flags=1 p=[(40.154837,-117.193995,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00391 Text handle=A37 flags=1 p=[(24.640582,-140.930996,0.000000)] h=0.250000 rot=0.000000 value="Hello this is a title"
+00392 Text handle=A38 flags=1 p=[(19.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="A2 cell"
+00393 Text handle=A39 flags=1 p=[(22.140582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="This is my content"
+00394 Text handle=A3A flags=1 p=[(24.640582,-141.461039,0.000000)] h=0.180000 rot=0.000000 value="CELL FORMAT 1"
+00395 Text handle=A3B flags=1 p=[(19.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.500000"
+00396 Text handle=A3C flags=1 p=[(22.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="60"
+00397 Text handle=A3D flags=1 p=[(24.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="0.000000, 0.000000, 0.000000"
+00398 Text handle=A3E flags=1 p=[(27.140582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="11/15/2024"
+00399 Text handle=A3F flags=1 p=[(29.640582,-141.824416,0.000000)] h=0.180000 rot=0.000000 value="5"
+00400 Text handle=A40 flags=1 p=[(19.640582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="35.00%"
+00401 Text handle=A41 flags=1 p=[(22.140582,-142.428959,0.000000)] h=0.180000 rot=0.000000 value="$100.00"
+00402 Circle handle=A0F flags=1 c=[(26.193958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00403 Text handle=E5C flags=1 p=[(29.784088,-141.217663,0.000000)] h=0.180000 rot=0.000000 value="Cell with 2 blocks"
+00404 Circle handle=A0F flags=1 c=[(28.693958,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00405 Circle handle=A0F flags=1 c=[(29.360711,-141.461039,0.000000)] r=0.243377 normal=[(0.000000,0.000000,1.000000)]
+00406 Line handle=A46 flags=1 pts=[(18.390582,-140.704330,0.000000);(30.890582,-140.704330,0.000000)]
+00407 Line handle=A47 flags=1 pts=[(18.390582,-141.157663,0.000000);(30.890582,-141.157663,0.000000)]
+00408 Line handle=A48 flags=1 pts=[(18.390582,-141.764416,0.000000);(30.890582,-141.764416,0.000000)]
+00409 Line handle=A49 flags=1 pts=[(18.390582,-142.368959,0.000000);(30.890582,-142.368959,0.000000)]
+00410 Line handle=A4A flags=1 pts=[(18.390582,-142.973502,0.000000);(30.890582,-142.973502,0.000000)]
+00411 Line handle=A4B flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-142.973502,0.000000)]
+00412 Line handle=A4C flags=1 pts=[(20.890582,-141.157663,0.000000);(20.890582,-142.973502,0.000000)]
+00413 Line handle=A4D flags=1 pts=[(23.390582,-141.157663,0.000000);(23.390582,-142.973502,0.000000)]
+00414 Line handle=A4E flags=1 pts=[(25.890582,-141.157663,0.000000);(25.890582,-142.973502,0.000000)]
+00415 Line handle=A4F flags=1 pts=[(28.390582,-141.157663,0.000000);(28.390582,-142.973502,0.000000)]
+00416 Line handle=A50 flags=1 pts=[(30.890582,-140.704330,0.000000);(30.890582,-142.973502,0.000000)]
+00417 Line handle=A51 flags=1 pts=[(18.390582,-140.704330,0.000000);(18.390582,-140.704330,0.000000)]
+00418 Polyline handle=A54 flags=0 n=4 closed=1 pts=[(13.653829,-137.480597,0.000000);(13.653829,-147.523764,0.000000);(37.822369,-147.523764,0.000000);(37.822369,-137.480597,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00419 Text handle=A55 flags=0 p=[(14.361669,-135.392081,0.000000)] h=1.000000 rot=0.000000 value="Table sample"
+00420 Polyline handle=A7A flags=0 n=4 closed=1 pts=[(13.653829,-155.952248,0.000000);(13.653829,-174.563083,0.000000);(41.305651,-174.563083,0.000000);(41.305651,-155.952248,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00421 Text handle=A7B flags=0 p=[(14.361669,-153.863732,0.000000)] h=1.000000 rot=0.000000 value="Dynamic blocks sample"
+00422 Circle handle=A94 flags=1 c=[(19.024708,-165.549631,0.000000)] r=0.999900 normal=[(0.000000,0.000000,1.000000)]
+00423 Circle handle=A99 flags=1 c=[(29.736907,-165.369992,0.000000)] r=7.349900 normal=[(0.000000,0.000000,1.000000)]
+00424 Line handle=B1A flags=0 pts=[(168.999342,-434.376343,0.000000);(176.999342,-434.376343,0.000000)]
+00425 Text handle=B1A flags=0 p=[(178.999342,-432.342237,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER TEST"
+00426 Line handle=B1B flags=0 pts=[(319.423950,-434.006104,0.000000);(327.423950,-434.006104,0.000000)]
+00427 Text handle=B1B flags=0 p=[(329.423950,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00428 Line handle=B1C flags=0 pts=[(449.179544,-434.006104,0.000000);(457.179544,-434.006104,0.000000)]
+00429 Text handle=B1C flags=0 p=[(478.498780,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00430 Line handle=B1D flags=0 pts=[(579.357108,-434.006104,0.000000);(587.357108,-434.006104,0.000000)]
+00431 Text handle=B1D flags=0 p=[(627.995580,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00432 Warning handle=B1E flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00433 Line handle=B1E flags=0 pts=[(709.318945,-434.006104,0.000000);(717.318945,-434.006104,0.000000)]
+00434 Text handle=B1E flags=0 p=[(757.957417,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00435 Warning handle=B1F flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00436 Line handle=B1F flags=0 pts=[(839.038083,-434.006104,0.000000);(847.038083,-434.006104,0.000000)]
+00437 Text handle=B1F flags=0 p=[(895.676555,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00438 Warning handle=B20 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00439 Line handle=B20 flags=0 pts=[(978.898129,-434.006104,0.000000);(994.898129,-434.006104,0.000000)]
+00440 Text handle=B20 flags=0 p=[(1043.536601,-431.970634,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER\\PTEST\\P123"
+00441 Warning handle=B21 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00442 Line handle=B21 flags=0 pts=[(1129.110354,-434.006104,0.000000);(1144.565168,-429.865000,0.000000)]
+00443 Text handle=B21 flags=0 p=[(1191.019505,-415.310323,0.000000)] h=4.000000 rot=0.261799 value="MULTILEADER\\PTEST\\P123"
+00444 Warning handle=B22 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00445 Line handle=B22 flags=0 pts=[(1278.688771,-434.006104,0.000000);(1294.143584,-429.865000,0.000000)]
+00446 Text handle=B22 flags=0 p=[(1369.027899,-407.729255,0.000000)] h=4.000000 rot=0.261799 value="MULTILEADER\\PTEST\\P123"
+00447 Warning handle=B23 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00448 Line handle=B23 flags=0 pts=[(1449.012490,-434.006104,0.000000);(1464.467303,-429.865000,0.000000)]
+00449 Text handle=B23 flags=0 p=[(1539.351618,-407.729255,0.000000)] h=4.000000 rot=0.261799 value="MULTILEADER\\PTEST\\P123"
+00450 Warning handle=B24 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, which this version does not draw; the geometry beside this warning is what the file holds"
+00451 Line handle=B24 flags=0 pts=[(1628.881122,-434.006104,0.000000);(1644.335935,-429.865000,0.000000)]
+00452 Text handle=B24 flags=0 p=[(1784.445308,-388.181702,0.000000)] h=8.000000 rot=0.261799 value="MULTILEADER\\PTEST\\P123"
+00453 Line handle=B25 flags=0 pts=[(168.999342,-343.639929,0.000000);(176.999342,-343.639929,0.000000)]
+00454 Text handle=B25 flags=0 p=[(178.999342,-338.771716,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER TEST"
+00455 Line handle=B26 flags=0 pts=[(358.611651,-343.639929,0.000000);(366.611651,-343.639929,0.000000)]
+00456 Text handle=B26 flags=0 p=[(368.611651,-343.639929,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER TEST"
+00457 Line handle=B27 flags=0 pts=[(556.636677,-349.776355,0.000000);(564.636677,-349.776355,0.000000)]
+00458 Text handle=B27 flags=0 p=[(529.421125,-343.639929,0.000000)] h=4.000000 rot=0.000000 value="MULTILEADER TEST"
+00459 Polyline handle=B28 flags=0 n=4 closed=1 pts=[(52.691496,-312.361608,0.000000);(52.691496,-566.168582,0.000000);(1852.185634,-566.168582,0.000000);(1852.185634,-312.361608,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00460 Text handle=B29 flags=0 p=[(53.399335,-310.273092,0.000000)] h=1.000000 rot=0.000000 value="Multileader sample"
+00461 Polygon handle=BBB flags=0 n=4 closed=1 pts=[(18.382606,-191.583790,0.000000);(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00462 Polyline handle=BBF flags=0 n=4 closed=1 pts=[(14.847072,-191.583790,0.000000);(14.847072,-195.119324,0.000000);(18.382606,-195.119324,0.000000);(18.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00463 Polygon handle=BC0 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00464 Polyline handle=BC1 flags=0 n=4 closed=1 pts=[(19.847072,-191.583790,0.000000);(19.847072,-195.119324,0.000000);(23.382606,-195.119324,0.000000);(23.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00465 Polygon handle=BC2 flags=0 n=4 closed=1 pts=[(28.382606,-191.583790,0.000000);(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00466 Polyline handle=BC3 flags=0 n=4 closed=1 pts=[(24.847072,-191.583790,0.000000);(24.847072,-195.119324,0.000000);(28.382606,-195.119324,0.000000);(28.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00467 Polygon handle=BC4 flags=0 n=4 closed=1 pts=[(33.382606,-191.583790,0.000000);(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00468 Polyline handle=BC5 flags=0 n=4 closed=1 pts=[(29.847072,-191.583790,0.000000);(29.847072,-195.119324,0.000000);(33.382606,-195.119324,0.000000);(33.382606,-191.583790,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00469 Polyline handle=BC6 flags=0 n=4 closed=1 pts=[(10.160533,-185.190206,0.000000);(10.160533,-203.801041,0.000000);(37.812355,-203.801041,0.000000);(37.812355,-185.190206,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00470 Text handle=BC7 flags=0 p=[(10.868373,-183.101690,0.000000)] h=1.000000 rot=0.000000 value="Hatch pattern sample"
+00471 Line handle=C9A flags=1 pts=[(313.773325,-18.630711,0.000000);(313.773325,-11.544072,0.000000)]
+00472 Line handle=C9B flags=1 pts=[(348.896656,-18.630711,0.000000);(348.896656,-11.544072,0.000000)]
+00473 Line handle=C9C flags=1 pts=[(313.953325,-11.724072,0.000000);(330.801498,-11.724072,0.000000)]
+00474 Line handle=C9D flags=1 pts=[(348.716656,-11.724072,0.000000);(331.868483,-11.724072,0.000000)]
+00475 Text handle=CA0 flags=1 p=[(331.334991,-11.724072,0.000000)] h=0.180000 rot=0.000000 value="\\A1;35.1233"
+00476 Point handle=CA1 flags=1 p=[(313.773325,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00477 Point handle=CA2 flags=1 p=[(348.896656,-18.693211,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00478 Point handle=CA3 flags=1 p=[(348.896656,-11.724072,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00479 Line handle=CD6 flags=1 pts=[(313.904306,-26.709111,0.000000);(313.904306,-21.434004,0.000000)]
+00480 Line handle=CD7 flags=1 pts=[(348.849638,-26.709111,0.000000);(348.849638,-21.434004,0.000000)]
+00481 Line handle=CD8 flags=1 pts=[(314.084306,-21.614004,0.000000);(330.843479,-21.614004,0.000000)]
+00482 Line handle=CD9 flags=1 pts=[(348.669638,-21.614004,0.000000);(331.910464,-21.614004,0.000000)]
+00483 Polygon handle=CDA flags=1 n=3 closed=1 pts=[(314.084306,-21.584004,0.000000);(314.084306,-21.644004,0.000000);(313.904306,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00484 Polygon handle=CDB flags=1 n=3 closed=1 pts=[(348.669638,-21.584004,0.000000);(348.669638,-21.644004,0.000000);(348.849638,-21.614004,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00485 Text handle=CDC flags=1 p=[(331.376972,-21.614004,0.000000)] h=0.180000 rot=0.000000 value="\\A1;34.9453"
+00486 Point handle=CDD flags=1 p=[(313.904306,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00487 Point handle=CDE flags=1 p=[(348.849638,-26.771611,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00488 Point handle=CDF flags=1 p=[(348.849638,-21.614004,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00489 Placement handle=D07 flags=0 i=[(16.286926,15.000000,0.000000)] u=[(1.000000,0.000000,0.000000)] v=[(0.000000,1.000000,0.000000)] size=[0.000000,0.000000] kind=pdf clip=[] name="..\\pdf-definition.pdf"
+00490 Circle handle=A0F flags=1 c=[(49.259343,-35.382599,0.000000)] r=1.606631 normal=[(0.000000,0.000000,1.000000)]
+00491 Warning handle=D65 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
+00492 Warning handle=D69 flags=0 code=ENTITY_REFUSED_BY_DESIGN message="REGION keeps its geometry as an embedded ACIS stream, the same as 3DSOLID, so there is no outline here to flatten and producing one means evaluating a proprietary boundary representation"
+00493 Warning handle=D6A flags=0 code=ENTITY_REFUSED_BY_DESIGN message="3DSOLID keeps its geometry as an embedded ACIS stream, which is a boundary representation rather than a tessellation and which nothing on this boundary evaluates, so there is no outline here to flatten"
+00494 Polyline handle=D70 flags=0 n=4 closed=1 pts=[(10.160533,-211.015865,0.000000);(10.160533,-229.626700,0.000000);(37.812355,-229.626700,0.000000);(37.812355,-211.015865,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00495 Text handle=D71 flags=0 p=[(10.868373,-208.927349,0.000000)] h=1.000000 rot=0.000000 value="3D Solid region and body"
+00496 Polyline handle=DFC flags=0 n=4 closed=1 pts=[(10.160533,-236.841524,0.000000);(10.160533,-255.452359,0.000000);(37.812355,-255.452359,0.000000);(37.812355,-236.841524,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00497 Text handle=DFD flags=0 p=[(10.868373,-234.753008,0.000000)] h=1.000000 rot=0.000000 value="Materials"
+00498 Circle handle=E00 flags=0 c=[(15.269596,-241.455888,0.000000)] r=2.586142 normal=[(0.000000,0.000000,1.000000)]
+00499 Circle handle=E01 flags=0 c=[(17.625983,-248.517347,0.000000)] r=4.143953 normal=[(0.000000,0.000000,1.000000)]
+00500 Circle handle=E02 flags=0 c=[(26.199179,-241.956699,0.000000)] r=4.742908 normal=[(0.000000,0.000000,1.000000)]
+00501 Circle handle=E03 flags=0 c=[(28.104337,-250.170028,0.000000)] r=2.989063 normal=[(0.000000,0.000000,1.000000)]

@@ -148,6 +148,17 @@ namespace Viprs.Cad
 		// refusal, which is what 110 does for a MESH's subdivision level.
 		public const uint MLineStyleFeaturesIgnored = 115u;
 
+		// A MULTILEADER that carries something this version does not draw: the
+		// frame round its text, a break in a leader line, the attribute text of
+		// its block, or tolerance content. The records beside it are the
+		// geometry the file holds (the leader lines, the landing, the text, the
+		// block's entities), and a frame or a gap is a box or a hole that
+		// AutoCAD works out from text extents and a style, none of which is in
+		// the file as geometry. Like 115 it sits beside real geometry and says
+		// what is missing from it, and the message names which features, since
+		// a consumer is not entitled to parse it for anything else.
+		public const uint MultiLeaderFeaturesIgnored = 116u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -168,6 +179,7 @@ namespace Viprs.Cad
 				case FaceEdgeVisibilityIgnored: return "FACE_EDGE_VISIBILITY_IGNORED";
 				case ArrowheadNotDrawn: return "ARROWHEAD_NOT_DRAWN";
 				case MLineStyleFeaturesIgnored: return "MLINE_STYLE_FEATURES_IGNORED";
+				case MultiLeaderFeaturesIgnored: return "MULTILEADER_FEATURES_IGNORED";
 				default: return "WARNING_" + code;
 			}
 		}
