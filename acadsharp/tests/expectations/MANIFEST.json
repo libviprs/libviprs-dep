@@ -414,6 +414,25 @@
       ],
       "views_without_extents": 0
     },
+    "g13_multileader.dwg": {
+      "batches": 1,
+      "bytes": 11692,
+      "decode_code": "OK",
+      "kinds": {
+        "Warning": 12
+      },
+      "live_handles": 0,
+      "notification_count": 5,
+      "output_bytes": 1524,
+      "records": 12,
+      "sha256": "f3d9d2e1f203bbbdcdbdfa713cd08ceee51052309188e7a5ab16d05c8c9969af",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_nan_bulge.dwg": {
       "batches": 1,
       "bytes": 10604,

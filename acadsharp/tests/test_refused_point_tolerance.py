@@ -15,8 +15,9 @@ not checked, which is what `CARRIED_NOT_RECORDED` in `test_adapter_stream.py`
 existed to say out loud.
 
 Recording them was not implementing them. POINT stayed on code 100 until a
-record could hold a marker, and TOLERANCE stays on 100 because its frame is
-computed from a formatted string rather than read out of the file. So what the
+record could hold a marker, and TOLERANCE is refused on purpose (109, since
+#86) because its frame is computed from a formatted string rather than read out
+of the file. So what the
 TOLERANCE assertions pin is a refusal, and they are written to go red the day
 it lowers to a record, which is the day somebody should be reading this file
 anyway.
@@ -147,7 +148,13 @@ class TestToleranceIsStillRefused:
             f"{TOLERANCE} holds {[w['kind'] for w in refused]} and the writer puts "
             f"{top + expanded} {kind}s in it"
         )
-        assert {w["code"] for w in refused} == {"UNSUPPORTED_ENTITY"}
+        assert {w["code"] for w in refused} == {"ENTITY_REFUSED_BY_DESIGN"}, (
+            "TOLERANCE is refused on 109 since #86: its frame is computed from a "
+            "formatted string and a text height, not read out of the file, and a "
+            "promise to agree with AutoCAD's layout is not one this boundary makes. "
+            "That is a decision, which is what the row in docs/adr/0002 records, and "
+            "not work nobody has got to, which is what 100 says"
+        )
 
     def test_both_halves_of_the_fixture_are_refused(self):
         kind, top, expanded = WRITTEN[TOLERANCE]
