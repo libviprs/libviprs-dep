@@ -93,12 +93,23 @@ jobs:
         # digest needs no .NET, no network and no runner of any particular
         # architecture -- it is a walk over `native/*.cs` -- so there is no
         # reason for it to cost a build.
+        #
+        # And the row itself, when the version came from acadsharp/VERSION
+        # rather than from a dispatch input (#126). `test_acadsharp_version.py`
+        # asks both questions, "has a row" and "the row matches the tree", and
+        # a release job runs no pytest, so this step used to ask only the
+        # second. A bump whose row was forgotten then published an archive
+        # whose `shim_sha256` was measured and pinned by nothing. An override
+        # (a dispatch naming a throwaway revision, the documented rehearsal) is not a bump
+        # and still needs no row.
         env:
           VERSION: ${{ steps.v.outputs.version }}
+          REQUESTED: ${{ inputs.version }}
         run: |
           set -eu
           python3 - "$VERSION" <<'PY'
           import importlib.util
+          import os
           import sys
 
           spec = importlib.util.spec_from_file_location(
@@ -119,6 +130,12 @@ jobs:
               packaged = driver.packaged_shim_digest(sys.argv[1])
           except ValueError as exc:
               sys.exit(str(exc))
+          if not os.environ.get("REQUESTED") and sys.argv[1] not in driver.SHIM_DIGESTS:
+              sys.exit(
+                  f"{sys.argv[1]} came from acadsharp/VERSION and SHIM_DIGESTS in "
+                  "build_acadsharp.py has no row for it, so nothing pins the shim this "
+                  "release would publish. Add the row in the same commit as the bump."
+              )
           print(f"ACadSharp {upstream}, shim revision {shim}")
           print(f"pinned sha256: {digest}")
           print(f"shim sha256:   {packaged}")
@@ -455,7 +472,10 @@ jobs:
         include:
           - { platform: mac, cpu: arm64, arch: arm64 }
     runs-on: macos-15
-    timeout-minutes: 60
+    # Raised with build-linux's, for the same reason (#121): this lane grew a
+    # consumer step too, and a ceiling that stays put turns a slow build into a
+    # cancelled release.
+    timeout-minutes: 75
     permissions:
       contents: write
     steps:
@@ -508,6 +528,16 @@ jobs:
           tar -xzf "bin/acadsharp-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
             -C bin/unpacked
           find bin/unpacked -maxdepth 2
+
+      - name: Record the cargo the link will use
+        # The mac cell takes cargo from whatever the macos-15 image ships,
+        # where the four linux cells pin `rust:<version>` (#121). Pinning a
+        # toolchain here would be a second moving part in a release gate, so the
+        # log records what actually linked. An image without cargo still fails
+        # the next step: link_consumer_smoke.sh exits 2 rather than skipping.
+        run: |
+          cargo --version
+          rustc --version
 
       - name: Link the unpacked archive through the documented recipe
         # The step this lane did not have, and #95 is what it cost. This
