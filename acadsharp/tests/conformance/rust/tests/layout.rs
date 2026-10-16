@@ -109,5 +109,5 @@ fn the_result_codes_keep_their_frozen_numbers() {
     assert_eq!(viprs_conformance::VIPRS_ACAD_LIMIT_EXCEEDED, 9);
     assert_eq!(viprs_conformance::VIPRS_ACAD_BUFFER_TOO_SMALL, 10);
     assert_eq!(viprs_conformance::VIPRS_ACAD_ABI_VERSION, 2);
-    assert_eq!(viprs_conformance::VIPRS_ACAD_WIRE_VERSION, 2);
+    assert_eq!(viprs_conformance::VIPRS_ACAD_WIRE_VERSION, 3);
 }

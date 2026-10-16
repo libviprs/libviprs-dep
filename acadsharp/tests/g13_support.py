@@ -49,6 +49,9 @@ RECORD_KINDS = (
     "Spline",
     "Text",
     "Polygon",
+    "Point",
+    "Unbounded",
+    "Placement",
     "Warning",
 )
 CURVE_KINDS = ("Arc", "Circle", "Ellipse", "Spline")

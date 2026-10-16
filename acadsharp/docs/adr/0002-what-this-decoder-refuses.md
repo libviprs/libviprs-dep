@@ -1,11 +1,19 @@
 # ADR 0002: what this decoder refuses, and why each one
 
-**REFUSED by decision, not by backlog.** Seven entity kinds leave a warning
-that says somebody looked, and all seven carry the code 109 this document
+**REFUSED by decision, not by backlog.** Three entity kinds leave a warning
+that says somebody looked, and all three carry the code 109 this document
 added, `ENTITY_REFUSED_BY_DESIGN`, because the answer will not change by
 waiting: their geometry is outside the drawing, or it is in a form nothing on
-this boundary evaluates, or no record wire version 2 defines can hold it. No
-wire version moves and no record is added.
+this boundary evaluates.
+
+**Four more rows left this table with wire version 3** (libviprs-dep#104):
+`IMAGE`, `PDFUNDERLAY`, `RAY` and `XLINE`. When this was written no record
+wire version 2 defines could hold them and no wire version moved. Wire 3 added
+record 15 `Unbounded` for the last two and record 16 `Placement` for the first
+two, so what this document said would reopen those rows is what happened, and
+`docs/adr/0003` carries the layouts. The policy under IMAGE and PDFUNDERLAY did
+not change: a `Placement` carries the name as an opaque string and nothing
+opens it.
 
 There were eight when this was written. `WIPEOUT` was the odd one, on code 100
 rather than 109 because it was unfinished work rather than a decision, and the
@@ -46,15 +54,10 @@ table to the same kinds and the same codes.
 | `3DSOLID` | refused | `ENTITY_REFUSED_BY_DESIGN` | The geometry is an embedded ACIS stream, which is a boundary representation rather than a tessellation. ACadSharp surfaces the bytes and does not evaluate them, and neither does acadrust, the independent Rust reader #92 compared against. | A B-rep evaluator gets written or vendored, which is categorically larger than anything else on this list and is a project rather than an issue. |
 | `REGION` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same embedded ACIS stream as 3DSOLID, in two dimensions. | The same evaluator. If one ever lands, these two rows come back together. |
 | `SHAPE` | refused | `ENTITY_REFUSED_BY_DESIGN` | The outline lives in an external SHX file. The entity carries a placement, a size, a rotation and a name, and this decoder opens no path a drawing names. | Either a placement record lands on a later wire (see below), or the whole external-resource policy changes, which is a security boundary this repository does not have anywhere yet. |
-| `IMAGE` | refused | `ENTITY_REFUSED_BY_DESIGN` | What it displays is an external raster resolved through a definition object holding a file path. Same rule: no path out of a drawing is ever opened. | A placement record on a later wire, carrying the frame and the referenced name as an opaque string, with no resolution. |
-| `PDFUNDERLAY` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same shape as IMAGE with an external PDF behind it. | The same placement record as IMAGE, and the two land together or not at all. |
-| `RAY` | refused | `ENTITY_REFUSED_BY_DESIGN` | A base point and a direction, running forever. Every record wire 2 defines is bounded, and clipping to the drawing extents to get a Line is the trap #85 exists to name: it is the easiest thing to implement and the hardest to notice being wrong, and `g13_bad_extents.dwg` is in the corpus precisely because extents cannot be trusted. | An unbounded record on a later wire, carrying base point and direction and leaving the clip to whoever knows the viewport. |
-| `XLINE` | refused | `ENTITY_REFUSED_BY_DESIGN` | The same as RAY, running both ways. One record covers both kinds with a flag or two entries. | The same unbounded record. RAY and XLINE are one piece of work and always were. |
 
 The refusals are not symmetric with each other, and the codes say so. A consumer
-that wants to draw a placeholder box can do it for IMAGE, PDFUNDERLAY and SHAPE
-from the handle and its own copy of the drawing; there is nothing it can do for
-3DSOLID; and for RAY and XLINE it is waiting on us rather than on physics.
+that wants to draw a placeholder box can do it for SHAPE from the handle and its
+own copy of the drawing, and there is nothing it can do for 3DSOLID or REGION.
 
 ## What is not decided
 
@@ -68,8 +71,9 @@ survives here so the next one starts from it rather than from scratch.
 
 A wire 3 worth cutting carries three records at once:
 
-* **Point.** The biggest single gap on a real drawing and the cheapest: **40**
-  of the **67** refusals on `real_AC1032.dwg` are POINT.
+* **Point.** The biggest single gap on a real drawing and the cheapest: when
+  this was written **40** of the refusals on `real_AC1032.dwg` were POINT, and
+  wire version 3 took all of them.
 * **Unbounded.** Base point and direction, covering RAY and XLINE, with the
   clip left to the consumer that knows its viewport.
 * **Placement.** An insertion point, two axis vectors, an optional clip
@@ -175,8 +179,8 @@ The numbers:
 * Of the 17 fixtures whose geometry can be compared without reimplementing the
   flattener, 15 match to 1e-6, including every OCS fixture, which is what says
   the arbitrary-axis lift is right.
-* On `real_AC1032.dwg` this adapter emits **380** geometry records and **100**
-  warnings, of which **67** are entity refusals: **59** on code 100 and **8** on
+* On `real_AC1032.dwg` this adapter emits **424** geometry records and **56**
+  warnings, of which **23** are entity refusals: **19** on code 100 and **4** on
   code 109. acadrust reads every one of them with matching counts, so none of
   these gaps are things ACadSharp cannot expose. They are flattener and
   wire-format work.

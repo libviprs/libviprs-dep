@@ -133,9 +133,10 @@
       "decode_code": "OK",
       "kinds": {
         "Line": 3,
+        "Point": 4,
         "Polygon": 2,
         "Text": 1,
-        "Warning": 8
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
@@ -155,9 +156,10 @@
       "decode_code": "OK",
       "kinds": {
         "Line": 12,
+        "Point": 16,
         "Polygon": 8,
         "Text": 4,
-        "Warning": 20
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
@@ -436,12 +438,15 @@
       "bytes": 11148,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 19
+        "Placement": 2,
+        "Point": 1,
+        "Unbounded": 2,
+        "Warning": 13
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 3244,
-      "records": 19,
+      "output_bytes": 2764,
+      "records": 18,
       "sha256": "554faca10e6a214d876525df8af7beeb9a32110dfee21a2e64d0cea9054ddd51",
       "view_count": 2,
       "view_extents": [
@@ -562,12 +567,13 @@
       "bytes": 11499,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 20
+        "Placement": 15,
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 3544,
-      "records": 20,
+      "output_bytes": 3832,
+      "records": 19,
       "sha256": "1f7475967ef5590a077c05f5d59ce00f419ff32e22faa1b2661972aae6ed6de0",
       "view_count": 2,
       "view_extents": [
@@ -581,12 +587,13 @@
       "bytes": 10828,
       "decode_code": "OK",
       "kinds": {
-        "Warning": 13
+        "Point": 8,
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1520,
-      "records": 13,
+      "output_bytes": 1460,
+      "records": 12,
       "sha256": "80fb91f9ae02317dac8fe9e9d234caf29e2bf0152dc030812a488f4157fdcd4e",
       "view_count": 2,
       "view_extents": [
@@ -659,11 +666,12 @@
       "decode_code": "OK",
       "kinds": {
         "Line": 1,
-        "Warning": 10
+        "Unbounded": 6,
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 2224,
+      "output_bytes": 1372,
       "records": 11,
       "sha256": "332411ca8ee2e05fce04520594ac87952ff7c36d18c3c279ff5abda03a49cdae",
       "view_count": 2,
@@ -859,8 +867,9 @@
       "bytes": 10571,
       "decode_code": "OK",
       "kinds": {
+        "Point": 1,
         "Polygon": 1,
-        "Warning": 5
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
@@ -942,15 +951,18 @@
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
+        "Placement": 2,
+        "Point": 40,
         "Polygon": 160,
         "Polyline": 31,
         "Spline": 2,
         "Text": 78,
-        "Warning": 93
+        "Unbounded": 2,
+        "Warning": 49
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 58904,
+      "output_bytes": 58556,
       "records": 473,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4,
@@ -971,15 +983,18 @@
         "Circle": 15,
         "Ellipse": 1,
         "Line": 90,
+        "Placement": 2,
+        "Point": 40,
         "Polygon": 160,
         "Polyline": 31,
         "Spline": 2,
         "Text": 78,
-        "Warning": 100
+        "Unbounded": 2,
+        "Warning": 56
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 60124,
+      "output_bytes": 59776,
       "records": 480,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
@@ -995,29 +1010,32 @@
   "recorded": "2026-10-16",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
-    "sha256": "2538ef7f9486f81e25985a9a090371fa178874137119b0a7379920068548ef25",
+    "sha256": "0a397f7f8478ee89221baa990bc63c3f84fac2e6ba405a1b494cbb69877c708f",
     "sources": {
-      "native/Abi.cs": "f4f408e58bb1b74690a01530331f8903e0392321fdb3573b2194d3cfb3a7beee",
+      "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
       "native/Adapter/Flatten.Faces.cs": "44e9a9ba519779f8f52ae47dbbbf7b9b05216436182d07674f8ad67eb3913dbb",
       "native/Adapter/Flatten.Leaders.cs": "6209dfe1ef72a247bc971e354b1fbe3f095fa747bb76c084eaf240da68a43abc",
       "native/Adapter/Flatten.MLine.cs": "b06a2f46de4c456c1462a9d36ef46fc4a5f46d109ab25cb55325b5a642639dff",
       "native/Adapter/Flatten.Masks.cs": "fda3c48a0d0edd3ac437572092bb556bdcccb7dd8ac019e25d1fcc09550ad3e1",
+      "native/Adapter/Flatten.Placements.cs": "714df26800c7bbbea71f2f388ed8c6be386f777242ea315d11d8e96f17117656",
+      "native/Adapter/Flatten.Points.cs": "409429722fdabeb4da39e6a3613445120c37b664d49f1e79db99b00b127418c9",
       "native/Adapter/Flatten.Text.cs": "a2c283df352e874b0aee6c5f0bab817b7968078a0f954b86383fbb7cafcad64a",
-      "native/Adapter/Flattener.cs": "0c9663103d31dc03ed554288d57325ea5c513cb28b3cd9f25ad6b81ed29639c3",
-      "native/Adapter/RecordName.cs": "e34f25a0905808c643b8ac5e716d79ba6a30a03197c19fc5e46767931efe0959",
-      "native/Adapter/RefusedKinds.cs": "1b4d93096331a6a68c68afcc9981bbd427c06c78833112908dae2fed8beb97fe",
+      "native/Adapter/Flatten.Unbounded.cs": "ed6178065ae86456db10b504448d9c09dd841a5389bf248fda76a58d75a8054f",
+      "native/Adapter/Flattener.cs": "1ae3deafdee7f13effda4a69ceae5d7a7d5fd2735a8e606f57e6518c28c8994e",
+      "native/Adapter/RecordName.cs": "25c3025889629f7eb9bd97c0d3b5b5443172a7867d535fc3a6b3869cb8cf290d",
+      "native/Adapter/RefusedKinds.cs": "b070ccb6f9df0b53242eed2b601891a32929e1f78bcf90eeea00ad51cb177ed5",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
       "native/Adapter/WarningCodes.cs": "2f5285e4f6396cc4c14368d006c2c0e4c87fae5028313899a6a2f9af87a75c9f",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "dce2b5401a2744f32ff1815ace5e1654d97208ea1f7889c2df91e4a07fe7b52f",
       "native/Sources/IDocumentSource.cs": "ef09d143be8d02dc498336f770ae1c939862107ba044fc5692b0e0ec2f10f871",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
-      "native/Sources/SyntheticSource.cs": "568c9e6aea293c18fe89238b16dd4c1bb3eeb393f504b2c0fac12790c50e0b67",
+      "native/Sources/SyntheticSource.cs": "41c028b0ab46da517122b9364611df49fa7151b0395eda089cc1a8e56220ac95",
       "native/Wire/BatchWriter.cs": "fe450480b5bb98b593fc78cd77b183dc158ea0798b3328663997a75ad16129bd",
       "native/Wire/DecodeSession.cs": "8e70e7820c9a7c9701298472f14776f831bfc6daa837463d98457c64e4d13c12",
-      "native/Wire/Primitive.cs": "47c94f73d6f9b150ff7e3a5ec6ea2709e8d9e68ebfe68baba6ab2a9e790e006a",
-      "native/Wire/RecordEncoder.cs": "9752cf982c13dd00b6746da115db56982b2c0f217346d2e1a35e7a00ed19ebb6",
-      "native/Wire/WireFormat.cs": "6a34f0bdc23a0107a9acdbeba7789e62ec60b6764300e1c8f81b868a4a2c0cdc"
+      "native/Wire/Primitive.cs": "a630e5183006135804be3300ef7cb3f705132500877b5f55d6929ef968bd943e",
+      "native/Wire/RecordEncoder.cs": "9f32694a2d385a2fa331290545e8df9e6a4e2473e068fa08009222e8f266dba0",
+      "native/Wire/WireFormat.cs": "6b250452f3be118f6f9e521ed6a99b99eff33b94719122fe7ff7516b13c7b8d1"
     }
   }
 }

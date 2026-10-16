@@ -1,4 +1,9 @@
-"""POINT and TOLERANCE, refused on a fixture that carries nothing else.
+"""TOLERANCE, refused on a fixture that carries nothing else. (POINT left this file.)
+
+POINT stopped being refused when wire version 3 added record 14 `Point`, and the
+assertions that were written to go red on exactly that are gone with it. What
+replaced them is `test_point_records.py`, which says what the same fixture
+holds now. TOLERANCE stays here, for the reason the docstring below gives.
 
 Both DWGs have been in `tests/fixtures` since #94 and neither was ever dumped,
 so until now the only evidence that either kind is refused came from the two
@@ -9,13 +14,12 @@ upstream control for that: a fixture missing from it can never reach
 not checked, which is what `CARRIED_NOT_RECORDED` in `test_adapter_stream.py`
 existed to say out loud.
 
-Recording them is not implementing them. POINT stays on code 100 because no
-record wire version 2 defines can hold a marker, and that is a wire 3 and a
-two-repo campaign (`docs/adr/0003`). TOLERANCE stays on 100 because its frame
-is computed from a formatted string rather than read out of the file. So what
-these assertions pin is a refusal, and they are written to go red the day
-either kind lowers to a record, which is the day somebody should be reading
-this file anyway.
+Recording them was not implementing them. POINT stayed on code 100 until a
+record could hold a marker, and TOLERANCE stays on 100 because its frame is
+computed from a formatted string rather than read out of the file. So what the
+TOLERANCE assertions pin is a refusal, and they are written to go red the day
+it lowers to a record, which is the day somebody should be reading this file
+anyway.
 
 The counts are split by `flags` on purpose. Each fixture puts the kind at top
 level and again inside a block that is inserted twice, so a flattener that
@@ -29,20 +33,18 @@ import pytest
 from g13_support import kinds, records
 from test_adapter_stream import CARRIED_NOT_RECORDED, DUMPED, ONCE_RECORDED
 
-POINT = "g13_point.dwg"
 TOLERANCE = "g13_tolerance.dwg"
-FIXTURES = (POINT, TOLERANCE)
+FIXTURES = (TOLERANCE,)
 
 # The two codes an entity refusal can carry. A READER_NOTIFICATION is the
 # backing reader talking about the document with item_handle 0, and is not one.
 REFUSAL_CODES = ("UNSUPPORTED_ENTITY", "ENTITY_REFUSED_BY_DESIGN")
 
-# What `Corpus.WritePoint` and `Corpus.WriteTolerance` put in each file, as
+# What `Corpus.WriteTolerance` puts in the file, as
 # (DXF kind, top-level entities, entities reached by expanding an insertion).
 # `AddBlockInstances` adds one block and inserts it twice, so a block member
 # is refused once per insertion and not once per member.
 WRITTEN = {
-    POINT: ("POINT", 4, 4),
     TOLERANCE: ("TOLERANCE", 2, 2),
 }
 
@@ -100,17 +102,17 @@ class TestTheEvidenceIsThere:
 
 
 class TestTheViewSaysItHoldsNothing:
-    """The other witness in these two dumps, and the one nothing else provides.
+    """The other witness in this dump, and the one nothing else provides.
 
-    Every entity in either fixture is refused, so the model space these
-    drawings describe comes out of the adapter with no geometry in it at all,
+    Every entity in the fixture is refused, so the model space this drawing
+    describes comes out of the adapter with no geometry in it at all,
     and the decoder says so with `EMPTY_VIEW` rather than emitting a view that
     looks like a successful decode of a blank drawing. `g13_empty_view.dwg`
-    carries that code on a document that genuinely has nothing in it; these two
-    carry it on a document full of entities the flattener would not take, which
-    is the harder case and the one a consumer actually meets.
+    carries that code on a document that genuinely has nothing in it; this one
+    carries it on a document full of entities the flattener would not take,
+    which is the harder case and the one a consumer actually meets.
 
-    It is also the sharpest thing here to go red the day either kind lands: a
+    It is also the sharpest thing here to go red the day the kind lands: a
     fixture that emits one record stops being an empty view.
     """
 
@@ -128,52 +130,8 @@ class TestTheViewSaysItHoldsNothing:
         )
 
 
-class TestPointIsStillRefused:
-    """POINT, and the record that would end this.
-
-    A marker is a position and nothing else, and every record wire version 2
-    defines is a shape: the honest lowering is record 14 `Point`, which is
-    pinned byte by byte in `docs/adr/0003-wire-3-point-unbounded-placement.md`
-    and is not implemented here. What this file does is make the refusal
-    visible on an input that carries four markers and nothing else.
-    """
-
-    def test_point_is_still_refused_on_its_own_fixture(self):
-        kind, top, expanded = WRITTEN[POINT]
-        refused = entity_warnings(POINT)
-        assert [w["kind"] for w in refused] == [kind] * (top + expanded), (
-            f"{POINT} holds {[w['kind'] for w in refused]} and the writer puts "
-            f"{top + expanded} {kind}s in it"
-        )
-        assert {w["code"] for w in refused} == {"UNSUPPORTED_ENTITY"}, (
-            "POINT is refused on code 100 because it is unfinished work rather than a "
-            "decision, which is the distinction docs/adr/0002 drew when it added 109"
-        )
-
-    def test_both_halves_of_the_fixture_are_refused(self):
-        kind, top, expanded = WRITTEN[POINT]
-        refused = entity_warnings(POINT)
-        counts = (
-            sum(1 for w in refused if w["flags"] == 0),
-            sum(1 for w in refused if w["flags"] == 1),
-        )
-        assert counts == (top, expanded), (
-            f"{POINT} carries {top} top-level {kind}s and {expanded} reached by "
-            f"expanding its two insertions, and the dump splits {counts[0]} and "
-            f"{counts[1]}"
-        )
-
-    def test_nothing_in_the_fixture_became_geometry(self):
-        assert set(kinds(POINT)) == {"Warning"}, (
-            f"{POINT} now emits {sorted(set(kinds(POINT)))}, so POINT has stopped "
-            "being refused. If that is deliberate, this module is where the evidence "
-            "of the old behaviour lives and it is the right place to say what "
-            "replaced it"
-        )
-
-
 class TestToleranceIsStillRefused:
-    """TOLERANCE, refused for a different reason from POINT's.
+    """TOLERANCE, refused because its geometry is computed, not read.
 
     Its geometry is a feature-control frame whose boxes are computed from a
     formatted string and a dimension style's text height, not read out of the
@@ -212,12 +170,12 @@ class TestToleranceIsStillRefused:
 
 
 class TestTheCarriedListIsEmpty:
-    """The allow-list these two were the last names on.
+    """The allow-list POINT and TOLERANCE were the last names on.
 
     `CARRIED_NOT_RECORDED` is an excuse, and an excuse that never shrinks is a
     list of things nobody checks. It was five names when the campaign started
     and the other three came off in the branches that recorded them, which is
-    the discipline it was written for. These two are the last of it.
+    the discipline it was written for. POINT and TOLERANCE were the last of it.
 
     It stays in the tree as an empty tuple rather than going away, because the
     guard that reads it is the one that catches the next DWG landing without a

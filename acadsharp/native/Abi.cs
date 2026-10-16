@@ -100,7 +100,7 @@ namespace Viprs.Abi
 	internal static class AbiConstants
 	{
 		public const uint AbiVersion = 2u;
-		public const uint WireVersion = 2u;
+		public const uint WireVersion = 3u;
 		public const uint StructVersion = 1u;
 
 		// The inclusive AC10xx range the backing reader handles. The ceiling

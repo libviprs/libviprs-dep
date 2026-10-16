@@ -654,14 +654,14 @@ class TestThePreflightHoldsTheRowAsWellAsTheTree:
         )
 
     def test_a_version_from_the_file_with_no_row_is_refused(self):
-        version = "3.7.1-viprs.3"
+        version = "3.7.1-viprs.9"
         assert version not in ba.SHIM_DIGESTS
         result = self._preflight(version, requested="")
         assert result.returncode != 0, result.stdout + result.stderr
         assert "SHIM_DIGESTS" in result.stdout + result.stderr
 
     def test_the_same_version_named_by_a_dispatch_is_an_override_and_passes(self):
-        version = "3.7.1-viprs.3"
+        version = "3.7.1-viprs.9"
         result = self._preflight(version, requested=version)
         assert result.returncode == 0, result.stdout + result.stderr
 

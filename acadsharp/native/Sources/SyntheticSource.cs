@@ -36,7 +36,7 @@ namespace Viprs.Sources
 		public const int MagicLength = 8;
 
 		private const uint DefaultViews = 2;
-		private const uint DefaultItemsPerView = 9;
+		private const uint DefaultItemsPerView = 12;
 		private const uint MaxViews = 64;
 		private const uint MaxItemsPerView = 4096;
 
@@ -134,6 +134,13 @@ namespace Viprs.Sources
 		public const uint ProbeWarningCode = 1100u;
 		public const uint ProbeSplineDegree = 3u;
 
+		// Wire version 3. Both kinds are the nonzero one, so a consumer that
+		// reads the field as always zero is told so, and the placement's name
+		// carries a character outside ASCII for the reason ProbeText does.
+		public const uint ProbeUnboundedKind = 1u;
+		public const uint ProbePlacementKind = 1u;
+		public const string ProbePlacementName = "VIPRS-NAME-PROBE-\u00C4";
+
 		public static double Probe(ushort type, int k)
 		{
 			return (100.0 * type) + k + ProbeFraction;
@@ -162,8 +169,8 @@ namespace Viprs.Sources
 			return values;
 		}
 
-		// One of every record type in the first nine, so a consumer that
-		// stops after nine primitives has still seen all of them, then
+		// One of every record type in the first twelve, so a consumer that
+		// stops after twelve primitives has still seen all of them, then
 		// repeats. The variable-length records change length as they repeat,
 		// which is what exercises the padding and the length invariants at
 		// every residue rather than only at the convenient one.
@@ -175,7 +182,7 @@ namespace Viprs.Sources
 		{
 			for (uint i = 0; i < _itemsPerView; i++)
 			{
-				switch (i % 9)
+				switch (i % 12)
 				{
 					case 0:
 					{
@@ -342,12 +349,71 @@ namespace Viprs.Sources
 						break;
 					}
 
-					default:
+					case 8:
 					{
 						yield return Primitive.Warning(
 							ProbeWarningCode,
 							ProbeHandle(WireFormat.TypeWarning),
 							ProbeWarning
+						);
+						break;
+					}
+
+					case 9:
+					{
+						double[] v = Probes(WireFormat.TypePoint, 7);
+						yield return Primitive.PointAt(
+							ProbeHandle(WireFormat.TypePoint),
+							0u,
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5],
+							v[6]
+						);
+						break;
+					}
+
+					case 10:
+					{
+						double[] v = Probes(WireFormat.TypeUnbounded, 6);
+						yield return Primitive.Unbounded(
+							ProbeHandle(WireFormat.TypeUnbounded),
+							0u,
+							ProbeUnboundedKind,
+							v[0],
+							v[1],
+							v[2],
+							v[3],
+							v[4],
+							v[5]
+						);
+						break;
+					}
+
+					default:
+					{
+						// The eleven fixed doubles, then the clip pairs, numbered
+						// as one run. The clip length changes as the record
+						// repeats, and so does the name's, so the record is a
+						// different length and a different padding residue each
+						// time, which is what a variable-length record has to be
+						// shown to survive.
+						int clip = 2 + (int)(i % 3);
+						double[] all = Probes(WireFormat.TypePlacement, 11 + (clip * 2));
+						yield return Primitive.Placement(
+							ProbeHandle(WireFormat.TypePlacement),
+							0u,
+							ProbePlacementKind,
+							Slice(all, 0, 3),
+							Slice(all, 3, 3),
+							Slice(all, 6, 3),
+							all[9],
+							all[10],
+							Slice(all, 11, clip * 2),
+							ProbePlacementName + new string('z', (int)(i % 4))
 						);
 						break;
 					}

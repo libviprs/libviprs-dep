@@ -50,7 +50,7 @@ RUST_SOURCES = (
     "run.sh",
 )
 
-# Each language spells the same thirteen names its own way. Underscores are
+# Each language spells the same sixteen names its own way. Underscores are
 # stripped before comparing, so the C and generated consumers can use
 # VACB_TYPE_DOCUMENT_BEGIN and TYPE_DOCUMENT_BEGIN without either of them
 # having to carry the shim's casing.
@@ -315,7 +315,7 @@ class TestTheConstantsAgreeThreeWays:
             extra = sorted(set(table) - frozen)
             assert not extra, (
                 f"the {label} knows record types {extra} the other two do not. wire_version "
-                "1 is frozen, so a fourteenth type is a version bump."
+                "3 is frozen, so a seventeenth type is a version bump."
             )
 
     def test_all_three_agree_on_the_batch_framing(self):

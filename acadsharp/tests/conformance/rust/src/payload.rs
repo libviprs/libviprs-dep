@@ -29,6 +29,7 @@ const PROBE_TEXT: &[u8] = b"VIPRS-TEXT-PROBE-";
 const PROBE_WARNING: &[u8] = b"VIPRS-WARNING-PROBE";
 const PROBE_WARNING_CODE: u32 = 1100;
 const PROBE_SPLINE_DEGREE: u32 = 3;
+const PROBE_NAME: &[u8] = b"VIPRS-NAME-PROBE-";
 
 fn probe(kind: u16, k: usize) -> f64 {
     (100.0 * kind as f64) + k as f64 + 0.25
@@ -110,6 +111,21 @@ impl Verifier {
     fn probes(&mut self, p: &[u8], off: usize, kind: u16, count: usize, what: &str) {
         for k in 0..count {
             self.f64_at(p, off + (k * 8), probe(kind, k), what);
+        }
+    }
+
+    /// The same, for a run that starts at probe index `first` rather than zero.
+    fn probes_from(
+        &mut self,
+        p: &[u8],
+        off: usize,
+        kind: u16,
+        first: usize,
+        count: usize,
+        what: &str,
+    ) {
+        for k in 0..count {
+            self.f64_at(p, off + (k * 8), probe(kind, first + k), what);
         }
     }
 
@@ -234,6 +250,34 @@ impl Verifier {
                 self.u32_at(p, 60, 0, "Text reserved1");
                 self.bytes_at(p, 64, PROBE_TEXT, "Text bytes");
                 self.len_is(r, 8 + 64 + bytes + pad4(bytes), "Text length");
+            }
+            // Wire version 3. Point and Unbounded are fixed at 80 bytes;
+            // Placement is 128 + 16 * clip_count + the name padded to four,
+            // and its clip pairs are read as their own run of probes after the
+            // fixed fields so a producer that wrote them before the counts is
+            // told.
+            wire::TYPE_POINT => {
+                self.prologue(r);
+                self.probes(p, 16, wire::TYPE_POINT, 7, "Point");
+                self.len_is(r, 80, "Point length");
+            }
+            wire::TYPE_UNBOUNDED => {
+                self.prologue(r);
+                self.probes(p, 16, wire::TYPE_UNBOUNDED, 6, "Unbounded");
+                self.u32_at(p, 64, 1, "Unbounded kind");
+                self.u32_at(p, 68, 0, "Unbounded reserved1");
+                self.len_is(r, 80, "Unbounded length");
+            }
+            wire::TYPE_PLACEMENT => {
+                self.prologue(r);
+                self.probes(p, 16, wire::TYPE_PLACEMENT, 11, "Placement frame");
+                self.u32_at(p, 104, 1, "Placement kind");
+                let clip = self.count(p, 108, "Placement clip_count") as usize;
+                let bytes = self.count(p, 112, "Placement name_len") as usize;
+                self.u32_at(p, 116, 0, "Placement reserved1");
+                self.probes_from(p, 120, wire::TYPE_PLACEMENT, 11, 2 * clip, "Placement clip");
+                self.bytes_at(p, 120 + (16 * clip), PROBE_NAME, "Placement name");
+                self.len_is(r, 8 + 120 + (16 * clip) + bytes + pad4(bytes), "Placement length");
             }
             wire::TYPE_WARNING => {
                 self.u32_at(p, 0, PROBE_WARNING_CODE, "Warning code");

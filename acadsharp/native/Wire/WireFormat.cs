@@ -12,7 +12,7 @@ namespace Viprs.Wire
 		// so nothing here depends on the host's endianness.
 		public static readonly byte[] Magic = new byte[] { 0x56, 0x41, 0x43, 0x42 };
 
-		public const ushort Version = 2;
+		public const ushort Version = 3;
 
 		// magic(4) + wire_version(2) + flags(2) + payload_length(4)
 		public const int BatchHeaderBytes = 12;
@@ -59,6 +59,14 @@ namespace Viprs.Wire
 		public const ushort TypeViewEnd = 12;
 		public const ushort TypeDocumentEnd = 13;
 
+		// Wire version 3's three geometry records. They are numbered past the
+		// framing on purpose and the numbering is frozen like the rest: 14, 15
+		// and 16 mean what docs/adr/0003 and docs/WIRE.md say they mean for as
+		// long as the format exists.
+		public const ushort TypePoint = 14;
+		public const ushort TypeUnbounded = 15;
+		public const ushort TypePlacement = 16;
+
 		internal const ushort ForwardProbe = (ushort)ForwardProbeFirst;
 
 		// The geometry records, which are the ones docs/WIRE.md's finiteness
@@ -95,6 +103,9 @@ namespace Viprs.Wire
 				case TypeSpline:
 				case TypePolygon:
 				case TypeText:
+				case TypePoint:
+				case TypeUnbounded:
+				case TypePlacement:
 					return true;
 				default:
 					return false;

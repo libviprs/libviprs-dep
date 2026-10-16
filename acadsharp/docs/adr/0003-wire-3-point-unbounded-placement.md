@@ -1,9 +1,14 @@
 # ADR 0003: wire 3, and the three records that earn it
 
-**PROPOSED, not decided.** Nothing below is implemented, no constant has moved
-and no fixture has changed. This is the byte layout a wire 3 would carry, written
-down so the campaign that cuts it starts from bytes rather than from prose. The
-decision to cut it, and when, is the epic this document was filed with.
+**ACCEPTED, and implemented in wire version 3 (libviprs-dep#104, phase 1).**
+This was the byte layout a wire 3 would carry, written down so the campaign that
+cuts it starts from bytes rather than from prose. Phase 1 has now cut it in this
+repository, and "Amendments made while implementing it" at the end of this
+document records the three places the implementation departs from what is
+written above, with the reason for each. Where the two differ, the amendment and
+`docs/WIRE.md` win. The text above is left as it was proposed, because a
+decision record that is edited to agree with what happened stops being a record
+of what was decided.
 
 Date: 2026-09-13. Issues: libviprs/libviprs-dep#83, #85, #89, #103.
 
@@ -284,3 +289,42 @@ read is a field nobody knows the value of in the wild.
 Nothing here is a promise about wire 4. The record numbering stays frozen, so 17
 is the next one and 14, 15 and 16 mean what this document says they mean for as
 long as the format exists.
+
+## Amendments made while implementing it
+
+Three departures from the layouts above. None changes a field's offset or a
+record's number, and each was found by writing the arm and checking it against
+the format's own documentation rather than against this document.
+
+**1. A POINT's position is not lifted.** This document says `x, y, z` is "lifted
+out of the entity's own plane by the arbitrary-axis algorithm the way every
+other planar entity's coordinates already are". That is wrong for this entity.
+DXF group 10 on a POINT is documented as WCS, ACadSharp's own comment on the
+field says "Point location(in WCS)", and the extrusion on a POINT orients the
+marker and its thickness without placing it. Lifting the position would move a
+point with a non-Z extrusion a long way and still emit a plausible one, which
+is why the fixture's fourth point carries a skewed extrusion and a Z. The
+record still carries the normal and the marker's rotation, and both come off
+the same measured basis an ARC's do, so they follow a rotated, tilted or
+mirrored insertion. `Flatten.Leaders.cs` already records the same reasoning for
+LEADER.
+
+**2. A PDFUNDERLAY has no size and its clip is in underlay units.** The
+Placement section says the clip is in fractions of the frame, and for an IMAGE
+it is. A PDFUNDERLAY does not say how big its page is, so `size_u` and `size_v`
+are zero for kind 1, which a consumer reads as unknown, `u` and `v` are one
+underlay unit long times the entity's scale, and the clip stays in the units
+the drawing stores. The single formula `insert + u·x + v·y` holds for both kinds
+because the axes are per unit for one and per picture for the other. What this
+does not have is a second implementation's agreement: no drawing in the corpus
+carries a clipped underlay, so the stored clip's unit is read from the field's
+documentation and not from AutoCAD. `docs/WIRE.md` says so.
+
+**3. Warning 100 for a degenerate input, 107 for a number that is not one.** A
+RAY or XLINE whose direction is the zero vector has no line to carry and is a
+code 100 `Warning` naming the kind, and an IMAGE whose pixel size is not
+positive has a frame with no area and is the same. A NaN or an infinity in any
+of the three records is warning 107 and no record, which is what J1.1 (#134)
+made reachable for records past 13 and `g13_nonfinite_records.dwg` holds.
+
+SHAPE is still not here, for the reason the Placement section gives.

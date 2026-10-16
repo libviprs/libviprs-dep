@@ -336,6 +336,103 @@ namespace Viprs.Wire
 			};
 		}
 
+		// Wire version 3's Point: where a POINT is, the plane it was drawn in,
+		// and the angle of the marker's x axis in that plane. PDMODE and PDSIZE
+		// are header variables that pick a glyph, which is a decision for
+		// whoever draws it, and they are not here.
+		public static Primitive PointAt(
+			ulong handle,
+			uint flags,
+			double x,
+			double y,
+			double z,
+			double nx,
+			double ny,
+			double nz,
+			double rotation
+		)
+		{
+			return new Primitive
+			{
+				Type = WireFormat.TypePoint,
+				ItemHandle = handle,
+				Flags = flags,
+				Values = new double[] { x, y, z, nx, ny, nz, rotation },
+			};
+		}
+
+		// Wire version 3's Unbounded: a line that does not end. `kind` is 0 for
+		// a RAY, which runs one way from the base point, and 1 for an XLINE,
+		// which runs both. The direction is a unit vector by the time it gets
+		// here and the caller has already refused the zero vector, because
+		// there is no direction to normalise.
+		public static Primitive Unbounded(
+			ulong handle,
+			uint flags,
+			uint kind,
+			double bx,
+			double by,
+			double bz,
+			double dx,
+			double dy,
+			double dz
+		)
+		{
+			return new Primitive
+			{
+				Type = WireFormat.TypeUnbounded,
+				ItemHandle = handle,
+				Flags = flags,
+				Counts = new uint[] { kind },
+				Values = new double[] { bx, by, bz, dx, dy, dz },
+			};
+		}
+
+		// Wire version 3's Placement: the frame an IMAGE or a PDFUNDERLAY
+		// occupies, its clip in the frame's own coordinates, and the name of
+		// what it refers to, which nothing on this boundary opens.
+		//
+		// `clip` is a flat run of x, y pairs, empty when the frame is not
+		// clipped. The record's clip_count is derived from it so the two
+		// cannot disagree.
+		public static Primitive Placement(
+			ulong handle,
+			uint flags,
+			uint kind,
+			double[] insert,
+			double[] u,
+			double[] v,
+			double sizeU,
+			double sizeV,
+			double[] clip,
+			string name
+		)
+		{
+			clip = clip ?? Array.Empty<double>();
+			if (clip.Length % 2 != 0)
+			{
+				throw new ArgumentException("a clip boundary is a flat run of x, y pairs");
+			}
+
+			double[] values = new double[11 + clip.Length];
+			Array.Copy(insert, 0, values, 0, 3);
+			Array.Copy(u, 0, values, 3, 3);
+			Array.Copy(v, 0, values, 6, 3);
+			values[9] = sizeU;
+			values[10] = sizeV;
+			Array.Copy(clip, 0, values, 11, clip.Length);
+
+			return new Primitive
+			{
+				Type = WireFormat.TypePlacement,
+				ItemHandle = handle,
+				Flags = flags,
+				Counts = new uint[] { kind, (uint)(clip.Length / 2) },
+				Values = values,
+				Text = name ?? string.Empty,
+			};
+		}
+
 		public static Primitive Warning(uint code, ulong handle, string message)
 		{
 			return new Primitive

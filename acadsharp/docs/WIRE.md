@@ -1,4 +1,4 @@
-# The VACB batch protocol, wire version 2
+# The VACB batch protocol, wire version 3
 
 `viprs_acad_decode_next_batch` writes one batch per call into a buffer the
 caller owns. This document is the complete definition of what is in that
@@ -12,7 +12,9 @@ self-describing beyond what is written here, and nothing is compressed.
 ## Record types, frozen
 
 The numbering is part of the contract. A consumer switches on the number,
-never on a name, and these numbers have not moved since wire version 1.
+never on a name, and these numbers have not moved since wire version 1. Records
+14 to 16 arrived with wire version 3 and are numbered past the framing records
+on purpose.
 
 | Number | Name | Carries |
 | --- | --- | --- |
@@ -29,9 +31,12 @@ never on a name, and these numbers have not moved since wire version 1.
 | 11 | `Warning` | A numeric code, a UTF-8 message with a length, and an optional item handle. |
 | 12 | `ViewEnd` | The view index it closes, and how many records it contained. |
 | 13 | `DocumentEnd` | Totals for the whole stream. |
+| 14 | `Point` | A position, the plane it was drawn in, and the angle of the marker's x axis in that plane. |
+| 15 | `Unbounded` | A base point and a direction, for a line that does not end: a ray or an infinite line. |
+| 16 | `Placement` | The frame an image or a PDF underlay occupies, its clip, and the name of what it refers to. |
 
 Numbers from 32512 (`0x7F00`) upward are the forward-probe range. They carry
-no meaning in wire version 2 and a consumer must skip them by their length.
+no meaning in wire version 3 and a consumer must skip them by their length.
 The library emits one on purpose, so that the skip path is exercised by a
 real stream rather than only by a buffer a test assembled by hand.
 
@@ -42,7 +47,7 @@ Twelve bytes, then the records.
 | Offset | Size | Field | Value |
 | --- | --- | --- | --- |
 | 0 | 4 | magic | The ASCII bytes `VACB`, `0x56 0x41 0x43 0x42` |
-| 4 | 2 | `wire_version` | 2 |
+| 4 | 2 | `wire_version` | 3 |
 | 6 | 2 | `flags` | Bit 0 set on the last batch of a stream, every other bit zero |
 | 8 | 4 | `payload_length` | Bytes of records that follow, not counting these twelve |
 
@@ -143,6 +148,15 @@ opens with the same sixteen-byte prologue:
 | 0 | 8 | `item_handle`, the backing file's handle for what produced this record, or 0 |
 | 8 | 4 | `flags`, bit 0 set when the record came from expanding a nested insertion |
 | 12 | 4 | `reserved0` |
+
+Bit 1 of `flags` is defined by wire version 3 and means this record masks: it
+hides whatever the stream drew before it inside its own boundary rather than
+adding to it. A producer that sets it also keeps emitting warning 112 beside
+the record, which is the only channel wire version 2 has, and a consumer reads
+whichever of the two it understands. Every other bit stays zero and
+`reserved0` stays reserved and is written zero. No producer sets bit 1 yet, so
+today it is a reservation, made here so that the one prologue bit a later lane
+wants is not decided by that lane on the day it is needed.
 
 **1 `DocumentBegin`**: `uint32 view_count`, `uint32 drawing_version` (the
 numeric AC10xx code, 0 when it is not known), `uint64 reserved0`. 24 bytes.
@@ -370,6 +384,75 @@ record_count`, the number of records emitted for the view, its own
 bytes. `total_records` counts every record in the stream, `DocumentBegin` and
 this record included, so it is `ViewEnd`'s `record_count` plus two.
 
+**14 `Point`**: prologue, then `f64 x, y, z`, `f64 nx, ny, nz`, `f64
+rotation`. 80 bytes.
+
+`x, y, z` is where the point is, in world coordinates. It is not lifted out of
+a plane: a POINT's position is stored in world coordinates already, and its
+extrusion exists to orient the marker, not to place it. `nx, ny, nz` is the
+plane the marker was drawn in, a unit vector, because a glyph drawn in that
+plane needs to know which. `rotation` is the angle of the marker's x axis in
+that plane, in radians, counter-clockwise about the normal, measured from the
+normal's arbitrary axis (the axis every other record's angles are measured
+from). PDMODE and PDSIZE are not here and will not be: they are header
+variables that say which glyph AutoCAD draws and how big, which is a decision
+for whoever is drawing. A consumer that wants a dot draws a dot.
+
+**15 `Unbounded`**: prologue, then `f64 bx, by, bz`, `f64 dx, dy, dz`,
+`uint32 kind`, `uint32 reserved1`. 80 bytes.
+
+`bx, by, bz` is the base point and `dx, dy, dz` the direction, a unit vector
+and never the zero vector: a drawing whose direction is zero produces a
+`Warning` instead. `kind` is 0 for a line that runs one way from the base
+point, which is a RAY, and 1 for one that runs both ways, which is an XLINE.
+`reserved1` is zero. How far it is drawn is the consumer's: a producer that
+clipped it to the drawing's stated extents would be trusting a number a
+drawing can get wrong, and the consumer is the one that knows its viewport.
+
+**16 `Placement`**: prologue, then `f64 ix, iy, iz`, `f64 ux, uy, uz`, `f64
+vx, vy, vz`, `f64 size_u, size_v`, `uint32 kind`, `uint32 clip_count`, `uint32
+name_len`, `uint32 reserved1`, then `clip_count` pairs of `f64 x, y`, then
+`name_len` bytes of UTF-8 padded with zeroes to a multiple of four. The length
+is `128 + 16·clip_count + 4·ceil(name_len / 4)`.
+
+`ix, iy, iz` is the insertion point in world coordinates, and `u` and `v` are
+the frame's two axes as world vectors, carrying its size, its rotation and its
+skew together, so a consumer draws the frame as the parallelogram from the
+insertion point along `u` and along `v` and never reconstructs an angle. `kind`
+is 0 for an IMAGE and 1 for a PDFUNDERLAY. `reserved1` is zero.
+
+The clip is in the frame's own coordinates, and the world point for a vertex is
+`insert + u·x + v·y`. That is the whole of what a consumer does with it. The
+boundary closes implicitly and the first vertex is not repeated, the same
+convention record 9 uses, and `clip_count` is 0 when the frame is not clipped.
+Two coordinates a vertex rather than three is deliberate: a clip that did not
+lie in the frame's plane would not be a clip of anything.
+
+For an IMAGE, `u` and `v` span the whole picture, `size_u` and `size_v` are its
+size in pixels, and the clip is in fractions of the picture, from 0 to 1. The
+producer has already left pixel space, where rows run the opposite way from `v`
+and the origin sits half a pixel outside the first pixel, so nobody downstream
+has to know that. A pixel vertex `(px, py)` becomes `x = (px + 0.5) / size_u`,
+`y = (size_v − py − 0.5) / size_v`.
+
+For a PDFUNDERLAY, the drawing does not say how big the page is, so `size_u`
+and `size_v` are zero, which means unknown, and `u` and `v` are one underlay
+unit long times the entity's scale and turned by its rotation. The clip is in
+underlay units, not fractions, and the same formula holds because `u` and `v`
+are per unit here. That unit is read from the stored field's documentation: no
+drawing in the corpus carries a clipped underlay, so the clip of a
+PDFUNDERLAY has not been compared against a second implementation. A
+rectangular clip stores two opposite corners and means four, for both kinds.
+
+`name_len` bytes of UTF-8 are the referenced name exactly as the drawing spells
+it (the file name of the image, or of the PDF), and the rule that comes with it
+is the whole reason this record can exist: **the name is an opaque string and
+nothing on this boundary opens it.** Not to stat it, not to read a header out
+of it, not to find out whether it is there. A consumer with a policy of its own
+goes and fetches the file; a renderer draws the frame and the label. The page
+of a PDF is not carried. Like record 10's bytes it is never shortened, and a
+name past `max_string_bytes` is refused.
+
 ### Ceilings the counts cannot exceed
 
 Every count above is a `uint32` and a record's `length` is a `uint32` in the
@@ -384,8 +467,10 @@ ceiling from that, and none of them reaches the top of its own field:
 | `name_len` in record 2 | 2,147,483,580 | 2^31 - 1 less the record's fixed 64 bytes |
 | `byte_len` in record 10 | 2,147,483,572 | less its fixed 72 bytes |
 | `message_len` in record 11 | 2,147,483,612 | less its fixed 32 bytes |
+| `name_len` in record 16, no clip | 2,147,483,516 | less its fixed 128 bytes, rounded down to where the padding fits |
+| `clip_count` in record 16, empty name | 134,217,719 | `128 + 16n` at most 2^31 - 1 |
 
-The three string ceilings are not simply 2^31 - 1 less the prefix: the padding
+The string ceilings are not simply 2^31 - 1 less the prefix: the padding
 to a multiple of four comes out of the same budget as the bytes, so each is
 that subtraction rounded down to where the padded record still fits. Record 8
 has no single ceiling because its three arrays share one, and
@@ -400,11 +485,13 @@ rather than emitted with a length that has wrapped.
 ## Every number in a geometry record is finite
 
 A producer never emits a geometry record carrying an `f64` that is `NaN` or
-infinite. The geometry records are `Line`, `Polyline`, `Arc`, `Circle`,
-`Ellipse`, `Spline`, `Polygon` and `Text`, and a record type a later wire
-version adds is one of them only if its own section says so. Not in a coordinate, not in a radius, not in an angle, not
-in a normal and not in a bulge. A drawing that holds one produces a `Warning`
+infinite. Not in a coordinate, not in a radius, not in an angle, not in a
+normal and not in a bulge. A drawing that holds one produces a `Warning`
 record naming the handle instead, and the rest of the drawing still crosses.
+
+The geometry records are `Line`, `Polyline`, `Arc`, `Circle`, `Ellipse`,
+`Spline`, `Polygon`, `Text`, `Point`, `Unbounded` and `Placement`, and a record
+type a later wire version adds is one of them only if its own section says so.
 
 The guarantee is scoped to geometry on purpose. `ViewBegin`'s extents are a
 bounding box the producer reports rather than a shape anybody draws, and a
@@ -646,6 +733,8 @@ than the insertion point on its own.
 | `reserved` in a record header is not zero | `VIPRS_ACAD_CORRUPT_INPUT` |
 | A `Polyline` or `Polygon` whose `bulge_count` is neither 0 nor `point_count` | `VIPRS_ACAD_CORRUPT_INPUT` |
 | A `Polyline` or `Polygon` whose `length` is not `64 + 24n + 8bc` | `VIPRS_ACAD_CORRUPT_INPUT` |
+| A `Point` or an `Unbounded` whose `length` is not 80 | `VIPRS_ACAD_CORRUPT_INPUT` |
+| A `Placement` whose `length` is not `128 + 16·clip_count + 4·ceil(name_len / 4)` | `VIPRS_ACAD_CORRUPT_INPUT` |
 | An `f64` in a geometry record (the set the finiteness section names) that is `NaN` or infinite | `VIPRS_ACAD_CORRUPT_INPUT` |
 
 Refusing on an unknown `wire_version` rather than trying is the important
@@ -657,7 +746,7 @@ the second is about the drawing, and means look at `dwg_version_min` and
 is the two ends of this boundary disagreeing, and the remedy is to rebuild
 one of them.
 
-The last three rows are the payload rules, and they belong beside a record's
+The last four rows are the payload rules, and they belong beside a record's
 layout rather than inside the framing loop. A parser walks record headers
 knowing nothing about what a payload means, which is what lets it skip an
 unknown type at all; a layout rule smuggled into that loop makes the parser

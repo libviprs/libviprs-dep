@@ -16,7 +16,7 @@ use crate::abi::{
 };
 
 pub const MAGIC: [u8; 4] = [0x56, 0x41, 0x43, 0x42];
-pub const WIRE_VERSION: u16 = 2;
+pub const WIRE_VERSION: u16 = 3;
 
 /// magic(4) + wire_version(2) + flags(2) + payload_length(4)
 pub const BATCH_HEADER_BYTES: usize = 12;
@@ -47,6 +47,9 @@ pub const TYPE_TEXT: u16 = 10;
 pub const TYPE_WARNING: u16 = 11;
 pub const TYPE_VIEW_END: u16 = 12;
 pub const TYPE_DOCUMENT_END: u16 = 13;
+pub const TYPE_POINT: u16 = 14;
+pub const TYPE_UNBOUNDED: u16 = 15;
+pub const TYPE_PLACEMENT: u16 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record<'a> {

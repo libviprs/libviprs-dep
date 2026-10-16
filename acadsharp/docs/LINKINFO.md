@@ -101,8 +101,8 @@ absence rather than as a defect while requiring them from that version onward.
 | `target` | string | always | The Rust target triple this archive is for: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl` or `aarch64-apple-darwin`. | Compare against the target being built for and refuse a mismatch. A glibc archive linked into a musl binary is a link that succeeds and a binary that does not load. |
 | `platform` | string | always | `linux`, `musl` or `mac`. The same fact as `target`, in this repo's own vocabulary. | Usually nothing; `target` is the precise one. |
 | `cpu` | string | always | `x64` or `arm64`. | Usually nothing, same reason. |
-| `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `2` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
-| `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `2` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
+| `abi_version` | integer | always | `VIPRS_ACAD_ABI_VERSION` as the shipped header defines it. `3` today. | Compare against the header the bindings were generated from, and against what `viprs_acad_abi_version()` returns at run time. |
+| `wire_version` | integer | always | `VIPRS_ACAD_WIRE_VERSION` as the shipped header defines it. `3` today. | Compare against the wire version the batch parser implements, and refuse a stream that disagrees. |
 | `dwg_version_min` | integer | always | The lowest DWG format this build reads, as the four digits behind the `AC` in a drawing's first six bytes. Measured: the build asks the library it is about to pack, through `viprs_acad_get_capabilities_v1`, and records the answer. The header never states it, because the range is a fact about the backing reader rather than part of the ABI, and it can move without `abi_version` moving. | Refuse a drawing whose signature is below it, or report the range. Read it from the archive rather than pinning the number: a consumer that hardcodes it refuses a format the next archive reads. |
 | `dwg_version_max` | integer | always | The highest, in the same form and measured the same way. Never below `dwg_version_min`. | The same, at the other end. |
 | `abi_header_sha256` | string | always | 64 lowercase hex characters: the sha256 of `include/viprs_acadsharp.h` as shipped in this same archive. | Verify the shipped header is the one this manifest describes, before generating bindings from it. |
@@ -516,7 +516,7 @@ a consumer checks. A certified Linux x86-64 target:
   "platform": "linux",
   "cpu": "x64",
   "abi_version": 2,
-  "wire_version": 2,
+  "wire_version": 3,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.so",
@@ -547,7 +547,7 @@ And an uncertified one, which is the same file with five differences and no
   "platform": "mac",
   "cpu": "arm64",
   "abi_version": 2,
-  "wire_version": 2,
+  "wire_version": 3,
   "abi_header_sha256": "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
   "abi_fingerprint": "aabbccddeeff0011",
   "shared_library": "lib/libacadsharp_native.dylib",

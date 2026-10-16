@@ -115,6 +115,23 @@ def unbounded_record(insertion, base, direction):
 # ---------------------------------------------------------------- the dump
 
 
+def entity_counts(fixture):
+    """Record kinds in a dump, less the reader's own notifications.
+
+    Every fixture opens with the same few READER_NOTIFICATION warnings about the
+    document, with item_handle 0. They say nothing about the entities, and a
+    count of what the fixture holds would be wrong by that many without this.
+    """
+    from g13_support import records
+
+    out = {}
+    for r in records(fixture):
+        if r["kind"] == "Warning" and "code=READER_NOTIFICATION" in r["rest"]:
+            continue
+        out[r["kind"]] = out.get(r["kind"], 0) + 1
+    return out
+
+
 def numbers(text):
     return [float(x) for x in re.findall(r"-?\d+\.\d+", text)]
 
@@ -151,6 +168,11 @@ def close(a, b, places=5):
     return abs(a - b) <= tol
 
 
-def dump_angle(a):
-    """An angle as the dump would print it, so pi and -pi compare equal."""
-    return math.atan2(math.sin(a), math.cos(a))
+def angles_close(a, b, places=5):
+    """Two angles that name the same direction, so pi and -pi compare equal.
+
+    A mirrored marker lands exactly on the branch cut, and which side of it a
+    last-bit rounding falls on is not a fact about the drawing.
+    """
+    turn = (a - b + math.pi) % (2.0 * math.pi) - math.pi
+    return abs(turn) <= 10.0**-places

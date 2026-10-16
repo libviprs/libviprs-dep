@@ -58,9 +58,10 @@ def points(fixture):
 
 class TestTheFixtureBecameRecords:
     def test_it_holds_eight_points_and_nothing_else(self):
-        assert kinds(POINT) == {"Point": 8}, (
-            f"{POINT} now holds {kinds(POINT)}. Four POINTs at top level and two in a block "
-            "inserted twice are eight records, and a view with geometry in it has no EMPTY_VIEW"
+        assert ref.entity_counts(POINT) == {"Point": 8}, (
+            f"{POINT} now holds {ref.entity_counts(POINT)}. Four POINTs at top level and "
+            "two in a block inserted twice are eight records, and a view with geometry "
+            "in it has no EMPTY_VIEW"
         )
 
     def test_four_are_top_level_and_four_came_from_the_insertions(self):
@@ -113,9 +114,7 @@ class TestTheInsertionsAreFollowed:
             p, n, rot = ref.point_record(insertion, location, normal, 0.0)
             assert ref.close(g["p"], p), f"position {g['p']} against {p}"
             assert ref.close(g["normal"], n), f"normal {g['normal']} against {n}"
-            assert ref.close(ref.dump_angle(g["rot"]), ref.dump_angle(rot)), (
-                f"rotation {g['rot']} against {rot}"
-            )
+            assert ref.angles_close(g["rot"], rot), f"rotation {g['rot']} against {rot}"
 
     def test_a_mirror_turns_the_marker_half_way_round(self):
         # Hand-checked rather than computed: x -> -2x sends the marker's x axis
@@ -123,14 +122,14 @@ class TestTheInsertionsAreFollowed:
         got = points(POINT)[6]
         assert ref.close(got["p"], (78.0, 4.0, 0.0)), got
         assert ref.close(got["normal"], Z), got
-        assert ref.close(got["rot"], math.pi), got
+        assert ref.angles_close(got["rot"], math.pi), got
 
 
 class TestAValueThatIsNotANumberIsAWarning:
     def counts(self):
         names = {}
         for r in records(NONFINITE):
-            if r["kind"] != "Warning":
+            if r["kind"] != "Warning" or "code=READER_NOTIFICATION" in r["rest"]:
                 continue
             m = re.search(r' code=(\S+) message="(\w+) ', r["rest"])
             assert m, r

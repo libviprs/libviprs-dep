@@ -41,9 +41,9 @@ def unbounded(fixture):
 
 class TestTheFixtureBecameRecords:
     def test_a_line_and_six_unbounded_records_and_no_refusal(self):
-        assert kinds(FIXTURE) == {"Line": 1, "Unbounded": 6}, (
-            f"{FIXTURE} holds {kinds(FIXTURE)}: a control LINE, a RAY and an XLINE at top "
-            "level, and the same pair in a block inserted twice"
+        assert ref.entity_counts(FIXTURE) == {"Line": 1, "Unbounded": 6}, (
+            f"{FIXTURE} holds {ref.entity_counts(FIXTURE)}: a control LINE, a RAY and an "
+            "XLINE at top level, and the same pair in a block inserted twice"
         )
 
     def test_the_kinds_are_told_apart(self):

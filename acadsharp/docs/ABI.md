@@ -88,7 +88,8 @@ can gain a field without a single declaration here changing, so a consumer
 that only calls the entry points carries on unaffected while a consumer that
 parses the stream must be rebuilt. Wire version 2 is exactly that, giving
 `Polyline` and `Polygon` a normal and a per-vertex bulge while
-`VIPRS_ACAD_ABI_VERSION` stayed 1. A bump in the other direction, with the
+`VIPRS_ACAD_ABI_VERSION` stayed 1. Wire version 3 did the same again,
+adding the `Point`, `Unbounded` and `Placement` records. A bump in the other direction, with the
 wire standing still, is just as possible, which is why a consumer reads both
 rather than inferring either from the other.
 
@@ -562,6 +563,12 @@ The rest, in the same spirit:
   changes length, so the padding and the length invariants are exercised at
   every residue rather than only at the one that happens to be zero. The
   `Text` probe is 19 bytes before the repeat adds up to three more.
+- Wire version 3's `Unbounded` and `Placement` carry a `kind` of 1, so a
+  consumer that reads the field as always zero is told, and `Placement`
+  changes its clip length and its name length as it repeats. Its name probe
+  is `VIPRS-NAME-PROBE-` with a non-ASCII character in it, followed by up to
+  three more bytes, and its clip pairs are numbered as one run after the
+  eleven frame doubles so they are told apart from them by where they start.
 - A view's extents are four different numbers, none of them round and none
   symmetric with another.
 

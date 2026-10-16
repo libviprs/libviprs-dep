@@ -2,12 +2,11 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Warning handle=49 flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00005 Warning handle=4A flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00006 Warning handle=4B flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00007 Warning handle=4C flags=0 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00008 Warning handle=50 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00009 Warning handle=51 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00010 Warning handle=50 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00011 Warning handle=51 flags=1 code=UNSUPPORTED_ENTITY message="POINT is not a primitive this version flattens"
-00012 Warning handle=0 flags=0 code=EMPTY_VIEW message="this view holds no geometry"
+00004 Point handle=49 flags=0 p=[(0.000000,0.000000,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00005 Point handle=4A flags=0 p=[(3.250000,-7.500000,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00006 Point handle=4B flags=0 p=[(-11.750000,4.500000,2.250000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00007 Point handle=4C flags=0 p=[(2.000000,3.000000,5.000000)] normal=[(0.333333,0.666667,0.666667)] rot=0.000000
+00008 Point handle=50 flags=1 p=[(43.000000,3.000000,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=0.000000
+00009 Point handle=51 flags=1 p=[(46.000000,4.500000,5.000000)] normal=[(0.137361,0.549442,0.824163)] rot=0.000000
+00010 Point handle=50 flags=1 p=[(78.000000,4.000000,0.000000)] normal=[(0.000000,0.000000,1.000000)] rot=3.141593
+00011 Point handle=51 flags=1 p=[(76.000000,6.000000,5.000000)] normal=[(-0.218218,0.436436,0.872872)] rot=-3.141593

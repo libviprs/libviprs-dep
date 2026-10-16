@@ -30,6 +30,13 @@
 // beside it saying that the polygon masks. Flatten.Masks.cs is where that
 // lives now.
 //
+// Wire version 3 emptied four more rows. IMAGE and PDFUNDERLAY are no longer
+// refused: their geometry, a frame, a clip and a name, crosses as record 16
+// Placement, and the file they name is still not opened (Flatten.Placements.cs).
+// RAY and XLINE cross as record 15 Unbounded, with the clip left to the
+// consumer (Flatten.Unbounded.cs). What is left in the table is what no record
+// can hold and no policy lets through.
+//
 // So the table says one thing again. A kind is here when the answer will not
 // change by waiting, the code beside it says so, and a kind nobody has got to
 // yet falls through to 100 with no row at all. If a later round wants to defer
@@ -65,37 +72,6 @@ namespace Viprs.Cad
 						"SHAPE draws a glyph out of an external SHX file and carries only the "
 						+ "placement and the name, and this decoder opens no path a drawing "
 						+ "names, so the outline is not in this file and is not fetched";
-					return true;
-
-				case "IMAGE":
-					code = WarningCodes.EntityRefusedByDesign;
-					reason =
-						"IMAGE shows an external raster the drawing only names, and this decoder "
-						+ "opens no path a drawing names, so what it displays is not in this file";
-					return true;
-
-				case "PDFUNDERLAY":
-					code = WarningCodes.EntityRefusedByDesign;
-					reason =
-						"PDFUNDERLAY shows an external PDF the drawing only names, and this "
-						+ "decoder opens no path a drawing names, so what it displays is not in "
-						+ "this file";
-					return true;
-
-				case "RAY":
-					code = WarningCodes.EntityRefusedByDesign;
-					reason =
-						"RAY runs from its base point in one direction forever and every record "
-						+ "wire version 2 defines is bounded, so it is refused rather than "
-						+ "clipped to the drawing's extents and passed off as a line";
-					return true;
-
-				case "XLINE":
-					code = WarningCodes.EntityRefusedByDesign;
-					reason =
-						"XLINE runs both ways from its base point forever and every record wire "
-						+ "version 2 defines is bounded, so it is refused rather than clipped to "
-						+ "the drawing's extents and passed off as a line";
 					return true;
 
 				default:

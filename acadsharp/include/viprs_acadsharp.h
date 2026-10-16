@@ -96,8 +96,12 @@ extern "C" {
  * Moves on its own, without VIPRS_ACAD_ABI_VERSION: nothing in this header
  * changes when a record's payload does, so a consumer that only calls the
  * entry points is unaffected and a consumer that parses the stream is not.
- * Version 2 gives Polyline and Polygon a normal and a per-vertex bulge. */
-#define VIPRS_ACAD_WIRE_VERSION 2u
+ * Version 2 gives Polyline and Polygon a normal and a per-vertex bulge.
+ * Version 3 adds three geometry records, 14 Point, 15 Unbounded and 16
+ * Placement, and defines bit 1 of the geometry prologue's flags as "this
+ * record masks". A consumer that parses version 2 refuses version 3 at the
+ * first batch header, which is the point of the number. */
+#define VIPRS_ACAD_WIRE_VERSION 3u
 
 /* -------------------------------------------------------------------------
  * Result codes

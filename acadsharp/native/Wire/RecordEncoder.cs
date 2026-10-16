@@ -161,6 +161,42 @@ namespace Viprs.Wire
 					Utf8WithLength(p.Text, ref c, false);
 					break;
 
+				case WireFormat.TypePoint:
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 7);
+					break;
+
+				case WireFormat.TypeUnbounded:
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 6);
+					c.U32(p.Counts[0]);
+					c.U32(0u);
+					break;
+
+				case WireFormat.TypePlacement:
+				{
+					GuardPoints(p.Counts[1]);
+					Prologue(p, ref c);
+					c.GeometryDoubles(p.Values, 0, 11);
+					string name = p.Text ?? string.Empty;
+					int nameBytes = Encoding.UTF8.GetByteCount(name);
+					if ((ulong)nameBytes > _limits.MaxStringBytes)
+					{
+						throw new AbiException(
+							Result.LimitExceeded,
+							"a string in this record is longer than max_string_bytes allows"
+						);
+					}
+
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					c.U32((uint)nameBytes);
+					c.U32(0u);
+					c.GeometryDoubles(p.Values, 11, p.Values.Length - 11);
+					c.Utf8(name, nameBytes);
+					break;
+				}
+
 				case WireFormat.TypeWarning:
 					c.U32(p.Counts[0]);
 					c.U32(0u);
