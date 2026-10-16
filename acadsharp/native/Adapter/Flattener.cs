@@ -1098,14 +1098,15 @@ namespace Viprs.Cad
 						p.Z,
 						mtext.Height * basis.ScaleY,
 						mtext.Rotation + basis.Turn,
-						mtext.Value ?? string.Empty
+						TextForms.Show(mtext)
 					);
 					yield break;
 				}
 
 				// AttributeEntity and AttributeDefinition derive from
 				// TextEntity, so this arm carries the text a block instance
-				// actually shows.
+				// actually shows. Which string that is, for a multiline
+				// attribute, and which characters it spells, is Flatten.Text.cs.
 				case TextEntity text:
 				{
 					// TEXT's insertion point is in the plane its normal
@@ -1129,7 +1130,7 @@ namespace Viprs.Cad
 						p.Z,
 						text.Height * basis.ScaleY,
 						text.Rotation + basis.Turn,
-						text.Value ?? string.Empty
+						TextForms.Show(text)
 					);
 					yield break;
 				}

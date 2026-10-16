@@ -145,6 +145,7 @@ ONCE_RECORDED = (
     "g13_solid.dwg",
     "g13_spline.dwg",
     "g13_text.dwg",
+    "g13_text_forms.dwg",
     "g13_tolerance.dwg",
     "g13_two_entities.dwg",
     "g13_unsupported.dwg",

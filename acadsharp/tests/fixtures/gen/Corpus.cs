@@ -108,6 +108,7 @@ public static class Corpus
 		yield return Pair("g13_ellipse.dwg", WriteEllipse);
 		yield return Pair("g13_spline.dwg", WriteSpline);
 		yield return Pair("g13_text.dwg", WriteText);
+		yield return Pair("g13_text_forms.dwg", WriteTextForms);
 		yield return Pair("g13_insert.dwg", WriteInsert);
 		yield return Pair("g13_dimension.dwg", WriteDimension);
 		yield return Pair("g13_hatch.dwg", WriteHatch);
@@ -270,6 +271,117 @@ public static class Corpus
 			Value = "VIPRS-G13-MTEXT",
 			Layer = L(doc),
 		});
+		Write(doc, path);
+	}
+
+	// The text the drawing means, against the text the file spells.
+	//
+	// Two different gaps in one file, because both are about record 10 carrying
+	// something other than what a viewer shows, and both were found by saving
+	// one drawing twice (libviprs-dep#111 and #112).
+	//
+	// MIF escapes. A TEXT or MTEXT string can spell a character as `\U+XXXX`,
+	// which is how a pre-2007 DWG holds one its code page cannot. ACadSharp
+	// resolves none of them, so the decoder has to, and the cases are the ones
+	// that tell a correct reader from a plausible one: a lowercase hex digit,
+	// a pair of surrogates that is one code point, a lone surrogate that is
+	// not a character at all, a short escape, a NUL (which must not cross the
+	// wire as a character), and in MTEXT an escaped backslash in front of the
+	// letters, which is the text `\U+2205` and not a diameter sign.
+	//
+	// Attribute text. An R2018 attribute that is multiline keeps its text in an
+	// embedded MTEXT and leaves the legacy field empty. The attributes here
+	// have a legacy value that differs from the MTEXT on purpose, so reading
+	// the wrong field is a different string rather than the same one, and one
+	// multiline attribute has an empty MTEXT to show the fallback is to the
+	// legacy field and not to nothing.
+	public static void WriteTextForms(string path)
+	{
+		CadDocument doc = NewDoc();
+		string[] text =
+		{
+			"\\U+220545,6",
+			"94\\U+00b0",
+			"smile \\U+D83D\\U+DE00",
+			"lone \\U+D83D high",
+			"short \\U+22 end",
+			"nul \\U+0000 inside",
+			"plain text with a \\ in it",
+		};
+		double y = 0;
+		foreach (string value in text)
+		{
+			doc.Entities.Add(new TextEntity
+			{
+				InsertPoint = new XYZ(0, y, 0),
+				Height = 2.5,
+				Value = value,
+				Layer = L(doc),
+			});
+			y += 5;
+		}
+
+		string[] mtext =
+		{
+			"Dia \\U+2205 45\\P2nd line",
+			"\\\\U+2205 is literal here",
+			"\\\\\\U+2205 is an escaped backslash then a diameter sign",
+		};
+		foreach (string value in mtext)
+		{
+			doc.Entities.Add(new MText
+			{
+				InsertPoint = new XYZ(30, y, 0),
+				Height = 2.5,
+				Value = value,
+				Layer = L(doc),
+			});
+			y += 8;
+		}
+
+		BlockRecord block = new BlockRecord("VIPRS_G13_TEXT_FORMS_BLK");
+		block.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(1, 0, 0)));
+		doc.BlockRecords.Add(block);
+		Insert insert = new Insert(block)
+		{
+			InsertPoint = new XYZ(60, 0, 0),
+			Layer = L(doc),
+		};
+		insert.Attributes.Add(new AttributeEntity
+		{
+			Tag = "SINGLE",
+			InsertPoint = new XYZ(60, 1, 0),
+			Height = 1.5,
+			Value = "single line",
+		});
+		insert.Attributes.Add(new AttributeEntity
+		{
+			Tag = "MULTI",
+			InsertPoint = new XYZ(60, 4, 0),
+			Height = 1.5,
+			Value = "legacy field",
+			AttributeType = AttributeType.MultiLine,
+			MText = new MText { Value = "the multiline text\\Pof an attribute", Height = 1.5 },
+		});
+		insert.Attributes.Add(new AttributeEntity
+		{
+			Tag = "EMPTYM",
+			InsertPoint = new XYZ(60, 7, 0),
+			Height = 1.5,
+			Value = "fallback field",
+			AttributeType = AttributeType.MultiLine,
+			MText = new MText { Value = string.Empty, Height = 1.5 },
+		});
+		insert.Attributes.Add(new AttributeEntity
+		{
+			Tag = "MIFATT",
+			InsertPoint = new XYZ(60, 10, 0),
+			Height = 1.5,
+			Value = "x",
+			AttributeType = AttributeType.MultiLine,
+			MText = new MText { Value = "attribute \\U+2205 escape", Height = 1.5 },
+		});
+		doc.Entities.Add(insert);
 		Write(doc, path);
 	}
 
