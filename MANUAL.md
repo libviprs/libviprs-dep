@@ -1159,6 +1159,11 @@ because it has to build offline inside a container, and it selects the
 mode from the manifest's `static_certified` rather than from a cargo
 feature, so what it runs is the same directives rather than exactly the
 block above.
+That is deliberate, and the block is not generated from the fixture: the
+fixture's hand-parsing is the worse thing to hand a reader. Instead
+`test_manual_recipe_directives_issue_127.py` holds the two to each other by
+what they emit, the set of `cargo:` directives that reach a dependent's link
+line, and not by the text of the source.
 
 The `cargo:lib_dir=` line in that shared branch is only half of the
 rpath, and the other half cannot go in a `-sys` crate's build script at
