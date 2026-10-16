@@ -283,10 +283,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: linux, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.98.1 }
-          - { platform: linux, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.98.1 }
-          - { platform: musl, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.98.1-alpine }
-          - { platform: musl, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.98.1-alpine }
+          - { platform: linux, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.99.1 }
+          - { platform: linux, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.99.1 }
+          - { platform: musl, cpu: x64, arch: amd64, runner: ubuntu-latest, image: rust:1.99.1-alpine }
+          - { platform: musl, cpu: arm64, arch: arm64, runner: ubuntu-24.04-arm, image: rust:1.99.1-alpine }
     runs-on: ${{ matrix.runner }}
     # 60 was the size of a job that built and verified. It now also runs
     # two consumers against what it built, so the ceiling moves with it

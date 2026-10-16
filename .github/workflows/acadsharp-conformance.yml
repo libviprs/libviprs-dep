@@ -62,7 +62,7 @@ jobs:
       # The runners' default is a local image name that exists on one machine.
       # CI has to name something a registry can serve, and the runners take it
       # from the environment for exactly this.
-      VIPRS_CONFORMANCE_IMAGE: rust:1.98.1
+      VIPRS_CONFORMANCE_IMAGE: rust:1.99.1
       VIPRS_CONFORMANCE_PLATFORM: linux/arm64
     steps:
       - uses: actions/checkout@v4
@@ -248,7 +248,7 @@ jobs:
       # here rather than picking whatever Alpine has rust on it. If the two
       # jobs also differed by compiler version, a check that passes on glibc
       # and fails on musl would no longer say which of the two it was.
-      VIPRS_CONFORMANCE_IMAGE: rust:1.98.1-alpine
+      VIPRS_CONFORMANCE_IMAGE: rust:1.99.1-alpine
       VIPRS_CONFORMANCE_PLATFORM: linux/arm64
     steps:
       - uses: actions/checkout@v4
