@@ -36,6 +36,12 @@ namespace Viprs.Sources
 		// source has no meaningful answer.
 		uint DrawingVersion { get; }
 
+		// The header's maintenance version, the build number inside a release
+		// of the format (228 for the AC1032 saves the parity corpus holds), or
+		// 0 when the source has none. Carried on DocumentBegin from wire
+		// version 3.
+		uint MaintenanceVersion { get; }
+
 		int ViewCount { get; }
 
 		// False for an index out of range, which the export turns into

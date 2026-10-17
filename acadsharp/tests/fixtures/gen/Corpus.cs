@@ -109,6 +109,7 @@ public static class Corpus
 		yield return Pair("g13_spline.dwg", WriteSpline);
 		yield return Pair("g13_text.dwg", WriteText);
 		yield return Pair("g13_text_forms.dwg", WriteTextForms);
+		yield return Pair("g13_text_aligned.dwg", WriteTextAligned);
 		yield return Pair("g13_insert.dwg", WriteInsert);
 		yield return Pair("g13_dimension.dwg", WriteDimension);
 		yield return Pair("g13_hatch.dwg", WriteHatch);
@@ -253,6 +254,109 @@ public static class Corpus
 		}
 
 		doc.Entities.Add(s);
+		Write(doc, path);
+	}
+
+	// Text that is not left on the baseline (libviprs/acadsharp-rs-tests#66).
+	//
+	// DXF stores a TEXT's drawn position in the alignment point whenever the
+	// alignment is anything but left on the baseline, so the insertion point is
+	// then the wrong place to anchor it, and the alignment pair, the width
+	// factor and the style name are all things a record 10 now carries. Every
+	// text here has an alignment point that is not its insertion point except the
+	// left/baseline control, which is what tells an anchor read off the wrong
+	// point from the right one.
+	public static void WriteTextAligned(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.TextStyles.Add(new TextStyle("VIPRS_G13_NARROW"));
+
+		// The control: left on the baseline, the insertion point is the anchor.
+		doc.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(10, 10, 0),
+			Height = 2.5,
+			Value = "left baseline",
+			Layer = L(doc),
+		});
+
+		doc.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(20, 20, 0),
+			AlignmentPoint = new XYZ(26, 23, 0),
+			HorizontalAlignment = TextHorizontalAlignment.Center,
+			VerticalAlignment = TextVerticalAlignmentType.Bottom,
+			Height = 2.0,
+			WidthFactor = 0.8,
+			Style = doc.TextStyles["VIPRS_G13_NARROW"],
+			Value = "centre bottom",
+			Layer = L(doc),
+		});
+
+		doc.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			AlignmentPoint = new XYZ(31, 41, 0),
+			HorizontalAlignment = TextHorizontalAlignment.Right,
+			VerticalAlignment = TextVerticalAlignmentType.Top,
+			Height = 1.5,
+			Value = "right top",
+			Layer = L(doc),
+		});
+
+		// Left but not on the baseline, and baseline but not left: either half
+		// of the pair alone is enough to move the anchor.
+		doc.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(50, 50, 0),
+			AlignmentPoint = new XYZ(52, 54, 0),
+			HorizontalAlignment = TextHorizontalAlignment.Left,
+			VerticalAlignment = TextVerticalAlignmentType.Middle,
+			Height = 1.0,
+			Value = "left middle",
+			Layer = L(doc),
+		});
+		doc.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(60, 60, 0),
+			AlignmentPoint = new XYZ(65, 61, 0),
+			HorizontalAlignment = TextHorizontalAlignment.Middle,
+			VerticalAlignment = TextVerticalAlignmentType.Baseline,
+			Height = 1.0,
+			Value = "middle baseline",
+			Layer = L(doc),
+		});
+
+		// MTEXT has an attachment point where TEXT has a pair.
+		doc.Entities.Add(new MText
+		{
+			InsertPoint = new XYZ(40, 40, 0),
+			AttachmentPoint = AttachmentPointType.BottomRight,
+			Height = 2.0,
+			Value = "mtext bottom right",
+			Layer = L(doc),
+		});
+
+		// A width factor under a stretch: the block is inserted with X scaled
+		// by three and Y by one, so the factor leaves as 0.5 * 3.
+		BlockRecord block = new BlockRecord("VIPRS_G13_STRETCHED_TEXT");
+		block.Entities.Add(new TextEntity
+		{
+			InsertPoint = new XYZ(0, 0, 0),
+			Height = 2.0,
+			WidthFactor = 0.5,
+			Value = "stretched",
+		});
+		doc.BlockRecords.Add(block);
+		doc.Entities.Add(new Insert(block)
+		{
+			InsertPoint = new XYZ(0, 80, 0),
+			XScale = 3.0,
+			YScale = 1.0,
+			ZScale = 1.0,
+			Layer = L(doc),
+		});
+
 		Write(doc, path);
 	}
 

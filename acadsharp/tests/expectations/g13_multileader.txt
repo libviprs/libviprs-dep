@@ -6,7 +6,7 @@
 00005 Polyline handle=56 flags=0 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(4.000000,5.000000,0.000000);(8.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00006 Polyline handle=56 flags=0 n=2 closed=0 pts=[(12.000000,0.000000,0.000000);(8.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00007 Line handle=56 flags=0 pts=[(8.000000,6.000000,0.000000);(10.000000,6.000000,0.000000)]
-00008 Text handle=56 flags=0 p=[(10.500000,6.000000,0.000000)] h=2.500000 rot=0.250000 value="Note ∅ 5"
+00008 Text handle=56 flags=0 p=[(10.500000,6.000000,0.000000)] h=2.500000 rot=0.250000 halign=left valign=baseline wf=1.000000 style="" value="Note ∅ 5"
 00009 Polyline handle=57 flags=0 n=3 closed=0 pts=[(100.000000,0.000000,0.000000);(104.000000,5.000000,0.000000);(108.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00010 Circle handle=4C flags=1 c=[(110.000000,7.000000,0.000000)] r=2.000000 normal=[(0.000000,0.000000,1.000000)]
 00011 Line handle=4D flags=1 pts=[(110.000000,7.000000,0.000000);(113.510330,8.917702,0.000000)]
@@ -16,13 +16,13 @@
 00015 Warning handle=59 flags=0 code=MULTILEADER_FEATURES_IGNORED message="MULTILEADER carries the frame round its text, 1 break(s) in its leader lines, which this version does not draw; the geometry beside this warning is what the file holds"
 00016 Polyline handle=59 flags=0 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(4.000000,5.000000,0.000000);(8.000000,6.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00017 Line handle=59 flags=0 pts=[(8.000000,6.000000,0.000000);(10.000000,6.000000,0.000000)]
-00018 Text handle=59 flags=0 p=[(10.500000,6.000000,0.000000)] h=2.500000 rot=0.250000 value="framed"
+00018 Text handle=59 flags=0 p=[(10.500000,6.000000,0.000000)] h=2.500000 rot=0.250000 halign=left valign=baseline wf=1.000000 style="" value="framed"
 00019 Warning handle=5A flags=0 code=UNSUPPORTED_ENTITY message="MULTILEADER carries no leader lines and no content, so there is nothing to draw"
 00020 Warning handle=5E flags=1 code=ARROWHEAD_NOT_DRAWN message="MULTILEADER asks for an arrowhead at the start of its leader lines and this version draws the lines only; the arrowhead is a glyph the style names and it is not emitted"
 00021 Polyline handle=5E flags=1 n=3 closed=0 pts=[(340.000000,0.000000,0.000000);(352.000000,7.500000,0.000000);(364.000000,9.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00022 Line handle=5E flags=1 pts=[(364.000000,9.000000,0.000000);(370.000000,9.000000,0.000000)]
-00023 Text handle=5E flags=1 p=[(371.500000,9.000000,0.000000)] h=3.750000 rot=0.250000 value="framed"
+00023 Text handle=5E flags=1 p=[(371.500000,9.000000,0.000000)] h=3.750000 rot=0.250000 halign=left valign=baseline wf=1.000000 style="" value="framed"
 00024 Warning handle=5E flags=1 code=ARROWHEAD_NOT_DRAWN message="MULTILEADER asks for an arrowhead at the start of its leader lines and this version draws the lines only; the arrowhead is a glyph the style names and it is not emitted"
 00025 Polyline handle=5E flags=1 n=3 closed=0 pts=[(-120.000000,0.000000,0.000000);(-128.000000,10.000000,0.000000);(-136.000000,12.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
 00026 Line handle=5E flags=1 pts=[(-136.000000,12.000000,0.000000);(-140.000000,12.000000,0.000000)]
-00027 Text handle=5E flags=1 p=[(-141.000000,12.000000,0.000000)] h=5.000000 rot=3.391593 value="framed"
+00027 Text handle=5E flags=1 p=[(-141.000000,12.000000,0.000000)] h=5.000000 rot=3.391593 halign=left valign=baseline wf=1.000000 style="" value="framed"

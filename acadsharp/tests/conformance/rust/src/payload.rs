@@ -26,6 +26,7 @@ use crate::wire::{self, f64_at, u32_at, u64_at, Record};
 const SHORT: &str = "a record too short to hold it";
 
 const PROBE_TEXT: &[u8] = b"VIPRS-TEXT-PROBE-";
+const PROBE_STYLE: &[u8] = b"VIPRS-STYLE-PROBE";
 const PROBE_WARNING: &[u8] = b"VIPRS-WARNING-PROBE";
 const PROBE_WARNING_CODE: u32 = 1100;
 const PROBE_SPLINE_DEGREE: u32 = 3;
@@ -193,7 +194,8 @@ impl Verifier {
         match r.kind {
             wire::TYPE_DOCUMENT_BEGIN => {
                 self.u32_at(p, 4, 1032, "DocumentBegin drawing_version");
-                self.u64_at(p, 8, 0, "DocumentBegin reserved0");
+                self.u32_at(p, 8, 228, "DocumentBegin maintenance_version");
+                self.u32_at(p, 12, 0, "DocumentBegin reserved0");
                 self.len_is(r, 24, "DocumentBegin length");
             }
             wire::TYPE_VIEW_BEGIN => {
@@ -247,9 +249,20 @@ impl Verifier {
                 self.prologue(r);
                 self.probes(p, 16, wire::TYPE_TEXT, 5, "Text");
                 let bytes = self.count(p, 56, "Text text_bytes") as usize;
-                self.u32_at(p, 60, 0, "Text reserved1");
+                // Wire version 3: the alignment pair (center, top) in the word
+                // that was reserved1, then the width factor and the style name
+                // after the string.
+                self.u32_at(p, 60, 1 | (3 << 8), "Text alignment");
                 self.bytes_at(p, 64, PROBE_TEXT, "Text bytes");
-                self.len_is(r, 8 + 64 + bytes + pad4(bytes), "Text length");
+                let after = 64 + bytes + pad4(bytes);
+                self.f64_at(p, after, 0.75, "Text width_factor");
+                let style = self.count(p, after + 8, "Text style_len") as usize;
+                if style != PROBE_STYLE.len() {
+                    self.fail("Text style_len", format!("{style}"), format!("{}", PROBE_STYLE.len()));
+                }
+                self.u32_at(p, after + 12, 0, "Text reserved2");
+                self.bytes_at(p, after + 16, PROBE_STYLE, "Text style");
+                self.len_is(r, 8 + 80 + bytes + pad4(bytes) + style + pad4(style), "Text length");
             }
             // Wire version 3. Point and Unbounded are fixed at 80 bytes;
             // Placement is 128 + 16 * clip_count + the name padded to four,

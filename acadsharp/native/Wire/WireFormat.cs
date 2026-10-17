@@ -69,6 +69,24 @@ namespace Viprs.Wire
 
 		internal const ushort ForwardProbe = (ushort)ForwardProbeFirst;
 
+		// A Text record's alignment pair (wire version 3, docs/WIRE.md record
+		// 10). The horizontal number is the low byte of the record's alignment
+		// word and the vertical one is the next byte. Zero in both is left and
+		// baseline, which is what a record that says nothing has always meant,
+		// so these are numbers the wire owns and not the values of whichever
+		// library's enum the shim happens to read them from.
+		public const uint TextLeft = 0;
+		public const uint TextCenter = 1;
+		public const uint TextRight = 2;
+		public const uint TextAligned = 3;
+		public const uint TextMiddle = 4;
+		public const uint TextFit = 5;
+
+		public const uint TextBaseline = 0;
+		public const uint TextBottom = 1;
+		public const uint TextVMiddle = 2;
+		public const uint TextTop = 3;
+
 		// The geometry records, which are the ones docs/WIRE.md's finiteness
 		// guarantee covers.
 		//

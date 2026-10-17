@@ -23,14 +23,22 @@ namespace Viprs.Wire
 		public uint[] Counts = Array.Empty<uint>();
 		public ulong Count64;
 		public string Text;
+
+		// A Text record's text style name (wire version 3). Null is the empty
+		// name, which is what a record with no style says.
+		public string Style;
 		public byte[] Raw;
 
-		public static Primitive DocumentBegin(uint viewCount, uint drawingVersion)
+		public static Primitive DocumentBegin(
+			uint viewCount,
+			uint drawingVersion,
+			uint maintenanceVersion
+		)
 		{
 			return new Primitive
 			{
 				Type = WireFormat.TypeDocumentBegin,
-				Counts = new uint[] { viewCount, drawingVersion },
+				Counts = new uint[] { viewCount, drawingVersion, maintenanceVersion },
 			};
 		}
 
@@ -315,6 +323,16 @@ namespace Viprs.Wire
 			};
 		}
 
+		// Wire version 3 gives a Text record four things wire version 2 had no
+		// room for: the alignment pair, the width factor and the style name
+		// (docs/WIRE.md, record 10). The three have defaults that mean what a
+		// bare record always meant (left, baseline, a width factor of one, no
+		// style), so a caller that has none of them says nothing and gets the
+		// record it always got.
+		//
+		// `halign` and `valign` are the wire's own numbers, not ACadSharp's
+		// enums: the wire is a contract and an enum's values are a library's
+		// to renumber.
 		public static Primitive TextAt(
 			ulong handle,
 			uint flags,
@@ -323,7 +341,11 @@ namespace Viprs.Wire
 			double z,
 			double height,
 			double rotation,
-			string text
+			string text,
+			uint halign = WireFormat.TextLeft,
+			uint valign = WireFormat.TextBaseline,
+			double widthFactor = 1.0,
+			string style = null
 		)
 		{
 			return new Primitive
@@ -331,8 +353,10 @@ namespace Viprs.Wire
 				Type = WireFormat.TypeText,
 				ItemHandle = handle,
 				Flags = flags,
-				Values = new double[] { x, y, z, height, rotation },
+				Values = new double[] { x, y, z, height, rotation, widthFactor },
+				Counts = new uint[] { halign | (valign << 8) },
 				Text = text,
+				Style = style,
 			};
 		}
 

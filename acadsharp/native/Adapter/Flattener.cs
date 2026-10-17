@@ -1234,8 +1234,16 @@ namespace Viprs.Cad
 				{
 					// MTEXT's insertion point is in world coordinates, unlike
 					// TEXT's below, so there is no lift on this arm.
+					//
+					// The insertion point is the attachment point, so it is the
+					// anchor whatever the attachment is, and the record says
+					// which of the nine it is as an alignment pair. MTEXT has no
+					// width factor of its own, which is a factor of one.
 					Basis basis = place.Basis;
 					XYZ p = place.Apply(mtext.InsertPoint);
+					uint mh;
+					uint mv;
+					TextForms.Attachment(mtext.AttachmentPoint, out mh, out mv);
 					yield return Primitive.TextAt(
 						h,
 						flags,
@@ -1244,7 +1252,11 @@ namespace Viprs.Cad
 						p.Z,
 						mtext.Height * basis.ScaleY,
 						mtext.Rotation + basis.Turn,
-						TextForms.Show(mtext)
+						TextForms.Show(mtext),
+						mh,
+						mv,
+						TextWidthFactor(1.0, basis),
+						mtext.Style == null ? null : mtext.Style.Name
 					);
 					yield break;
 				}
@@ -1265,9 +1277,21 @@ namespace Viprs.Cad
 					// wire change and is not this one. Lifting the point is
 					// still right on its own: an unlifted one is not in the
 					// drawing at all.
+					//
+					// The anchor is where a viewer puts the text, which is the
+					// alignment point for anything but left on the baseline
+					// (DXF stores the drawn position in the second point
+					// whenever the alignment is anything else, and the first
+					// point is then only where the text would sit if it were
+					// left-aligned). The record carries the pair as well, so a
+					// consumer that wants to re-anchor can
+					// (libviprs/acadsharp-rs-tests#66).
 					Placement ocs = place.WithOcs(text.Normal, 0.0);
 					Basis basis = ocs.Basis;
-					XYZ p = ocs.Apply(text.InsertPoint);
+					uint th = TextForms.Horizontal(text.HorizontalAlignment);
+					uint tv = TextForms.Vertical(text.VerticalAlignment);
+					bool aligned = th != WireFormat.TextLeft || tv != WireFormat.TextBaseline;
+					XYZ p = ocs.Apply(aligned ? text.AlignmentPoint : text.InsertPoint);
 					yield return Primitive.TextAt(
 						h,
 						flags,
@@ -1276,7 +1300,11 @@ namespace Viprs.Cad
 						p.Z,
 						text.Height * basis.ScaleY,
 						text.Rotation + basis.Turn,
-						TextForms.Show(text)
+						TextForms.Show(text),
+						th,
+						tv,
+						TextWidthFactor(text.WidthFactor, basis),
+						text.Style == null ? null : text.Style.Name
 					);
 					yield break;
 				}
@@ -1444,6 +1472,23 @@ namespace Viprs.Cad
 					yield break;
 				}
 			}
+		}
+
+		// A text's width factor after a transform. Height follows the scale of
+		// the text's up direction, so the factor follows how much longer the
+		// baseline came out than the up direction did: under a uniform scale
+		// (a mirror included) both moved together and the factor is the one the
+		// drawing stores, and under a stretch it becomes the ratio. The test is
+		// the basis' own Uniform, so a factor is not recomputed from two
+		// lengths that agree to the last bit but one.
+		private static double TextWidthFactor(double stored, Basis basis)
+		{
+			if (basis.Uniform || !(basis.ScaleY > Eps))
+			{
+				return stored;
+			}
+
+			return stored * basis.ScaleX / basis.ScaleY;
 		}
 
 		// A polyline, exactly as wire version 2 carries it: one record,

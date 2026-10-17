@@ -32,6 +32,7 @@ namespace Viprs.Sources
 		private readonly List<SourceView> _views = new List<SourceView>();
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
 		private uint _drawingVersion;
+		private uint _maintenanceVersion;
 		private int _viewsWithoutExtents;
 
 		// Volatile because two threads reach it. ABI.md says two handles may
@@ -71,6 +72,11 @@ namespace Viprs.Sources
 		public uint DrawingVersion
 		{
 			get { return _drawingVersion; }
+		}
+
+		public uint MaintenanceVersion
+		{
+			get { return _maintenanceVersion; }
 		}
 
 		// ------------------------------------------------------------ open
@@ -185,6 +191,18 @@ namespace Viprs.Sources
 				{
 					_document = DwgReader.Read(stream, (sender, e) => OnNotification(e));
 				}
+
+				// The header's own maintenance version ($ACADMAINTVER), which
+				// is the build number inside a release of the format and has
+				// no relation to the file-header byte some readers report
+				// under the same name. A header that does not hold one reads
+				// as zero, which is also what a wire-2 stream said.
+				long maintenance = _document.Header != null
+					? _document.Header.MaintenanceVersion
+					: 0L;
+				_maintenanceVersion = maintenance < 0L || maintenance > uint.MaxValue
+					? 0u
+					: (uint)maintenance;
 
 				BuildViews();
 			}

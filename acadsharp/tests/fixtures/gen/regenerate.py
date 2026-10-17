@@ -92,6 +92,7 @@ DUMPED = (
     "g13_spline.dwg",
     "g13_text.dwg",
     "g13_text_forms.dwg",
+    "g13_text_aligned.dwg",
     "g13_insert.dwg",
     "g13_dimension.dwg",
     "g13_hatch.dwg",
@@ -528,6 +529,11 @@ def expectations(scratch):
             "records": len([x for x in lines if x]),
             "kinds": counts,
             "view_count": result.get("view_count"),
+            # What DocumentBegin carried, read off the composed stream and not
+            # off the source: the record is the evidence, not the property
+            # behind it (acadsharp-rs-tests#61).
+            "document_drawing_version": result.get("document_drawing_version"),
+            "document_maintenance_version": result.get("document_maintenance_version"),
             "view_extents": result.get("view_extents"),
             "views_without_extents": result.get("views_without_extents"),
             "notification_count": result.get("notification_count"),
