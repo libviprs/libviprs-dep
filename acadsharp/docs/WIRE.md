@@ -310,6 +310,35 @@ major_z` (the vector from the centre to the end of the major axis), `f64
 ratio` (minor over major), `f64 start_param`, `f64 end_param`, `f64 nx, ny,
 nz`. 120 bytes.
 
+Two rules about how records 4, 5, 6 and 7 come out of a block transform, both
+settled in wire version 3 and both there so that a consumer does not have to
+guess which of two equal records it is looking at.
+
+**A reflection turns the normal over and reverses nothing else.** The normal on
+these records is the image of the entity's own plane, with the orientation the
+transform gives it: the image of the plane's x axis crossed with the image of
+its y axis. A mirror turns a plane over, so a curve mirrored in x carries
+`(0, 0, -1)` where the stored one carried `(0, 0, 1)`. Angles, parameters and
+bulges are counter-clockwise about the record's own normal, and about the
+turned-over normal a mirrored curve runs the way the stored one did, so an
+arc's two angles, an ellipse's two parameters and a bulge's sign cross as they
+were stored (the angles gain only the rotation between the two normals'
+arbitrary axes). The centre and the vertices are world coordinates either way.
+The alternative, keeping the normal on the entity's side and reflecting the
+angles and the bulges to match, names the same curve and was what wire version
+2 did; it is not what a reader that follows the drawing writes, and two records
+for one curve is a finding for anyone comparing streams.
+
+**A stretch makes an Ellipse.** Under a transform that scales the plane by
+different amounts in different directions, or that skews it, a circle or an arc
+is an ellipse or an elliptical arc. It is written as record 7, from the images
+of the two perpendicular radii: the principal axes of the image give `major` and
+`ratio`, and a parameter is moved onto them by subtracting the angle between the
+image of the first radius and the major axis. A full circle comes out as
+`0` to `2π`. An ellipse under a stretch is mapped the same way from its major
+and minor semi-axes. A curve the transform collapses onto a line or a point has
+no ellipse, and crosses as it was with warning 106 beside it.
+
 **8 `Spline`**: prologue, `uint32 degree`, `uint32 flags` (bit 0 closed, bit
 1 rational, bit 2 periodic), `uint32 knot_count`, `uint32 control_count`,
 `uint32 weight_count`, `uint32 reserved1`, then `knot_count` values of `f64`,
@@ -555,7 +584,7 @@ and 105 with these meanings, whatever it is built on.
 | 103 | `HATCH_PATTERN_ONLY` | A hatch with no boundary loop that could become a `Polygon`. |
 | 104 | `HATCH_LOOP_NOT_POLYGON` | A boundary loop carrying an elliptical or spline edge, which a closed polygon cannot express. The edges follow as their own records, so nothing is lost and nothing is approximated. |
 | 105 | `UNRESOLVED_BLOCK` | An insertion whose block could not be resolved, which is what an unresolved external reference looks like from inside. Never a fetch, and never a read of anything outside the file being decoded. |
-| 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a circle is an ellipse and a bulge is an elliptical arc. The parameters still cross unchanged; this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
+| 106 | `NON_UNIFORM_BLOCK_SCALE` | A block transform that does not scale an entity's plane uniformly, under which a bulge is an elliptical arc. A circle, an arc or an ellipse under one is written as the Ellipse it becomes and raises nothing, but a bulge has no elliptical spelling inside a Polyline or a Polygon, so those cross with their parameters unchanged and this says they were measured in a frame the transform does not preserve. A reflection is not this case: a mirror preserves every shape exactly and the records follow it. |
 | 107 | `NON_FINITE_GEOMETRY` | A geometry record whose values are not all finite, which is what a `NaN` or an infinite coordinate, radius, angle, normal or bulge in the source file turns into. The record is not emitted: there is no correct number to put in its place, and the section above promises no geometry record carries one. `item_handle` names the entity so it can be found in the drawing. |
 | 108 | `EMPTY_VIEW` | This view emitted no geometry record at all. It is the other half of the inverted extents above: those say the view has no usable bounding box, and this says there was nothing to have one of. A consumer tells an empty drawing from a damaged one by what sits beside this in the same view, because every warning about something that could not be read is in that stream too, so this alone is empty and this with company is damaged. `item_handle` is 0: it is about the view. |
 | 109 | `ENTITY_REFUSED_BY_DESIGN` | An entity kind this build has looked at and will not flatten, which is a different fact from 100. 100 says nobody has got to this kind yet and a later build may well emit it; 109 says somebody did get to it and decided against, and waiting will not change the answer. Three things put a kind here: its geometry is not in the drawing at all (an external raster, an external PDF, an external SHX glyph), or it is in a form nothing on this boundary evaluates (an embedded ACIS stream, which is a boundary representation and not a tessellation), or no record this wire version defines can hold it (an unbounded construction line). The message names the kind first and then says which of the three it is, and `item_handle` is the entity's. A consumer that shows "not supported yet" for 100 shows something else for this one. |
