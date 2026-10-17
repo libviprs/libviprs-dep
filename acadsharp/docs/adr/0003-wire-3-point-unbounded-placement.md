@@ -328,3 +328,22 @@ of the three records is warning 107 and no record, which is what J1.1 (#134)
 made reachable for records past 13 and `g13_nonfinite_records.dwg` holds.
 
 SHAPE is still not here, for the reason the Placement section gives.
+
+**4. Two wire 2 records grow in wire 3, and neither moves a byte it had.** The
+parity run against the reference oracle (libviprs/acadsharp-rs-tests#61 and
+#66) found two facts schema 1 carries that wire 2 had nowhere to put: the
+header's maintenance version, and a text's alignment pair, width factor and
+style name, with the anchor at the alignment point for anything but left on the
+baseline. Wire 3 is not cut, and a record that grows inside an unreleased
+version costs nobody a release, where the same change after the cut would be a
+wire 4. So both land here.
+
+`DocumentBegin` keeps its 24 bytes: the `uint64` that was reserved becomes
+`uint32 maintenance_version` and `uint32 reserved0`. `Text` keeps every byte it
+had in the place it had it: the word beside `byte_len` that was reserved (and
+zero) becomes `alignment`, where zero is left on the baseline, and the new
+fixed fields and the style name follow the string, so a reader that stops after
+the string reads wire 2's record. The alternative for the text, placing it in
+the flattener and sending a left-baseline anchor, keeps the wire smaller and
+loses the alignment from the stream, which is the part a consumer that does its
+own layout needs. `docs/WIRE.md` has the layouts and wins over this paragraph.

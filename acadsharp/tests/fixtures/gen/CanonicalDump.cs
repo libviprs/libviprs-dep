@@ -49,6 +49,35 @@ namespace Viprs.Cad
 			return s == "-0.000000" ? "0.000000" : s;
 		}
 
+		// The names the wire's alignment numbers go by in a dump. A number this
+		// does not know prints as itself, so a dump never hides a value the wire
+		// defines no name for.
+		private static string TextHorizontalName(uint n)
+		{
+			switch (n)
+			{
+				case WireFormat.TextLeft: return "left";
+				case WireFormat.TextCenter: return "center";
+				case WireFormat.TextRight: return "right";
+				case WireFormat.TextAligned: return "aligned";
+				case WireFormat.TextMiddle: return "middle";
+				case WireFormat.TextFit: return "fit";
+				default: return n.ToString(CultureInfo.InvariantCulture);
+			}
+		}
+
+		private static string TextVerticalName(uint n)
+		{
+			switch (n)
+			{
+				case WireFormat.TextBaseline: return "baseline";
+				case WireFormat.TextBottom: return "bottom";
+				case WireFormat.TextVMiddle: return "middle";
+				case WireFormat.TextTop: return "top";
+				default: return n.ToString(CultureInfo.InvariantCulture);
+			}
+		}
+
 		private static string Q(string s)
 		{
 			if (s == null)
@@ -203,6 +232,10 @@ namespace Viprs.Cad
 					Triples(sb, "p", p.Values, 0, 1);
 					sb.Append(" h=").Append(N(p.Values[3]));
 					sb.Append(" rot=").Append(N(p.Values[4]));
+					sb.Append(" halign=").Append(TextHorizontalName(p.Counts[0] & 0xFFu));
+					sb.Append(" valign=").Append(TextVerticalName((p.Counts[0] >> 8) & 0xFFu));
+					sb.Append(" wf=").Append(N(p.Values[5]));
+					sb.Append(" style=").Append(Q(p.Style));
 					sb.Append(" value=").Append(Q(p.Text));
 					break;
 

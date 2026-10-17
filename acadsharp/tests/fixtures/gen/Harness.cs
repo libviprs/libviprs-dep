@@ -609,12 +609,24 @@ namespace Viprs.Cad.Fixtures
 			{
 				List<string> dump = new List<string>();
 				string dumpError = null;
+				uint documentDrawingVersion = 0u;
+				uint documentMaintenanceVersion = 0u;
 				try
 				{
 					int index = 0;
 					DecodeSession walk = new DecodeSession(document, (uint)o.View, IntPtr.Zero);
 					foreach (Primitive p in walk.Compose())
 					{
+						// DocumentBegin is the one framing record whose body is a
+						// fact about the drawing rather than about the stream, so
+						// the capture keeps what it carried (libviprs-dep's
+						// acadsharp-rs-tests#61).
+						if (p.Type == WireFormat.TypeDocumentBegin)
+						{
+							documentDrawingVersion = p.Counts[1];
+							documentMaintenanceVersion = p.Counts[2];
+						}
+
 						if (CanonicalDump.IsFraming(p.Type))
 						{
 							continue;
@@ -631,6 +643,8 @@ namespace Viprs.Cad.Fixtures
 
 				json.Str("dump_error", dumpError);
 				json.Num("dumped_records", dump.Count);
+				json.UNum("document_drawing_version", documentDrawingVersion);
+				json.UNum("document_maintenance_version", documentMaintenanceVersion);
 
 				if (o.DumpPath != null && dumpError == null)
 				{

@@ -159,7 +159,17 @@ today it is a reservation, made here so that the one prologue bit a later lane
 wants is not decided by that lane on the day it is needed.
 
 **1 `DocumentBegin`**: `uint32 view_count`, `uint32 drawing_version` (the
-numeric AC10xx code, 0 when it is not known), `uint64 reserved0`. 24 bytes.
+numeric AC10xx code, 0 when it is not known), `uint32 maintenance_version`,
+`uint32 reserved0`. 24 bytes.
+
+`maintenance_version` is wire version 3's, and it took the first half of the
+word wire version 2 left reserved, so the record is the size it was and a
+reader that never looked at those bytes reads what it always read.
+It is the document header's own maintenance version (`$ACADMAINTVER`), the
+build number inside a release of the format: 228 for the AC1032 saves in this
+repository's corpus. It is not the file-header byte some readers report under
+the same name, and it has no relation to `drawing_version`. A header that holds
+no maintenance version, and a source that has none, say 0.
 
 **2 `ViewBegin`**: `uint32 view_index`, `uint32 kind` (0 model, 1 layout, 2
 unknown), `f64 min_x`, `f64 min_y`, `f64 max_x`, `f64 max_y`, `uint64
@@ -399,8 +409,45 @@ a contribution of no width, no height and no area, and not treat it as a parse
 failure.
 
 **10 `Text`**: prologue, `f64 x, y, z`, `f64 height`, `f64 rotation`
-(radians), `uint32 byte_len`, `uint32 reserved1`, then `byte_len` bytes of
-UTF-8, padded with zeroes to a multiple of four. Not terminated.
+(radians), `uint32 byte_len`, `uint32 alignment`, then `byte_len` bytes of
+UTF-8, padded with zeroes to a multiple of four. Not terminated. Then, from
+wire version 3, `f64 width_factor`, `uint32 style_len`, `uint32 reserved2`, and
+`style_len` bytes of UTF-8 padded the same way. So `length` is
+`88 + 4·ceil(byte_len / 4) + 4·ceil(style_len / 4)`.
+
+Everything up to and including the string is wire version 2's record, byte for
+byte, with one word renamed: `alignment` is what wire 2 called `reserved1` and
+wrote as zero, and zero is left on the baseline, so a record that says nothing
+means what it always meant. A reader that stops after the string reads what it
+always read.
+
+`alignment` is two numbers in one word. The low byte is the horizontal
+alignment: 0 left, 1 center, 2 right, 3 aligned, 4 middle, 5 fit. The next
+byte is the vertical: 0 baseline, 1 bottom, 2 middle, 3 top. The upper two
+bytes are zero. These are this wire's numbers and not any library's: an MTEXT's
+nine-way attachment point is written as the pair it names (top-left is left and
+top, middle-center is center and middle), so a consumer has one table for both
+entities. A value outside those ranges is a producer's bug, and a consumer that
+meets one treats the text as left on the baseline and says nothing worse.
+
+`x, y, z` is where a viewer puts the text, which is **the alignment point for
+anything but left on the baseline and the insertion point for that**. DXF keeps
+the drawn position in the second point whenever the alignment is anything else,
+and the first is then only where the text would sit if it were left-aligned, so
+a consumer that anchored every text at the first point put an aligned one off
+by the distance between them. An MTEXT's insertion point is its attachment
+point already. The point goes through the same lift into the entity's plane as
+the insertion point it replaces.
+
+`width_factor` is the x stretch of the glyphs against their height, 1 for a
+text that has none and for every MTEXT. Under a transform that scales the
+baseline direction and the up direction by different amounts it is the stored
+factor times the baseline's scale over the up direction's, which is the same
+arithmetic that makes `height` the up direction's scale: a text inside a block
+inserted at X scale 3 and Y scale 1 leaves with its height unchanged and a
+factor three times as wide. `style` is the text style's name, never a resolved
+font file, and empty for a text with no style. It is held to
+`max_string_bytes` as `byte_len` is.
 
 The bytes are the text the drawing shows, which is not always the string its
 file holds, and a producer does two things to get there. A MIF escape,

@@ -990,7 +990,8 @@ static void verify_payload(const vacb_record *r)
 	switch (r->type) {
 	case VACB_TYPE_DOCUMENT_BEGIN:
 		want_u32(r->payload, 4, 1032, "DocumentBegin drawing_version");
-		want_u64(r->payload, 8, 0, "DocumentBegin reserved0");
+		want_u32(r->payload, 8, 228, "DocumentBegin maintenance_version");
+		want_u32(r->payload, 12, 0, "DocumentBegin reserved0");
 		want_len(len, 24, "DocumentBegin length");
 		break;
 
@@ -1077,9 +1078,21 @@ static void verify_payload(const vacb_record *r)
 		want_prologue(r);
 		want_probes(r->payload, 16, VACB_TYPE_TEXT, 0, 5, "Text");
 		bytes = vacb_u32(r->payload + 56);
-		want_u32(r->payload, 60, 0, "Text reserved1");
+		/* Wire version 3: the alignment pair (center, top) in the word that
+		 * was reserved1, then the width factor and the style name after the
+		 * string. */
+		want_u32(r->payload, 60, 1u | (3u << 8), "Text alignment");
 		want_bytes(r->payload, 64, "VIPRS-TEXT-PROBE-", "Text bytes");
-		want_len(len, 8u + 64u + bytes + pad4(bytes), "Text length");
+		{
+			uint32_t after = 64u + bytes + pad4(bytes);
+			uint32_t style = vacb_u32(r->payload + after + 8u);
+
+			want_f64(r->payload, after, 0.75, "Text width_factor");
+			want_u32(r->payload, after + 8u, 17u, "Text style_len");
+			want_u32(r->payload, after + 12u, 0, "Text reserved2");
+			want_bytes(r->payload, after + 16u, "VIPRS-STYLE-PROBE", "Text style");
+			want_len(len, 8u + after + 16u + style + pad4(style), "Text length");
+		}
 		break;
 
 	/* Wire version 3. Point and Unbounded are fixed at 80 bytes; Placement's

@@ -237,7 +237,8 @@ namespace Viprs.Wire
 
 			yield return Primitive.DocumentBegin(
 				(uint)_document.Source.ViewCount,
-				_document.Source.DrawingVersion
+				_document.Source.DrawingVersion,
+				_document.Source.MaintenanceVersion
 			);
 
 			yield return Primitive.ViewBegin(
