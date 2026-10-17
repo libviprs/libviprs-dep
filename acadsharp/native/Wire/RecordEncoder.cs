@@ -94,7 +94,8 @@ namespace Viprs.Wire
 				case WireFormat.TypeDocumentBegin:
 					c.U32(p.Counts[0]);
 					c.U32(p.Counts[1]);
-					c.U64(0ul);
+					c.U32(p.Counts[2]);
+					c.U32(0u);
 					break;
 
 				case WireFormat.TypeViewBegin:
@@ -156,9 +157,17 @@ namespace Viprs.Wire
 					break;
 
 				case WireFormat.TypeText:
+					// Wire version 3: the alignment pair rides in the word
+					// that was reserved beside the string's length, and the
+					// width factor and the style name follow the string. The
+					// first half of the record is wire version 2's, byte for
+					// byte, so a reader that stops after the string has read
+					// what it always read.
 					Prologue(p, ref c);
 					c.GeometryDoubles(p.Values, 0, 5);
-					Utf8WithLength(p.Text, ref c, false);
+					Utf8WithLength(p.Text, ref c, false, p.Counts.Length > 0 ? p.Counts[0] : 0u);
+					c.GeometryDoubles(p.Values, 5, 1);
+					Utf8WithLength(p.Style, ref c, false);
 					break;
 
 				case WireFormat.TypePoint:
@@ -340,7 +349,7 @@ namespace Viprs.Wire
 		// a consumer cannot tell a label the file carries from one this library
 		// shortened, so cutting them quietly would be worse than refusing them
 		// loudly.
-		private void Utf8WithLength(string text, ref Cursor c, bool truncate)
+		private void Utf8WithLength(string text, ref Cursor c, bool truncate, uint word = 0u)
 		{
 			string value = text ?? string.Empty;
 			int bytes = Encoding.UTF8.GetByteCount(value);
@@ -368,7 +377,7 @@ namespace Viprs.Wire
 			}
 
 			c.U32((uint)bytes);
-			c.U32(0u);
+			c.U32(word);
 			c.Utf8(value, bytes);
 		}
 

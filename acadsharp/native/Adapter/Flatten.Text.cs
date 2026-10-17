@@ -1,5 +1,6 @@
 using System.Text;
 using ACadSharp.Entities;
+using Viprs.Wire;
 
 // What a Text record's bytes say: the text the drawing shows, not the text the
 // file spells (libviprs-dep#111 and #112).
@@ -44,6 +45,82 @@ namespace Viprs.Cad
 {
 	internal static class TextForms
 	{
+		// The wire's number for a TEXT's horizontal alignment
+		// (docs/WIRE.md, record 10). Written out as a switch rather than a cast
+		// of ACadSharp's enum, because the wire's numbers are a contract and an
+		// enum's values are a library's to renumber. An alignment the switch
+		// does not know is left, which is what a record that says nothing means.
+		public static uint Horizontal(TextHorizontalAlignment a)
+		{
+			switch (a)
+			{
+				case TextHorizontalAlignment.Center: return WireFormat.TextCenter;
+				case TextHorizontalAlignment.Right: return WireFormat.TextRight;
+				case TextHorizontalAlignment.Aligned: return WireFormat.TextAligned;
+				case TextHorizontalAlignment.Middle: return WireFormat.TextMiddle;
+				case TextHorizontalAlignment.Fit: return WireFormat.TextFit;
+				default: return WireFormat.TextLeft;
+			}
+		}
+
+		public static uint Vertical(TextVerticalAlignmentType a)
+		{
+			switch (a)
+			{
+				case TextVerticalAlignmentType.Bottom: return WireFormat.TextBottom;
+				case TextVerticalAlignmentType.Middle: return WireFormat.TextVMiddle;
+				case TextVerticalAlignmentType.Top: return WireFormat.TextTop;
+				default: return WireFormat.TextBaseline;
+			}
+		}
+
+		// MTEXT has one nine-way attachment point where TEXT has a pair. The
+		// pair it names is what a reader of the record wants: top-left is
+		// (left, top), middle-center is (center, middle), and so on. An
+		// attachment this does not know is top-left, which is the DXF default.
+		public static void Attachment(AttachmentPointType a, out uint halign, out uint valign)
+		{
+			switch (a)
+			{
+				case AttachmentPointType.TopCenter:
+					halign = WireFormat.TextCenter;
+					valign = WireFormat.TextTop;
+					return;
+				case AttachmentPointType.TopRight:
+					halign = WireFormat.TextRight;
+					valign = WireFormat.TextTop;
+					return;
+				case AttachmentPointType.MiddleLeft:
+					halign = WireFormat.TextLeft;
+					valign = WireFormat.TextVMiddle;
+					return;
+				case AttachmentPointType.MiddleCenter:
+					halign = WireFormat.TextCenter;
+					valign = WireFormat.TextVMiddle;
+					return;
+				case AttachmentPointType.MiddleRight:
+					halign = WireFormat.TextRight;
+					valign = WireFormat.TextVMiddle;
+					return;
+				case AttachmentPointType.BottomLeft:
+					halign = WireFormat.TextLeft;
+					valign = WireFormat.TextBottom;
+					return;
+				case AttachmentPointType.BottomCenter:
+					halign = WireFormat.TextCenter;
+					valign = WireFormat.TextBottom;
+					return;
+				case AttachmentPointType.BottomRight:
+					halign = WireFormat.TextRight;
+					valign = WireFormat.TextBottom;
+					return;
+				default:
+					halign = WireFormat.TextLeft;
+					valign = WireFormat.TextTop;
+					return;
+			}
+		}
+
 		// The value a record 10 carries for a TEXT, MTEXT or ATTRIB.
 		public static string Show(TextEntity text)
 		{

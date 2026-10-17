@@ -5,6 +5,8 @@
       "batches": 1,
       "bytes": 9643,
       "decode_code": "OK",
+      "document_drawing_version": 1018,
+      "document_maintenance_version": 104,
       "kinds": {
         "Arc": 1,
         "Circle": 1,
@@ -14,7 +16,7 @@
       },
       "live_handles": 0,
       "notification_count": 3,
-      "output_bytes": 1152,
+      "output_bytes": 1200,
       "records": 9,
       "sha256": "04ae1bca9e384c9604aff632b838a3497236daf9d79be7b073148a696d12b089",
       "view_count": 2,
@@ -28,6 +30,8 @@
       "batches": 1,
       "bytes": 10891,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 1,
         "Circle": 1,
@@ -37,7 +41,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1228,
+      "output_bytes": 1252,
       "records": 9,
       "sha256": "e54abbe4b4b24499783edc1d5c7251db66fa1683fb0197f2f3704b3eeee45813",
       "view_count": 2,
@@ -51,6 +55,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 1,
         "Warning": 4
@@ -71,6 +77,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 1,
         "Warning": 4
@@ -91,6 +99,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Circle": 1,
         "Warning": 4
@@ -111,6 +121,8 @@
       "batches": 1,
       "bytes": 11051,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 1,
         "Warning": 4
@@ -131,6 +143,8 @@
       "batches": 1,
       "bytes": 11019,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 3,
         "Point": 4,
@@ -140,7 +154,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1704,
+      "output_bytes": 1728,
       "records": 14,
       "sha256": "1460af678540fef90a9514d020fce2ea9c085e5cc4dacc4bc64f81e96b7bd6d4",
       "view_count": 2,
@@ -154,6 +168,8 @@
       "batches": 1,
       "bytes": 11979,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 12,
         "Point": 16,
@@ -163,7 +179,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 4356,
+      "output_bytes": 4452,
       "records": 44,
       "sha256": "f62d9df1588434447b034dc0fd4c76e806973c63bc83aea2146ebf0d9aca4a36",
       "view_count": 2,
@@ -177,6 +193,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Ellipse": 1,
         "Warning": 4
@@ -197,6 +215,8 @@
       "batches": 1,
       "bytes": 10507,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 5
       },
@@ -216,6 +236,8 @@
       "batches": 1,
       "bytes": 10923,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 6,
         "Warning": 5
@@ -236,6 +258,8 @@
       "batches": 1,
       "bytes": 10827,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 3,
         "Spline": 1,
@@ -257,6 +281,8 @@
       "batches": 1,
       "bytes": 10795,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Circle": 1,
         "Line": 1,
@@ -278,6 +304,8 @@
       "batches": 1,
       "bytes": 10923,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 5,
         "Warning": 8
@@ -298,6 +326,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 1,
         "Warning": 4
@@ -318,13 +348,15 @@
       "batches": 1,
       "bytes": 10571,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Text": 1,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 9084,
+      "output_bytes": 9108,
       "records": 5,
       "sha256": "b9c8b8f42779c6785ff9d19e8f8dfc48384739423978dc41065f8d722c126775",
       "view_count": 2,
@@ -338,6 +370,8 @@
       "batches": 1,
       "bytes": 10763,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 6,
         "Warning": 7
@@ -358,6 +392,8 @@
       "batches": 1,
       "bytes": 10571,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 1,
         "Warning": 8
@@ -378,6 +414,8 @@
       "batches": 1,
       "bytes": 10699,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 1,
         "Warning": 4
@@ -398,6 +436,8 @@
       "batches": 1,
       "bytes": 11531,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 21,
         "Warning": 6
@@ -418,6 +458,8 @@
       "batches": 1,
       "bytes": 11723,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Circle": 1,
         "Line": 6,
@@ -427,7 +469,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 3696,
+      "output_bytes": 3760,
       "records": 28,
       "sha256": "7e16f40a0a1a5ebfc1157a1e0d89111aef48bd30e2aac0057c55a74d2e90e5ea",
       "view_count": 2,
@@ -441,6 +483,8 @@
       "batches": 1,
       "bytes": 10604,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 7
       },
@@ -460,6 +504,8 @@
       "batches": 1,
       "bytes": 11148,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Placement": 2,
         "Point": 1,
@@ -482,6 +528,8 @@
       "batches": 1,
       "bytes": 10699,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Ellipse": 1,
         "Warning": 4
@@ -502,6 +550,8 @@
       "batches": 1,
       "bytes": 10795,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 2,
         "Circle": 2,
@@ -524,6 +574,8 @@
       "batches": 1,
       "bytes": 10892,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 1,
         "Circle": 2,
@@ -546,6 +598,8 @@
       "batches": 1,
       "bytes": 10731,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 1,
         "Circle": 1,
@@ -568,6 +622,8 @@
       "batches": 1,
       "bytes": 10828,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Ellipse": 1,
         "Polyline": 1,
@@ -589,6 +645,8 @@
       "batches": 1,
       "bytes": 11499,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Placement": 15,
         "Warning": 4
@@ -609,6 +667,8 @@
       "batches": 1,
       "bytes": 10828,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Point": 8,
         "Warning": 4
@@ -629,6 +689,8 @@
       "batches": 1,
       "bytes": 11243,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 9
       },
@@ -648,6 +710,8 @@
       "batches": 1,
       "bytes": 11404,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 9
       },
@@ -667,6 +731,8 @@
       "batches": 1,
       "bytes": 10731,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 3,
         "Warning": 4
@@ -687,6 +753,8 @@
       "batches": 1,
       "bytes": 10828,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 1,
         "Unbounded": 6,
@@ -708,6 +776,8 @@
       "batches": 1,
       "bytes": 12235,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Circle": 64,
         "Line": 64,
@@ -729,6 +799,8 @@
       "batches": 1,
       "bytes": 10539,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 1,
         "Warning": 4
@@ -749,6 +821,8 @@
       "batches": 1,
       "bytes": 10731,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 3,
         "Warning": 4
@@ -769,6 +843,8 @@
       "batches": 1,
       "bytes": 10889,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 5,
         "Warning": 4
@@ -789,6 +865,8 @@
       "batches": 1,
       "bytes": 10571,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Spline": 1,
         "Warning": 4
@@ -809,15 +887,39 @@
       "batches": 1,
       "bytes": 10699,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Text": 2,
         "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 996,
+      "output_bytes": 1044,
       "records": 6,
       "sha256": "c791143334c6d2ccda33a72e7e85fc2fd93e2c1b8e8acd5a75e1b2254aa54e0f",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_text_aligned.dwg": {
+      "batches": 1,
+      "bytes": 11243,
+      "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
+      "kinds": {
+        "Text": 7,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1604,
+      "records": 11,
+      "sha256": "9a5eb797cb20e3369df37f396a3f213e852296b89789857c5db7823d211997d3",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
@@ -829,6 +931,8 @@
       "batches": 1,
       "bytes": 11723,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 1,
         "Text": 14,
@@ -836,7 +940,7 @@
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 2188,
+      "output_bytes": 2524,
       "records": 19,
       "sha256": "aceceed251f21bbab67aa224b0f3b20719b7fcab2b97b1c4f6d601dfac80aabf",
       "view_count": 2,
@@ -850,6 +954,8 @@
       "batches": 1,
       "bytes": 10889,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 9
       },
@@ -869,6 +975,8 @@
       "batches": 1,
       "bytes": 10571,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Line": 2,
         "Warning": 4
@@ -889,6 +997,8 @@
       "batches": 1,
       "bytes": 10571,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Point": 1,
         "Polygon": 1,
@@ -910,6 +1020,8 @@
       "batches": 3,
       "bytes": 23320,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polyline": 1,
         "Warning": 4
@@ -930,6 +1042,8 @@
       "batches": 1,
       "bytes": 10923,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Polygon": 5,
         "Warning": 9
@@ -950,6 +1064,8 @@
       "batches": 1,
       "bytes": 10667,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Warning": 6
       },
@@ -969,6 +1085,8 @@
       "batches": 1,
       "bytes": 1097214,
       "decode_code": "OK",
+      "document_drawing_version": 1018,
+      "document_maintenance_version": 104,
       "kinds": {
         "Arc": 3,
         "Circle": 15,
@@ -985,7 +1103,7 @@
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 61580,
+      "output_bytes": 63824,
       "records": 494,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4,
@@ -1001,6 +1119,8 @@
       "batches": 1,
       "bytes": 1081979,
       "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
       "kinds": {
         "Arc": 3,
         "Circle": 15,
@@ -1017,7 +1137,7 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 62872,
+      "output_bytes": 65116,
       "records": 502,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
@@ -1033,7 +1153,7 @@
   "recorded": "2026-10-17",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
-    "sha256": "08504acec8edbe080db5f5cad9d30e449552d31751592843b69b48994f999f5c",
+    "sha256": "7c7a0d825e8050fe86a3c6c15a417132ba6c0bfd807b26a900c20118d06059e0",
     "sources": {
       "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
       "native/Adapter/Flatten.Curves.cs": "3e81dc6b2235af16ce9fadae841f5490d5b78e0b89ed3c245245045f4b131a8c",
@@ -1044,23 +1164,23 @@
       "native/Adapter/Flatten.MultiLeaders.cs": "827b18e11c76ef52e71f454fd6b12424888aa55d62fe60d059fa6f01191c940f",
       "native/Adapter/Flatten.Placements.cs": "714df26800c7bbbea71f2f388ed8c6be386f777242ea315d11d8e96f17117656",
       "native/Adapter/Flatten.Points.cs": "409429722fdabeb4da39e6a3613445120c37b664d49f1e79db99b00b127418c9",
-      "native/Adapter/Flatten.Text.cs": "a2c283df352e874b0aee6c5f0bab817b7968078a0f954b86383fbb7cafcad64a",
+      "native/Adapter/Flatten.Text.cs": "d8d33d2b1e47df6a526185180acd9884afc86e81781b63d4896142d4d2546009",
       "native/Adapter/Flatten.Unbounded.cs": "ed6178065ae86456db10b504448d9c09dd841a5389bf248fda76a58d75a8054f",
-      "native/Adapter/Flattener.cs": "3945c1550d542067fe6d7fb25f2ad6e4f0b08772c16eafce032ad056f779b8bf",
+      "native/Adapter/Flattener.cs": "a3cad3be479d67dfb338897ceb67ff4af1b8e83276c8a67fcfac3c8da66e1a7a",
       "native/Adapter/RecordName.cs": "25c3025889629f7eb9bd97c0d3b5b5443172a7867d535fc3a6b3869cb8cf290d",
       "native/Adapter/RefusedKinds.cs": "67aa09a53c85ff7fa27c8acd1077391d18eb74f4f7d68fa506ca15926acaaa1d",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
       "native/Adapter/WarningCodes.cs": "c49014e1db72553c7997554aebc19333a86f8037dbc4c21336495ec362ec8dee",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
-      "native/Sources/AcadSharpSource.cs": "dce2b5401a2744f32ff1815ace5e1654d97208ea1f7889c2df91e4a07fe7b52f",
-      "native/Sources/IDocumentSource.cs": "ef09d143be8d02dc498336f770ae1c939862107ba044fc5692b0e0ec2f10f871",
+      "native/Sources/AcadSharpSource.cs": "0a4a9cf21aa7666b0c733cf9651ef1454f34d67dde552805807895144b35426d",
+      "native/Sources/IDocumentSource.cs": "44e095aeab77c688ec53c5ce69bd959225cf4c17e384e28532fec1c527330182",
       "native/Sources/SourceFactory.cs": "b7c860ab7f06e643260359ba591bf01d3901e6fb1799aa09c91a7be65970617b",
-      "native/Sources/SyntheticSource.cs": "41c028b0ab46da517122b9364611df49fa7151b0395eda089cc1a8e56220ac95",
+      "native/Sources/SyntheticSource.cs": "f6e2676bba707645f2320a19d3994426b8a15d3c7a0a13fb7ad73dfc81481e44",
       "native/Wire/BatchWriter.cs": "fe450480b5bb98b593fc78cd77b183dc158ea0798b3328663997a75ad16129bd",
-      "native/Wire/DecodeSession.cs": "8e70e7820c9a7c9701298472f14776f831bfc6daa837463d98457c64e4d13c12",
-      "native/Wire/Primitive.cs": "a630e5183006135804be3300ef7cb3f705132500877b5f55d6929ef968bd943e",
-      "native/Wire/RecordEncoder.cs": "9f32694a2d385a2fa331290545e8df9e6a4e2473e068fa08009222e8f266dba0",
-      "native/Wire/WireFormat.cs": "6b250452f3be118f6f9e521ed6a99b99eff33b94719122fe7ff7516b13c7b8d1"
+      "native/Wire/DecodeSession.cs": "e6d1f62fc963c91a4ec7931edecdbb2e052d5e4abfb367e4c16fd30e493a02e0",
+      "native/Wire/Primitive.cs": "0176b78a5e06d84af75ae9287679f5e91fc06bbe6bcd3725f88eba725bf5802d",
+      "native/Wire/RecordEncoder.cs": "7b6efcd58dcc52394e3aa544bc95667278b219f81cc0886d303d1f3bb61f61ee",
+      "native/Wire/WireFormat.cs": "1073e57108fdc5b488a99acf6d86f4980ccd94ed3494ef6066529018dd430483"
     }
   }
 }

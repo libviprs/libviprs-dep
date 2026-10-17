@@ -86,6 +86,14 @@ namespace Viprs.Sources
 			get { return 1032u; }
 		}
 
+		// Not zero on purpose: a consumer that finds 228 here has read the
+		// field, and one that finds 0 could be reading either a field the
+		// stream never filled or a reserved word it skipped.
+		public uint MaintenanceVersion
+		{
+			get { return 228u; }
+		}
+
 		public int ViewCount
 		{
 			get { return (int)_views; }
@@ -130,6 +138,14 @@ namespace Viprs.Sources
 		public const double ProbeFraction = 0.25;
 		public const ulong ProbeHandleBase = 1000000ul;
 		public const string ProbeText = "VIPRS-TEXT-PROBE-\u00C4";
+
+		// A Text record's style name and width factor (wire version 3). Plain
+		// ASCII and seventeen bytes, so the style is padded by three and the
+		// padding after the second string is exercised as well as the first.
+		// 0.75 is exact in binary, which is what lets a consumer compare it
+		// for equality.
+		public const string ProbeStyle = "VIPRS-STYLE-PROBE";
+		public const double ProbeWidthFactor = 0.75;
 		public const string ProbeWarning = "VIPRS-WARNING-PROBE";
 		public const uint ProbeWarningCode = 1100u;
 		public const uint ProbeSplineDegree = 3u;
@@ -344,7 +360,14 @@ namespace Viprs.Sources
 							v[2],
 							v[3],
 							v[4],
-							ProbeText + new string('z', (int)(i % 4))
+							ProbeText + new string('z', (int)(i % 4)),
+							// Not the defaults, so a consumer that finds them
+							// has read the new fields and one that finds zeroes
+							// could have skipped them (wire version 3).
+							WireFormat.TextCenter,
+							WireFormat.TextTop,
+							ProbeWidthFactor,
+							ProbeStyle
 						);
 						break;
 					}
