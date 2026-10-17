@@ -198,6 +198,24 @@ namespace Viprs.Cad
 			// a correction and all three are exact.
 			public bool Mirrored;
 
+			// The plane the transform sends the entity's own plane to, as a unit
+			// vector, with the orientation the transform gives it: the image of
+			// the entity's x axis crossed with the image of its y axis, and
+			// nothing corrected for a reflection. Normal above is the other
+			// spelling of the same plane, turned back onto the entity's own side,
+			// and it is the one a face keeps. A curve uses this one, because a
+			// curve's angles, parameters and bulges are counter-clockwise about
+			// whatever normal its record carries, and about this normal the
+			// image of a reflected curve runs the way the stored one did. Nothing
+			// then has to be reversed, which is what the oracle writes and what
+			// libviprs/acadsharp-rs-tests#63 asked for.
+			public XYZ ImageNormal;
+
+			// Turn measured against ImageNormal's arbitrary axis, which is the
+			// rotation a curve's angles are offset by when the curve carries
+			// ImageNormal. Equal to Turn for a transform that is not a reflection.
+			public double ImageTurn;
+
 			// Equal in-plane scale factors that are still at right angles to each
 			// other, mirror or no mirror. This is the gate
 			// NON_UNIFORM_BLOCK_SCALE hangs off.
@@ -237,6 +255,18 @@ namespace Viprs.Cad
 			XYZ u = ArbitraryAxisX(basis.Normal);
 			XYZ v = XYZ.Cross(basis.Normal, u);
 			basis.Turn = Math.Atan2(a.Dot(v), a.Dot(u));
+
+			basis.ImageNormal = plane;
+			if (basis.Mirrored)
+			{
+				XYZ iu = ArbitraryAxisX(plane);
+				XYZ iv = XYZ.Cross(plane, iu);
+				basis.ImageTurn = Math.Atan2(a.Dot(iv), a.Dot(iu));
+			}
+			else
+			{
+				basis.ImageTurn = basis.Turn;
+			}
 
 			double m = Math.Max(Math.Max(basis.ScaleX, basis.ScaleY), 1.0);
 			basis.Uniform = Math.Abs(basis.ScaleX - basis.ScaleY) <= 1e-9 * m
@@ -827,25 +857,55 @@ namespace Viprs.Cad
 					Basis basis = ocs.Basis;
 					if (!basis.Uniform)
 					{
+						// Stretched: the image is an elliptical arc, and that is
+						// what is written (libviprs/acadsharp-rs-tests#64).
+						ImageEllipse stretched = ImageOfCurve(
+							ocs,
+							arc.Center,
+							new XYZ(arc.Radius, 0.0, 0.0),
+							new XYZ(0.0, arc.Radius, 0.0)
+						);
+						if (!stretched.Degenerate)
+						{
+							yield return Primitive.Ellipse(
+								h,
+								flags,
+								stretched.Center.X,
+								stretched.Center.Y,
+								stretched.Center.Z,
+								stretched.Major.X,
+								stretched.Major.Y,
+								stretched.Major.Z,
+								stretched.Ratio,
+								arc.StartAngle - stretched.Theta,
+								arc.EndAngle - stretched.Theta,
+								stretched.Normal.X,
+								stretched.Normal.Y,
+								stretched.Normal.Z
+							);
+							yield break;
+						}
+
+						// Collapsed onto a line or a point: no ellipse names it,
+						// so the record keeps the parameters and the warning says
+						// they no longer describe the drawing.
 						yield return NonUniform(h, flags, "ARC");
 					}
 
 					XYZ c = ocs.Apply(arc.Center);
 
-					// Under a reflection the image of the sweep runs the other
-					// way round the circle, so the record's two ends swap. The
-					// sweep is preserved: end minus start is still the included
-					// angle the drawing has. What a mirror cannot preserve is
-					// which end the drawing called the start, and no record
-					// whose angles are counter-clockwise about its normal can
-					// say that.
-					double start = basis.Mirrored
-						? basis.Turn - arc.EndAngle
-						: arc.StartAngle + basis.Turn;
-					double end = basis.Mirrored
-						? basis.Turn - arc.StartAngle
-						: arc.EndAngle + basis.Turn;
-
+					// The angles are counter-clockwise about the normal the
+					// record carries, and the record carries the image of the
+					// entity's own plane with the orientation the transform
+					// gives it, reflection included. About that normal the image
+					// of a reflected arc sweeps the way the stored one did, so
+					// nothing is reversed and the ends do not swap: the only
+					// correction left is the rotation, measured against that
+					// normal's arbitrary axis. This used to turn the normal back
+					// onto the entity's side and reflect the angles to match,
+					// which is the same curve spelled the other way round and
+					// not the spelling schema 1 writes
+					// (libviprs/acadsharp-rs-tests#63).
 					yield return Primitive.Arc(
 						h,
 						flags,
@@ -853,11 +913,11 @@ namespace Viprs.Cad
 						c.Y,
 						c.Z,
 						arc.Radius * basis.ScaleX,
-						start,
-						end,
-						basis.Normal.X,
-						basis.Normal.Y,
-						basis.Normal.Z
+						arc.StartAngle + basis.ImageTurn,
+						arc.EndAngle + basis.ImageTurn,
+						basis.ImageNormal.X,
+						basis.ImageNormal.Y,
+						basis.ImageNormal.Z
 					);
 					yield break;
 				}
@@ -871,6 +931,35 @@ namespace Viprs.Cad
 					Basis basis = ocs.Basis;
 					if (!basis.Uniform)
 					{
+						// A circle under a stretch is an ellipse, and a full one
+						// starts at the major axis (libviprs/acadsharp-rs-tests#64).
+						ImageEllipse stretched = ImageOfCurve(
+							ocs,
+							circle.Center,
+							new XYZ(circle.Radius, 0.0, 0.0),
+							new XYZ(0.0, circle.Radius, 0.0)
+						);
+						if (!stretched.Degenerate)
+						{
+							yield return Primitive.Ellipse(
+								h,
+								flags,
+								stretched.Center.X,
+								stretched.Center.Y,
+								stretched.Center.Z,
+								stretched.Major.X,
+								stretched.Major.Y,
+								stretched.Major.Z,
+								stretched.Ratio,
+								0.0,
+								2.0 * Math.PI,
+								stretched.Normal.X,
+								stretched.Normal.Y,
+								stretched.Normal.Z
+							);
+							yield break;
+						}
+
 						yield return NonUniform(h, flags, "CIRCLE");
 					}
 
@@ -882,9 +971,9 @@ namespace Viprs.Cad
 						c.Y,
 						c.Z,
 						circle.Radius * basis.ScaleX,
-						basis.Normal.X,
-						basis.Normal.Y,
-						basis.Normal.Z
+						basis.ImageNormal.X,
+						basis.ImageNormal.Y,
+						basis.ImageNormal.Z
 					);
 					yield break;
 				}
@@ -908,9 +997,48 @@ namespace Viprs.Cad
 					);
 					if (!basis.Uniform)
 					{
+						// The two semi-diameters go through the stretch and the
+						// principal axes of what comes out are written, with the
+						// parameters moved onto them
+						// (libviprs/acadsharp-rs-tests#64).
+						XYZ minor = XYZ.Cross(Unit(ellipse.Normal), major)
+							* (ellipse.MajorAxisEndPoint.GetLength() * ellipse.RadiusRatio);
+						ImageEllipse stretched = ImageOfCurve(
+							place,
+							ellipse.Center,
+							ellipse.MajorAxisEndPoint,
+							minor
+						);
+						if (!stretched.Degenerate)
+						{
+							yield return Primitive.Ellipse(
+								h,
+								flags,
+								stretched.Center.X,
+								stretched.Center.Y,
+								stretched.Center.Z,
+								stretched.Major.X,
+								stretched.Major.Y,
+								stretched.Major.Z,
+								stretched.Ratio,
+								ellipse.StartParameter - stretched.Theta,
+								ellipse.EndParameter - stretched.Theta,
+								stretched.Normal.X,
+								stretched.Normal.Y,
+								stretched.Normal.Z
+							);
+							yield break;
+						}
+
 						yield return NonUniform(h, flags, "ELLIPSE");
 					}
 
+					// The major axis is on the record and the parameters are
+					// measured from it, so the image of the curve keeps its
+					// parameters under any transform that keeps the shape, a
+					// reflection included. Only the normal needs care, and it is
+					// the image of the entity's plane with the orientation the
+					// transform gives it, the same spelling the arcs use.
 					yield return Primitive.Ellipse(
 						h,
 						flags,
@@ -921,11 +1049,11 @@ namespace Viprs.Cad
 						tm.Y,
 						tm.Z,
 						ellipse.RadiusRatio,
-						basis.Mirrored ? -ellipse.EndParameter : ellipse.StartParameter,
-						basis.Mirrored ? -ellipse.StartParameter : ellipse.EndParameter,
-						basis.Normal.X,
-						basis.Normal.Y,
-						basis.Normal.Z
+						ellipse.StartParameter,
+						ellipse.EndParameter,
+						basis.ImageNormal.X,
+						basis.ImageNormal.Y,
+						basis.ImageNormal.Z
 					);
 					yield break;
 				}
@@ -1002,14 +1130,17 @@ namespace Viprs.Cad
 						yield return NonUniform(h, flags, "LWPOLYLINE");
 					}
 
+					// The image normal and no bulge reversal: about the normal
+					// the transform gives the plane a mirrored span bulges the
+					// way the stored one did (libviprs/acadsharp-rs-tests#63).
 					yield return OnePolyline(
 						h,
 						flags,
 						lw.IsClosed,
 						pts,
 						lwBulges,
-						basis.Mirrored,
-						basis.Normal
+						false,
+						basis.ImageNormal
 					);
 					yield break;
 				}
@@ -1093,8 +1224,8 @@ namespace Viprs.Cad
 						poly.IsClosed,
 						pts.ToArray(),
 						bulges.ToArray(),
-						basis.Mirrored,
-						basis.Normal
+						false,
+						basis.ImageNormal
 					);
 					yield break;
 				}

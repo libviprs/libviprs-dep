@@ -483,13 +483,13 @@
       "bytes": 10699,
       "decode_code": "OK",
       "kinds": {
-        "Circle": 1,
-        "Warning": 5
+        "Ellipse": 1,
+        "Warning": 4
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1172,
-      "records": 6,
+      "output_bytes": 940,
+      "records": 5,
       "sha256": "e6175bd09a45f390085521c55b42837f049af1f2a3225bf1f1620782150aac7b",
       "view_count": 2,
       "view_extents": [
@@ -569,14 +569,14 @@
       "bytes": 10828,
       "decode_code": "OK",
       "kinds": {
-        "Circle": 1,
+        "Ellipse": 1,
         "Polyline": 1,
-        "Warning": 6
+        "Warning": 5
       },
       "live_handles": 0,
       "notification_count": 4,
-      "output_bytes": 1608,
-      "records": 8,
+      "output_bytes": 1376,
+      "records": 7,
       "sha256": "5d5242f2914922521e9bafff42e98700a2f3d62f64f1158fdffa2204747a8c90",
       "view_count": 2,
       "view_extents": [
@@ -1030,12 +1030,13 @@
       "views_without_extents": 0
     }
   },
-  "recorded": "2026-10-16",
+  "recorded": "2026-10-17",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
-    "sha256": "7d0c0c14f39513a750641f9a2a3d2a6c26f71c7c8404a382366fb2c19a166cc7",
+    "sha256": "08504acec8edbe080db5f5cad9d30e449552d31751592843b69b48994f999f5c",
     "sources": {
       "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
+      "native/Adapter/Flatten.Curves.cs": "3e81dc6b2235af16ce9fadae841f5490d5b78e0b89ed3c245245045f4b131a8c",
       "native/Adapter/Flatten.Faces.cs": "44e9a9ba519779f8f52ae47dbbbf7b9b05216436182d07674f8ad67eb3913dbb",
       "native/Adapter/Flatten.Leaders.cs": "6209dfe1ef72a247bc971e354b1fbe3f095fa747bb76c084eaf240da68a43abc",
       "native/Adapter/Flatten.MLine.cs": "b06a2f46de4c456c1462a9d36ef46fc4a5f46d109ab25cb55325b5a642639dff",
@@ -1045,7 +1046,7 @@
       "native/Adapter/Flatten.Points.cs": "409429722fdabeb4da39e6a3613445120c37b664d49f1e79db99b00b127418c9",
       "native/Adapter/Flatten.Text.cs": "a2c283df352e874b0aee6c5f0bab817b7968078a0f954b86383fbb7cafcad64a",
       "native/Adapter/Flatten.Unbounded.cs": "ed6178065ae86456db10b504448d9c09dd841a5389bf248fda76a58d75a8054f",
-      "native/Adapter/Flattener.cs": "1389e614a3dfeec938be11f3bc4b978f828ee3f992e80762356330ec8a683f12",
+      "native/Adapter/Flattener.cs": "3945c1550d542067fe6d7fb25f2ad6e4f0b08772c16eafce032ad056f779b8bf",
       "native/Adapter/RecordName.cs": "25c3025889629f7eb9bd97c0d3b5b5443172a7867d535fc3a6b3869cb8cf290d",
       "native/Adapter/RefusedKinds.cs": "67aa09a53c85ff7fa27c8acd1077391d18eb74f4f7d68fa506ca15926acaaa1d",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
