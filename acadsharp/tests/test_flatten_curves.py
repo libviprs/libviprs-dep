@@ -173,18 +173,30 @@ class TestABulgeCrossesAsABulge:
             "1.25 from the centre instead of 6.25"
         )
 
-    def test_a_reflection_negates_every_bulge(self):
+    def test_a_reflection_keeps_every_bulge_and_turns_the_normal_over(self):
         # The block holds the same polyline as g13_polyline.dwg and the
         # insertion has XScale -1, so the arc's midpoint has to be the mirror
         # image of (12.5, 5, 0). Both scale magnitudes are 1, so nothing here
         # is a non-uniform scale and nothing should warn about one.
+        #
+        # The record is spelled the way schema 1 spells it
+        # (libviprs/acadsharp-rs-tests#63): the normal is the image of the
+        # polyline's own plane, which a mirror turns over, and a bulge is
+        # counter-clockwise about whatever normal the record carries, so about
+        # the turned-over normal the mirrored span bulges the way the stored
+        # one did and nothing is negated. The old spelling kept the normal at
+        # +Z and negated the bulge: the same curve, and a different record.
         rs = [r for r in records("g13_mirrored_bulge.dwg") if r["kind"] == "Polyline"]
         assert len(rs) == 1
         pts, bulges, normal = vertex_record(rs[0]["rest"])
-        assert bulges == [0.0, -0.5, 0.0], (
-            f"the mirrored polyline carries {bulges}. A reflection flips which side of "
-            "the chord the arc bulges to, and the vertices follow the transform while "
-            "the bulge does not, so it has to be negated"
+        assert bulges == [0.0, 0.5, 0.0], (
+            f"the mirrored polyline carries {bulges}. The stored bulge is 0.5 and the "
+            "record's normal is turned over by the reflection, so the bulge crosses "
+            "as it was stored"
+        )
+        assert normal == pytest.approx((0.0, 0.0, -1.0), abs=1e-9), (
+            f"the mirrored polyline's normal is {normal}, not the image of +Z under a "
+            "reflection in x"
         )
         point = arc_midpoint(pts[1], pts[2], bulges[1], normal)
         assert point == pytest.approx((-12.5, 5.0, 0.0), abs=1e-9)
@@ -200,7 +212,12 @@ class TestABulgeCrossesAsABulge:
     def test_a_genuinely_non_uniform_scale_still_warns(self):
         # The control for the test above. Without it, "a mirror does not warn"
         # could be a warning nothing raises any more.
-        codes = [w["code"] for w in warnings("g13_nonuniform.dwg")]
+        #
+        # A bulge is a circular arc by definition and has no elliptical
+        # spelling in a Polyline, so a bulged polyline under a stretch is
+        # still warned about. A circle is not: it is an Ellipse now, and that
+        # is tested beside the other skew cases in test_flatten_ocs.py.
+        codes = [w["code"] for w in warnings("g13_ocs_skew.dwg")]
         assert "NON_UNIFORM_BLOCK_SCALE" in codes
 
 

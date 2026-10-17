@@ -26,7 +26,9 @@ CODE_FIXTURES = {
     "HATCH_PATTERN_ONLY": "g13_hatch.dwg",
     "HATCH_LOOP_NOT_POLYGON": "g13_hatch.dwg",
     "UNRESOLVED_BLOCK": "g13_xref.dwg",
-    "NON_UNIFORM_BLOCK_SCALE": "g13_nonuniform.dwg",
+    # A bulged polyline under a stretch: a circle under one is an Ellipse
+    # record now and raises nothing (libviprs/acadsharp-rs-tests#64).
+    "NON_UNIFORM_BLOCK_SCALE": "g13_ocs_skew.dwg",
     "NON_FINITE_GEOMETRY": "g13_nan_bulge.dwg",
     "EMPTY_VIEW": "g13_empty_view.dwg",
     # The real drawing carries all four kinds in RefusedKinds.cs (3DSOLID,
@@ -169,13 +171,21 @@ class TestBlocksAndExternalReferences:
 
 
 class TestTransformsThatDoNotPreserveShape:
-    def test_a_squashed_circle_warns_and_still_crosses_as_a_circle(self):
+    def test_a_squashed_circle_crosses_as_an_ellipse_and_raises_nothing(self):
+        # Wire 2 kept the circle and warned. The shim holds the transform and
+        # the Ellipse record exists, so it writes the shape the drawing shows
+        # (libviprs/acadsharp-rs-tests#64).
         found = [
             w for w in warnings("g13_nonuniform.dwg") if w["code"] == "NON_UNIFORM_BLOCK_SCALE"
         ]
-        assert len(found) == 1
-        assert "CIRCLE" in found[0]["message"]
-        assert kinds("g13_nonuniform.dwg").get("Circle", 0) == 1
+        assert found == []
+        counts = kinds("g13_nonuniform.dwg")
+        assert counts.get("Circle", 0) == 0
+        assert counts.get("Ellipse", 0) == 1
+
+    def test_a_squashed_bulge_still_warns_because_it_has_no_ellipse_spelling(self):
+        found = [w for w in warnings("g13_ocs_skew.dwg") if w["code"] == "NON_UNIFORM_BLOCK_SCALE"]
+        assert [w for w in found if "POLYLINE" in w["message"]]
 
 
 class TestHatches:

@@ -282,7 +282,7 @@ class TestAnArcUnderAMirroredInsertion:
         plain, mirrored = self.curves("Circle")
         assert mirrored["c"] == approx(negate_x(plain["c"]))
         assert mirrored["r"] == pytest.approx(plain["r"])
-        assert mirrored["normal"] == approx(plain["normal"])
+        assert mirrored["normal"] == approx(FLIPPED)
 
     def test_the_arc_sweeps_the_mirror_of_what_the_block_holds(self):
         plain, mirrored = self.curves("Arc")
@@ -346,6 +346,42 @@ class TestAnArcUnderAMirroredInsertion:
         )
 
 
+class TestAMirroredCurveIsSpelledTheWayTheSchemaSpellsIt:
+    """libviprs/acadsharp-rs-tests#63, on g13_ocs_mirror.dwg.
+
+    The mirrored curves above are the right geometry. This is about which of
+    the two records that name that geometry the shim writes. A reflection turns
+    a plane over, so the image of +Z is -Z; a curve's angles, parameters and
+    bulges are counter-clockwise about the record's normal, and about the
+    turned-over normal the mirrored curve runs the way the stored one did. So
+    the record that carries the image normal needs no angle swapped and no
+    bulge negated, and that is the record schema 1 holds for the same drawing.
+    The other spelling (normal kept at +Z, centre reflected, angles reversed)
+    is the same curve and is what the comparator reports as a finding.
+    """
+
+    def curves(self, kind):
+        rs = of_kind(MIRROR, kind)
+        return curve_record(rs[0]["rest"]), curve_record(rs[1]["rest"])
+
+    @pytest.mark.parametrize("kind", ["Circle", "Arc", "Ellipse"])
+    def test_the_mirrored_curve_faces_down(self, kind):
+        plain, mirrored = self.curves(kind)
+        assert plain["normal"] == approx((0.0, 0.0, 1.0))
+        assert mirrored["normal"] == approx(FLIPPED)
+
+    def test_the_arcs_angles_are_the_ones_the_block_stores(self):
+        plain, mirrored = self.curves("Arc")
+        assert mirrored["a0"] == pytest.approx(plain["a0"], abs=1e-6)
+        assert mirrored["a1"] == pytest.approx(plain["a1"], abs=1e-6)
+
+    def test_the_ellipses_parameters_are_the_ones_the_block_stores(self):
+        plain, mirrored = self.curves("Ellipse")
+        assert mirrored["p0"] == pytest.approx(plain["p0"], abs=1e-6)
+        assert mirrored["p1"] == pytest.approx(plain["p1"], abs=1e-6)
+        assert mirrored["ratio"] == pytest.approx(plain["ratio"])
+
+
 class TestARecordsNormalFollowsTheTransform:
     """g13_ocs_rotated.dwg: an insertion whose own extrusion is +Y, which
     takes the block's XY plane to the world's XZ plane.
@@ -404,15 +440,35 @@ class TestASkewIsNotAUniformScale:
     describe the shape.
     """
 
-    def test_the_squashed_circle_is_warned_about(self):
-        squashed = [w for w in warnings(SKEW) if w["code"] == "NON_UNIFORM_BLOCK_SCALE"]
-        assert squashed, (
-            f"{SKEW} produced no NON_UNIFORM_BLOCK_SCALE. The transform's two "
-            "singular values are 3 and 1, so the fixture's circle of radius 4 is "
-            "an ellipse with semi-axes 12 and 4, and the record calls it a circle "
-            "of radius 8.944272, which is neither"
+    def test_the_squashed_circle_is_the_ellipse_it_became(self):
+        # The transform's two singular values are 3 and 1, so the fixture's
+        # circle of radius 4 is an ellipse with semi-axes 12 and 4. The record
+        # used to call it a circle of radius 8.944272, which is neither, and
+        # then a circle with a warning beside it; it is the ellipse now
+        # (libviprs/acadsharp-rs-tests#64).
+        assert of_kind(SKEW, "Circle") == []
+        rs = of_kind(SKEW, "Ellipse")
+        assert len(rs) == 1, f"{SKEW} has {len(rs)} Ellipse records, not one"
+        e = curve_record(rs[0]["rest"])
+        assert math.sqrt(dot(e["major"], e["major"])) == pytest.approx(12.0, abs=1e-5)
+        assert e["ratio"] == pytest.approx(1.0 / 3.0, abs=1e-6)
+        assert e["normal"] == approx((0.0, 0.0, 1.0))
+        assert abs(e["p1"] - e["p0"] - 2.0 * math.pi) < 1e-5, "a full circle is a full ellipse"
+        assert not any(
+            "CIRCLE" in w["message"]
+            for w in warnings(SKEW)
+            if w["code"] == "NON_UNIFORM_BLOCK_SCALE"
         )
-        assert any("CIRCLE" in w["message"] for w in squashed)
+
+    def test_the_plain_stretch_is_an_ellipse_on_the_x_axis(self):
+        # g13_nonuniform.dwg: radius 4 at x scale 3, y scale 1.
+        rs = of_kind("g13_nonuniform.dwg", "Ellipse")
+        assert len(rs) == 1
+        e = curve_record(rs[0]["rest"])
+        assert e["c"] == approx((0.0, 0.0, 0.0))
+        assert e["major"] == approx((12.0, 0.0, 0.0))
+        assert e["ratio"] == pytest.approx(1.0 / 3.0, abs=1e-6)
+        assert e["normal"] == approx((0.0, 0.0, 1.0))
 
     def test_the_squashed_bulge_is_warned_about_too(self):
         # A bulge under this transform is an elliptical arc for the same
@@ -425,8 +481,9 @@ class TestASkewIsNotAUniformScale:
 
     def test_the_controls_beside_it(self):
         # Without these, "the skew warns" could be a warning everything
-        # raises. A plain non-uniform scale still warns and a mirror does not.
-        assert "NON_UNIFORM_BLOCK_SCALE" in [w["code"] for w in warnings("g13_nonuniform.dwg")]
+        # raises. A mirror does not warn, and a circle under a plain stretch
+        # does not either: it is an Ellipse.
+        assert "NON_UNIFORM_BLOCK_SCALE" not in [w["code"] for w in warnings("g13_nonuniform.dwg")]
         assert "NON_UNIFORM_BLOCK_SCALE" not in [w["code"] for w in warnings(MIRROR)]
 
 
