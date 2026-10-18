@@ -129,6 +129,9 @@ the generator is a red test that names the fixture.
 | File | sha256 | What it holds |
 | --- | --- | --- |
 | `g13_ac1009.dwg` | `0f7c1ae8358511b569895fd84f9d79cedccda520a8a9a762aeff7ae67223265d` | Not a drawing. The six bytes `AC1009` and then zeros, which is a DWG version this build does not read. ACadSharp's writer cannot produce an AC1009 file, so this one is written byte by byte. |
+| `g13_attdef_block.dwg` | `913a668432980cc923bd8682aaf2a3780dfe426f804866caa2baf0970ee3d022` | AC1032. An ATTDEF inside a block that is inserted once with an ATTRIB of its own, and an ATTDEF at the top of the view as the control (acadsharp-rs-tests#54). The template is skipped inside the block and the insertion's attributes follow the block's body. |
+| `g13_dimension_arrow.dwg` | `cebfb98fd4aeec44971673dfc45b66f169a009f66acba6b306518f382bd4e567` | AC1032. A linear dimension whose generated block holds two INSERTs of a two-stroke arrowhead block, the second rotated half a turn and scaled by two (acadsharp-rs-tests#55). |
+| `g13_invisible.dwg` | `208c645aeb62d04a819ee7b01a2450acc810a27593623024beabdc63d3e4101f` | AC1032. Invisible entities beside visible controls: a line, a circle inside a block, and a whole INSERT (acadsharp-rs-tests#60). |
 | `g13_arc.dwg` | `c3b09b470908d35265ef50e2aa70db9551533286778dc9182018cd4f059785b1` | One ARC. |
 | `g13_circle.dwg` | `6122b77ff962a84e7b18a07c7a3b92da9934ec82044ca363032d53c45167a523` | One CIRCLE. |
 | `g13_deep_blocks.dwg` | `2749f007a82dd4156b61c151ebb6097cb1d36d4551d6e31611b8d39e86fb0f19` | Six blocks nested one inside the next, for the max_block_depth bound. |

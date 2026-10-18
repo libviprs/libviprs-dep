@@ -63,8 +63,12 @@ class TestAnAttdefInsideABlock:
     """acadsharp-rs-tests#54."""
 
     def test_the_template_is_not_drawn_when_the_block_is_inserted(self):
-        values = [text_value(r["rest"]) for r in of_kind(ATTDEF, "Text")]
-        assert "the default" not in values, values
+        # ACadSharp's Insert constructor also makes an ATTRIB from each ATTDEF,
+        # carrying the definition's default, and that one is the instance's own
+        # and is drawn at flags 0. Anything text at flags 1 is the template
+        # itself, reached by expanding the block.
+        from_block = [text_value(r["rest"]) for r in of_kind(ATTDEF, "Text") if r["flags"] == 1]
+        assert from_block == [], from_block
 
     def test_the_insertions_own_attribute_is_what_the_instance_shows(self):
         texts = of_kind(ATTDEF, "Text")
@@ -79,7 +83,9 @@ class TestAnAttdefInsideABlock:
         assert top[0]["flags"] == 0
 
     def test_nothing_else_is_text(self):
-        assert len(of_kind(ATTDEF, "Text")) == 2
+        # The constructor's ATTRIB, the one the fixture adds, and the top-level
+        # definition.
+        assert len(of_kind(ATTDEF, "Text")) == 3
 
     def test_the_attribute_comes_after_the_block_body(self):
         # The block's line is the one record with the from-block bit set.

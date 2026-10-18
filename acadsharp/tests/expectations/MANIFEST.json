@@ -73,6 +73,27 @@
       ],
       "views_without_extents": 0
     },
+    "g13_attdef_block.dwg": {
+      "batches": 1,
+      "bytes": 10987,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 1,
+        "Text": 4,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1244,
+      "records": 9,
+      "sha256": "913a668432980cc923bd8682aaf2a3780dfe426f804866caa2baf0970ee3d022",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_bad_extents.dwg": {
       "batches": 1,
       "bytes": 10539,
@@ -157,6 +178,29 @@
       "output_bytes": 1728,
       "records": 14,
       "sha256": "1460af678540fef90a9514d020fce2ea9c085e5cc4dacc4bc64f81e96b7bd6d4",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_dimension_arrow.dwg": {
+      "batches": 1,
+      "bytes": 11243,
+      "decode_code": "OK",
+      "kinds": {
+        "Line": 3,
+        "Point": 4,
+        "Polygon": 2,
+        "Text": 1,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1704,
+      "records": 14,
+      "sha256": "cebfb98fd4aeec44971673dfc45b66f169a009f66acba6b306518f382bd4e567",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
@@ -293,6 +337,27 @@
       "output_bytes": 972,
       "records": 6,
       "sha256": "c8c1fcb0bdbd34c634c64ffc36421ffac7c59332e310018d9549986f7d5c86d1",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
+    "g13_invisible.dwg": {
+      "batches": 1,
+      "bytes": 10955,
+      "decode_code": "OK",
+      "kinds": {
+        "Circle": 3,
+        "Line": 2,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1204,
+      "records": 9,
+      "sha256": "208c645aeb62d04a819ee7b01a2450acc810a27593623024beabdc63d3e4101f",
       "view_count": 2,
       "view_extents": [
         "25.7,19.5,231.3,175.5",
