@@ -426,12 +426,6 @@ CARRIED = {
         "the text a block instance actually shows, which is why the arm is reached "
         "from InsertBody at all"
     ),
-    ("TextEntity", "AttributeDefinition"): (
-        "an ATTDEF carries a text value and a position and the arm emits both. It is "
-        "in a block's own entity list, so an insertion reaches the definition and the "
-        "instance, which is the thing to look at first if a drawing ever comes back "
-        "with its attribute text doubled"
-    ),
 }
 
 # An arm on one of these is the default arm under another name: it matches

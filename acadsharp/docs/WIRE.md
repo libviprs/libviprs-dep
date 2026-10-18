@@ -702,6 +702,26 @@ circle.
 A consumer that only draws segments should tessellate on its own side, at
 its own tolerance, where it can do it again at a different one.
 
+## What block expansion leaves out and puts in
+
+Three rules about which entities reach the stream at all, each one the answer
+to "what does a viewer show".
+
+- **An invisible entity is absent.** An entity the drawing marks invisible
+  produces no record, and neither does anything it would have expanded into: an
+  invisible `INSERT` takes its block with it, an invisible `DIMENSION` its
+  picture. There is no warning, because nothing was lost; the drawing never
+  showed it. This is where a dynamic block's visibility states end up.
+- **An `ATTDEF` inside a block is the template, not the text.** It is skipped
+  when the block is expanded, and the insertion's own `ATTRIB` records are the
+  text the instance shows. They follow the block's body in the stream, since
+  that is the order a viewer paints them in. An `ATTDEF` at the top of a view,
+  outside any block, is ordinary text.
+- **A dimension is its block, inserts included.** The arrowheads are `INSERT`s
+  of the blocks the dimension style names, inside the dimension's generated
+  block, and they expand like any other insertion, one depth deeper than the
+  dimension and under the same `max_block_depth`.
+
 ## Stream shape
 
 ```

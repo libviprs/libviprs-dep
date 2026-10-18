@@ -112,6 +112,9 @@ public static class Corpus
 		yield return Pair("g13_text_aligned.dwg", WriteTextAligned);
 		yield return Pair("g13_insert.dwg", WriteInsert);
 		yield return Pair("g13_dimension.dwg", WriteDimension);
+		yield return Pair("g13_attdef_block.dwg", WriteAttdefBlock);
+		yield return Pair("g13_dimension_arrow.dwg", WriteDimensionArrow);
+		yield return Pair("g13_invisible.dwg", WriteInvisible);
 		yield return Pair("g13_hatch.dwg", WriteHatch);
 		yield return Pair("g13_unsupported.dwg", WriteUnsupported);
 		// The refused-entity corpus. One file per kind the flattener does not
@@ -534,6 +537,130 @@ public static class Corpus
 		dim.UpdateBlock();
 		Write(doc, path);
 	}
+
+	// An ATTDEF is the template for an attribute. Inside a block it is not
+	// drawn when the block is inserted (the insertion's own ATTRIB is), and at
+	// the top of a view it is ordinary text (libviprs/acadsharp-rs-tests#54).
+	//
+	// The block holds a line, then a definition. The insertion carries one
+	// attribute, so the whole stream is: the line from the block (flags 1), then
+	// the attribute (flags 0), which is also the order, because the instance's
+	// text is painted over what the block draws. The definition at the top of
+	// the view is the control for "skipped everywhere": it must stay.
+	public static void WriteAttdefBlock(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		BlockRecord block = new BlockRecord("VIPRS_G13_ATTDEF_BLK");
+		block.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(4, 0, 0)));
+		block.Entities.Add(new AttributeDefinition
+		{
+			Tag = "TEMPLATE",
+			Prompt = "the prompt",
+			Value = "the default",
+			InsertPoint = new XYZ(1, 1, 0),
+			Height = 1.0,
+		});
+		doc.BlockRecords.Add(block);
+
+		Insert insert = new Insert(block)
+		{
+			InsertPoint = new XYZ(20, 0, 0),
+			Layer = L(doc),
+		};
+		insert.Attributes.Add(new AttributeEntity
+		{
+			Tag = "TEMPLATE",
+			InsertPoint = new XYZ(21, 1, 0),
+			Height = 1.0,
+			Value = "the instance value",
+		});
+		doc.Entities.Add(insert);
+
+		doc.Entities.Add(new AttributeDefinition
+		{
+			Tag = "TOPLEVEL",
+			Prompt = "a prompt",
+			Value = "top level definition",
+			InsertPoint = new XYZ(0, 10, 0),
+			Height = 1.0,
+			Layer = L(doc),
+		});
+		Write(doc, path);
+	}
+
+	// A dimension is its generated block with the inserts inside it, which is
+	// where an arrowhead lives (libviprs/acadsharp-rs-tests#55). The block gets
+	// two inserts of a one-line arrowhead block, one at each end, the second
+	// rotated half a turn and scaled, so a stream that expands them without the
+	// insert's transform fails as well as one that skips them.
+	public static void WriteDimensionArrow(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		BlockRecord arrow = new BlockRecord("VIPRS_G13_ARROW");
+		arrow.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(-1, 0.25, 0)));
+		arrow.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(-1, -0.25, 0)));
+		doc.BlockRecords.Add(arrow);
+
+		DimensionLinear dim = new DimensionLinear
+		{
+			FirstPoint = new XYZ(0, 0, 0),
+			SecondPoint = new XYZ(10, 0, 0),
+			DefinitionPoint = new XYZ(10, 0, 0),
+			TextMiddlePoint = new XYZ(5, 3, 0),
+			Offset = 3,
+			Layer = L(doc),
+		};
+		doc.Entities.Add(dim);
+		dim.UpdateBlock();
+		dim.Block.Entities.Add(new Insert(arrow) { InsertPoint = new XYZ(0, 3, 0) });
+		dim.Block.Entities.Add(new Insert(arrow)
+		{
+			InsertPoint = new XYZ(10, 3, 0),
+			Rotation = Math.PI,
+			XScale = 2.0,
+			YScale = 2.0,
+			ZScale = 2.0,
+		});
+		Write(doc, path);
+	}
+
+	// Entities the drawing marks invisible are not drawn, and neither is what an
+	// invisible one would have expanded into (libviprs/acadsharp-rs-tests#60).
+	// The visible ones are the controls: a rule that dropped too much fails on
+	// them. Five cases: a visible line and an invisible one at the top of the
+	// view; a block with a visible and an invisible circle, inserted visibly; an
+	// invisible insert of a block, whose circle must not appear either.
+	public static void WriteInvisible(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		doc.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(1, 0, 0)) { Layer = L(doc) });
+		doc.Entities.Add(new Line(new XYZ(0, 1, 0), new XYZ(1, 1, 0))
+		{
+			Layer = L(doc),
+			IsInvisible = true,
+		});
+
+		BlockRecord mixed = new BlockRecord("VIPRS_G13_INVISIBLE_MIXED");
+		mixed.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 1.0 });
+		mixed.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 2.0, IsInvisible = true });
+		doc.BlockRecords.Add(mixed);
+		doc.Entities.Add(new Insert(mixed) { InsertPoint = new XYZ(10, 0, 0), Layer = L(doc) });
+
+		BlockRecord whole = new BlockRecord("VIPRS_G13_INVISIBLE_WHOLE");
+		whole.Entities.Add(new Circle { Center = new XYZ(0, 0, 0), Radius = 3.0 });
+		doc.BlockRecords.Add(whole);
+		doc.Entities.Add(new Insert(whole)
+		{
+			InsertPoint = new XYZ(20, 0, 0),
+			Layer = L(doc),
+			IsInvisible = true,
+		});
+		Write(doc, path);
+	}
+
 
 	public static void WriteHatch(string path)
 	{

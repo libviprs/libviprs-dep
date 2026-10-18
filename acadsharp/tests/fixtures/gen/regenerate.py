@@ -134,6 +134,12 @@ DUMPED = (
     # which is what an isolated fixture is for.
     "g13_leader.dwg",
     "g13_multileader.dwg",
+    # What the block expansion leaves out and puts in (acadsharp-rs-tests #54,
+    # #55, #60): an ATTDEF inside a block, the inserts inside a dimension's
+    # block, and the entities a drawing marks invisible.
+    "g13_attdef_block.dwg",
+    "g13_dimension_arrow.dwg",
+    "g13_invisible.dwg",
     "g13_deep_blocks.dwg",
     "g13_slot.dwg",
     "g13_slot_block.dwg",

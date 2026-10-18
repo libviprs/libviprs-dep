@@ -541,6 +541,20 @@ namespace Viprs.Cad
 
 					CountEntity();
 
+					// An entity the drawing marks invisible is not drawn, and
+					// neither is anything it would have expanded into: an
+					// invisible INSERT takes its block with it, an invisible
+					// DIMENSION its picture and an invisible HATCH its boundary.
+					// This is where a dynamic block's visibility states end up.
+					// It is absence rather than a warning on purpose, because
+					// nothing was lost: the drawing never showed it. The check
+					// is after the count, so the bound that stops a file from
+					// making the walk do unbounded work still sees it.
+					if (item.Entity.IsInvisible)
+					{
+						continue;
+					}
+
 					if (item.Entity is Insert insert)
 					{
 						Primitive refusal;
@@ -758,19 +772,6 @@ namespace Viprs.Cad
 			int rows = insert.RowCount < 1 ? 1 : insert.RowCount;
 			int cols = insert.ColumnCount < 1 ? 1 : insert.ColumnCount;
 
-			// The attributes belong to the INSERT and are already placed in
-			// the frame the INSERT sits in, so they go out under the parent
-			// transform rather than under the block's.
-			foreach (AttributeEntity att in insert.Attributes)
-			{
-				yield return new Pending
-				{
-					Entity = att,
-					Placement = item.Placement,
-					Depth = item.Depth,
-				};
-			}
-
 			for (int r = 0; r < rows; r++)
 			{
 				for (int c = 0; c < cols; c++)
@@ -802,6 +803,23 @@ namespace Viprs.Cad
 						};
 					}
 				}
+			}
+
+			// The attributes belong to the INSERT and are already placed in
+			// the frame the INSERT sits in, so they go out under the parent
+			// transform rather than under the block's.
+			//
+			// After the block's body, which is the order schema 1 writes and the
+			// one a viewer paints in: the attribute is the text the instance
+			// shows on top of what the block draws.
+			foreach (AttributeEntity att in insert.Attributes)
+			{
+				yield return new Pending
+				{
+					Entity = att,
+					Placement = item.Placement,
+					Depth = item.Depth,
+				};
 			}
 		}
 
@@ -1261,6 +1279,18 @@ namespace Viprs.Cad
 					yield break;
 				}
 
+				// An ATTDEF inside a block is the template for an attribute, not
+				// something a viewer draws when the block is inserted: the
+				// insertion's own ATTRIBs are the text the instance shows, and
+				// they are emitted from InsertBody. The same entity at depth 0,
+				// in a view's own entity list, is ordinary text and falls
+				// through to the arm below, which this one has to be ahead of
+				// because a subtype after its base does not compile.
+				case AttributeDefinition when depth > 0:
+				{
+					yield break;
+				}
+
 				// AttributeEntity and AttributeDefinition derive from
 				// TextEntity, so this arm carries the text a block instance
 				// actually shows. Which string that is, for a multiline
@@ -1699,14 +1729,14 @@ namespace Viprs.Cad
 			{
 				foreach (Entity e in block.Entities)
 				{
-					// Never through an INSERT: a dimension block is generated
-					// geometry, not a user block, and walking it as a block
-					// would hand it a second depth budget.
-					if (e is Insert)
-					{
-						continue;
-					}
-
+					// An INSERT in here is an arrowhead: the dimension style names
+					// a block (_ArchTick, _ClosedBlank, _BoxBlank and the rest)
+					// and the generated picture inserts it at each end of the
+					// dimension line. A dimension is its block with the inserts
+					// inside it, so they go on the walk like any other entity.
+					// That does not hand the dimension a second depth budget:
+					// the item goes back to Walk one depth deeper and
+					// ExpandInsert checks it against max_block_depth.
 					handed++;
 					yield return new Pending
 					{
