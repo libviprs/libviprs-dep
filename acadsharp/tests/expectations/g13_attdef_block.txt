@@ -2,8 +2,7 @@
 00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Text handle=50 flags=0 p=[(1.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the default"
-00005 Text handle=51 flags=0 p=[(21.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the instance value"
-00006 Line handle=4C flags=1 pts=[(20.000000,0.000000,0.000000);(24.000000,0.000000,0.000000)]
-00007 Text handle=4D flags=1 p=[(21.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the default"
-00008 Text handle=52 flags=0 p=[(0.000000,10.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="top level definition"
+00004 Line handle=4C flags=1 pts=[(20.000000,0.000000,0.000000);(24.000000,0.000000,0.000000)]
+00005 Text handle=50 flags=0 p=[(1.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the default"
+00006 Text handle=51 flags=0 p=[(21.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the instance value"
+00007 Text handle=52 flags=0 p=[(0.000000,10.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="top level definition"

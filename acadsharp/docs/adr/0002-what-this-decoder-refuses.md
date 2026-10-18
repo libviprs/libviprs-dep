@@ -181,7 +181,7 @@ The numbers:
 * Of the 17 fixtures whose geometry can be compared without reimplementing the
   flattener, 15 match to 1e-6, including every OCS fixture, which is what says
   the arbitrary-axis lift is right.
-* On `real_AC1032.dwg` this adapter emits **454** geometry records and **48**
+* On `real_AC1032.dwg` this adapter emits **455** geometry records and **48**
   warnings, of which **8** are entity refusals: **1** on code 100 and **7** on
   code 109. acadrust reads every one of them with matching counts, so none of
   these gaps are things ACadSharp cannot expose. They are flattener and

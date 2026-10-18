@@ -131,6 +131,9 @@ class TestTheInsertsInsideADimensionsBlock:
                 all(abs(x - y) < TOL for x, y in zip(line_ends(r["rest"])[0], s))
                 for s in starts
             )
+            # The dimension line itself also starts at (0, 3): an arrowhead
+            # stroke is the short one.
+            and abs(line_ends(r["rest"])[1][0] - line_ends(r["rest"])[0][0]) < 3.0
         ]
         assert len(arrows) == 4, len(arrows)
         assert all(r["flags"] == 1 for r in arrows)

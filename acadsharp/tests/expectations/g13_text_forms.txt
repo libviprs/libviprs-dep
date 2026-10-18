@@ -12,8 +12,8 @@
 00011 Text handle=50 flags=0 p=[(30.000000,35.000000,0.000000)] h=2.500000 rot=0.000000 halign=left valign=top wf=1.000000 style="Standard" value="Dia ∅ 45\\P2nd line"
 00012 Text handle=51 flags=0 p=[(30.000000,43.000000,0.000000)] h=2.500000 rot=0.000000 halign=left valign=top wf=1.000000 style="Standard" value="\\\\U+2205 is literal here"
 00013 Text handle=52 flags=0 p=[(30.000000,51.000000,0.000000)] h=2.500000 rot=0.000000 halign=left valign=top wf=1.000000 style="Standard" value="\\\\∅ is an escaped backslash then a diameter sign"
-00014 Text handle=59 flags=0 p=[(60.000000,1.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="single line"
-00015 Text handle=5A flags=0 p=[(60.000000,4.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the multiline text\\Pof an attribute"
-00016 Text handle=5B flags=0 p=[(60.000000,7.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="fallback field"
-00017 Text handle=5C flags=0 p=[(60.000000,10.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="attribute ∅ escape"
-00018 Line handle=56 flags=1 pts=[(60.000000,0.000000,0.000000);(61.000000,0.000000,0.000000)]
+00014 Line handle=56 flags=1 pts=[(60.000000,0.000000,0.000000);(61.000000,0.000000,0.000000)]
+00015 Text handle=59 flags=0 p=[(60.000000,1.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="single line"
+00016 Text handle=5A flags=0 p=[(60.000000,4.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the multiline text\\Pof an attribute"
+00017 Text handle=5B flags=0 p=[(60.000000,7.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="fallback field"
+00018 Text handle=5C flags=0 p=[(60.000000,10.000000,0.000000)] h=1.500000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="attribute ∅ escape"
