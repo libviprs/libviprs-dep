@@ -1208,7 +1208,7 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 65060,
+      "output_bytes": 65220,
       "records": 503,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
@@ -1224,7 +1224,7 @@
   "recorded": "2026-10-24",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
-    "sha256": "7eb582e0da350ed4b65f3fe1986ae59966d22da7be0b8e401aeddaf0c5171ae6",
+    "sha256": "e4c437033a28bb19325133b3e26ee6ef0359946bf1274fc398235cb2782fabf9",
     "sources": {
       "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
       "native/Adapter/Flatten.Curves.cs": "3e81dc6b2235af16ce9fadae841f5490d5b78e0b89ed3c245245045f4b131a8c",
@@ -1237,7 +1237,7 @@
       "native/Adapter/Flatten.Points.cs": "409429722fdabeb4da39e6a3613445120c37b664d49f1e79db99b00b127418c9",
       "native/Adapter/Flatten.Text.cs": "d8d33d2b1e47df6a526185180acd9884afc86e81781b63d4896142d4d2546009",
       "native/Adapter/Flatten.Unbounded.cs": "ed6178065ae86456db10b504448d9c09dd841a5389bf248fda76a58d75a8054f",
-      "native/Adapter/Flattener.cs": "08df63aade5d5684d4bfaea0893f29f602365a45d10f436a823c582121997040",
+      "native/Adapter/Flattener.cs": "0fc3929f8ae9a968242898f72fcebafbc0df7ed3e427fc9b72dd50aa26025315",
       "native/Adapter/RecordName.cs": "25c3025889629f7eb9bd97c0d3b5b5443172a7867d535fc3a6b3869cb8cf290d",
       "native/Adapter/RefusedKinds.cs": "67aa09a53c85ff7fa27c8acd1077391d18eb74f4f7d68fa506ca15926acaaa1d",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",

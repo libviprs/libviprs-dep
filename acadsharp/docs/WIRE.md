@@ -355,6 +355,15 @@ no ellipse, and crosses as it was with warning 106 beside it.
 then `control_count` triples of `f64 x, y, z`, then `weight_count` values of
 `f64`. `weight_count` is either 0 or equal to `control_count`.
 
+A spline an AC1027 or later save stores as fit data holds fit points and end
+tangents and no control points, and this record has no field for fit points.
+For a cubic through exactly two fit points with both tangents present the shim
+sends the one Bezier segment they fix (control points P0, P0 + T0/3, P1 - T1/3,
+P1, knots 0,0,0,0,1,1,1,1), which matches the same drawing saved as AC1018 to
+1e-9 (libviprs-dep#150). A fit spline with more points still crosses with no
+control points and no knots, because their parametrisation and tangent scaling
+have no recorded drawing to be checked against.
+
 **9 `Polygon`**: record 4's payload exactly, with `closed` always 1. The
 boundary is closed implicitly and the first vertex is not repeated, so the
 closing span is the one `bulge[n - 1]` describes. One layout means one reader

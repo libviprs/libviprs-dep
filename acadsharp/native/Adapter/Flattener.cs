@@ -644,6 +644,47 @@ namespace Viprs.Cad
 		// condition, and that one throws: reaching it means this guard did not
 		// run, which is a bug in the library rather than a fact about the
 		// drawing.
+		// The control points of a spline stored as fit data, when they are
+		// determined. A cubic through two fit points with both end tangents given
+		// is one Bezier segment: P0, P0 + T0/3, P1 - T1/3, P1, over the knot
+		// vector 0,0,0,0,1,1,1,1. That was checked against the same drawing saved
+		// as AC1018, which stores the control points, and agrees to 1e-9.
+		//
+		// Only that case. More fit points need a parametrisation and a tangent
+		// scaling this has no recorded drawing to check against, and a plausible
+		// wrong curve is worse than the empty record it replaces, so those stay
+		// as the reader gave them.
+		private static bool TryFitSplineAsBezier(Spline spline, out XYZ[] bezier)
+		{
+			bezier = null;
+			if (spline.ControlPoints.Count != 0 || spline.Knots.Count != 0)
+				return false;
+			if (spline.Degree != 3 || spline.FitPoints.Count != 2)
+				return false;
+
+			XYZ p0 = spline.FitPoints[0];
+			XYZ p1 = spline.FitPoints[1];
+			XYZ t0 = spline.StartTangent;
+			XYZ t1 = spline.EndTangent;
+			if (t0.GetLength() == 0.0 || t1.GetLength() == 0.0)
+				return false;
+
+			XYZ[] pts = new XYZ[]
+			{
+				p0,
+				new XYZ(p0.X + t0.X / 3.0, p0.Y + t0.Y / 3.0, p0.Z + t0.Z / 3.0),
+				new XYZ(p1.X - t1.X / 3.0, p1.Y - t1.Y / 3.0, p1.Z - t1.Z / 3.0),
+				p1,
+			};
+			foreach (XYZ p in pts)
+			{
+				if (!double.IsFinite(p.X) || !double.IsFinite(p.Y) || !double.IsFinite(p.Z))
+					return false;
+			}
+			bezier = pts;
+			return true;
+		}
+
 		private static Primitive Finite(Primitive p)
 		{
 			if (p == null || !WireFormat.IsGeometry(p.Type))
@@ -1089,13 +1130,27 @@ namespace Viprs.Cad
 					CheckPointCount(spline.ControlPoints.Count, "a Spline record's control points");
 					CheckPointCount(spline.Knots.Count, "a Spline record's knots");
 
+					// A spline an AC1027 or later save stores as fit data holds
+					// no control points and no knots, and the wire's Spline has
+					// no field for fit points, so it used to cross empty
+					// (#150). Two fit points and both end tangents fix a cubic
+					// as one Bezier segment, so the control points are worked
+					// out, not guessed. Anything else is left as it was.
+					IReadOnlyList<XYZ> points = spline.ControlPoints;
+					double[] knots = spline.Knots.ToArray();
+					if (TryFitSplineAsBezier(spline, out XYZ[] bezier))
+					{
+						points = bezier;
+						knots = new double[] { 0, 0, 0, 0, 1, 1, 1, 1 };
+					}
+
 					// Straight into an array of the size the count already
 					// gives, rather than a List that is grown and then copied
 					// out. A spline's control points used to be copied four
 					// times between the document and the wire.
-					double[] ctrl = new double[spline.ControlPoints.Count * 3];
+					double[] ctrl = new double[points.Count * 3];
 					int at = 0;
-					foreach (XYZ p in spline.ControlPoints)
+					foreach (XYZ p in points)
 					{
 						XYZ v = place.Apply(p);
 						ctrl[at] = v.X;
@@ -1109,7 +1164,7 @@ namespace Viprs.Cad
 						flags,
 						(uint)spline.Degree,
 						(uint)spline.Flags,
-						spline.Knots.ToArray(),
+						knots,
 						ctrl,
 						spline.Weights.ToArray()
 					);
