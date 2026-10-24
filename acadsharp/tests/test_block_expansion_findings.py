@@ -47,7 +47,11 @@ def text_value(rest):
 
 
 def line_ends(rest):
-    m = re.search(r" pts=\[\(([-0-9.]+),([-0-9.]+),([-0-9.]+)\);\(([-0-9.]+),([-0-9.]+),([-0-9.]+)\)\]", rest)
+    m = re.search(
+        r" pts=\[\(([-0-9.]+),([-0-9.]+),([-0-9.]+)\);"
+        r"\(([-0-9.]+),([-0-9.]+),([-0-9.]+)\)\]",
+        rest,
+    )
     assert m, rest
     v = [float(x) for x in m.groups()]
     return (v[0], v[1], v[2]), (v[3], v[4], v[5])
@@ -78,7 +82,9 @@ class TestAnAttdefInsideABlock:
 
     def test_a_definition_at_the_top_of_the_view_is_still_text(self):
         # The control for "skipped everywhere": only the ones inside a block go.
-        top = [r for r in of_kind(ATTDEF, "Text") if text_value(r["rest"]) == "top level definition"]
+        top = [
+            r for r in of_kind(ATTDEF, "Text") if text_value(r["rest"]) == "top level definition"
+        ]
         assert len(top) == 1
         assert top[0]["flags"] == 0
 
@@ -92,9 +98,7 @@ class TestAnAttdefInsideABlock:
         body = [r for r in drawn(ATTDEF) if r["kind"] == "Line" and r["flags"] == 1]
         assert len(body) == 1
         instance = [
-            r
-            for r in of_kind(ATTDEF, "Text")
-            if text_value(r["rest"]) == "the instance value"
+            r for r in of_kind(ATTDEF, "Text") if text_value(r["rest"]) == "the instance value"
         ][0]
         assert body[0]["index"] < instance["index"], (body[0]["index"], instance["index"])
 
@@ -128,8 +132,7 @@ class TestTheInsertsInsideADimensionsBlock:
             r
             for r in of_kind(ARROW, "Line")
             if any(
-                all(abs(x - y) < TOL for x, y in zip(line_ends(r["rest"])[0], s))
-                for s in starts
+                all(abs(x - y) < TOL for x, y in zip(line_ends(r["rest"])[0], s)) for s in starts
             )
             # The dimension line itself also starts at (0, 3): an arrowhead
             # stroke is the short one.
