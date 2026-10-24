@@ -1174,7 +1174,7 @@
       },
       "live_handles": 0,
       "notification_count": 24,
-      "output_bytes": 63756,
+      "output_bytes": 63768,
       "records": 495,
       "sha256": "7d26f908516ec5fb89cc8054af33aff233b68a7b63208bbc5b7f9f4d9bff9866",
       "view_count": 4,
@@ -1208,7 +1208,7 @@
       },
       "live_handles": 0,
       "notification_count": 31,
-      "output_bytes": 65048,
+      "output_bytes": 65060,
       "records": 503,
       "sha256": "0e8faaca949c9429c92240082d9ea4d3524aca5baf7c7815ec439245c321b528",
       "view_count": 4,
@@ -1221,10 +1221,10 @@
       "views_without_extents": 0
     }
   },
-  "recorded": "2026-10-18",
+  "recorded": "2026-10-24",
   "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
   "shim": {
-    "sha256": "842d5ee325f3a1548e43bcfb8d14e25ed3cf145421666a1ec1bda52bc15693ac",
+    "sha256": "7eb582e0da350ed4b65f3fe1986ae59966d22da7be0b8e401aeddaf0c5171ae6",
     "sources": {
       "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
       "native/Adapter/Flatten.Curves.cs": "3e81dc6b2235af16ce9fadae841f5490d5b78e0b89ed3c245245045f4b131a8c",
@@ -1250,7 +1250,7 @@
       "native/Wire/BatchWriter.cs": "fe450480b5bb98b593fc78cd77b183dc158ea0798b3328663997a75ad16129bd",
       "native/Wire/DecodeSession.cs": "e6d1f62fc963c91a4ec7931edecdbb2e052d5e4abfb367e4c16fd30e493a02e0",
       "native/Wire/Primitive.cs": "0176b78a5e06d84af75ae9287679f5e91fc06bbe6bcd3725f88eba725bf5802d",
-      "native/Wire/RecordEncoder.cs": "7b6efcd58dcc52394e3aa544bc95667278b219f81cc0886d303d1f3bb61f61ee",
+      "native/Wire/RecordEncoder.cs": "78878772bbf5b423abec12aa94a33588a9f5dba1007d1160155bc178409a7119",
       "native/Wire/WireFormat.cs": "1073e57108fdc5b488a99acf6d86f4980ccd94ed3494ef6066529018dd430483"
     }
   }

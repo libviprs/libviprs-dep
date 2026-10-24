@@ -166,6 +166,12 @@ namespace Viprs.Wire
 					Prologue(p, ref c);
 					c.GeometryDoubles(p.Values, 0, 5);
 					Utf8WithLength(p.Text, ref c, false, p.Counts.Length > 0 ? p.Counts[0] : 0u);
+					// The string is padded to four before what follows it, as
+					// docs/WIRE.md says, and not only at the end of the record:
+					// the width factor used to land straight after the last
+					// byte of the string, so a text whose length was not a
+					// multiple of four put it up to three bytes early.
+					c.Zero(WireFormat.PadTo4(c.Length));
 					c.GeometryDoubles(p.Values, 5, 1);
 					Utf8WithLength(p.Style, ref c, false);
 					break;
