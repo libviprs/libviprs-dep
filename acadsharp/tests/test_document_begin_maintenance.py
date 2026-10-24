@@ -36,7 +36,8 @@ class TestTheManifestRecordsWhatDocumentBeginCarried:
         missing = [
             name
             for name, entry in MANIFEST["fixtures"].items()
-            if "document_maintenance_version" not in entry or "document_drawing_version" not in entry
+            if "document_maintenance_version" not in entry
+            or "document_drawing_version" not in entry
         ]
         assert not missing, (
             f"{missing} were recorded without what DocumentBegin carried, so nothing "
