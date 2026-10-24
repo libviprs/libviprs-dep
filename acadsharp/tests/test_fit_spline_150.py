@@ -40,7 +40,9 @@ CTRL = re.compile(r"ctrl=\[([^\]]*)\]")
 
 def spline(fixture, handle):
     found = [r for r in records(fixture) if r["kind"] == "Spline" and r["handle"] == handle]
-    assert len(found) == 1, f"{fixture}: expected one Spline with handle {handle}, found {len(found)}"
+    assert len(found) == 1, (
+        f"{fixture}: expected one Spline with handle {handle}, found {len(found)}"
+    )
     return found[0]
 
 
@@ -74,7 +76,10 @@ class TestTheFitSplineCrossesWithItsControlPoints:
 
     def test_it_has_eight_knots(self):
         got = knots(spline(REAL_32, FIT_SPLINE))
-        assert len(got) == 8, f"spline {FIT_SPLINE} in {REAL_32} crossed with {len(got)} knots; the DXF twin holds eight"
+        assert len(got) == 8, (
+            f"spline {FIT_SPLINE} in {REAL_32} crossed with {len(got)} knots; "
+            "the DXF twin holds eight"
+        )
 
     def test_the_knots_are_the_clamped_cubic_vector(self):
         assert knots(spline(REAL_32, FIT_SPLINE)) == [0, 0, 0, 0, 1, 1, 1, 1]
@@ -94,7 +99,9 @@ class TestTheTwoSavesAgree:
         b = ctrl(spline(REAL_18, FIT_SPLINE))
         assert len(a) == len(b), f"{len(a)} control points in AC1032, {len(b)} in AC1018"
         for i, (p, q) in enumerate(zip(a, b)):
-            assert max(abs(x - y) for x, y in zip(p, q)) < TOL, f"control point {i}: {p} against {q}"
+            assert max(abs(x - y) for x, y in zip(p, q)) < TOL, (
+                f"control point {i}: {p} against {q}"
+            )
 
     def test_the_neighbouring_spline_was_never_affected(self):
         # Spline 433 is defined by control points in both saves and already agrees.
@@ -105,9 +112,7 @@ class TestTheTwoSavesAgree:
 class TestNoRecordedSplineIsEmpty:
     def test_every_spline_record_carries_control_points_and_knots(self):
         empty = [
-            (fixture, r["handle"])
-            for fixture, r in all_splines()
-            if not ctrl(r) or not knots(r)
+            (fixture, r["handle"]) for fixture, r in all_splines() if not ctrl(r) or not knots(r)
         ]
         assert not empty, f"Spline records with no control points or no knots: {empty}"
 
@@ -131,7 +136,9 @@ class TestTheDerivationIsNotAGuess:
         expected = ctrl(spline(REAL_18, FIT_SPLINE))
         assert len(expected) == 4
         for i, (p, q) in enumerate(zip(derived, expected)):
-            assert abs(p[0] - q[0]) < TOL and abs(p[1] - q[1]) < TOL, f"control point {i}: {p} against {q}"
+            assert abs(p[0] - q[0]) < TOL and abs(p[1] - q[1]) < TOL, (
+                f"control point {i}: {p} against {q}"
+            )
 
 
 @pytest.mark.parametrize("fixture", [REAL_18, REAL_32])
