@@ -50,9 +50,47 @@ namespace Viprs.Cad
 		private readonly ResolvedLimits _limits;
 		private ulong _entities;
 
+		// Layer name to the id the Layer records give it (wire version 3).
+		// Names compare case-insensitively because a DWG's layer table does.
+		// Null or empty means the source has no table and every record says 0.
+		private readonly Dictionary<string, uint> _layerIds;
+
+		// The last instance index handed out. One Flattener walks one view, so
+		// the count starts again for each view, as docs/WIRE.md says.
+		private uint _instances;
+
 		public Flattener(ResolvedLimits limits)
+			: this(limits, null)
+		{
+		}
+
+		public Flattener(ResolvedLimits limits, IReadOnlyList<Viprs.Sources.SourceLayer> layers)
 		{
 			_limits = limits ?? ResolvedLimits.Defaults;
+			if (layers != null && layers.Count > 0)
+			{
+				_layerIds = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+				foreach (Viprs.Sources.SourceLayer l in layers)
+				{
+					if (l.Name != null && !_layerIds.ContainsKey(l.Name))
+					{
+						_layerIds[l.Name] = l.Id;
+					}
+				}
+			}
+		}
+
+		// The id of the layer an entity sits on, or 0 when the entity has none
+		// or the table does not hold it.
+		private uint LayerIdOf(Entity e)
+		{
+			if (_layerIds == null || e == null || e.Layer == null || e.Layer.Name == null)
+			{
+				return 0u;
+			}
+
+			uint id;
+			return _layerIds.TryGetValue(e.Layer.Name, out id) ? id : 0u;
 		}
 
 		public ulong EntitiesVisited
@@ -88,6 +126,13 @@ namespace Viprs.Cad
 		private struct Frame
 		{
 			public IEnumerator<Pending> Items;
+
+			// Non-zero for a composite (a dimension, a hatch, a multileader):
+			// the layer id of the composite itself. What it makes is drawn on
+			// the composite's layer, because that is the layer whose state
+			// hides it, and the synthesised entities it is made of carry
+			// whatever default layer the reader gave them.
+			public uint Inherit;
 		}
 
 		// ------------------------------------------------------- geometry
@@ -535,6 +580,11 @@ namespace Viprs.Cad
 					// batch writer counts every record it emits separately.
 					if (item.Record != null)
 					{
+						if (item.Record.LayerId == 0u)
+						{
+							item.Record.LayerId = frame.Inherit;
+						}
+
 						yield return Finite(item.Record);
 						continue;
 					}
@@ -577,7 +627,13 @@ namespace Viprs.Cad
 					if (item.Entity is Dimension dimension)
 					{
 						CheckDepth(item.Depth + 1, "DIMENSION", dimension.Handle, dimension.ObjectName);
-						stack.Push(new Frame { Items = DimensionBody(dimension, item).GetEnumerator() });
+						stack.Push(
+							new Frame
+							{
+								Items = DimensionBody(dimension, item).GetEnumerator(),
+								Inherit = LayerIdOf(dimension),
+							}
+						);
 						continue;
 					}
 
@@ -592,14 +648,26 @@ namespace Viprs.Cad
 							multiLeader.Handle,
 							multiLeader.ObjectName
 						);
-						stack.Push(new Frame { Items = MultiLeaderBody(multiLeader, item).GetEnumerator() });
+						stack.Push(
+							new Frame
+							{
+								Items = MultiLeaderBody(multiLeader, item).GetEnumerator(),
+								Inherit = LayerIdOf(multiLeader),
+							}
+						);
 						continue;
 					}
 
 					if (item.Entity is Hatch hatch)
 					{
 						CheckDepth(item.Depth + 1, "HATCH", hatch.Handle, hatch.ObjectName);
-						stack.Push(new Frame { Items = HatchBody(hatch, item).GetEnumerator() });
+						stack.Push(
+							new Frame
+							{
+								Items = HatchBody(hatch, item).GetEnumerator(),
+								Inherit = LayerIdOf(hatch),
+							}
+						);
 						continue;
 					}
 
@@ -609,6 +677,8 @@ namespace Viprs.Cad
 						{
 							p.ItemHandle = item.HandleOverride;
 						}
+
+						p.LayerId = frame.Inherit != 0u ? frame.Inherit : LayerIdOf(item.Entity);
 
 						yield return Finite(p);
 					}
@@ -834,6 +904,17 @@ namespace Viprs.Cad
 					// entity the cell holds, so the basis behind it is
 					// measured at most once however many entities that is.
 					Placement composed = new Placement(Compose(item.Placement.Matrix, cell));
+
+					// One bracket per cell: each cell of an array is its own
+					// expansion, and two of them repeat every leaf handle.
+					_instances = _instances + 1u;
+					uint instance = _instances;
+					yield return new Pending
+					{
+						Record = Primitive.InstanceBegin(instance, LayerIdOf(insert), block.Name),
+						Depth = item.Depth + 1,
+					};
+
 					foreach (Entity e in block.Entities)
 					{
 						yield return new Pending
@@ -843,6 +924,12 @@ namespace Viprs.Cad
 							Depth = item.Depth + 1,
 						};
 					}
+
+					yield return new Pending
+					{
+						Record = Primitive.InstanceEnd(instance),
+						Depth = item.Depth + 1,
+					};
 				}
 			}
 

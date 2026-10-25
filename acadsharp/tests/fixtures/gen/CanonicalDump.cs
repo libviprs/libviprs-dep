@@ -168,9 +168,32 @@ namespace Viprs.Cad
 			sb.Append(' ').Append(RecordName.Of(p.Type));
 			sb.Append(" handle=").Append(p.ItemHandle.ToString("X", CultureInfo.InvariantCulture));
 			sb.Append(" flags=").Append(p.Flags.ToString(CultureInfo.InvariantCulture));
+			if (WireFormat.IsGeometry(p.Type))
+			{
+				sb.Append(" layer=").Append(p.LayerId.ToString(CultureInfo.InvariantCulture));
+			}
 
 			switch (p.Type)
 			{
+				// Wire version 3's view context. lflags is the state word, bit 0
+				// on and bit 1 frozen, printed as a number so a bit the dump does
+				// not know about still shows.
+				case WireFormat.TypeLayer:
+					sb.Append(" id=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" lflags=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" name=").Append(Q(p.Text));
+					break;
+
+				case WireFormat.TypeInstanceBegin:
+					sb.Append(" inst=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" layer=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
+					sb.Append(" block=").Append(Q(p.Text));
+					break;
+
+				case WireFormat.TypeInstanceEnd:
+					sb.Append(" inst=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
+					break;
+
 				case WireFormat.TypeLine:
 					Triples(sb, "pts", p.Values, 0, 2);
 					break;

@@ -212,6 +212,28 @@ namespace Viprs.Wire
 					break;
 				}
 
+				// Wire version 3's view context. The names are cut and marked
+				// when they pass max_string_bytes rather than refused: a layer
+				// or a block with a hostile name is a drawing with an odd
+				// name, and refusing the decode over it would take the whole
+				// view down for a label.
+				case WireFormat.TypeLayer:
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					Utf8WithLength(p.Text, ref c, true);
+					break;
+
+				case WireFormat.TypeInstanceBegin:
+					c.U32(p.Counts[0]);
+					c.U32(p.Counts[1]);
+					Utf8WithLength(p.Text, ref c, true);
+					break;
+
+				case WireFormat.TypeInstanceEnd:
+					c.U32(p.Counts[0]);
+					c.U32(0u);
+					break;
+
 				case WireFormat.TypeWarning:
 					c.U32(p.Counts[0]);
 					c.U32(0u);
@@ -243,7 +265,7 @@ namespace Viprs.Wire
 		{
 			c.U64(p.ItemHandle);
 			c.U32(p.Flags);
-			c.U32(0u);
+			c.U32(p.LayerId);
 		}
 
 		private void GuardPoints(uint count)

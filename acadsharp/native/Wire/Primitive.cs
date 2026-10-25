@@ -19,6 +19,12 @@ namespace Viprs.Wire
 		// insertion, matching docs/WIRE.md's geometry prologue.
 		public uint Flags;
 
+		// The id of the layer this record sits on, an index into the view's
+		// Layer records (wire version 3, docs/WIRE.md). Written into the
+		// geometry prologue's old reserved0. Zero says the producer does not
+		// know, which is what every record said before this existed.
+		public uint LayerId;
+
 		public double[] Values = Array.Empty<double>();
 		public uint[] Counts = Array.Empty<uint>();
 		public ulong Count64;
@@ -454,6 +460,42 @@ namespace Viprs.Wire
 				Counts = new uint[] { kind, (uint)(clip.Length / 2) },
 				Values = values,
 				Text = name ?? string.Empty,
+			};
+		}
+
+		// Wire version 3's Layer: one row of the layer table. `id` is 1-based and
+		// is what a geometry record's layer_id and an InstanceBegin's layer_id
+		// refer to. `state` is WireFormat.LayerOn and LayerFrozen or'd together.
+		public static Primitive LayerEntry(uint id, uint state, string name)
+		{
+			return new Primitive
+			{
+				Type = WireFormat.TypeLayer,
+				Counts = new uint[] { id, state },
+				Text = name ?? string.Empty,
+			};
+		}
+
+		// Wire version 3's InstanceBegin: the start of one expansion of an
+		// INSERT (one per cell when it is an array). Everything up to the
+		// matching InstanceEnd came out of this expansion, and brackets inside
+		// are expansions nested in it. `layerId` is the INSERT's own layer.
+		public static Primitive InstanceBegin(uint index, uint layerId, string blockName)
+		{
+			return new Primitive
+			{
+				Type = WireFormat.TypeInstanceBegin,
+				Counts = new uint[] { index, layerId },
+				Text = blockName ?? string.Empty,
+			};
+		}
+
+		public static Primitive InstanceEnd(uint index)
+		{
+			return new Primitive
+			{
+				Type = WireFormat.TypeInstanceEnd,
+				Counts = new uint[] { index },
 			};
 		}
 

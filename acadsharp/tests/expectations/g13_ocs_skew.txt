@@ -1,7 +1,13 @@
-00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Ellipse handle=4C flags=1 c=[(0.000000,0.000000,0.000000)] major=[(12.000000,0.000000,0.000000)] ratio=0.333333 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
-00005 Warning handle=4D flags=1 code=NON_UNIFORM_BLOCK_SCALE message="LWPOLYLINE crossed under a block transform that does not scale its plane uniformly, so the shape its parameters describe is stretched in the drawing and they no longer name it. A reflection is not this case and raises nothing: a mirror is exact"
-00006 Polyline handle=4D flags=1 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(21.213203,7.071068,0.000000);(0.000000,14.142136,0.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 InstanceBegin handle=0 flags=0 inst=1 layer=2 block="VIPRS_G13_OCS_SKEW"
+00007 InstanceBegin handle=0 flags=0 inst=2 layer=1 block="VIPRS_G13_OCS_SKEW_INNER"
+00008 Ellipse handle=4C flags=1 layer=1 c=[(0.000000,0.000000,0.000000)] major=[(12.000000,0.000000,0.000000)] ratio=0.333333 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
+00009 Warning handle=4D flags=1 code=NON_UNIFORM_BLOCK_SCALE message="LWPOLYLINE crossed under a block transform that does not scale its plane uniformly, so the shape its parameters describe is stretched in the drawing and they no longer name it. A reflection is not this case and raises nothing: a mirror is exact"
+00010 Polyline handle=4D flags=1 layer=1 n=3 closed=0 pts=[(0.000000,0.000000,0.000000);(21.213203,7.071068,0.000000);(0.000000,14.142136,0.000000)] bulges=[0.000000,0.500000,0.000000] normal=[(0.000000,0.000000,1.000000)]
+00011 InstanceEnd handle=0 flags=0 inst=2
+00012 InstanceEnd handle=0 flags=0 inst=1

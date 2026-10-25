@@ -30,7 +30,7 @@ import os
 import re
 
 import pytest
-from g13_support import records
+from g13_support import records as _records
 
 ACAD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 WIRE_FORMAT = os.path.join(ACAD, "native", "Wire", "WireFormat.cs")
@@ -58,6 +58,11 @@ GEOMETRY = {
     "Unbounded",
     "Placement",
 }
+
+
+def records(fixture):
+    """The whole stream, view context included."""
+    return _records(fixture, context=True)
 
 
 def read(path):

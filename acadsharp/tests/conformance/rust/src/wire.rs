@@ -50,6 +50,9 @@ pub const TYPE_DOCUMENT_END: u16 = 13;
 pub const TYPE_POINT: u16 = 14;
 pub const TYPE_UNBOUNDED: u16 = 15;
 pub const TYPE_PLACEMENT: u16 = 16;
+pub const TYPE_LAYER: u16 = 17;
+pub const TYPE_INSTANCE_BEGIN: u16 = 18;
+pub const TYPE_INSTANCE_END: u16 = 19;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record<'a> {

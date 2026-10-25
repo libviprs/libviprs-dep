@@ -53,6 +53,9 @@
 #define VACB_TYPE_POINT 14
 #define VACB_TYPE_UNBOUNDED 15
 #define VACB_TYPE_PLACEMENT 16
+#define VACB_TYPE_LAYER 17
+#define VACB_TYPE_INSTANCE_BEGIN 18
+#define VACB_TYPE_INSTANCE_END 19
 
 typedef struct vacb_record {
 	uint16_t type;

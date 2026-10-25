@@ -94,6 +94,11 @@ namespace Viprs.Wire
 		private ulong _items;
 		private ulong _warnings;
 
+		// Layer, InstanceBegin and InstanceEnd records: counted in _items for
+		// ViewEnd's record_count, and taken back out wherever the question is
+		// how much the drawing held.
+		private ulong _context;
+
 		// The code this decode died of, or Result.Ok while it is still alive.
 		//
 		// Without it a refused decode could be asked again and would answer.
@@ -252,10 +257,33 @@ namespace Viprs.Wire
 				view.Name
 			);
 
+			// The layer table, once per view and ahead of everything that refers
+			// to it. These are the shim's own records and not entities the
+			// drawing holds, so max_entities does not count them, for the
+			// reason it does not count EMPTY_VIEW below; ViewEnd's record_count
+			// does, because it is a count of records.
+			foreach (SourceLayer layer in _document.Source.Layers)
+			{
+				_items = _items + 1ul;
+				_context = _context + 1ul;
+				yield return Primitive.LayerEntry(layer.Id, layer.State, layer.Name);
+			}
+
 			foreach (Primitive p in _document.Source.EnumerateView((int)_viewIndex, IsCanceled))
 			{
 				_items = _items + 1ul;
-				if (_items > _document.Limits.MaxEntities)
+
+				// The instance brackets are context and not content: they
+				// count as records and not against max_entities, and they do
+				// not make a view that holds nothing else non-empty.
+				if (p.Type == WireFormat.TypeInstanceBegin || p.Type == WireFormat.TypeInstanceEnd)
+				{
+					_context = _context + 1ul;
+					yield return p;
+					continue;
+				}
+
+				if (_items - _context > _document.Limits.MaxEntities)
 				{
 					throw new AbiException(
 						Result.LimitExceeded,
@@ -287,7 +315,7 @@ namespace Viprs.Wire
 			// on. max_entities is deliberately not consulted: this record is
 			// the shim's own and not an entity the drawing holds, and refusing
 			// a view for being empty is not a bound anybody asked for.
-			if (_items - _warnings == 0ul)
+			if (_items - _warnings - _context == 0ul)
 			{
 				_items = _items + 1ul;
 				_warnings = _warnings + 1ul;

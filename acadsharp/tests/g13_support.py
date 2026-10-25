@@ -306,18 +306,29 @@ def parse(line):
     }
 
 
-def records(fixture):
+# The view context wire 3 added (#156): a layer table, and brackets around each
+# expansion of an insertion. They say where a record sits and are not part of
+# what a drawing drew, so the assertions written before they existed (this kind
+# is the only one in the fixture, that many records came out) keep meaning what
+# they meant. `records(fixture, context=True)` is the whole stream, for the tests
+# that are about the context.
+CONTEXT_KINDS = ("Layer", "InstanceBegin", "InstanceEnd")
+
+
+def records(fixture, context=False):
     out = []
     for line in read_expectation(fixture):
         r = parse(line)
         assert r is not None, f"{fixture}: unparseable record line {line!r}"
+        if not context and r["kind"] in CONTEXT_KINDS:
+            continue
         out.append(r)
     return out
 
 
-def kinds(fixture):
+def kinds(fixture, context=False):
     counts = {}
-    for r in records(fixture):
+    for r in records(fixture, context=context):
         counts[r["kind"]] = counts.get(r["kind"], 0) + 1
     return counts
 

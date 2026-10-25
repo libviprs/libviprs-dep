@@ -34,6 +34,9 @@ namespace Viprs.Cad
 				case WireFormat.TypePoint: return "Point";
 				case WireFormat.TypeUnbounded: return "Unbounded";
 				case WireFormat.TypePlacement: return "Placement";
+				case WireFormat.TypeLayer: return "Layer";
+				case WireFormat.TypeInstanceBegin: return "InstanceBegin";
+				case WireFormat.TypeInstanceEnd: return "InstanceEnd";
 
 				// The forward probe, and anything a later wire version adds.
 				default: return "Type" + type.ToString(CultureInfo.InvariantCulture);

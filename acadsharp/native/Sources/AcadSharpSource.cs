@@ -31,6 +31,7 @@ namespace Viprs.Sources
 		private readonly List<string> _notifications = new List<string>();
 		private readonly List<SourceView> _views = new List<SourceView>();
 		private readonly List<BlockRecord> _blocks = new List<BlockRecord>();
+		private readonly List<SourceLayer> _layers = new List<SourceLayer>();
 		private uint _drawingVersion;
 		private uint _maintenanceVersion;
 		private int _viewsWithoutExtents;
@@ -72,6 +73,11 @@ namespace Viprs.Sources
 		public uint DrawingVersion
 		{
 			get { return _drawingVersion; }
+		}
+
+		public IReadOnlyList<SourceLayer> Layers
+		{
+			get { return _layers; }
 		}
 
 		public uint MaintenanceVersion
@@ -205,6 +211,7 @@ namespace Viprs.Sources
 					: (uint)maintenance;
 
 				BuildViews();
+				BuildLayers();
 			}
 			catch (OutOfMemoryException)
 			{
@@ -317,6 +324,37 @@ namespace Viprs.Sources
 			}
 		}
 
+		// The layer table, in the order the document holds it, numbered from 1.
+		//
+		// Off and frozen are the drawing's own switches and they are carried as
+		// they are: this decoder still emits the geometry of a layer that is
+		// off, and a consumer applies the drawing's visibility rules from the
+		// state word. A layer ACadSharp reports as off is not on, and a frozen
+		// one has bit 1 set whether or not it is also on, because the two are
+		// separate switches in the file and a drawing can have both.
+		private void BuildLayers()
+		{
+			uint id = 0u;
+			foreach (Layer layer in _document.Layers)
+			{
+				id = id + 1u;
+				uint state = 0u;
+				if (layer.IsOn)
+				{
+					state = state | WireFormat.LayerOn;
+				}
+
+				if (layer.Flags.HasFlag(LayerFlags.Frozen))
+				{
+					state = state | WireFormat.LayerFrozen;
+				}
+
+				_layers.Add(
+					new SourceLayer { Id = id, State = state, Name = layer.Name ?? string.Empty }
+				);
+			}
+		}
+
 		// What a view reports when its extents are not four numbers.
 		//
 		// docs/WIRE.md's finiteness guarantee covers the geometry records and leaves
@@ -402,7 +440,7 @@ namespace Viprs.Sources
 				yield break;
 			}
 
-			Flattener flattener = new Flattener(_limits);
+			Flattener flattener = new Flattener(_limits, _layers);
 			foreach (Primitive p in flattener.Walk(block.Entities, canceled))
 			{
 				yield return p;
@@ -420,6 +458,7 @@ namespace Viprs.Sources
 			_document = null;
 			_views.Clear();
 			_blocks.Clear();
+			_layers.Clear();
 		}
 	}
 }

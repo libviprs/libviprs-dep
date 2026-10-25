@@ -126,9 +126,11 @@ class TestABulgeCrossesAsABulge:
 
     def test_leaving_the_array_out_keeps_a_plain_polyline_the_size_it_was(self):
         # 4096 vertices, no bulge anywhere. The number is a literal, read off a
-        # decode: emitting the array unconditionally makes it 131,980, which is
-        # 32,768 bytes of zeroes for a polyline that is entirely straight.
-        assert MANIFEST["fixtures"]["g13_wide_polyline.dwg"]["output_bytes"] == 99212
+        # decode: emitting the array unconditionally makes it 132,044, which is
+        # 32,768 bytes of zeroes for a polyline that is entirely straight. Both
+        # figures moved by 64 when the view started carrying its two Layer
+        # records (#156), 28 bytes for "0" and 36 for "VIPRS_G13".
+        assert MANIFEST["fixtures"]["g13_wide_polyline.dwg"]["output_bytes"] == 99276
 
     def test_the_closing_span_of_a_closed_polyline_survives(self):
         rs = [r for r in records("g13_slot.dwg") if r["kind"] == "Polyline"]

@@ -13,7 +13,7 @@ self-describing beyond what is written here, and nothing is compressed.
 
 The numbering is part of the contract. A consumer switches on the number,
 never on a name, and these numbers have not moved since wire version 1. Records
-14 to 16 arrived with wire version 3 and are numbered past the framing records
+14 to 19 arrived with wire version 3 and are numbered past the framing records
 on purpose.
 
 | Number | Name | Carries |
@@ -34,6 +34,9 @@ on purpose.
 | 14 | `Point` | A position, the plane it was drawn in, and the angle of the marker's x axis in that plane. |
 | 15 | `Unbounded` | A base point and a direction, for a line that does not end: a ray or an infinite line. |
 | 16 | `Placement` | The frame an image or a PDF underlay occupies, its clip, and the name of what it refers to. |
+| 17 | `Layer` | One row of the layer table: an id, whether the layer is on or frozen, and its name. |
+| 18 | `InstanceBegin` | The start of one expansion of an insertion: its index, the insertion's layer id, and the block's name. |
+| 19 | `InstanceEnd` | The end of the expansion `InstanceBegin` opened. |
 
 Numbers from 32512 (`0x7F00`) upward are the forward-probe range. They carry
 no meaning in wire version 3 and a consumer must skip them by their length.
@@ -147,16 +150,26 @@ opens with the same sixteen-byte prologue:
 | --- | --- | --- |
 | 0 | 8 | `item_handle`, the backing file's handle for what produced this record, or 0 |
 | 8 | 4 | `flags`, bit 0 set when the record came from expanding a nested insertion |
-| 12 | 4 | `reserved0` |
+| 12 | 4 | `layer_id`, an id into the view's `Layer` records, or 0 when the producer does not know |
 
 Bit 1 of `flags` is defined by wire version 3 and means this record masks: it
 hides whatever the stream drew before it inside its own boundary rather than
 adding to it. A producer that sets it also keeps emitting warning 112 beside
 the record, which is the only channel wire version 2 has, and a consumer reads
-whichever of the two it understands. Every other bit stays zero and
-`reserved0` stays reserved and is written zero. No producer sets bit 1 yet, so
+whichever of the two it understands. Every other bit stays zero.
+No producer sets bit 1 yet, so
 today it is a reservation, made here so that the one prologue bit a later lane
 wants is not decided by that lane on the day it is needed.
+
+`layer_id` is wire version 3's, and it took the word every earlier version
+wrote as zero, so the prologue is the size it was and a reader that never looked
+at those four bytes reads what it always read. A nonzero value is the `id` of a
+`Layer` record (17) the same view carried, and a producer that cannot say which
+layer a record is on writes 0. The id is the layer the entity itself is on, not
+the layer of the insertion it was expanded from: the leaves of an expanded block
+keep their own, which is what a drawing's visibility rules look at, and the
+insertion's is on `InstanceBegin`. A hatch's boundary, a dimension's picture and
+a multileader's pieces are drawn on the layer of the entity they came from.
 
 **1 `DocumentBegin`**: `uint32 view_count`, `uint32 drawing_version` (the
 numeric AC10xx code, 0 when it is not known), `uint32 maintenance_version`,
@@ -554,6 +567,60 @@ of it, not to find out whether it is there. A consumer with a policy of its own
 goes and fetches the file; a renderer draws the frame and the label. The page
 of a PDF is not carried. Like record 10's bytes it is never shortened, and a
 name past `max_string_bytes` is refused.
+
+**17 `Layer`**: `uint32 id`, `uint32 state`, `uint32 name_len`, `uint32
+reserved0`, then `name_len` bytes of UTF-8 padded with zeroes to a multiple of
+four. The length is `24 + 4·ceil(name_len / 4)`.
+
+One record per layer of the document, written once per view directly after
+`ViewBegin` and before anything that refers to it, in the document's table order
+with `id` counting up from 1. Every view carries the whole table, so a consumer
+decoding one layout alone still has the names it needs. `state` is a bit set:
+bit 0 is set when the layer is on and bit 1 when it is frozen, and every other
+bit is zero. On is the set bit on purpose, so a state of zero is an off layer
+that is not frozen and never reads as the absence of an answer. The two are
+separate switches in the file and a layer can be both off and frozen.
+
+The decoder does not apply any of it. It emits the geometry of an off or frozen
+layer exactly as it emits any other, and the state is here so the consumer can
+apply the drawing's own visibility rules. A drawing with no layer table writes
+no `Layer` records and every `layer_id` is 0. The name is the layer's name as
+the drawing spells it. Like a warning's message it is cut at `max_string_bytes`
+and marked, not refused, because a layer with a hostile name is a drawing with
+an odd name and not a reason to lose the view. `reserved0` is zero. A `Layer`
+record is not geometry, so the finiteness guarantee has nothing to say about
+it, and it does not count against `max_entities`.
+
+**18 `InstanceBegin`**: `uint32 instance`, `uint32 layer_id`, `uint32
+name_len`, `uint32 reserved0`, then `name_len` bytes of UTF-8 padded with
+zeroes to a multiple of four. The length is `24 + 4·ceil(name_len / 4)`.
+
+**19 `InstanceEnd`**: `uint32 instance`, `uint32 reserved0`. 16 bytes.
+
+These two bracket the records one expansion of an insertion produced. Every
+record between an `InstanceBegin` and the `InstanceEnd` carrying the same
+`instance` came out of that expansion, and a bracket opened inside it is an
+expansion nested in it, so the chain of blocks a record sits in is the stack of
+open brackets, outermost first, and its block is the innermost. Brackets nest
+properly and never interleave. A record outside every bracket is at the top
+level, and the records inside one carry bit 0 of `flags`.
+
+`instance` counts from 1, per view, in the order the expansions begin, and an
+insertion that is an array is one expansion per cell. A handle does not stand in
+for it: every expansion of a block repeats each of its leaves' handles, and two
+cells of one array repeat all of them, so `instance` is what tells two copies of
+the same leaf apart. It is an identity within one view's stream and means
+nothing across views. `layer_id` is the insertion's own layer, an id into the
+`Layer` records, or 0, and the name is the block's. It is cut at
+`max_string_bytes` and marked, like a layer's. `reserved0` is zero.
+
+The attributes of an insertion belong to the insertion and not to the block, so
+they come out after the `InstanceEnd`, at the level the insertion is on. An
+invisible insertion, or one that could not be expanded (an external reference,
+a missing block), produces no bracket at all. Neither record is geometry and
+neither counts against `max_entities`, though both count towards `ViewEnd`'s
+`record_count` like any record. A view that holds nothing but brackets and
+layers still gets warning 108 (empty view).
 
 ### Ceilings the counts cannot exceed
 

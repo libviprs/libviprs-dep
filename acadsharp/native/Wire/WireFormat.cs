@@ -67,6 +67,21 @@ namespace Viprs.Wire
 		public const ushort TypeUnbounded = 15;
 		public const ushort TypePlacement = 16;
 
+		// Wire version 3's view context (#156): the layer table, and the brackets
+		// around one expansion of an INSERT. None of the three is geometry, so
+		// none is in IsGeometry below and none has a finiteness guarantee to
+		// keep: they carry ids, a state word and names.
+		public const ushort TypeLayer = 17;
+		public const ushort TypeInstanceBegin = 18;
+		public const ushort TypeInstanceEnd = 19;
+
+		// A Layer record's state word. Bit 0 set means the layer is on, bit 1
+		// set means it is frozen, and every other bit is zero. "On" is the
+		// positive spelling on purpose: a state word of zero is then an off,
+		// thawed layer and not the absence of an answer.
+		public const uint LayerOn = 1u;
+		public const uint LayerFrozen = 2u;
+
 		internal const ushort ForwardProbe = (ushort)ForwardProbeFirst;
 
 		// A Text record's alignment pair (wire version 3, docs/WIRE.md record

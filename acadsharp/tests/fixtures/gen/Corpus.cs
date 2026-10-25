@@ -111,6 +111,7 @@ public static class Corpus
 		yield return Pair("g13_text_forms.dwg", WriteTextForms);
 		yield return Pair("g13_text_aligned.dwg", WriteTextAligned);
 		yield return Pair("g13_insert.dwg", WriteInsert);
+		yield return Pair("g13_layers.dwg", WriteLayers);
 		yield return Pair("g13_dimension.dwg", WriteDimension);
 		yield return Pair("g13_attdef_block.dwg", WriteAttdefBlock);
 		yield return Pair("g13_dimension_arrow.dwg", WriteDimensionArrow);
@@ -517,6 +518,51 @@ public static class Corpus
 			Rotation = 0.5,
 			Layer = L(doc),
 		});
+
+		Write(doc, path);
+	}
+
+	// Layer state and instance identity (#156). Four layers in the states a
+	// drawing can put them in: "0" and WALLS on, HIDDEN off, FROZEN frozen.
+	//
+	// UNIT is a line on WALLS and a circle on "0". It is inserted three times,
+	// twice at top level (the first on the off layer, the second on WALLS and at
+	// twice the size) and once through OUTER, which inserts it a second way. So
+	// the same line handle is emitted under three different expansions, and the
+	// one thing that separates them is the instance index. The two top-level
+	// entities before the inserts sit on the off and the frozen layer, which a
+	// consumer applying the drawing's own visibility rules drops.
+	public static void WriteLayers(string path)
+	{
+		CadDocument doc = NewDoc();
+		Layer walls = new Layer("WALLS");
+		Layer hidden = new Layer("HIDDEN") { IsOn = false };
+		Layer frozen = new Layer("FROZEN") { Flags = LayerFlags.Frozen };
+		doc.Layers.Add(walls);
+		doc.Layers.Add(hidden);
+		doc.Layers.Add(frozen);
+
+		BlockRecord unit = new BlockRecord("VIPRS_G13_UNIT");
+		unit.Entities.Add(new Line(new XYZ(0, 0, 0), new XYZ(2, 0, 0)) { Layer = walls });
+		unit.Entities.Add(new Circle { Center = new XYZ(1, 1, 0), Radius = 0.5 });
+		doc.BlockRecords.Add(unit);
+
+		BlockRecord outer = new BlockRecord("VIPRS_G13_OUTER");
+		outer.Entities.Add(new Insert(unit) { InsertPoint = new XYZ(5, 0, 0) });
+		doc.BlockRecords.Add(outer);
+
+		doc.Entities.Add(new Line(new XYZ(-5, -5, 0), new XYZ(-1, -5, 0)) { Layer = hidden });
+		doc.Entities.Add(new Circle { Center = new XYZ(-3, -8, 0), Radius = 1.0, Layer = frozen });
+		doc.Entities.Add(new Insert(unit) { InsertPoint = new XYZ(10, 0, 0), Layer = hidden });
+		doc.Entities.Add(new Insert(unit)
+		{
+			InsertPoint = new XYZ(20, 0, 0),
+			XScale = 2.0,
+			YScale = 2.0,
+			ZScale = 2.0,
+			Layer = walls,
+		});
+		doc.Entities.Add(new Insert(outer) { InsertPoint = new XYZ(40, 0, 0), Layer = walls });
 
 		Write(doc, path);
 	}

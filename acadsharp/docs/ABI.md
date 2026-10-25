@@ -554,8 +554,9 @@ a value that would look right in its neighbour's place.
 
 The rest, in the same spirit:
 
-- `item_handle` is `1000000 + type`, and `flags` and every reserved field are
-  zero.
+- `item_handle` is `1000000 + type`, and every reserved field is zero. `flags`
+  is 1 on every geometry record, because the whole view sits inside one
+  instance bracket (below), and `layer_id` is 2.
 - A `Spline`'s knots, control points and weights are numbered as one run, so
   a consumer tells the three apart by where they start rather than by their
   values.
@@ -571,6 +572,13 @@ The rest, in the same spirit:
   eleven frame doubles so they are told apart from them by where they start.
 - A view's extents are four different numbers, none of them round and none
   symmetric with another.
+- Wire version 3's view context. Every view carries two `Layer` records: id 1,
+  on, named `VIPRS-LAYER-PROBE-A`, and id 2, on and frozen, named
+  `VIPRS-LAYER-PROBE-` with a non-ASCII character in it. Every geometry record
+  is on layer 2, and the whole run of them sits inside one `InstanceBegin` and
+  `InstanceEnd` of instance 7, on layer 1, for a block named `VIPRS-BLOCK-PROBE-`
+  with a non-ASCII character in it. The index is neither 1 nor either layer id,
+  so a consumer that reads the wrong word is told.
 
 These are placement probes and not drawable geometry: an `Ellipse` probe has
 a ratio above one, which no real ellipse does. Anything reading this document

@@ -1,0 +1,25 @@
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
+00002 Layer handle=0 flags=0 id=3 lflags=1 name="WALLS"
+00003 Layer handle=0 flags=0 id=4 lflags=0 name="HIDDEN"
+00004 Layer handle=0 flags=0 id=5 lflags=3 name="FROZEN"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00007 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00008 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00009 Line handle=55 flags=0 layer=4 pts=[(-5.000000,-5.000000,0.000000);(-1.000000,-5.000000,0.000000)]
+00010 Circle handle=56 flags=0 layer=5 c=[(-3.000000,-8.000000,0.000000)] r=1.000000 normal=[(0.000000,0.000000,1.000000)]
+00011 InstanceBegin handle=0 flags=0 inst=1 layer=4 block="VIPRS_G13_UNIT"
+00012 Line handle=4F flags=1 layer=3 pts=[(10.000000,0.000000,0.000000);(12.000000,0.000000,0.000000)]
+00013 Circle handle=50 flags=1 layer=1 c=[(11.000000,1.000000,0.000000)] r=0.500000 normal=[(0.000000,0.000000,1.000000)]
+00014 InstanceEnd handle=0 flags=0 inst=1
+00015 InstanceBegin handle=0 flags=0 inst=2 layer=3 block="VIPRS_G13_UNIT"
+00016 Line handle=4F flags=1 layer=3 pts=[(20.000000,0.000000,0.000000);(24.000000,0.000000,0.000000)]
+00017 Circle handle=50 flags=1 layer=1 c=[(22.000000,2.000000,0.000000)] r=1.000000 normal=[(0.000000,0.000000,1.000000)]
+00018 InstanceEnd handle=0 flags=0 inst=2
+00019 InstanceBegin handle=0 flags=0 inst=3 layer=3 block="VIPRS_G13_OUTER"
+00020 InstanceBegin handle=0 flags=0 inst=4 layer=1 block="VIPRS_G13_UNIT"
+00021 Line handle=4F flags=1 layer=3 pts=[(45.000000,0.000000,0.000000);(47.000000,0.000000,0.000000)]
+00022 Circle handle=50 flags=1 layer=1 c=[(46.000000,1.000000,0.000000)] r=0.500000 normal=[(0.000000,0.000000,1.000000)]
+00023 InstanceEnd handle=0 flags=0 inst=4
+00024 InstanceEnd handle=0 flags=0 inst=3
