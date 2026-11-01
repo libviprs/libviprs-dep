@@ -30,8 +30,24 @@ namespace Viprs.Sources
 		public string Name;
 	}
 
+	// One row of the document's layer table (wire version 3's Layer record).
+	// `Id` is 1-based and is what a primitive's LayerId and an InstanceBegin
+	// refer to. `State` is WireFormat.LayerOn and LayerFrozen or'd together.
+	internal struct SourceLayer
+	{
+		public uint Id;
+		public uint State;
+		public string Name;
+	}
+
 	internal interface IDocumentSource : IDisposable
 	{
+		// The document's layers, in table order, ids ascending from 1. Every
+		// view repeats the same table, so a consumer decoding one layout alone
+		// still gets the names it needs. Empty when the source has no layer
+		// table, in which case every primitive's LayerId is 0.
+		IReadOnlyList<SourceLayer> Layers { get; }
+
 		// The numeric AC10xx code the document was read from, or 0 when the
 		// source has no meaningful answer.
 		uint DrawingVersion { get; }

@@ -144,7 +144,9 @@ class TestTheDocumentsBindNoConsumer:
     @pytest.mark.parametrize("name", ("ABI.md", "WIRE.md"))
     def test_neither_document_leaks_the_upstream_object_model(self, name, abi, wire):
         text = abi if name == "ABI.md" else wire
-        hits = re.findall(r"Cad(?:Document|Entity)|\bLayer\b|\bBlock\b", text)
+        # `Layer` in backticks is record 17, a name this boundary owns (#156). The
+        # bare word is still the backing library's class, so it is still refused.
+        hits = re.findall(r"Cad(?:Document|Entity)|(?<!`)\bLayer\b(?!`)|\bBlock\b", text)
         assert not hits, (
             f"{name} names {hits}. The boundary is VIPRS-owned, and a document that "
             "describes it in the backing library's type names has documented the "

@@ -157,6 +157,35 @@ namespace Viprs.Sources
 		public const uint ProbePlacementKind = 1u;
 		public const string ProbePlacementName = "VIPRS-NAME-PROBE-\u00C4";
 
+		// Wire version 3's view context. Two layers, one of them frozen and
+		// neither with the id a default would be, and every geometry record on
+		// the second, so a consumer that reads layer_id as always zero or
+		// always one is told. The instance bracket around the view's items has
+		// an index that is neither 1 nor the layer id, and a name outside ASCII
+		// for the reason ProbeText has one.
+		public const uint ProbeLayerId = 2u;
+		public const string ProbeLayerNameOne = "VIPRS-LAYER-PROBE-A";
+		public const string ProbeLayerNameTwo = "VIPRS-LAYER-PROBE-\u00C4";
+		public const uint ProbeInstanceIndex = 7u;
+		public const uint ProbeInstanceLayerId = 1u;
+		public const string ProbeBlockName = "VIPRS-BLOCK-PROBE-\u00C4";
+
+		private static readonly SourceLayer[] ProbeLayers = new SourceLayer[]
+		{
+			new SourceLayer { Id = 1u, State = WireFormat.LayerOn, Name = ProbeLayerNameOne },
+			new SourceLayer
+			{
+				Id = 2u,
+				State = WireFormat.LayerOn | WireFormat.LayerFrozen,
+				Name = ProbeLayerNameTwo,
+			},
+		};
+
+		public IReadOnlyList<SourceLayer> Layers
+		{
+			get { return ProbeLayers; }
+		}
+
 		public static double Probe(ushort type, int k)
 		{
 			return (100.0 * type) + k + ProbeFraction;
@@ -196,6 +225,32 @@ namespace Viprs.Sources
 		// read there.
 		public IEnumerable<Primitive> EnumerateView(int index, Func<bool> canceled)
 		{
+			foreach (Primitive p in Items())
+			{
+				if (WireFormat.IsGeometry(p.Type))
+				{
+					p.LayerId = ProbeLayerId;
+
+					// Inside the bracket, so bit 0 is set the way a real
+					// expansion's records have it.
+					p.Flags = p.Flags | 1u;
+				}
+
+				yield return p;
+			}
+		}
+
+		// The whole view sits inside one InstanceBegin and InstanceEnd, so a
+		// consumer meets both on every stream and the bracket is checked against
+		// real bytes rather than only against a buffer a test assembled.
+		private IEnumerable<Primitive> Items()
+		{
+			yield return Primitive.InstanceBegin(
+				ProbeInstanceIndex,
+				ProbeInstanceLayerId,
+				ProbeBlockName
+			);
+
 			for (uint i = 0; i < _itemsPerView; i++)
 			{
 				switch (i % 12)
@@ -442,6 +497,8 @@ namespace Viprs.Sources
 					}
 				}
 			}
+
+			yield return Primitive.InstanceEnd(ProbeInstanceIndex);
 		}
 
 		public void Dispose() { }

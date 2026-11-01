@@ -94,6 +94,9 @@ DUMPED = (
     "g13_text_forms.dwg",
     "g13_text_aligned.dwg",
     "g13_insert.dwg",
+    # Layer state and instance identity (#156): an off layer, a frozen layer and
+    # one block expanded three ways.
+    "g13_layers.dwg",
     "g13_dimension.dwg",
     "g13_hatch.dwg",
     "g13_unsupported.dwg",

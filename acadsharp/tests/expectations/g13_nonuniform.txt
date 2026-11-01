@@ -1,5 +1,9 @@
-00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Ellipse handle=4C flags=1 c=[(0.000000,0.000000,0.000000)] major=[(12.000000,0.000000,0.000000)] ratio=0.333333 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 InstanceBegin handle=0 flags=0 inst=1 layer=2 block="VIPRS_G13_SQUASH"
+00007 Ellipse handle=4C flags=1 layer=1 c=[(0.000000,0.000000,0.000000)] major=[(12.000000,0.000000,0.000000)] ratio=0.333333 p0=0.000000 p1=6.283185 normal=[(0.000000,0.000000,1.000000)]
+00008 InstanceEnd handle=0 flags=0 inst=1

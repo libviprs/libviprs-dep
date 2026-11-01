@@ -34,7 +34,18 @@ ENCODER = os.path.join(ACAD, "native", "Wire", "RecordEncoder.cs")
 # The record types that are not geometry: stream framing and diagnostics. A new
 # type constant has to be in the IsGeometry set or in this list, and putting it
 # here is a statement that a consumer may meet a non-finite value in it.
-NOT_GEOMETRY = {"DocumentBegin", "ViewBegin", "Warning", "ViewEnd", "DocumentEnd"}
+NOT_GEOMETRY = {
+    "DocumentBegin",
+    "ViewBegin",
+    "Warning",
+    "ViewEnd",
+    "DocumentEnd",
+    # The view context (#156): ids, a state word and names. Nothing in them is a
+    # coordinate, so the finiteness guarantee has nothing to say about them.
+    "Layer",
+    "InstanceBegin",
+    "InstanceEnd",
+}
 
 
 def read(path):

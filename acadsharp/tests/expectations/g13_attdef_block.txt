@@ -1,8 +1,12 @@
-00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Line handle=4C flags=1 pts=[(20.000000,0.000000,0.000000);(24.000000,0.000000,0.000000)]
-00005 Text handle=50 flags=0 p=[(1.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the default"
-00006 Text handle=51 flags=0 p=[(21.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the instance value"
-00007 Text handle=52 flags=0 p=[(0.000000,10.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="top level definition"
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 InstanceBegin handle=0 flags=0 inst=1 layer=2 block="VIPRS_G13_ATTDEF_BLK"
+00007 Line handle=4C flags=1 layer=1 pts=[(20.000000,0.000000,0.000000);(24.000000,0.000000,0.000000)]
+00008 InstanceEnd handle=0 flags=0 inst=1
+00009 Text handle=50 flags=0 layer=1 p=[(1.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the default"
+00010 Text handle=51 flags=0 layer=1 p=[(21.000000,1.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="the instance value"
+00011 Text handle=52 flags=0 layer=2 p=[(0.000000,10.000000,0.000000)] h=1.000000 rot=0.000000 halign=left valign=baseline wf=1.000000 style="Standard" value="top level definition"

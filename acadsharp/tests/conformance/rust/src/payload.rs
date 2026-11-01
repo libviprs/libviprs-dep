@@ -32,6 +32,15 @@ const PROBE_WARNING_CODE: u32 = 1100;
 const PROBE_SPLINE_DEGREE: u32 = 3;
 const PROBE_NAME: &[u8] = b"VIPRS-NAME-PROBE-";
 
+// Wire version 3's view context. The synthetic document writes two Layer
+// records after ViewBegin, puts every geometry record on layer 2, and wraps all
+// of them in one InstanceBegin and InstanceEnd of instance 7 (docs/ABI.md).
+const PROBE_LAYER_ID: u32 = 2;
+const PROBE_INSTANCE: u32 = 7;
+const PROBE_LAYER_ONE: &[u8] = b"VIPRS-LAYER-PROBE-A";
+const PROBE_LAYER_TWO: &[u8] = b"VIPRS-LAYER-PROBE-";
+const PROBE_BLOCK: &[u8] = b"VIPRS-BLOCK-PROBE-";
+
 fn probe(kind: u16, k: usize) -> f64 {
     (100.0 * kind as f64) + k as f64 + 0.25
 }
@@ -51,6 +60,8 @@ pub struct Verifier {
     records: u64,
     view_records: u64,
     warnings: u64,
+    layers_seen: u32,
+    open_instance: u32,
 }
 
 impl Verifier {
@@ -138,8 +149,22 @@ impl Verifier {
 
     fn prologue(&mut self, r: &Record) {
         self.u64_at(r.payload, 0, probe_handle(r.kind), "prologue item_handle");
-        self.u32_at(r.payload, 8, 0, "prologue flags");
-        self.u32_at(r.payload, 12, 0, "prologue reserved0");
+        self.u32_at(r.payload, 8, 1, "prologue flags");
+        self.u32_at(r.payload, 12, PROBE_LAYER_ID, "prologue layer_id");
+        if self.layers_seen < PROBE_LAYER_ID {
+            self.fail(
+                "prologue layer_id",
+                "a Layer record that has not come yet".into(),
+                "one that came before".into(),
+            );
+        }
+        if self.open_instance != PROBE_INSTANCE {
+            self.fail(
+                "instance bracket",
+                "a geometry record outside it".into(),
+                "inside it".into(),
+            );
+        }
     }
 
     /// Counts every record, the forward probe included, because ViewEnd and
@@ -199,6 +224,8 @@ impl Verifier {
                 self.len_is(r, 24, "DocumentBegin length");
             }
             wire::TYPE_VIEW_BEGIN => {
+                self.layers_seen = 0;
+                self.open_instance = 0;
                 self.u32_at(p, 0, 0, "ViewBegin view_index");
                 self.u32_at(p, 4, 0, "ViewBegin kind");
                 self.f64_at(p, 8, -100.25, "ViewBegin min_x");
@@ -292,6 +319,52 @@ impl Verifier {
                 self.bytes_at(p, 120 + (16 * clip), PROBE_NAME, "Placement name");
                 self.len_is(r, 8 + 120 + (16 * clip) + bytes + pad4(bytes), "Placement length");
             }
+            // Wire version 3. Layer: id, state, name_len, reserved0, then the
+            // name. InstanceBegin has the same shape with the instance and the
+            // insertion's layer in the first two words. InstanceEnd is the
+            // instance and a zero.
+            wire::TYPE_LAYER => {
+                let first = self.layers_seen == 0;
+                let id = self.layers_seen + 1;
+                self.u32_at(p, 0, id, "Layer id counts up from 1");
+                self.u32_at(p, 4, if first { 1 } else { 3 }, "Layer state");
+                let bytes = self.count(p, 8, "Layer name_len") as usize;
+                self.u32_at(p, 12, 0, "Layer reserved0");
+                self.bytes_at(
+                    p,
+                    16,
+                    if first { PROBE_LAYER_ONE } else { PROBE_LAYER_TWO },
+                    "Layer name",
+                );
+                self.len_is(r, 8 + 16 + bytes + pad4(bytes), "Layer length");
+                self.layers_seen += 1;
+            }
+            wire::TYPE_INSTANCE_BEGIN => {
+                self.u32_at(p, 0, PROBE_INSTANCE, "InstanceBegin instance");
+                self.u32_at(p, 4, 1, "InstanceBegin layer_id");
+                let bytes = self.count(p, 8, "InstanceBegin name_len") as usize;
+                self.u32_at(p, 12, 0, "InstanceBegin reserved0");
+                self.bytes_at(p, 16, PROBE_BLOCK, "InstanceBegin block name");
+                self.len_is(r, 8 + 16 + bytes + pad4(bytes), "InstanceBegin length");
+                if self.open_instance != 0 {
+                    self.fail(
+                        "InstanceBegin",
+                        "another one still open".into(),
+                        "nothing open".into(),
+                    );
+                }
+                self.open_instance = PROBE_INSTANCE;
+            }
+            wire::TYPE_INSTANCE_END => {
+                let open = self.open_instance;
+                self.u32_at(p, 0, open, "InstanceEnd closes the open instance");
+                if open == 0 {
+                    self.fail("InstanceEnd", "nothing open".into(), "an open instance".into());
+                }
+                self.u32_at(p, 4, 0, "InstanceEnd reserved0");
+                self.len_is(r, 16, "InstanceEnd length");
+                self.open_instance = 0;
+            }
             wire::TYPE_WARNING => {
                 self.u32_at(p, 0, PROBE_WARNING_CODE, "Warning code");
                 self.u32_at(p, 4, 0, "Warning reserved0");
@@ -302,6 +375,9 @@ impl Verifier {
                 self.len_is(r, 8 + 24 + bytes + pad4(bytes), "Warning length");
             }
             wire::TYPE_VIEW_END => {
+                if self.open_instance != 0 {
+                    self.fail("ViewEnd", "an instance still open".into(), "none".into());
+                }
                 self.u32_at(p, 0, 0, "ViewEnd view_index");
                 self.u32_at(p, 4, 0, "ViewEnd reserved0");
                 let want = self.view_records;

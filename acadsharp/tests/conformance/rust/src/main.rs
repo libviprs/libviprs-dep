@@ -1119,7 +1119,7 @@ fn decode_and_parse(t: &mut Tally) {
     }
 
     println!("      {batches} batches, {probes} forward probes skipped");
-    for kind in 1..=16usize {
+    for kind in 1..=19usize {
         t.check(seen[kind], &format!("record type {kind} appeared in the stream"));
     }
     t.check(batches > 1, "the stream spanned more than one batch, so the loop ran");

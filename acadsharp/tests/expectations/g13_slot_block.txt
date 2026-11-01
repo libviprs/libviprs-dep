@@ -1,7 +1,15 @@
-00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,0.000000,0.000000);(20.000000,0.000000,0.000000);(20.000000,10.000000,0.000000);(0.000000,10.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
-00005 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,30.000000,0.000000);(20.000000,30.000000,0.000000);(20.000000,40.000000,0.000000);(0.000000,40.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
-00006 Polyline handle=4C flags=1 n=4 closed=1 pts=[(0.000000,60.000000,0.000000);(20.000000,60.000000,0.000000);(20.000000,70.000000,0.000000);(0.000000,70.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 InstanceBegin handle=0 flags=0 inst=1 layer=2 block="VIPRS_G13_SLOT"
+00007 Polyline handle=4C flags=1 layer=1 n=4 closed=1 pts=[(0.000000,0.000000,0.000000);(20.000000,0.000000,0.000000);(20.000000,10.000000,0.000000);(0.000000,10.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00008 InstanceEnd handle=0 flags=0 inst=1
+00009 InstanceBegin handle=0 flags=0 inst=2 layer=2 block="VIPRS_G13_SLOT"
+00010 Polyline handle=4C flags=1 layer=1 n=4 closed=1 pts=[(0.000000,30.000000,0.000000);(20.000000,30.000000,0.000000);(20.000000,40.000000,0.000000);(0.000000,40.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00011 InstanceEnd handle=0 flags=0 inst=2
+00012 InstanceBegin handle=0 flags=0 inst=3 layer=2 block="VIPRS_G13_SLOT"
+00013 Polyline handle=4C flags=1 layer=1 n=4 closed=1 pts=[(0.000000,60.000000,0.000000);(20.000000,60.000000,0.000000);(20.000000,70.000000,0.000000);(0.000000,70.000000,0.000000)] bulges=[0.000000,1.000000,0.000000,1.000000] normal=[(0.000000,0.000000,1.000000)]
+00014 InstanceEnd handle=0 flags=0 inst=3

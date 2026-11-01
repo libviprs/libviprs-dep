@@ -1,13 +1,19 @@
-00000 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00001 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
 00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
-00004 Warning handle=49 flags=0 code=MESH_SUBDIVISION_IGNORED message="MESH carries subdivision level 2 and the Polygon records beside this one are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that would invent vertices the drawing does not hold, so the level is ignored rather than approximated"
-00005 Polygon handle=49 flags=0 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,0.000000,0.000000);(10.000000,10.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00006 Polygon handle=49 flags=0 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,10.000000,0.000000);(0.000000,10.000000,4.000000)] bulges=[] normal=[(0.348155,-0.348155,0.870388)]
-00007 Warning handle=4D flags=1 code=MESH_SUBDIVISION_IGNORED message="MESH carries subdivision level 2 and the Polygon records beside this one are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that would invent vertices the drawing does not hold, so the level is ignored rather than approximated"
-00008 Polygon handle=4D flags=1 n=3 closed=1 pts=[(40.000000,0.000000,0.000000);(70.000000,0.000000,0.000000);(70.000000,15.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
-00009 Polygon handle=4D flags=1 n=3 closed=1 pts=[(40.000000,0.000000,0.000000);(70.000000,15.000000,0.000000);(40.000000,15.000000,4.000000)] bulges=[] normal=[(0.127775,-0.255551,0.958315)]
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 Warning handle=49 flags=0 code=MESH_SUBDIVISION_IGNORED message="MESH carries subdivision level 2 and the Polygon records beside this one are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that would invent vertices the drawing does not hold, so the level is ignored rather than approximated"
+00007 Polygon handle=49 flags=0 layer=2 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,0.000000,0.000000);(10.000000,10.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00008 Polygon handle=49 flags=0 layer=2 n=3 closed=1 pts=[(0.000000,0.000000,0.000000);(10.000000,10.000000,0.000000);(0.000000,10.000000,4.000000)] bulges=[] normal=[(0.348155,-0.348155,0.870388)]
+00009 InstanceBegin handle=0 flags=0 inst=1 layer=2 block="VIPRS_G13_MESH_BLK"
 00010 Warning handle=4D flags=1 code=MESH_SUBDIVISION_IGNORED message="MESH carries subdivision level 2 and the Polygon records beside this one are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that would invent vertices the drawing does not hold, so the level is ignored rather than approximated"
-00011 Polygon handle=4D flags=1 n=3 closed=1 pts=[(80.000000,0.000000,0.000000);(60.000000,0.000000,0.000000);(60.000000,20.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,-1.000000)]
-00012 Polygon handle=4D flags=1 n=3 closed=1 pts=[(80.000000,0.000000,0.000000);(60.000000,20.000000,0.000000);(80.000000,20.000000,4.000000)] bulges=[] normal=[(0.192450,0.192450,-0.962250)]
+00011 Polygon handle=4D flags=1 layer=1 n=3 closed=1 pts=[(40.000000,0.000000,0.000000);(70.000000,0.000000,0.000000);(70.000000,15.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00012 Polygon handle=4D flags=1 layer=1 n=3 closed=1 pts=[(40.000000,0.000000,0.000000);(70.000000,15.000000,0.000000);(40.000000,15.000000,4.000000)] bulges=[] normal=[(0.127775,-0.255551,0.958315)]
+00013 InstanceEnd handle=0 flags=0 inst=1
+00014 InstanceBegin handle=0 flags=0 inst=2 layer=2 block="VIPRS_G13_MESH_BLK"
+00015 Warning handle=4D flags=1 code=MESH_SUBDIVISION_IGNORED message="MESH carries subdivision level 2 and the Polygon records beside this one are the base mesh the file stores, one per face. Evaluating the subdivision is a smoothing algorithm that would invent vertices the drawing does not hold, so the level is ignored rather than approximated"
+00016 Polygon handle=4D flags=1 layer=1 n=3 closed=1 pts=[(80.000000,0.000000,0.000000);(60.000000,0.000000,0.000000);(60.000000,20.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,-1.000000)]
+00017 Polygon handle=4D flags=1 layer=1 n=3 closed=1 pts=[(80.000000,0.000000,0.000000);(60.000000,20.000000,0.000000);(80.000000,20.000000,4.000000)] bulges=[] normal=[(0.192450,0.192450,-0.962250)]
+00018 InstanceEnd handle=0 flags=0 inst=2

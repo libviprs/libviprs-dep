@@ -347,3 +347,29 @@ the string reads wire 2's record. The alternative for the text, placing it in
 the flattener and sending a left-baseline anchor, keeps the wire smaller and
 loses the alignment from the stream, which is the part a consumer that does its
 own layout needs. `docs/WIRE.md` has the layouts and wins over this paragraph.
+
+**5. The view context rides in wire 3 as well: a layer table, a layer id on every
+geometry record, and brackets around each expansion of an insertion (#156).**
+libviprs's Epic N has to apply the drawing's own visibility rules, and the
+stream gave it nothing to apply them with: no layer, no layer state, no block
+name, and no way to tell two expansions of one block apart, because every
+expansion repeats each leaf's handle. Wire 3 has no tag yet, so this lands
+inside it for the reason amendment 4 did, and a second bump to the same records
+would cost a wire 4.
+
+Three additions, and no layout that existed moves a byte. Record 17 `Layer` is
+one row of the layer table (id, an on and a frozen bit, the name), written once
+per layer after `ViewBegin`. The prologue's `reserved0` becomes `layer_id`, an id
+into that table. Records 18 `InstanceBegin` and 19 `InstanceEnd` bracket one
+expansion, with the instance index, the insertion's own layer id and the block's
+name on the first, and the stack of open brackets is the chain.
+
+The issue sketched a block-name index and an instance index on every geometry
+record. I went with brackets because they cost nothing on the records
+themselves, they carry the chain for free (a consumer that wants the parent of
+an instance reads the bracket it sits in), and a name is written once per
+expansion and not once per leaf. What a consumer gives up is a record that can
+be understood alone: it has to track the open brackets while it reads, which a
+consumer that applies visibility has to keep state for anyway. The decoder still
+emits the geometry of an off or frozen layer, and the state word is how the
+consumer knows. `docs/WIRE.md` has the layouts and wins over this paragraph.

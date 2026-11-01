@@ -725,7 +725,7 @@ namespace Viprs.Cad.Fixtures
 				? new Func<bool>(() => { polls++; return true; })
 				: null;
 
-			Flattener flattener = new Flattener(limits);
+			Flattener flattener = new Flattener(limits, null);
 			Stopwatch sw = Stopwatch.StartNew();
 			ulong records = 0ul;
 			string code = "OK";

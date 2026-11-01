@@ -121,6 +121,7 @@ ONCE_RECORDED = (
     "g13_face3d.dwg",
     "g13_hatch.dwg",
     "g13_insert.dwg",
+    "g13_layers.dwg",
     "g13_leader.dwg",
     "g13_line.dwg",
     "g13_long_text.dwg",
@@ -417,7 +418,7 @@ class TestTheDumpsAreWellFormed:
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
     def test_the_indices_run_from_zero(self, fixture):
-        for i, r in enumerate(records(fixture)):
+        for i, r in enumerate(records(fixture, context=True)):
             assert r["index"] == i, f"{fixture}: record {i} is numbered {r['index']}"
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
@@ -429,11 +430,11 @@ class TestTheDumpsAreWellFormed:
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
     def test_the_record_count_matches_the_manifest(self, fixture):
-        assert len(records(fixture)) == MANIFEST["fixtures"][fixture]["records"]
+        assert len(records(fixture, context=True)) == MANIFEST["fixtures"][fixture]["records"]
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
     def test_the_kind_counts_match_the_manifest(self, fixture):
-        assert kinds(fixture) == MANIFEST["fixtures"][fixture]["kinds"]
+        assert kinds(fixture, context=True) == MANIFEST["fixtures"][fixture]["kinds"]
 
     @pytest.mark.parametrize("fixture", FIXTURE_NAMES)
     def test_every_float_is_at_the_fixed_precision(self, fixture):

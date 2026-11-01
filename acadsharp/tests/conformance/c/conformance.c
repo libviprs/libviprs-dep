@@ -897,6 +897,15 @@ static void count_fail(const char *what, unsigned long long got, unsigned long l
 	}
 }
 
+/* A condition rather than a field: the bracket and the layer table are stream
+ * state, not bytes at an offset. */
+static void want_that(int ok, const char *what)
+{
+	if (!ok) {
+		count_fail(what, 0, 1);
+	}
+}
+
 static double probe(uint16_t type, uint32_t k)
 {
 	return (100.0 * (double)type) + (double)k + 0.25;
@@ -952,11 +961,25 @@ static void want_probes(const uint8_t *p, uint32_t off, uint16_t type, uint32_t 
 	}
 }
 
+/* Wire version 3's view context. The synthetic document writes two Layer
+ * records after ViewBegin, puts every geometry record on layer 2, and wraps all
+ * of them in one InstanceBegin and InstanceEnd of instance 7. So a geometry
+ * record is only right if the Layer records came first, the bracket is open, and
+ * its flags carry bit 0 for being inside it (docs/ABI.md). */
+#define PROBE_LAYER_ID 2u
+#define PROBE_INSTANCE 7u
+static uint32_t layers_seen;
+static uint32_t open_instance;
+
 static void want_prologue(const vacb_record *r)
 {
 	want_u64(r->payload, 0, probe_handle(r->type), "prologue item_handle");
-	want_u32(r->payload, 8, 0, "prologue flags");
-	want_u32(r->payload, 12, 0, "prologue reserved0");
+	want_u32(r->payload, 8, 1, "prologue flags");
+	want_u32(r->payload, 12, PROBE_LAYER_ID, "prologue layer_id");
+	want_that(layers_seen >= PROBE_LAYER_ID,
+		  "prologue layer_id names a Layer record that came before it");
+	want_that(open_instance == PROBE_INSTANCE,
+		  "a geometry record arrived outside the instance bracket");
 }
 
 static void want_bytes(const uint8_t *p, uint32_t off, const char *want, const char *what)
@@ -996,6 +1019,8 @@ static void verify_payload(const vacb_record *r)
 		break;
 
 	case VACB_TYPE_VIEW_BEGIN:
+		layers_seen = 0;
+		open_instance = 0;
 		want_u32(r->payload, 0, 0, "ViewBegin view_index");
 		want_u32(r->payload, 4, 0, "ViewBegin kind");
 		want_f64(r->payload, 8, -100.25, "ViewBegin min_x");
@@ -1125,6 +1150,40 @@ static void verify_payload(const vacb_record *r)
 		want_len(len, 8u + 120u + (16u * clip) + bytes + pad4(bytes), "Placement length");
 		break;
 
+	/* Wire version 3. Layer: id, state, name_len, reserved0, then the name.
+	 * InstanceBegin has the same shape with the instance and the insertion's
+	 * layer in the first two words. InstanceEnd is the instance and a zero. */
+	case VACB_TYPE_LAYER:
+		bytes = vacb_u32(r->payload + 8);
+		want_u32(r->payload, 0, layers_seen + 1u, "Layer id counts up from 1");
+		want_u32(r->payload, 4, layers_seen == 0 ? 1u : 3u, "Layer state");
+		want_u32(r->payload, 12, 0, "Layer reserved0");
+		want_bytes(r->payload, 16,
+			   layers_seen == 0 ? "VIPRS-LAYER-PROBE-A" : "VIPRS-LAYER-PROBE-",
+			   "Layer name");
+		want_len(len, 8u + 16u + bytes + pad4(bytes), "Layer length");
+		layers_seen++;
+		break;
+
+	case VACB_TYPE_INSTANCE_BEGIN:
+		bytes = vacb_u32(r->payload + 8);
+		want_u32(r->payload, 0, PROBE_INSTANCE, "InstanceBegin instance");
+		want_u32(r->payload, 4, 1, "InstanceBegin layer_id");
+		want_u32(r->payload, 12, 0, "InstanceBegin reserved0");
+		want_bytes(r->payload, 16, "VIPRS-BLOCK-PROBE-", "InstanceBegin block name");
+		want_len(len, 8u + 16u + bytes + pad4(bytes), "InstanceBegin length");
+		want_that(open_instance == 0, "an InstanceBegin arrived while another was open");
+		open_instance = PROBE_INSTANCE;
+		break;
+
+	case VACB_TYPE_INSTANCE_END:
+		want_u32(r->payload, 0, open_instance, "InstanceEnd closes the open instance");
+		want_that(open_instance != 0, "an InstanceEnd arrived with nothing open");
+		want_u32(r->payload, 4, 0, "InstanceEnd reserved0");
+		want_len(len, 16, "InstanceEnd length");
+		open_instance = 0;
+		break;
+
 	case VACB_TYPE_WARNING:
 		want_u32(r->payload, 0, 1100, "Warning code");
 		want_u32(r->payload, 4, 0, "Warning reserved0");
@@ -1136,6 +1195,7 @@ static void verify_payload(const vacb_record *r)
 		break;
 
 	case VACB_TYPE_VIEW_END:
+		want_that(open_instance == 0, "ViewEnd arrived inside an open instance");
 		want_u32(r->payload, 0, 0, "ViewEnd view_index");
 		want_u32(r->payload, 4, 0, "ViewEnd reserved0");
 		want_u64(r->payload, 8, view_records, "ViewEnd record_count");
@@ -1283,7 +1343,7 @@ static void test_decode_and_parse(void)
 	}
 
 	printf("      %d batches, %d forward probes skipped\n", batches, probes);
-	for (i = 1; i <= 16; i++) {
+	for (i = 1; i <= 19; i++) {
 		char label[64];
 		snprintf(label, sizeof label, "record type %d appeared in the stream", i);
 		check(seen[i] == 1, label);

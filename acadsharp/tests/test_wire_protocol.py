@@ -64,6 +64,11 @@ RECORD_TYPES = {
     "Point": 14,
     "Unbounded": 15,
     "Placement": 16,
+    # The view context (#156): a layer table, and the brackets around one
+    # expansion of an insertion.
+    "Layer": 17,
+    "InstanceBegin": 18,
+    "InstanceEnd": 19,
 }
 
 # Records whose length never varies, as docs/WIRE.md states them. The number
@@ -81,6 +86,7 @@ FIXED_RECORD_BYTES = {
     "DocumentEnd": 24,
     "Point": 80,
     "Unbounded": 80,
+    "InstanceEnd": 16,
 }
 
 # Types at or above this carry no meaning in wire_version 1 and exist so a
