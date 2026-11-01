@@ -170,7 +170,9 @@ class TestEveryGeometryRecordNamesItsLayer:
         assert table, f"{fixture} has no Layer records"
         for r in self.geometry(fixture):
             lid = field(r["rest"], "layer")
-            assert lid in table, f"{r['kind']} {r['handle']} names layer {lid}, which is not in {sorted(table)}"
+            assert lid in table, (
+                f"{r['kind']} {r['handle']} names layer {lid}, which is not in {sorted(table)}"
+            )
 
 
 class TestInstancesAreToldApart:
