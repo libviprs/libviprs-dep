@@ -28,7 +28,7 @@ for p in sorted(glob.glob("pdfs/*.pdf")):
         pt = time.time()-t
         him = Image.open(h).convert("RGBA")
         bg = Image.new("RGBA",him.size,"white"); bg.alpha_composite(him); him = bg.convert("L")
-        sz = f"{im.size}/{him.size}"
+        sz = f"{im.size[0]}x{im.size[1]}/{him.size[0]}x{him.size[1]}"  # pdfium/hayro, no commas so the CSV stays valid
         if him.size != im.size: him = him.resize(im.size)
         a = np.asarray(im,dtype=np.int16); b = np.asarray(him,dtype=np.int16)
         d = np.abs(a-b)

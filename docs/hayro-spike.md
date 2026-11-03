@@ -9,8 +9,10 @@ raw numbers are in [`tools/hayro-spike`](../tools/hayro-spike) (`results.csv` ha
 A small binary renders page 1 of 36 PDFs to 2000 px on the long side, and pypdfium2 renders the same page at
 the same scale. The 36 are the 35 arch, ISO and US sheets from the `pdf-candidates` set plus an exported DWG
 (`exported.pdf`). The PDFs themselves are not committed here, the names are in `results.csv`. Native x86_64
-container on MARS. Hayro's time includes process start, parse and PNG encode while pdfium's is render only, so
-the speed numbers are an upper bound for hayro.
+container on MARS. The pdfium baseline is pypdfium2's bundled pdfium, not the build this repo pins. Hayro's time
+includes process start, parse and PNG encode. Pdfium's time is `run.py`'s open, render and conversion to a PIL image,
+inside one Python process, with no process start and no PNG encode. The two are not like for like, so read the speed
+numbers as an upper bound for hayro.
 
 ## Numbers (36 of 36 rendered)
 
@@ -27,9 +29,11 @@ the speed numbers are an upper bound for hayro.
   `census-harrisonburg`, `f8949`, `f1040`, `USTopo_quickstart`, `usace_swf_gpw_daca67-06-d-0029`,
   `chorographia-naumburg-A3`, `usace_sam_tda_adjacency_diagrams_2026` and
   `usace_norfolk_hoskins_creek_dredging_plans`. I have not looked at them by eye yet.
-- Most of the difference is thin linework landing half a pixel apart (hayro's pixmap comes out one pixel smaller
-  than pdfium's on a few sheets, and I resize it to compare). Read the percentages as a lower bound on
-  disagreement, not as a fidelity verdict.
+- Hayro's pixmap is one pixel smaller than pdfium's in width, height or both on all 36 sheets (17 by one row, 12 by
+  one column, 7 by both), so `run.py` resizes every hayro image to pdfium's size before diffing. That resampling
+  shifts thin linework by up to a pixel and counts as disagreement, so the percentages above overstate how far
+  the two renderers really differ. They are a rough size of the problem, not a fidelity verdict, and I have not
+  separated resampling from real rendering differences.
 
 ## Encryption, the one hard gap
 
