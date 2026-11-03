@@ -391,6 +391,7 @@ namespace Viprs.Sources
 						yield return Primitive.Polygon(
 							ProbeHandle(WireFormat.TypePolygon),
 							0u,
+							WireFormat.FillNone,
 							Slice(all, 3, points * 3),
 							Slice(all, 3 + (points * 3), points),
 							all[0],

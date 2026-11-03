@@ -113,15 +113,17 @@ namespace Viprs.Wire
 		)
 		{
 			return Vertices(
-				WireFormat.TypePolyline, handle, flags, closed ? 1u : 0u, points, bulges, nx, ny, nz);
+				WireFormat.TypePolyline, handle, flags, closed ? 1u : 0u, 0u, points, bulges, nx, ny, nz);
 		}
 
 		// Record 9 takes record 4's payload with `closed` always 1. One layout,
 		// one reader on the other side, and a hatch loop that turns out to
-		// carry a bulge needs no new shape.
+		// carry a bulge needs no new shape. The word record 4 reserves carries
+		// the fill here (libviprs-dep#165).
 		public static Primitive Polygon(
 			ulong handle,
 			uint flags,
+			uint fill,
 			double[] points,
 			double[] bulges,
 			double nx,
@@ -130,7 +132,7 @@ namespace Viprs.Wire
 		)
 		{
 			return Vertices(
-				WireFormat.TypePolygon, handle, flags, 1u, points, bulges, nx, ny, nz);
+				WireFormat.TypePolygon, handle, flags, 1u, fill, points, bulges, nx, ny, nz);
 		}
 
 		private static Primitive Vertices(
@@ -138,6 +140,7 @@ namespace Viprs.Wire
 			ulong handle,
 			uint flags,
 			uint closed,
+			uint reserved1,
 			double[] points,
 			double[] bulges,
 			double nx,
@@ -169,7 +172,7 @@ namespace Viprs.Wire
 				Type = type,
 				ItemHandle = handle,
 				Flags = flags,
-				Counts = new uint[] { (uint)n, closed, (uint)bulges.Length, 0u },
+				Counts = new uint[] { (uint)n, closed, (uint)bulges.Length, reserved1 },
 				Values = values,
 			};
 		}

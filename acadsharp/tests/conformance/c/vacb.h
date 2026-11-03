@@ -91,7 +91,7 @@ int vacb_next(vacb_reader *r, vacb_record *out);
  * headers and knows nothing about what a payload means, which is what lets it
  * skip a type it has never heard of; a layout rule pushed into that loop would
  * make it wrong for every record type the day one of them changes. */
-uint32_t vacb_polyline_shape(const uint8_t *payload, uint32_t payload_len, uint32_t length,
+uint32_t vacb_polyline_shape(uint32_t kind, const uint8_t *payload, uint32_t payload_len, uint32_t length,
 			     uint32_t *point_count, uint32_t *bulge_count);
 
 /* One Polyline or Polygon built field by field, so a test can lie about any

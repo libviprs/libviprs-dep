@@ -54,6 +54,13 @@ namespace Viprs.Wire
 		public const ushort TypeEllipse = 7;
 		public const ushort TypeSpline = 8;
 		public const ushort TypePolygon = 9;
+
+		// What record 9's fill word says about the region its boundary
+		// encloses (libviprs-dep#165). `none` is every polygon that is a
+		// face, a mask or a loop with nothing to say.
+		public const uint FillNone = 0;
+		public const uint FillSolid = 1;
+		public const uint FillPattern = 2;
 		public const ushort TypeText = 10;
 		public const ushort TypeWarning = 11;
 		public const ushort TypeViewEnd = 12;

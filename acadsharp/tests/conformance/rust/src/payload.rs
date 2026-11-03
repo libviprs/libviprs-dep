@@ -191,7 +191,7 @@ impl Verifier {
     fn vertices(&mut self, r: &Record) {
         self.prologue(r);
         let length = r.payload.len() + wire::RECORD_HEADER_BYTES;
-        let (n, bulges) = match wire::polyline_shape(r.payload, length) {
+        let (n, bulges) = match wire::polyline_shape(r.kind, r.payload, length) {
             Ok(shape) => shape,
             Err(_) => {
                 self.fail("vertex record shape", "refused".into(), "accepted".into());

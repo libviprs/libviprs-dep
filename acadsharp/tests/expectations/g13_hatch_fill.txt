@@ -1,0 +1,10 @@
+00000 Layer handle=0 flags=0 id=1 lflags=1 name="0"
+00001 Layer handle=0 flags=0 id=2 lflags=1 name="VIPRS_G13"
+00002 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00003 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
+00006 Polygon handle=49 flags=0 layer=2 n=4 closed=1 fill=solid pts=[(0.000000,0.000000,0.000000);(20.000000,0.000000,0.000000);(20.000000,20.000000,0.000000);(0.000000,20.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00007 Polygon handle=49 flags=0 layer=2 n=4 closed=1 fill=solid pts=[(5.000000,5.000000,0.000000);(15.000000,5.000000,0.000000);(15.000000,15.000000,0.000000);(5.000000,15.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00008 Polygon handle=4A flags=0 layer=2 n=4 closed=1 fill=pattern pts=[(40.000000,0.000000,0.000000);(50.000000,0.000000,0.000000);(50.000000,10.000000,0.000000);(40.000000,10.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]
+00009 Polygon handle=4B flags=0 layer=2 n=4 closed=1 fill=solid pts=[(60.000000,0.000000,0.000000);(70.000000,0.000000,0.000000);(70.000000,10.000000,0.000000);(60.000000,10.000000,0.000000)] bulges=[] normal=[(0.000000,0.000000,1.000000)]

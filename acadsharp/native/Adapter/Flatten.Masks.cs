@@ -161,6 +161,7 @@ namespace Viprs.Cad
 			yield return Primitive.Polygon(
 				h,
 				flags,
+				WireFormat.FillNone,
 				pts,
 				null,
 				normal.X,

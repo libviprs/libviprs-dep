@@ -232,6 +232,17 @@ namespace Viprs.Cad
 					int n = (int)p.Counts[0];
 					sb.Append(" n=").Append(p.Counts[0].ToString(CultureInfo.InvariantCulture));
 					sb.Append(" closed=").Append(p.Counts[1].ToString(CultureInfo.InvariantCulture));
+					if (p.Type == WireFormat.TypePolygon)
+					{
+						// Record 9's fill word (libviprs-dep#165), named the way
+						// docs/WIRE.md names it so a diff reads without the table.
+						sb.Append(" fill=").Append(
+							p.Counts[3] == WireFormat.FillSolid ? "solid"
+							: p.Counts[3] == WireFormat.FillPattern ? "pattern"
+							: p.Counts[3] == WireFormat.FillNone ? "none"
+							: p.Counts[3].ToString(CultureInfo.InvariantCulture));
+					}
+
 					Triples(sb, "pts", p.Values, 3, n);
 					Values(sb, "bulges", p.Values, 3 + (n * 3), (int)p.Counts[2]);
 					Triples(sb, "normal", p.Values, 0, 1);
