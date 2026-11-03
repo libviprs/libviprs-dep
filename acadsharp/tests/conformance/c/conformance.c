@@ -1045,7 +1045,7 @@ static void verify_payload(const vacb_record *r)
 	case VACB_TYPE_POLYLINE:
 	case VACB_TYPE_POLYGON:
 		want_prologue(r);
-		if (vacb_polyline_shape(r->payload, r->payload_len, len, &n, &bulges) !=
+		if (vacb_polyline_shape(r->type, r->payload, r->payload_len, len, &n, &bulges) !=
 		    VIPRS_ACAD_OK) {
 			count_fail("vertex record shape", 1, 0);
 			break;
@@ -1388,7 +1388,7 @@ static void test_vertex_payload_rules(void)
 		uint16_t kind = kinds[i];
 
 		rec_len = vacb_build_vertex_record(rec, kind, 4, 4, 1, 0, values, 19, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_OK &&
 		      n == 4u && bulges == 4u,
 		      kind == VACB_TYPE_POLYLINE
@@ -1396,7 +1396,7 @@ static void test_vertex_payload_rules(void)
 			      : "a well-formed Polygon reads back its two counts");
 
 		rec_len = vacb_build_vertex_record(rec, kind, 4, 0, 1, 0, values, 15, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_OK &&
 		      bulges == 0u,
 		      kind == VACB_TYPE_POLYLINE
@@ -1407,7 +1407,7 @@ static void test_vertex_payload_rules(void)
 		 * be and the length agrees; what a consumer cannot do is work
 		 * out which three spans they describe. */
 		rec_len = vacb_build_vertex_record(rec, kind, 4, 3, 1, 0, values, 18, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_CORRUPT_INPUT,
 		      kind == VACB_TYPE_POLYLINE
 			      ? "a Polyline bulge_count that is neither 0 nor point_count"
@@ -1416,23 +1416,29 @@ static void test_vertex_payload_rules(void)
 		/* The array written and the count left at zero: a record whose
 		 * framing is perfect and whose trailing numbers nobody reads. */
 		rec_len = vacb_build_vertex_record(rec, kind, 4, 0, 1, 0, values, 19, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_CORRUPT_INPUT,
 		      kind == VACB_TYPE_POLYLINE
 			      ? "a zero Polyline bulge_count with a bulge-inclusive length"
 			      : "a zero Polygon bulge_count with a bulge-inclusive length");
 
 		rec_len = vacb_build_vertex_record(rec, kind, 3, 0, 2, 0, values, 12, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_CORRUPT_INPUT,
 		      kind == VACB_TYPE_POLYLINE ? "a Polyline closed flag of 2"
 						 : "a Polygon closed flag of 2");
 
 		rec_len = vacb_build_vertex_record(rec, kind, 3, 0, 1, 1, values, 12, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
-			      VIPRS_ACAD_CORRUPT_INPUT,
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      (kind == VACB_TYPE_POLYLINE ? VIPRS_ACAD_CORRUPT_INPUT : VIPRS_ACAD_OK),
 		      kind == VACB_TYPE_POLYLINE ? "a Polyline reserved1 that is not zero"
-						 : "a Polygon reserved1 that is not zero");
+						 : "a Polygon fill of solid");
+
+		rec_len = vacb_build_vertex_record(rec, kind, 3, 0, 1, 3, values, 12, 0);
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+			      VIPRS_ACAD_CORRUPT_INPUT,
+		      kind == VACB_TYPE_POLYLINE ? "a Polyline reserved1 of 3"
+						 : "a Polygon fill past pattern");
 
 		/* The normal, a vertex and a bulge in turn, so the three places
 		 * a NaN can hide are each covered rather than only the first the
@@ -1442,7 +1448,7 @@ static void test_vertex_payload_rules(void)
 			values[slot] = (double)NAN;
 			rec_len = vacb_build_vertex_record(rec, kind, 4, 4, 1, 0, values, 19, 0);
 			values[slot] = 1.0 + (double)slot;
-			check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n,
+			check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n,
 						  &bulges) == VIPRS_ACAD_CORRUPT_INPUT,
 			      kind == VACB_TYPE_POLYLINE
 				      ? "a non-finite value in a Polyline is refused"
@@ -1452,7 +1458,7 @@ static void test_vertex_payload_rules(void)
 		values[5] = (double)INFINITY;
 		rec_len = vacb_build_vertex_record(rec, kind, 3, 3, 1, 0, values, 15, 0);
 		values[5] = 6.0;
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_CORRUPT_INPUT,
 		      kind == VACB_TYPE_POLYLINE
 			      ? "an infinite value in a Polyline is refused the same way"
@@ -1460,7 +1466,7 @@ static void test_vertex_payload_rules(void)
 
 		/* A length that is merely large enough rather than exact. */
 		rec_len = vacb_build_vertex_record(rec, kind, 2, 0, 1, 0, values, 20, 0);
-		check(vacb_polyline_shape(rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
+		check(vacb_polyline_shape(kind, rec + 8, rec_len - 8u, rec_len, &n, &bulges) ==
 			      VIPRS_ACAD_CORRUPT_INPUT,
 		      kind == VACB_TYPE_POLYLINE
 			      ? "a Polyline length that is merely large enough is still wrong"

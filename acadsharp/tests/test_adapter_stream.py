@@ -120,6 +120,7 @@ ONCE_RECORDED = (
     "g13_empty_view.dwg",
     "g13_face3d.dwg",
     "g13_hatch.dwg",
+    "g13_hatch_fill.dwg",
     "g13_insert.dwg",
     "g13_layers.dwg",
     "g13_leader.dwg",

@@ -117,6 +117,7 @@ public static class Corpus
 		yield return Pair("g13_dimension_arrow.dwg", WriteDimensionArrow);
 		yield return Pair("g13_invisible.dwg", WriteInvisible);
 		yield return Pair("g13_hatch.dwg", WriteHatch);
+		yield return Pair("g13_hatch_fill.dwg", WriteHatchFill);
 		yield return Pair("g13_unsupported.dwg", WriteUnsupported);
 		// The refused-entity corpus. One file per kind the flattener does not
 		// emit today, written so a comparison against another reader has a small
@@ -789,6 +790,45 @@ public static class Corpus
 		doc.Entities.Add(patternOnly);
 
 		Write(doc, path);
+	}
+
+	// The fill word on record 9 (libviprs-dep#165): a solid hatch with an island
+	// (two loops, one handle), a patterned hatch with a boundary, and a 2D
+	// SOLID. The island is the case a consumer that fills loop by loop gets
+	// wrong, so it is its own hatch and the two loops are nested.
+	public static void WriteHatchFill(string path)
+	{
+		CadDocument doc = NewDoc();
+
+		Hatch island = new Hatch { Layer = L(doc), IsSolid = true };
+		island.Paths.Add(SquareLoop(0, 0, 20));
+		island.Paths.Add(SquareLoop(5, 5, 10));
+		doc.Entities.Add(island);
+
+		Hatch pattern = new Hatch { Layer = L(doc), IsSolid = false };
+		pattern.Paths.Add(SquareLoop(40, 0, 10));
+		doc.Entities.Add(pattern);
+
+		doc.Entities.Add(new Solid
+		{
+			FirstCorner = new XYZ(60, 0, 0),
+			SecondCorner = new XYZ(70, 0, 0),
+			ThirdCorner = new XYZ(60, 10, 0),
+			FourthCorner = new XYZ(70, 10, 0),
+			Layer = L(doc)
+		});
+
+		Write(doc, path);
+	}
+
+	private static Hatch.BoundaryPath SquareLoop(double x, double y, double size)
+	{
+		Hatch.BoundaryPath loop = new Hatch.BoundaryPath();
+		loop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(x, y), End = new XY(x + size, y) });
+		loop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(x + size, y), End = new XY(x + size, y + size) });
+		loop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(x + size, y + size), End = new XY(x, y + size) });
+		loop.Edges.Add(new Hatch.BoundaryPath.Line { Start = new XY(x, y + size), End = new XY(x, y) });
+		return loop;
 	}
 
 	public static void WriteUnsupported(string path)

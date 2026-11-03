@@ -129,6 +129,7 @@ namespace Viprs.Cad
 			return Primitive.Polygon(
 				h,
 				flags,
+				WireFormat.FillSolid,
 				pts.ToArray(),
 				null,
 				basis.Normal.X,
@@ -224,6 +225,7 @@ namespace Viprs.Cad
 			yield return Primitive.Polygon(
 				h,
 				flags,
+				WireFormat.FillNone,
 				points,
 				null,
 				normal.X,
@@ -369,7 +371,7 @@ namespace Viprs.Cad
 				}
 
 				XYZ normal = FaceNormal(pts);
-				yield return Primitive.Polygon(h, flags, pts, null, normal.X, normal.Y, normal.Z);
+				yield return Primitive.Polygon(h, flags, WireFormat.FillNone, pts, null, normal.X, normal.Y, normal.Z);
 			}
 		}
 

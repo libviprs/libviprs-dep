@@ -143,7 +143,7 @@ int vacb_next(vacb_reader *r, vacb_record *out)
 	return 1;
 }
 
-uint32_t vacb_polyline_shape(const uint8_t *payload, uint32_t payload_len, uint32_t length,
+uint32_t vacb_polyline_shape(uint32_t kind, const uint8_t *payload, uint32_t payload_len, uint32_t length,
 			     uint32_t *point_count, uint32_t *bulge_count)
 {
 	uint32_t n;
@@ -162,7 +162,7 @@ uint32_t vacb_polyline_shape(const uint8_t *payload, uint32_t payload_len, uint3
 	bulges = vacb_u32(payload + 24);
 	reserved1 = vacb_u32(payload + 28);
 
-	if (closed > 1u || reserved1 != 0u) {
+	if (closed > 1u || reserved1 > (kind == VACB_TYPE_POLYGON ? 2u : 0u)) {
 		return VIPRS_ACAD_CORRUPT_INPUT;
 	}
 

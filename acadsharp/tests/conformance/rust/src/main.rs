@@ -45,7 +45,7 @@ fn vertex_payload_rules(t: &mut Tally) {
         let shape = |n: usize, bc: usize, closed: u32, reserved1: u32, vals: &[f64]| {
             let rec = wire::build_vertex_record(kind, n, bc, closed, reserved1, vals, None);
             let length = rec.len();
-            wire::polyline_shape(&rec[wire::RECORD_HEADER_BYTES..], length)
+            wire::polyline_shape(kind, &rec[wire::RECORD_HEADER_BYTES..], length)
         };
 
         t.check(
@@ -73,10 +73,13 @@ fn vertex_payload_rules(t: &mut Tally) {
         );
 
         t.check(shape(3, 0, 2, 0, &values[..12]).is_err(), &format!("a {name} closed flag of 2"));
+        // Polyline's reserved1 is zero. Polygon's is the fill word, so 1 (solid)
+        // is accepted there and 3 is past the last fill.
         t.check(
-            shape(3, 0, 1, 1, &values[..12]).is_err(),
-            &format!("a {name} reserved1 that is not zero"),
+            shape(3, 0, 1, 1, &values[..12]).is_err() == (kind == wire::TYPE_POLYLINE),
+            &format!("a {name} reserved1 of 1"),
         );
+        t.check(shape(3, 0, 1, 3, &values[..12]).is_err(), &format!("a {name} reserved1 of 3"));
 
         // The normal, a vertex and a bulge in turn, so the three places a NaN
         // can hide are each covered rather than only the first one reached.

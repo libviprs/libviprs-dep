@@ -235,7 +235,7 @@ impl<'a> Reader<'a> {
 /// Three rules, and the second is not implied by the first: a producer that
 /// wrote the bulge array and left the count at zero produces a record whose
 /// framing is perfect and whose trailing numbers nobody reads.
-pub fn polyline_shape(payload: &[u8], length: usize) -> Result<(usize, usize), u32> {
+pub fn polyline_shape(kind: u16, payload: &[u8], length: usize) -> Result<(usize, usize), u32> {
     if payload.len() < 56 {
         return Err(VIPRS_ACAD_CORRUPT_INPUT);
     }
@@ -245,7 +245,10 @@ pub fn polyline_shape(payload: &[u8], length: usize) -> Result<(usize, usize), u
     let bulges = u32_at(payload, 24).ok_or(VIPRS_ACAD_CORRUPT_INPUT)? as usize;
     let reserved1 = u32_at(payload, 28).ok_or(VIPRS_ACAD_CORRUPT_INPUT)?;
 
-    if closed > 1 || reserved1 != 0 {
+    // reserved1 is zero on a Polyline. On a Polygon it is the fill word
+    // (libviprs-dep#165): none, solid or pattern, and nothing past that.
+    let reserved1_max = if kind == TYPE_POLYGON { 2 } else { 0 };
+    if closed > 1 || reserved1 > reserved1_max {
         return Err(VIPRS_ACAD_CORRUPT_INPUT);
     }
     if bulges != 0 && bulges != n {

@@ -99,6 +99,7 @@ DUMPED = (
     "g13_layers.dwg",
     "g13_dimension.dwg",
     "g13_hatch.dwg",
+    "g13_hatch_fill.dwg",
     "g13_unsupported.dwg",
     # The last two of #94's refused-kind corpus, recorded so the refusals they
     # witness are evidenced on an input carrying nothing else rather than only

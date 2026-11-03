@@ -163,7 +163,7 @@ def parse_batch(buf):
 POLYLINE_TYPES = (RECORD_TYPES["Polyline"], RECORD_TYPES["Polygon"])
 
 
-def polyline_shape(payload, length):
+def polyline_shape(payload, length, rtype):
     """(point_count, bulge_count) for a Polyline or Polygon, or a refusal code.
 
     Beside the framing parser rather than inside it. `parse_batch` walks record
@@ -180,7 +180,9 @@ def polyline_shape(payload, length):
     if len(payload) < 56:
         return CORRUPT_INPUT, None
     n, closed, bc, reserved1 = struct.unpack_from("<IIII", payload, 16)
-    if closed > 1 or reserved1 != 0:
+    # reserved1 is zero on a Polyline and the fill word on a Polygon (none,
+    # solid, pattern), libviprs-dep#165.
+    if closed > 1 or reserved1 > (2 if rtype == RECORD_TYPES["Polygon"] else 0):
         return CORRUPT_INPUT, None
     if bc not in (0, n):
         return CORRUPT_INPUT, None
@@ -370,7 +372,7 @@ class TestThePolylineAndPolygonPayloadRules:
         code, records = parse_batch(batch([raw]))
         assert code == OK
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (OK, (4, 4))
+        assert polyline_shape(records[0][1], length, rtype) == (OK, (4, 4))
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_no_bulges_at_all_is_the_other_legal_shape(self, rtype):
@@ -378,7 +380,7 @@ class TestThePolylineAndPolygonPayloadRules:
         code, records = parse_batch(batch([raw]))
         assert code == OK
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (OK, (4, 0))
+        assert polyline_shape(records[0][1], length, rtype) == (OK, (4, 0))
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_a_bulge_count_that_is_neither_zero_nor_the_point_count(self, rtype):
@@ -388,7 +390,7 @@ class TestThePolylineAndPolygonPayloadRules:
         raw = vertex_record(rtype, n=4, bc=3)
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_a_zero_bulge_count_with_a_bulge_inclusive_length(self, rtype):
@@ -399,21 +401,30 @@ class TestThePolylineAndPolygonPayloadRules:
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
         assert length == 64 + (24 * 4) + (8 * 4)
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_a_closed_flag_that_is_not_zero_or_one(self, rtype):
         raw = vertex_record(rtype, n=3, bc=0, closed=2)
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
-    def test_reserved1_is_refused_when_it_is_not_zero(self, rtype):
-        raw = vertex_record(rtype, n=3, bc=0, reserved1=1)
+    def test_reserved1_is_refused_past_the_fills_a_polygon_names(self, rtype):
+        raw = vertex_record(rtype, n=3, bc=0, reserved1=3)
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
+
+    @pytest.mark.parametrize("fill", (0, 1, 2))
+    def test_a_polygon_reads_its_fill_word_and_a_polyline_does_not(self, fill):
+        for rtype in POLYLINE_TYPES:
+            raw = vertex_record(rtype, n=3, bc=0, reserved1=fill)
+            _code, records = parse_batch(batch([raw]))
+            length = len(records[0][1]) + RECORD_HEADER_BYTES
+            want = OK if (rtype == RECORD_TYPES["Polygon"] or fill == 0) else CORRUPT_INPUT
+            assert polyline_shape(records[0][1], length, rtype)[0] == want
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     @pytest.mark.parametrize("slot", (0, 3, 14))
@@ -426,7 +437,7 @@ class TestThePolylineAndPolygonPayloadRules:
         raw = vertex_record(rtype, n=4, bc=4, values=values)
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_an_infinite_value_is_refused_the_same_way(self, rtype):
@@ -435,7 +446,7 @@ class TestThePolylineAndPolygonPayloadRules:
         raw = vertex_record(rtype, n=3, bc=3, values=values)
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
     @pytest.mark.parametrize("rtype", POLYLINE_TYPES)
     def test_a_length_that_is_merely_large_enough_is_still_wrong(self, rtype):
@@ -443,7 +454,7 @@ class TestThePolylineAndPolygonPayloadRules:
         _code, records = parse_batch(batch([raw]))
         length = len(records[0][1]) + RECORD_HEADER_BYTES
         assert length > 64 + (24 * 2)
-        assert polyline_shape(records[0][1], length) == (CORRUPT_INPUT, None)
+        assert polyline_shape(records[0][1], length, rtype) == (CORRUPT_INPUT, None)
 
 
 class TestTheRunawayGuardItself:

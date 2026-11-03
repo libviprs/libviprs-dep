@@ -198,7 +198,7 @@ UTF-8, padded with zeroes to a multiple of four. The name is not terminated.
 | 16 | 4 | `point_count` | `n`, at most `max_polyline_points` |
 | 20 | 4 | `closed` | 0 or 1 |
 | 24 | 4 | `bulge_count` | `bc`, either 0 or equal to `point_count` |
-| 28 | 4 | `reserved1` | 0 |
+| 28 | 4 | `reserved1` | 0 on a `Polyline`; the fill word on a `Polygon` (record 9) |
 | 32 | 24 | `f64 nx, ny, nz` | the entity's normal |
 | 56 | 24·n | `f64 x, y, z` × n | the vertices |
 | 56 + 24·n | 8·bc | `f64 bulge` × bc | one per vertex, absent when `bc` is 0 |
@@ -382,6 +382,27 @@ boundary is closed implicitly and the first vertex is not repeated, so the
 closing span is the one `bulge[n - 1]` describes. One layout means one reader
 serves both, and a hatch loop that turns out to carry a curved edge needs no
 second shape.
+
+**The fill word.** On a `Polygon` the word at offset 28 says what the region
+inside the boundary is:
+
+| Value | Name | Meaning |
+| --- | --- | --- |
+| 0 | none | A face, a mask or a loop with nothing to say about a fill. A consumer draws the outline, or whatever it does for a face. |
+| 1 | solid | The region is filled with the entity's colour: a solid `HATCH`, and a 2D `SOLID`. |
+| 2 | pattern | A patterned `HATCH`. The pattern lines are not sent (warning 103 says so when no loop could become a polygon), so a consumer draws the outline and does not fill. |
+
+Any other value is `VIPRS_ACAD_CORRUPT_INPUT`. A `Polyline` still carries 0
+there. The version stays 3 because the word was reserved and zero, which reads
+as none, and wire 3 is not tagged yet (libviprs-dep#165).
+
+**Loops that share an `item_handle` are one region, filled even-odd.** A hatch
+with an island or a hole arrives as several record 9s, one per boundary loop,
+all with the hatch's handle and all with the same fill word. A consumer that
+fills each loop on its own blacks out the hole, so it fills the loops together
+under the even-odd rule: a point is inside when an odd number of the loops
+enclose it. Two inserts of one block repeat the hatch's handle, so a consumer
+groups by handle within one instance bracket and not across brackets.
 
 A hatch loop is not the only thing that lands here. A `SOLID` is one of these
 with three or four vertices and no bulge array, and a `MESH` is one per face

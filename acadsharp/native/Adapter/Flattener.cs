@@ -1748,6 +1748,7 @@ namespace Viprs.Cad
 		private static Primitive OnePolygon(
 			ulong handle,
 			uint flags,
+			uint fill,
 			double[] points,
 			double[] bulges,
 			bool mirrored,
@@ -1757,6 +1758,7 @@ namespace Viprs.Cad
 			return Primitive.Polygon(
 				handle,
 				flags,
+				fill,
 				points,
 				BulgeArray(points.Length / 3, bulges, mirrored),
 				normal.X,
@@ -1921,6 +1923,12 @@ namespace Viprs.Cad
 			Placement place = item.Placement.WithOcs(hatch.Normal, hatch.Elevation);
 			int loops = 0;
 
+			// Every loop of one hatch carries the hatch's own fill. Loops that
+			// share an item_handle are one even-odd region, so a consumer
+			// fills them together and an island or a hole falls out of the
+			// rule (docs/WIRE.md, record 9).
+			uint fill = hatch.IsSolid ? WireFormat.FillSolid : WireFormat.FillPattern;
+
 			foreach (Hatch.BoundaryPath path in hatch.Paths)
 			{
 				if (path.Edges.Count == 0)
@@ -1954,7 +1962,7 @@ namespace Viprs.Cad
 
 					yield return new Pending
 					{
-						Record = OnePolygon(h, flags, pts, bulges, basis.Mirrored, basis.Normal),
+						Record = OnePolygon(h, flags, fill, pts, bulges, basis.Mirrored, basis.Normal),
 						Depth = item.Depth,
 					};
 					continue;
