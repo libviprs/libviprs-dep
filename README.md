@@ -4,6 +4,8 @@ Pre-compiled native dependencies for [libviprs](https://github.com/libviprs/libv
 
 PDFium consumers and CLI flags that exercise it are documented at https://libviprs.org/cli/#flag-render. The matching CLI flags — [`--render`](https://libviprs.org/cli/#flag-render), [`--dpi`](https://libviprs.org/cli/#flag-dpi), [`--page`](https://libviprs.org/cli/#flag-page), and [`--match-page-size`](https://libviprs.org/cli/#flag-match-page-size) — are what load the binaries shipped here at runtime, gated by the `pdfium` and `pdfium-static` Cargo features.
 
+**The `acadsharp` archive is experimental.** libviprs reads DWG through acadrust by default, so the ACadSharp archives here only matter to a build with libviprs' opt-in `dwg-acadsharp` feature. They are kept, not removed.
+
 For a full man-page-style reference on the build tooling, see [`MANUAL.md`](MANUAL.md).
 
 ## Dependencies
