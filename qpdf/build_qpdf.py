@@ -13,12 +13,12 @@ binary. macOS has no container image, so the mac slice builds natively on a
 macOS host (the release workflow uses a macos-15 runner).
 
 qpdf is Apache-2.0 since v11. Crypto is qpdf's own native provider, so no
-OpenSSL is needed. libjpeg is linked statically; zlib stays dynamic (it is on
+OpenSSL is needed. libjpeg-turbo is linked statically; zlib stays dynamic (it is on
 every Linux and macOS host) and is recorded in BUILDINFO.
 
 Requirements:
     - Docker with buildx support (linux targets)
-    - CMake, a C++20 compiler and libjpeg-turbo (mac target, built natively)
+    - CMake, a C++20 compiler and Homebrew's libjpeg-turbo (mac target, built natively)
     - gh CLI (only when using --upload)
 
 Usage:
@@ -83,6 +83,18 @@ SOURCE_SHA256 = {
 }
 
 MAC_DEPLOYMENT_TARGET = "11.0"
+
+# libjpeg-turbo is built from source on linux and linked statically, because
+# Debian's libjpeg.a is not position-independent on amd64 and cannot go into
+# libqpdf.so. Pinned the same way the qpdf source is. The mac slice links
+# Homebrew's libjpeg-turbo instead.
+JPEG_VERSION = "3.2.1"
+JPEG_SOURCE_URL = (
+    "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/"
+    "{version}/libjpeg-turbo-{version}.tar.gz"
+)
+JPEG_SOURCE_SHA256 = "c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f"
+JPEG_LINUX_PREFIX = "/opt/jpeg"
 
 
 def read_version(path=VERSION_FILE):
@@ -188,8 +200,8 @@ def cmake_configure_args(plat, arch, prefix, jpeg_prefix=None):
             f"-DCMAKE_OSX_DEPLOYMENT_TARGET={MAC_DEPLOYMENT_TARGET}",
             "-DCMAKE_INSTALL_NAME_DIR=@rpath",
         ]
-        if jpeg_prefix:
-            args.append(f"-DCMAKE_PREFIX_PATH={jpeg_prefix}")
+    if jpeg_prefix:
+        args.append(f"-DCMAKE_PREFIX_PATH={jpeg_prefix}")
     return args
 
 
@@ -360,17 +372,34 @@ def make_dockerfile(version, arch, plat):
     base_image = BASE_IMAGES[plat]
     url = source_url(version)
     sha = source_sha256(version)
-    cmake_args = " ".join(shlex.quote(a) for a in cmake_configure_args(plat, arch, "/staging"))
-    args_text = cmake_args_text(plat, arch, "/staging")
+    cmake_args = " ".join(
+        shlex.quote(a) for a in cmake_configure_args(plat, arch, "/staging", JPEG_LINUX_PREFIX)
+    )
+    args_text = cmake_args_text(plat, arch, "/staging", JPEG_LINUX_PREFIX)
+    jpeg_url = JPEG_SOURCE_URL.format(version=JPEG_VERSION)
     cpu = TARGETS[arch]["cpu"]
 
     return f"""\
 FROM --platform={docker_platform} {base_image}
 
-# Step 0: toolchain and the two libraries qpdf links: zlib and libjpeg.
+# Step 0: toolchain and zlib, the one library qpdf links dynamically.
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    build-essential cmake curl ca-certificates binutils file zlib1g-dev libjpeg-dev \\
+    build-essential cmake curl ca-certificates binutils file zlib1g-dev \\
     && rm -rf /var/lib/apt/lists/*
+
+# Step 0b: libjpeg-turbo, pinned and built static and position-independent so
+# it can be linked into libqpdf.so.
+RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \\
+        --connect-timeout 30 -o /tmp/jpeg.tar.gz "{jpeg_url}" \\
+    && echo "{JPEG_SOURCE_SHA256}  /tmp/jpeg.tar.gz" | sha256sum -c - \\
+    && mkdir -p /build/jpeg && tar xzf /tmp/jpeg.tar.gz -C /build/jpeg --strip-components=1 \\
+    && cmake -S /build/jpeg -B /build/jpeg/out -DCMAKE_BUILD_TYPE=Release \\
+        -DCMAKE_INSTALL_PREFIX={JPEG_LINUX_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \\
+        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_TURBOJPEG=OFF \\
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \\
+    && cmake --build /build/jpeg/out -j"$(nproc)" && cmake --install /build/jpeg/out \\
+    && cp /build/jpeg/LICENSE.md /build/jpeg/README.ijg /tmp/ \\
+    && rm -rf /build/jpeg /tmp/jpeg.tar.gz
 
 # Step 1: fetch the pinned upstream release tarball and check it against the
 # hash recorded in build_qpdf.py before a single line is compiled.
@@ -402,7 +431,8 @@ RUN cat > /staging/cmake-args.txt <<'ARGS'
 {args_text}ARGS
 RUN cp LICENSE.txt /staging/LICENSE && cp NOTICE.md /staging/NOTICE.md \\
     && mkdir -p /staging/LICENSES \\
-    && cp /usr/share/doc/libjpeg62-turbo/copyright /staging/LICENSES/libjpeg-turbo.txt
+    && cp /tmp/LICENSE.md /staging/LICENSES/libjpeg-turbo-LICENSE.md \\
+    && cp /tmp/README.ijg /staging/LICENSES/libjpeg-turbo-README.ijg
 
 # Step 8: BUILDINFO and CHECKSUMS, last, so they cover every other file
 COPY finalize.sh /tmp/finalize.sh
@@ -412,7 +442,7 @@ RUN sh /tmp/finalize.sh /staging linux {cpu} {version} {sha} native static
 # the binary executes for real, with no library path set.
 COPY fixtures /tmp/fixtures
 COPY smoke.sh /tmp/smoke.sh
-RUN sh /tmp/smoke.sh /staging {version} /tmp/fixtures
+RUN sh /tmp/smoke.sh /staging {version} /tmp/fixtures "" "{JPEG_LINUX_PREFIX}/lib/libjpeg.a -lz"
 
 # Step 10: leave a listing in the build log for post-mortems
 RUN ls -lR /staging && file /staging/bin/qpdf && (ldd /staging/bin/qpdf || true)

@@ -19,6 +19,16 @@ def test_source_is_checked_against_the_pin_before_it_is_unpacked():
     assert text.index("sha256sum -c") < text.index("tar xzf")
 
 
+def test_libjpeg_is_a_pinned_static_pic_build():
+    text = df()
+    assert b.JPEG_SOURCE_SHA256 in text
+    assert text.index(b.JPEG_SOURCE_SHA256) < text.index("cmake -S . ")
+    assert "-DENABLE_SHARED=OFF" in text
+    assert "-DCMAKE_POSITION_INDEPENDENT_CODE=ON" in text
+    assert f"-DCMAKE_PREFIX_PATH={b.JPEG_LINUX_PREFIX}" in text
+    assert "libjpeg-dev" not in text
+
+
 def test_mac_has_no_dockerfile():
     with pytest.raises(ValueError, match="mac"):
         b.make_dockerfile(b.read_version(), "arm64", "mac")
