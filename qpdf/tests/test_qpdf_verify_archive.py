@@ -40,6 +40,7 @@ FILES = {
     "cmake-args.txt": b"-DCMAKE_BUILD_TYPE=Release\n",
     "LICENSE": b"Apache License\nVersion 2.0, January 2004\n",
     "NOTICE.md": b"notice\n",
+    "LICENSES/libjpeg-turbo-LICENSE.md": b"licence\n",
 }
 
 
@@ -110,6 +111,24 @@ def test_a_licence_that_is_not_apache_is_refused(tmp_path):
     r = run(make_archive(tmp_path, mutate=lambda f: f.update({"LICENSE": b"MIT\n"})))
     assert r.returncode != 0
     assert "Apache" in r.stdout + r.stderr
+
+
+def test_an_archive_without_licenses_is_refused(tmp_path):
+    r = run(make_archive(tmp_path, mutate=lambda f: f.pop("LICENSES/libjpeg-turbo-LICENSE.md")))
+    assert r.returncode != 0
+    assert "LICENSES" in r.stdout + r.stderr
+
+
+def test_a_dynamically_linked_libjpeg_is_refused(tmp_path):
+    cpu = foreign_cpu()
+    r = run(
+        make_archive(
+            tmp_path,
+            mutate=lambda f: f.update({"bin/qpdf": elf(cpu) + b"\x00libjpeg.so.62\x00"}),
+        )
+    )
+    assert r.returncode != 0
+    assert "libjpeg" in r.stdout + r.stderr
 
 
 def test_a_checksum_mismatch_is_refused(tmp_path):

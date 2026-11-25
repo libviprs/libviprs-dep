@@ -15,6 +15,8 @@
 #      documented layout: bin/qpdf, the shared and static libqpdf, the public
 #      headers, the pkg-config file, cmake-args.txt, LICENSE, NOTICE.md and
 #      metadata/{BUILDINFO.txt,CHECKSUMS.txt}.
+#   1b. LICENSES/ holds the licence files of the statically linked libjpeg, and
+#      neither bin/qpdf nor the shared library names libjpeg as a dependency.
 #   2. LICENSE is the Apache License 2.0 (qpdf is Apache-2.0 since v11).
 #   3. metadata/CHECKSUMS.txt lists every other regular file, with the right
 #      sha256, and nothing is listed that is not there.
@@ -71,6 +73,19 @@ for f in bin/qpdf include/qpdf/QPDF.hh lib/libqpdf.a lib/pkgconfig/libqpdf.pc \
 done
 SHARED="$(find "$ROOT/lib" -maxdepth 1 -type f \( -name 'libqpdf.so*' -o -name 'libqpdf*.dylib' \) | sort | head -n 1)"
 [ -n "$SHARED" ] || fail "missing the shared libqpdf in lib/"
+
+# 1b. LICENSES/ ships the statically linked libjpeg's licence
+if [ -z "$(find "$ROOT/LICENSES" -type f 2>/dev/null | head -n 1)" ]; then
+  fail "missing LICENSES/ (the statically linked libjpeg's licence files)"
+fi
+
+# 1c. libjpeg is statically linked: no libjpeg library name in the binary or
+# the shared library (a dynamic link records it as a NEEDED / load command)
+for f in "$ROOT/bin/qpdf" "$SHARED"; do
+  if grep -aq 'libjpeg\.\(so\|[0-9]*\.dylib\|dylib\)' "$f"; then
+    fail "$(basename "$f") links libjpeg dynamically; it must be linked statically"
+  fi
+done
 
 # 2. licence
 if ! grep -q 'Apache License' "$ROOT/LICENSE" || ! grep -q 'Version 2.0' "$ROOT/LICENSE"; then

@@ -35,7 +35,7 @@ def test_version_input_goes_through_env_not_the_script():
 def test_latest_tag_only_moves_when_every_cell_published():
     assert "tools/publish_latest_tag.sh qpdf" in WF
     assert "needs.build-linux.result == 'success'" in WF
-    assert "needs.build-mac.result == 'success'" in WF
+    assert "needs.build-mac.result" not in WF.split("publish-latest:", 1)[1]
 
 
 def test_third_party_actions_are_pinned_to_a_commit():
@@ -43,3 +43,19 @@ def test_third_party_actions_are_pinned_to_a_commit():
         m = re.search(r"uses: (docker/[^@\s]+)@(\S+)", line)
         if m:
             assert re.fullmatch(r"[0-9a-f]{40}", m.group(2)), line
+
+
+def test_every_job_declares_its_permissions():
+    jobs = WF.split("\njobs:\n", 1)[1]
+    for block in re.split(r"\n  (?=[a-z-]+:\n)", jobs):
+        if block.strip():
+            assert "permissions:" in block, block.splitlines()[0]
+
+
+def test_the_mac_job_is_optional_and_off_by_default():
+    top, jobs = WF.split("\njobs:\n", 1)
+    mac = jobs.split("build-mac:", 1)[1].split("\n  summary:", 1)[0]
+    assert "continue-on-error: true" in mac
+    assert "inputs.build_mac" in mac
+    assert "build_mac:" in top
+    assert "default: false" in top

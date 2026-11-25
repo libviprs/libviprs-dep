@@ -61,7 +61,7 @@ Every linux cell builds in a container of its own architecture (arm64 under QEMU
 
 ## Publishing
 
-`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It builds the three cells, verifies each archive, uploads it with its sidecar, and moves `qpdf-latest` only when every cell published.
+`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It builds the two Linux cells, verifies each archive, uploads it with its sidecar, and moves `qpdf-latest` when both published. The macOS arm64 archive is not built yet: its job is optional (a `build_mac` dispatch input, off by default, `continue-on-error`) and does not gate `qpdf-latest`.
 
 ## Testing
 
