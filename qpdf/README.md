@@ -16,6 +16,14 @@ Archives are published to the `qpdf-<version>` GitHub Release, plus a `qpdf-late
 | `qpdf-linux-arm64.tgz` | Linux, glibc 2.36 or newer, aarch64 |
 | `qpdf-mac-arm64.tgz` | macOS 11 or newer, Apple Silicon |
 
+The 12.4.2 archives (the release is still a draft):
+
+| Archive | Size (bytes) | sha256 |
+| --- | --- | --- |
+| `qpdf-linux-x64.tgz` | 4441722 | `1b6befdc17e110b6ba57fc73e3250aa95ff77a0996497c4c5f5b8fbdaa5ced0b` |
+| `qpdf-linux-arm64.tgz` | 4383675 | `c90b00092315eba2cc750fb77b8c021f04a00dcb1e91619af132385ca42bb75d` |
+| `qpdf-mac-arm64.tgz` | 3499049 | `57e518f306f1e1e69cf7c434b4a271393e955032fae05d28d0cbb8f6e4c05854` |
+
 ```
 qpdf-<platform>-<cpu>/
 ├── bin/qpdf                       # finds ../lib by itself (rpath), no library path needed
