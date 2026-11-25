@@ -197,6 +197,21 @@ class TestRelocatableCmakeTargets:
         stage, _ = self.relocate(tmp_path)
         assert (stage / "lib" / "libjpeg.a").read_bytes() == b"!<arch>\nfake\n"
 
+    def test_a_read_only_source_gives_a_writable_copy(self, tmp_path):
+        jpeg = tmp_path / "jpeg" / "lib" / "libjpeg.a"
+        jpeg.parent.mkdir(parents=True)
+        jpeg.write_bytes(b"!<arch>\n")
+        jpeg.chmod(0o444)
+        stage = tmp_path / "stage"
+        (stage / "lib" / "cmake" / "qpdf").mkdir(parents=True)
+        (stage / "lib" / "cmake" / "qpdf" / "libqpdfTargets.cmake").write_text(
+            'INTERFACE_LINK_LIBRARIES "z;/opt/jpeg/lib/libjpeg.a"\n'
+        )
+        script = tmp_path / "relocate-cmake.sh"
+        script.write_text(b.RELOCATE_CMAKE_SH)
+        subprocess.run(["sh", str(script), str(stage), str(jpeg)], check=True)
+        assert os.access(stage / "lib" / "libjpeg.a", os.W_OK)
+
     def test_the_target_points_at_the_copy_relative_to_the_prefix(self, tmp_path):
         _, text = self.relocate(tmp_path)
         assert '"z;${_IMPORT_PREFIX}/lib/libjpeg.a"' in text
@@ -279,6 +294,11 @@ class TestFindPackageSmoke:
         text = b.make_dockerfile(b.read_version(), "amd64", "linux")
         assert "find_package_smoke.sh /staging" in text
         assert text.index("find_package_smoke.sh /staging") > text.index("smoke.sh /staging")
+
+    def test_the_smoke_script_survives_a_path_with_spaces(self):
+        # the native mac build ran from a directory with a space in it
+        assert "run_qpdf()" in b.SMOKE_TEST_SH
+        assert '"$STAGING/bin/qpdf" "$@"' in b.SMOKE_TEST_SH
 
     def test_the_driver_puts_the_script_in_the_build_context(self):
         import inspect

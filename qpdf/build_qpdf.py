@@ -283,14 +283,14 @@ first=$(env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH "$STAGING/bin/qpdf" --versio
 [ "$first" = "qpdf version $EXPECTED" ] || { echo "smoke: bin/qpdf says '$first'" >&2; exit 1; }
 echo "smoke: $first"
 
-QPDF="env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH $STAGING/bin/qpdf"
-out=$($QPDF --check "$FIX/good.pdf" 2>&1) \
+run_qpdf() { env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH "$STAGING/bin/qpdf" "$@"; }
+out=$(run_qpdf --check "$FIX/good.pdf" 2>&1) \
     || { echo "smoke: --check rejected the good PDF: $out" >&2; exit 1; }
 case "$out" in
     *"No syntax or stream encoding errors found"*) ;;
     *) echo "smoke: --check on the good PDF was not clean: $out" >&2; exit 1 ;;
 esac
-if $QPDF --check "$FIX/corrupt.pdf" >/dev/null 2>&1; then
+if run_qpdf --check "$FIX/corrupt.pdf" >/dev/null 2>&1; then
     echo "smoke: --check accepted the corrupted PDF" >&2
     exit 1
 fi
@@ -341,6 +341,8 @@ TARGETS="$STAGING/lib/cmake/qpdf/libqpdfTargets.cmake"
 [ -f "$JPEG" ] || { echo "relocate: $JPEG not found" >&2; exit 1; }
 
 cp "$JPEG" "$STAGING/lib/libjpeg.a"
+# Homebrew's copy is read-only, and so would the archive's be.
+chmod 644 "$STAGING/lib/libjpeg.a"
 sed -E -e '/INTERFACE_LINK_LIBRARIES/ s|/[^;"]*/libjpeg\.a|${_IMPORT_PREFIX}/lib/libjpeg.a|g' \
     -e '/INTERFACE_LINK_LIBRARIES/ s#/[^;"]*/libz\.(so|a|dylib)#z#g' "$TARGETS" > "$TARGETS.tmp"
 mv "$TARGETS.tmp" "$TARGETS"
