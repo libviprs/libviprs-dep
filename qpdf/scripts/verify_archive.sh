@@ -27,6 +27,11 @@
 #   6. libqpdf.pc is relocatable (prefix relative to ${pcfiledir}, libdir and
 #      includedir under ${prefix}), and cmake-args.txt records the neutral
 #      /staging install prefix rather than a path from the build host.
+#   6b. Nothing relocatable names a path on the build machine: no absolute path
+#      in lib/cmake/**, lib/pkgconfig/**, share/** (the upstream prose under
+#      share/doc and share/man aside) or a text script in bin/, and every
+#      ${_IMPORT_PREFIX}/... the cmake targets name exists in the archive
+#      (the static libjpeg ships as lib/libjpeg.a).
 #   7. metadata/BUILDINFO.txt records the version in qpdf/VERSION.
 #   8. When the host can run the binary: `bin/qpdf --version` reports that
 #      version with no library path set, `--check` passes a known-good tiny
@@ -70,7 +75,7 @@ ROOT="$WORK/$BASE"
 
 # 1. layout
 for f in bin/qpdf include/qpdf/QPDF.hh lib/libqpdf.a lib/pkgconfig/libqpdf.pc \
-  cmake-args.txt LICENSE NOTICE.md metadata/BUILDINFO.txt metadata/CHECKSUMS.txt; do
+  lib/cmake/qpdf/qpdfConfig.cmake lib/cmake/qpdf/libqpdfTargets.cmake cmake-args.txt LICENSE NOTICE.md metadata/BUILDINFO.txt metadata/CHECKSUMS.txt; do
   [ -f "$ROOT/$f" ] || fail "missing $f"
 done
 SHARED="$(find "$ROOT/lib" -maxdepth 1 -type f \( -name 'libqpdf.so*' -o -name 'libqpdf*.dylib' \) | sort | head -n 1)"
@@ -154,6 +159,24 @@ grep -q '^includedir=${prefix}/include$' "$ROOT/lib/pkgconfig/libqpdf.pc" ||
   fail "libqpdf.pc includedir is not under \${prefix}"
 grep -qx -e '-DCMAKE_INSTALL_PREFIX=/staging' "$ROOT/cmake-args.txt" ||
   fail "cmake-args.txt does not record -DCMAKE_INSTALL_PREFIX=/staging (a path from the build host?)"
+
+# 6b. no path from the build machine in anything a consumer reads. An absolute
+# path is a / that starts a word (after whitespace, a quote, ; = : ( , or a
+# -I/-L flag) and goes on into a second component, so ${prefix}/lib and a bare
+# "/" do not match. Comment lines and a shebang are not paths in use.
+abs_re="(^|[[:space:]\"';=:(,]|-[IL])/[A-Za-z0-9_.+~-]+([/\"';[:space:]]|\$)"
+while IFS= read -r f; do
+  grep -Iq . "$f" || continue
+  hit="$(sed -e '1{/^#!/d;}' -e '/^[[:space:]]*#/d' "$f" | grep -E -- "$abs_re" | head -n 1 || true)"
+  if [ -n "$hit" ]; then
+    fail "absolute path outside the archive in ${f#"$ROOT"/}: $(echo "$hit" | tr -s '[:space:]' ' ')"
+  fi
+done < <(find "$ROOT/lib/cmake" "$ROOT/lib/pkgconfig" "$ROOT/share" "$ROOT/bin" -type f \
+  ! -path "$ROOT/share/doc/*" ! -path "$ROOT/share/man/*" 2>/dev/null | sort)
+while IFS= read -r ref; do
+  [ -e "$ROOT/${ref#\$\{_IMPORT_PREFIX\}/}" ] ||
+    fail "the cmake targets name ${ref}, which is not in the archive"
+done < <(grep -rhoE '\$\{_IMPORT_PREFIX\}/[A-Za-z0-9_./+-]+' "$ROOT/lib/cmake" | sort -u)
 
 # 7. version record
 WANT="$(tr -d '[:space:]' <"$QPDF_DIR/VERSION")"

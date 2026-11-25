@@ -60,6 +60,9 @@ FILES = {
     "NOTICE.md": b"notice\n",
     "LICENSES/libjpeg-turbo-LICENSE.md": b"licence\n",
     "lib/libjpeg.a": b"!<arch>\n",
+    "lib/cmake/qpdf/qpdfConfig.cmake": (
+        b'include("${CMAKE_CURRENT_LIST_DIR}/libqpdfTargets.cmake")\n'
+    ),
     "lib/cmake/qpdf/libqpdfTargets.cmake": CLEAN_TARGETS,
 }
 
@@ -290,7 +293,11 @@ def test_177_cmake_targets_with_a_baked_libjpeg_path_are_refused(tmp_path):
     r = run(make_archive(tmp_path, mutate=baked(TARGETS, bad)))
     assert r.returncode != 0
     out = r.stdout + r.stderr
-    assert "absolute path" in out and "libqpdfTargets.cmake" in out and "/opt/jpeg/lib/libjpeg.a" in out
+    assert (
+        "absolute path" in out
+        and "libqpdfTargets.cmake" in out
+        and "/opt/jpeg/lib/libjpeg.a" in out
+    )
 
 
 def test_177_cmake_targets_with_a_baked_homebrew_path_are_refused(tmp_path):
@@ -338,14 +345,16 @@ def test_177_upstream_prose_in_share_doc_and_man_is_not_a_path(tmp_path):
     r = run(
         make_archive(
             tmp_path,
-            mutate=lambda f: f.update({"share/doc/qpdf/README-doc.txt": prose, "share/man/man1/qpdf.1": prose}),
+            mutate=lambda f: f.update(
+                {"share/doc/qpdf/README-doc.txt": prose, "share/man/man1/qpdf.1": prose}
+            ),
         )
     )
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_177_an_absolute_path_in_a_bin_script_is_refused(tmp_path):
-    script = b"#!/bin/sh\nPREFIX=/home/builder/out\nexec \"$PREFIX/bin/qpdf\" \"$@\"\n"
+    script = b'#!/bin/sh\nPREFIX=/home/builder/out\nexec "$PREFIX/bin/qpdf" "$@"\n'
     r = run(make_archive(tmp_path, mutate=baked("bin/qpdf-config", script)))
     assert r.returncode != 0
     assert "bin/qpdf-config" in r.stdout + r.stderr

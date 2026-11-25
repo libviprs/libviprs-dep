@@ -175,7 +175,9 @@ class TestRelocatableCmakeTargets:
         '  INTERFACE_LINK_LIBRARIES "%s;%s"\n)\n'
     )
 
-    def relocate(self, tmp_path, libz="/usr/lib/x86_64-linux-gnu/libz.so", jpeg="/opt/jpeg/lib/libjpeg.a"):
+    def relocate(
+        self, tmp_path, libz="/usr/lib/x86_64-linux-gnu/libz.so", jpeg="/opt/jpeg/lib/libjpeg.a"
+    ):
         stage = tmp_path / "stage"
         cmake_dir = stage / "lib" / "cmake" / "qpdf"
         cmake_dir.mkdir(parents=True)
@@ -218,12 +220,16 @@ class TestRelocatableCmakeTargets:
         stage = tmp_path / "stage"
         cmake_dir = stage / "lib" / "cmake" / "qpdf"
         cmake_dir.mkdir(parents=True)
-        (cmake_dir / "libqpdfTargets.cmake").write_text('INTERFACE_LINK_LIBRARIES "/weird/libfoo.a"\n')
+        (cmake_dir / "libqpdfTargets.cmake").write_text(
+            'INTERFACE_LINK_LIBRARIES "/weird/libfoo.a"\n'
+        )
         script = tmp_path / "relocate-cmake.sh"
         script.write_text(b.RELOCATE_CMAKE_SH)
         jpeg = tmp_path / "libjpeg.a"
         jpeg.write_bytes(b"!<arch>\n")
-        r = subprocess.run(["sh", str(script), str(stage), str(jpeg)], capture_output=True, text=True)
+        r = subprocess.run(
+            ["sh", str(script), str(stage), str(jpeg)], capture_output=True, text=True
+        )
         assert r.returncode != 0
         assert "/weird/libfoo.a" in r.stdout + r.stderr
 
