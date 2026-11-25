@@ -49,6 +49,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 VERSION_FILE = os.path.join(HERE, "VERSION")
 VERIFY_ARCHIVE_SCRIPT = os.path.join(HERE, "scripts", "verify_archive.sh")
+FIND_PACKAGE_SMOKE_SCRIPT = os.path.join(HERE, "scripts", "find_package_smoke.sh")
 FIXTURES_DIR = os.path.join(HERE, "tests", "fixtures")
 
 # linux builds in Docker, mac builds natively. There is no musl cell: nobody
@@ -282,14 +283,14 @@ first=$(env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH "$STAGING/bin/qpdf" --versio
 [ "$first" = "qpdf version $EXPECTED" ] || { echo "smoke: bin/qpdf says '$first'" >&2; exit 1; }
 echo "smoke: $first"
 
-QPDF="env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH $STAGING/bin/qpdf"
-out=$($QPDF --check "$FIX/good.pdf" 2>&1) \
+run_qpdf() { env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH "$STAGING/bin/qpdf" "$@"; }
+out=$(run_qpdf --check "$FIX/good.pdf" 2>&1) \
     || { echo "smoke: --check rejected the good PDF: $out" >&2; exit 1; }
 case "$out" in
     *"No syntax or stream encoding errors found"*) ;;
     *) echo "smoke: --check on the good PDF was not clean: $out" >&2; exit 1 ;;
 esac
-if $QPDF --check "$FIX/corrupt.pdf" >/dev/null 2>&1; then
+if run_qpdf --check "$FIX/corrupt.pdf" >/dev/null 2>&1; then
     echo "smoke: --check accepted the corrupted PDF" >&2
     exit 1
 fi
@@ -320,6 +321,38 @@ grep -q '^includedir=${prefix}/include$' "$PC" || {
     exit 1
 }
 echo "relocate: libqpdf.pc prefix is now relative to its own directory"
+"""
+
+# CMake bakes the build machine's libjpeg and zlib paths into the
+# INTERFACE_LINK_LIBRARIES of the static target (/opt/jpeg/lib/libjpeg.a, the
+# Homebrew one, /usr/lib/<triple>/libz.so), which no consumer can use. The
+# static libjpeg qpdf links is shipped as lib/libjpeg.a and the target points
+# at it relative to the prefix; zlib becomes the plain linker name, which is
+# what the pkg-config file already says.
+RELOCATE_CMAKE_SH = r"""#!/bin/sh
+# Usage: relocate-cmake.sh <staging-dir> <libjpeg.a>
+set -eu
+
+STAGING="${1:?usage: relocate-cmake.sh <staging-dir> <libjpeg.a>}"
+JPEG="${2:?missing the libjpeg.a qpdf was linked against}"
+TARGETS="$STAGING/lib/cmake/qpdf/libqpdfTargets.cmake"
+
+[ -f "$TARGETS" ] || { echo "relocate: $TARGETS not found" >&2; exit 1; }
+[ -f "$JPEG" ] || { echo "relocate: $JPEG not found" >&2; exit 1; }
+
+cp "$JPEG" "$STAGING/lib/libjpeg.a"
+# Homebrew's copy is read-only, and so would the archive's be.
+chmod 644 "$STAGING/lib/libjpeg.a"
+sed -E -e '/INTERFACE_LINK_LIBRARIES/ s|/[^;"]*/libjpeg\.a|${_IMPORT_PREFIX}/lib/libjpeg.a|g' \
+    -e '/INTERFACE_LINK_LIBRARIES/ s#/[^;"]*/libz\.(so|a|dylib)#z#g' "$TARGETS" > "$TARGETS.tmp"
+mv "$TARGETS.tmp" "$TARGETS"
+
+left="$(grep 'INTERFACE_LINK_LIBRARIES' "$TARGETS" | grep -E '(^|[";])/' || true)"
+if [ -n "$left" ]; then
+    echo "relocate: an absolute path is left in $TARGETS: $left" >&2
+    exit 1
+fi
+echo "relocate: libqpdfTargets.cmake now points at lib/libjpeg.a inside the prefix"
 """
 
 # Writes metadata/BUILDINFO.txt and then metadata/CHECKSUMS.txt, the sha256 of
@@ -354,6 +387,7 @@ echo "finalize: $(wc -l < metadata/CHECKSUMS.txt | tr -d ' ') files checksummed"
 HELPER_SCRIPTS = (
     ("smoke.sh", SMOKE_TEST_SH),
     ("relocate-pc.sh", RELOCATE_PKGCONFIG_SH),
+    ("relocate-cmake.sh", RELOCATE_CMAKE_SH),
     ("finalize.sh", FINALIZE_SH),
 )
 
@@ -429,6 +463,10 @@ RUN cmake --install out
 COPY relocate-pc.sh /tmp/relocate-pc.sh
 RUN sh /tmp/relocate-pc.sh /staging
 
+# Step 6b: the same for the cmake targets, which also gain the static libjpeg
+COPY relocate-cmake.sh /tmp/relocate-cmake.sh
+RUN sh /tmp/relocate-cmake.sh /staging {JPEG_LINUX_PREFIX}/lib/libjpeg.a
+
 # Step 7: record the exact configure flags, and ship upstream's licence and
 # notice plus the licence of the statically linked libjpeg
 RUN cat > /staging/cmake-args.txt <<'ARGS'
@@ -447,6 +485,11 @@ RUN sh /tmp/finalize.sh /staging linux {cpu} {version} {sha} native static
 COPY fixtures /tmp/fixtures
 COPY smoke.sh /tmp/smoke.sh
 RUN sh /tmp/smoke.sh /staging {version} /tmp/fixtures "" "{JPEG_LINUX_PREFIX}/lib/libjpeg.a -lz"
+
+# Step 9b: a cmake consumer resolves the staged tree from a copy of it at
+# another path, so a baked build path would fail here.
+COPY find_package_smoke.sh /tmp/find_package_smoke.sh
+RUN sh /tmp/find_package_smoke.sh /staging /tmp/fixtures/find_package {version}
 
 # Step 10: leave a listing in the build log for post-mortems
 RUN ls -lR /staging && file /staging/bin/qpdf && (ldd /staging/bin/qpdf || true)
@@ -755,6 +798,7 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
         with open(os.path.join(ctx, "Dockerfile"), "w") as f:
             f.write(make_dockerfile(version, arch, plat))
         _write_helper_scripts(ctx)
+        shutil.copy2(FIND_PACKAGE_SMOKE_SCRIPT, os.path.join(ctx, "find_package_smoke.sh"))
         shutil.copytree(FIXTURES_DIR, os.path.join(ctx, "fixtures"))
 
         run_checked(
@@ -844,6 +888,11 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
 
     helpers = _write_helper_scripts(workspace)
     run_checked(["sh", helpers["relocate-pc.sh"], staging], log_file, job)
+    run_checked(
+        ["sh", helpers["relocate-cmake.sh"], staging, os.path.join(jpeg, "lib", "libjpeg.a")],
+        log_file,
+        job,
+    )
 
     with open(os.path.join(staging, "cmake-args.txt"), "w") as f:
         f.write(cmake_args_text("mac", arch, "/staging", jpeg))
@@ -887,6 +936,18 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
             FIXTURES_DIR,
             f"-arch {TARGETS[arch]['apple_arch']}",
             f"-L{jpeg}/lib -ljpeg -lz",
+            run_mode,
+        ],
+        log_file,
+        job,
+    )
+    run_checked(
+        [
+            "sh",
+            FIND_PACKAGE_SMOKE_SCRIPT,
+            staging,
+            os.path.join(FIXTURES_DIR, "find_package"),
+            version,
             run_mode,
         ],
         log_file,

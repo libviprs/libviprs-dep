@@ -16,13 +16,22 @@ Archives are published to the `qpdf-<version>` GitHub Release, plus a `qpdf-late
 | `qpdf-linux-arm64.tgz` | Linux, glibc 2.36 or newer, aarch64 |
 | `qpdf-mac-arm64.tgz` | macOS 11 or newer, Apple Silicon |
 
+The 12.4.2 archives (the release is still a draft):
+
+| Archive | Size (bytes) | sha256 |
+| --- | --- | --- |
+| `qpdf-linux-x64.tgz` | 4441722 | `1b6befdc17e110b6ba57fc73e3250aa95ff77a0996497c4c5f5b8fbdaa5ced0b` |
+| `qpdf-linux-arm64.tgz` | 4383675 | `c90b00092315eba2cc750fb77b8c021f04a00dcb1e91619af132385ca42bb75d` |
+| `qpdf-mac-arm64.tgz` | 3499049 | `57e518f306f1e1e69cf7c434b4a271393e955032fae05d28d0cbb8f6e4c05854` |
+
 ```
 qpdf-<platform>-<cpu>/
 ├── bin/qpdf                       # finds ../lib by itself (rpath), no library path needed
 ├── lib/libqpdf.so                 # or .dylib on mac, with the usual symlinks
 ├── lib/libqpdf.a
+├── lib/libjpeg.a                  # the static libjpeg that libqpdf.a needs, for the cmake static target
 ├── lib/pkgconfig/libqpdf.pc       # relocatable, prefix is ${pcfiledir}/../..
-├── lib/cmake/                     # CMake package config
+├── lib/cmake/qpdf/                # CMake package config, relocatable (see below)
 ├── include/qpdf/
 ├── cmake-args.txt                 # the configure flags used
 ├── LICENSE                        # qpdf, Apache License 2.0
@@ -40,6 +49,15 @@ tar xzf qpdf-linux-x64.tgz
 qpdf-linux-x64/bin/qpdf --check streamed-plot.pdf
 ```
 
+## Using it from CMake
+
+```cmake
+find_package(qpdf CONFIG REQUIRED)    # with -DCMAKE_PREFIX_PATH=<unpacked archive>
+target_link_libraries(app PRIVATE qpdf::libqpdf)          # or qpdf::libqpdf_static
+```
+
+The targets resolve inside the unpacked archive wherever it lives: includes and libraries hang off `${_IMPORT_PREFIX}`, the static target links the shipped `lib/libjpeg.a`, and zlib is the plain `z` linker name, so a static consumer needs zlib's development files (`zlib1g-dev` on Debian, already there on macOS). CMake bakes the build machine's libjpeg and zlib paths into the static target on its own, so `relocate-cmake.sh` rewrites them during the build and the verifier refuses an archive that still has one.
+
 ## Licences
 
 qpdf is Apache-2.0 since v11, and the Apache License text and upstream's NOTICE ship in every archive. Crypto is qpdf's own native provider, so no OpenSSL or GnuTLS is involved. libjpeg-turbo is linked statically, so its licence (IJG, BSD-3-Clause and zlib terms) is in `LICENSES/`. zlib is linked dynamically and is not redistributed. Runtime libraries are libc, libstdc++ and zlib, recorded in `metadata/BUILDINFO.txt`.
@@ -53,11 +71,13 @@ python3 qpdf/build_qpdf.py --platform mac  # mac/arm64, needs a macOS host with 
 python3 qpdf/build_qpdf.py --upload        # verify, then publish to the release
 ```
 
+`qpdf/scripts/find_package_smoke.sh <unpacked-archive> qpdf/tests/fixtures/find_package <version> [run|norun]` copies an unpacked archive to a fresh directory and builds a small cmake consumer of both targets against it (it needs cmake, a C and C++ compiler and zlib's headers). The Linux Dockerfile and the native mac build run it on the tree they just staged, and `norun` builds without executing, for an archive of a foreign architecture.
+
 Every linux cell builds in a container of its own architecture (arm64 under QEMU on an x86_64 host), so the smoke test runs the real binary: it checks the version, links the shared and the static library, and runs `qpdf --check` over `qpdf/tests/fixtures/good.pdf` (must pass) and `corrupt.pdf` (must fail). The fixtures are regenerated with `python3 -I qpdf/tests/make_fixtures.py`.
 
 ## Verification
 
-`qpdf/scripts/verify_archive.sh <archive.tgz>` runs on every archive before it is published. It checks the layout, that the licence is Apache-2.0, that `metadata/CHECKSUMS.txt` matches the files exactly, the architecture read from the ELF or Mach-O header, that `libqpdf.a` is not a thin archive, that the pkg-config file is relocatable (prefix, libdir and includedir all hang off `${pcfiledir}`) and that `cmake-args.txt` records the neutral `/staging` prefix instead of a path from the build host, that BUILDINFO records the version in `qpdf/VERSION`, and, when the host can run the binary, the same good-PDF and corrupt-PDF checks as the smoke test.
+`qpdf/scripts/verify_archive.sh <archive.tgz>` runs on every archive before it is published. It checks the layout, that the licence is Apache-2.0, that `metadata/CHECKSUMS.txt` matches the files exactly, the architecture read from the ELF or Mach-O header, that `libqpdf.a` is not a thin archive, that the pkg-config file is relocatable (prefix, libdir and includedir all hang off `${pcfiledir}`) and that `cmake-args.txt` records the neutral `/staging` prefix instead of a path from the build host, that nothing a consumer reads names a path on the build machine (no absolute path in `lib/cmake`, `lib/pkgconfig`, `share` outside the upstream `doc` and `man` prose, or a text script in `bin`, and every `${_IMPORT_PREFIX}` file the cmake targets name is in the archive), that BUILDINFO records the version in `qpdf/VERSION`, and, when the host can run the binary, the same good-PDF and corrupt-PDF checks as the smoke test.
 
 ## Publishing
 
