@@ -28,6 +28,14 @@ def elf(cpu):
     return b"\x7fELF\x02\x01\x01" + b"\x00" * 9 + b"\x03\x00" + MACHINE[cpu] + b"\x00" * 40
 
 
+# Mach-O cputype (little endian): CPU_TYPE_ARM64 is 0x0100000c, x86_64 is 0x01000007.
+CPUTYPE = {"x64": b"\x07\x00\x00\x01", "arm64": b"\x0c\x00\x00\x01"}
+
+
+def macho(cpu):
+    return b"\xcf\xfa\xed\xfe" + CPUTYPE[cpu] + b"\x00" * 40
+
+
 def foreign_cpu():
     host = platform.machine()
     return "arm64" if host in ("x86_64", "AMD64") else "x64"
@@ -44,15 +52,18 @@ FILES = {
 }
 
 
-def make_archive(tmp_path, cpu=None, mutate=None):
+def make_archive(tmp_path, cpu=None, mutate=None, plat="linux"):
     cpu = cpu or foreign_cpu()
-    name = f"qpdf-linux-{cpu}"
+    name = f"qpdf-{plat}-{cpu}"
+    mac = plat == "mac"
+    obj = macho if mac else elf
+    shared = "lib/libqpdf.30.dylib" if mac else "lib/libqpdf.so.29"
     root = tmp_path / name
     files = dict(FILES)
-    files["bin/qpdf"] = elf(cpu)
-    files["lib/libqpdf.so.29"] = elf(cpu)
+    files["bin/qpdf"] = obj(cpu)
+    files[shared] = obj(cpu)
     files["metadata/BUILDINFO.txt"] = (
-        f"qpdf_version={VERSION}\nplatform=linux\ncpu={cpu}\n".encode()
+        f"qpdf_version={VERSION}\nplatform={plat}\ncpu={cpu}\n".encode()
     )
     if mutate:
         mutate(files)
@@ -60,8 +71,9 @@ def make_archive(tmp_path, cpu=None, mutate=None):
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    if "lib/libqpdf.so.29" in files:
-        (root / "lib" / "libqpdf.so").symlink_to("libqpdf.so.29")
+    if shared in files:
+        link = "libqpdf.dylib" if mac else "libqpdf.so"
+        (root / "lib" / link).symlink_to(os.path.basename(shared))
     lines = [
         f"{hashlib.sha256(d).hexdigest()}  {rel}"
         for rel, d in sorted(files.items())
@@ -165,3 +177,82 @@ def test_a_thin_static_archive_is_refused(tmp_path):
 
 def test_a_missing_archive_path_is_an_error():
     assert run("/nonexistent/qpdf-linux-x64.tgz").returncode == 2
+
+
+# The mac slice is verified on a Linux host here, so the run step is skipped by
+# design (the name says mac-arm64, the host is not a Mac) and the Mach-O header
+# read is what gets exercised.
+on_mac_arm64 = platform.system() == "Darwin" and platform.machine() == "arm64"
+needs_other_host = pytest.mark.skipif(on_mac_arm64, reason="a mac-arm64 archive would be run here")
+
+
+@needs_other_host
+def test_a_complete_mac_archive_passes(tmp_path):
+    r = run(make_archive(tmp_path, cpu="arm64", plat="mac"))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@needs_other_host
+def test_a_mac_binary_built_for_x86_64_is_refused(tmp_path):
+    r = run(
+        make_archive(
+            tmp_path, cpu="arm64", plat="mac", mutate=lambda f: f.update({"bin/qpdf": macho("x64")})
+        )
+    )
+    assert r.returncode != 0
+    assert "architecture" in r.stdout + r.stderr
+
+
+@needs_other_host
+def test_a_mac_archive_without_its_dylib_is_refused(tmp_path):
+    r = run(
+        make_archive(
+            tmp_path, cpu="arm64", plat="mac", mutate=lambda f: f.pop("lib/libqpdf.30.dylib")
+        )
+    )
+    assert r.returncode != 0
+    assert "shared" in r.stdout + r.stderr
+
+
+@needs_other_host
+def test_a_mac_archive_that_links_libjpeg_dynamically_is_refused(tmp_path):
+    r = run(
+        make_archive(
+            tmp_path,
+            cpu="arm64",
+            plat="mac",
+            mutate=lambda f: f.update({"bin/qpdf": macho("arm64") + b"\x00libjpeg.8.dylib\x00"}),
+        )
+    )
+    assert r.returncode != 0
+    assert "libjpeg" in r.stdout + r.stderr
+
+
+# libqpdf.pc and cmake-args.txt must not carry the build host's paths. The
+# first mac archive shipped libdir and includedir pointing into the builder's
+# home directory, which pkg-config follows even though prefix is relative.
+def test_a_pkgconfig_file_with_an_absolute_libdir_is_refused(tmp_path):
+    pc = b"prefix=${pcfiledir}/../..\nlibdir=/home/builder/out/lib\nincludedir=${prefix}/include\n"
+    r = run(make_archive(tmp_path, mutate=lambda f: f.update({"lib/pkgconfig/libqpdf.pc": pc})))
+    assert r.returncode != 0
+    assert "libdir" in r.stdout + r.stderr
+
+
+def test_a_pkgconfig_file_with_an_absolute_includedir_is_refused(tmp_path):
+    pc = b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=/home/builder/out/include\n"
+    r = run(make_archive(tmp_path, mutate=lambda f: f.update({"lib/pkgconfig/libqpdf.pc": pc})))
+    assert r.returncode != 0
+    assert "includedir" in r.stdout + r.stderr
+
+
+def test_a_pkgconfig_file_with_prefix_relative_dirs_passes(tmp_path):
+    pc = b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n"
+    r = run(make_archive(tmp_path, mutate=lambda f: f.update({"lib/pkgconfig/libqpdf.pc": pc})))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_cmake_args_naming_a_build_host_prefix_are_refused(tmp_path):
+    args = b"-DCMAKE_INSTALL_PREFIX=/home/builder/out/qpdf-linux-x64\n"
+    r = run(make_archive(tmp_path, mutate=lambda f: f.update({"cmake-args.txt": args})))
+    assert r.returncode != 0
+    assert "cmake-args" in r.stdout + r.stderr

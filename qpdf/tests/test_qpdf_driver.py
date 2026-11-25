@@ -1,6 +1,7 @@
 """The qpdf build driver: version pin, naming, matrix and configure flags."""
 
 import os
+import subprocess
 import re
 
 import build_qpdf as b
@@ -114,3 +115,51 @@ class TestFixtures:
     def test_corrupt_pdf_has_no_trailer(self):
         data = open(os.path.join(HERE, "fixtures", "corrupt.pdf"), "rb").read()
         assert b"startxref" not in data
+
+
+class TestRelocatablePkgConfig:
+    """relocate-pc.sh rewrites every absolute directory CMake baked into the file."""
+
+    def relocate(self, tmp_path):
+        pc_dir = tmp_path / "stage" / "lib" / "pkgconfig"
+        pc_dir.mkdir(parents=True)
+        (pc_dir / "libqpdf.pc").write_text(
+            "prefix=/home/builder/out/stage\n"
+            "exec_prefix=${prefix}\n"
+            "libdir=/home/builder/out/stage/lib\n"
+            "includedir=/home/builder/out/stage/include\n"
+            "Name: libqpdf\n"
+            "Libs: -L${libdir} -lqpdf\n"
+        )
+        script = tmp_path / "relocate-pc.sh"
+        script.write_text(b.RELOCATE_PKGCONFIG_SH)
+        subprocess.run(["sh", str(script), str(tmp_path / "stage")], check=True)
+        return (pc_dir / "libqpdf.pc").read_text()
+
+    def test_prefix_is_relative_to_the_file(self, tmp_path):
+        assert "prefix=${pcfiledir}/../..\n" in self.relocate(tmp_path)
+
+    def test_libdir_and_includedir_hang_off_the_prefix(self, tmp_path):
+        text = self.relocate(tmp_path)
+        assert "libdir=${prefix}/lib\n" in text
+        assert "includedir=${prefix}/include\n" in text
+
+    def test_no_build_host_path_is_left(self, tmp_path):
+        assert "/home/builder" not in self.relocate(tmp_path)
+
+
+class TestMacNativeBuild:
+    """The mac path records a neutral prefix, as the Linux Dockerfile does with /staging."""
+
+    def source(self):
+        import inspect
+
+        return inspect.getsource(b._build_mac_native)
+
+    def test_cmake_args_txt_does_not_carry_the_staging_path(self):
+        assert 'cmake_args_text("mac", arch, "/staging", jpeg)' in self.source()
+
+    def test_configure_uses_the_neutral_prefix_and_install_picks_the_real_one(self):
+        src = self.source()
+        assert 'cmake_configure_args("mac", arch, "/staging", jpeg)' in src
+        assert '"--prefix", staging' in src
