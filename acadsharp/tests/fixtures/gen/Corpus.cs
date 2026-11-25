@@ -107,6 +107,7 @@ public static class Corpus
 		yield return Pair("g13_circle.dwg", WriteCircle);
 		yield return Pair("g13_ellipse.dwg", WriteEllipse);
 		yield return Pair("g13_spline.dwg", WriteSpline);
+		yield return Pair("g13_fit_spline.dwg", WriteFitSpline);
 		yield return Pair("g13_text.dwg", WriteText);
 		yield return Pair("g13_text_forms.dwg", WriteTextForms);
 		yield return Pair("g13_text_aligned.dwg", WriteTextAligned);
@@ -259,6 +260,95 @@ public static class Corpus
 		}
 
 		doc.Entities.Add(s);
+		Write(doc, path);
+	}
+
+	// Fit-defined splines (libviprs-dep#155). An AC1027 or later save stores a
+	// spline drawn through fit points as fit data only, so the reader hands the
+	// shim a Spline with no control points and no knots. Eight splines, in this
+	// order, which tests/test_fit_spline_warning_155.py reads by position:
+	//
+	//   0  3 fit points, chord, both end tangents
+	//   1  4 fit points, square root, both end tangents
+	//   2  10 fit points, uniform, both end tangents
+	//   3  5 fit points, chord, closed, no tangents
+	//   4  3 fit points, chord, no tangents
+	//   5  2 fit points, uniform, both end tangents (one Bezier segment, #150)
+	//   6  2 fit points, uniform, no tangents
+	//   7  an ordinary control-point spline, as the control
+	//
+	// The tangents are not normalised on purpose: how AutoCAD scales them is
+	// part of what is not known.
+	private static Spline FitSpline(
+		CadDocument doc,
+		KnotParametrization parametrisation,
+		bool closed,
+		XYZ? startTangent,
+		XYZ? endTangent,
+		params XYZ[] fit
+	)
+	{
+		Spline s = new Spline { Degree = 3, Layer = L(doc), KnotParametrization = parametrisation };
+		s.FitPoints.AddRange(fit);
+		if (startTangent.HasValue)
+		{
+			s.StartTangent = startTangent.Value;
+		}
+
+		if (endTangent.HasValue)
+		{
+			s.EndTangent = endTangent.Value;
+		}
+
+		if (closed)
+		{
+			s.IsClosed = true;
+		}
+
+		return s;
+	}
+
+	public static void WriteFitSpline(string path)
+	{
+		CadDocument doc = NewDoc();
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Chord, false, new XYZ(1, 1, 0), new XYZ(1, -1, 0),
+				new XYZ(0, 0, 0), new XYZ(10, 6, 0), new XYZ(20, 0, 0)));
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.SquareRoot, false, new XYZ(2, 1, 0), new XYZ(2, -1, 0),
+				new XYZ(0, 20, 0), new XYZ(8, 28, 0), new XYZ(16, 22, 0), new XYZ(24, 30, 0)));
+		XYZ[] ten = new XYZ[10];
+		for (int i = 0; i < ten.Length; i++)
+		{
+			ten[i] = new XYZ(i * 5.0, 40.0 + (i % 3) * 4.0, 0);
+		}
+
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Uniform, false, new XYZ(1, 0.5, 0), new XYZ(1, -0.5, 0), ten));
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Chord, true, null, null,
+				new XYZ(60, 0, 0), new XYZ(70, 5, 0), new XYZ(75, 15, 0), new XYZ(65, 20, 0), new XYZ(58, 10, 0)));
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Chord, false, null, null,
+				new XYZ(0, 60, 0), new XYZ(10, 66, 0), new XYZ(20, 60, 0)));
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Uniform, false, new XYZ(12.5, 32.5, 0), new XYZ(-0.5, 29.25, 0),
+				new XYZ(250, 17, 0), new XYZ(259, 27, 0)));
+		doc.Entities.Add(
+			FitSpline(doc, KnotParametrization.Uniform, false, null, null,
+				new XYZ(100, 0, 0), new XYZ(110, 10, 0)));
+
+		Spline control = new Spline { Degree = 3, Layer = L(doc) };
+		control.ControlPoints.Add(new XYZ(0, 80, 0));
+		control.ControlPoints.Add(new XYZ(5, 90, 0));
+		control.ControlPoints.Add(new XYZ(15, 75, 0));
+		control.ControlPoints.Add(new XYZ(20, 88, 0));
+		foreach (double k in new double[] { 0, 0, 0, 0, 1, 1, 1, 1 })
+		{
+			control.Knots.Add(k);
+		}
+
+		doc.Entities.Add(control);
 		Write(doc, path);
 	}
 

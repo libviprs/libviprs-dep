@@ -119,6 +119,7 @@ ONCE_RECORDED = (
     "g13_ellipse.dwg",
     "g13_empty_view.dwg",
     "g13_face3d.dwg",
+    "g13_fit_spline.dwg",
     "g13_hatch.dwg",
     "g13_hatch_fill.dwg",
     "g13_insert.dwg",

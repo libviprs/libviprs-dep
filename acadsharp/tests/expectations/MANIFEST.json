@@ -327,6 +327,29 @@
       ],
       "views_without_extents": 0
     },
+    "g13_fit_spline.dwg": {
+      "batches": 1,
+      "bytes": 10987,
+      "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
+      "kinds": {
+        "Layer": 2,
+        "Spline": 8,
+        "Warning": 4
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 1588,
+      "records": 14,
+      "sha256": "4d2f28af3f6141936b659e56a18de61485ea5071e76d1190835bc968ddbe6142",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_hatch.dwg": {
       "batches": 1,
       "bytes": 10827,
@@ -1383,8 +1406,8 @@
       "views_without_extents": 0
     }
   },
-  "recorded": "2026-11-03",
-  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
+  "recorded": "2026-11-25",
+  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
     "sha256": "81116ec31f4e56e5cdbfd590dbc880282cf0f73d0ef539a40f6b272e131a2355",
     "sources": {
