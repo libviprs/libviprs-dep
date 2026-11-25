@@ -229,7 +229,7 @@ A separate **Build PDFium** workflow (`.github/workflows/build.yml`) is availabl
 - [`qpdf/README.md`](qpdf/README.md) — qpdf as a test-time validator: archives, licences, verification.
 - [`zstd/README.md`](zstd/README.md) — zstd build pipeline, version pin rationale, pkg-config consumption.
 - [`acadsharp/README.md`](acadsharp/README.md) — the NativeAOT shim, the C ABI, the archive layout and how to link it.
-- [`docs/hayro-spike.md`](docs/hayro-spike.md): whether the pure-Rust hayro renderer could replace pdfium (numbers on 36 PDFs, the encryption gap, and the keep-both-behind-a-feature recommendation).
+- [`docs/hayro-spike.md`](docs/hayro-spike.md): whether the pure-Rust hayro renderer could replace pdfium (numbers on 36 PDFs, then rotation goldens, A0 at full resolution, strip rendering, JBIG2/JPX/CCITT, hostile input, threads and passwords, and the `pdf-hayro` decision).
 - [`acadsharp/docs/ABI.md`](acadsharp/docs/ABI.md) and [`acadsharp/docs/WIRE.md`](acadsharp/docs/WIRE.md) — the frozen contract, written so a second consumer could be built from them alone.
 
 ## License

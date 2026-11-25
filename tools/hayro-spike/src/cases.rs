@@ -313,11 +313,12 @@ pub fn hostile(path: &str) -> String {
         let s = 800.0 / w.max(h);
         let pm = one_pixmap(&pdf, 0, s, s)?;
         Ok(format!(
-            "pages={pages} page_pt={w}x{h} pixmap={}x{} secs={:.3} rss_kb={}",
+            "pages={pages} page_pt={w}x{h} pixmap={}x{} secs={:.3} rss_kb={} hash={:x}",
             pm.width(),
             pm.height(),
             t.elapsed().as_secs_f64(),
-            peak_rss_kb()
+            peak_rss_kb(),
+            fnv(pm.data_as_u8_slice())
         ))
     })
 }

@@ -13,6 +13,7 @@ end of the run.
 """
 
 import csv
+import hashlib
 import os
 import re
 import resource
@@ -176,8 +177,10 @@ def pdfium_child(args):
                 print(f"status=ERR note=BadPageSize_{w}x{h}")
                 return
             s = 800 / max(w, h)
-            pg.render(scale=s)
-            print(f"status=OK secs={time.time() - t:.4f} rss_kb={rss()}")
+            bm = pg.render(scale=s)
+            secs = time.time() - t
+            digest = hashlib.md5(bm.to_numpy().tobytes()).hexdigest()[:12]
+            print(f"status=OK secs={secs:.4f} rss_kb={rss()} hash={digest}")
         elif op == "mutants":
             data = Path(args[1]).read_bytes()
             seed, count = int(args[2]), int(args[3])
@@ -476,8 +479,14 @@ def step_hostile():
                 "pdfium_s": pdd.get("secs", f"{psecs:.2f}"),
                 "pdfium_peak_rss_mb": mb(pdd),
                 "pdfium_note": pdd.get("note", "") or (perr[:100] if ps != "OK" else ""),
+                "_h": hd.get("hash", ""),
+                "_p": pdd.get("hash", ""),
             }
         )
+    for r in rows:  # did a damaged file come out as the same picture as the untouched base?
+        for side, key in (("hayro", "_h"), ("pdfium", "_p")):
+            if r[key]:
+                r[f"{side}_same_as_base"] = "yes" if r[key] == rows[0][key] else "no"
     # byte level mutants of two files, hayro in process under catch_unwind, pdfium in a child
     sources = [FIX / "canonical.pdf", tmp / "base.pdf"]
     tot = {"ok": 0, "err": 0, "panic": 0}
@@ -513,6 +522,7 @@ def step_hostile():
     )
     cols = ["case", "description", "hayro", "hayro_s", "hayro_peak_rss_mb", "hayro_note"]
     cols += ["pdfium", "pdfium_s", "pdfium_peak_rss_mb", "pdfium_note"]
+    cols += ["hayro_same_as_base", "pdfium_same_as_base"]
     write_csv("hostile", cols, rows)
 
 
