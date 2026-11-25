@@ -723,7 +723,7 @@ namespace Viprs.Cad
 		// Only that case. More fit points need a parametrisation and a tangent
 		// scaling this has no recorded drawing to check against, and a plausible
 		// wrong curve is worse than the empty record it replaces, so those stay
-		// as the reader gave them.
+		// as the reader gave them, with warning 117 beside them (#155).
 		private static bool TryFitSplineAsBezier(Spline spline, out XYZ[] bezier)
 		{
 			bezier = null;
@@ -1255,6 +1255,38 @@ namespace Viprs.Cad
 						ctrl,
 						spline.Weights.ToArray()
 					);
+
+					// Fit data this build could not turn into control points. The
+					// record above stays as the reader gave it, so a consumer
+					// that already handles an empty Spline is unchanged, and this
+					// is what tells it why that one is empty (#155).
+					if (points.Count == 0 && knots.Length == 0 && spline.FitPoints.Count > 0)
+					{
+						// An if chain and not a switch: a nested switch would put two
+						// switches' arms in one list, which test_shim_source_rules
+						// refuses to order.
+						KnotParametrization kp = spline.KnotParametrization;
+						string method =
+							kp == KnotParametrization.Chord ? "chord"
+							: kp == KnotParametrization.SquareRoot ? "square root"
+							: kp == KnotParametrization.Uniform ? "uniform"
+							: "custom";
+
+						Primitive unfitted = Primitive.Warning(
+							WarningCodes.FitSplineNotFitted,
+							h,
+							"SPLINE is stored as "
+								+ spline.FitPoints.Count.ToString(CultureInfo.InvariantCulture)
+								+ " fit points (" + method + " parametrisation) with no control "
+								+ "points and no knots, and this build only works out a cubic "
+								+ "through two fit points with both end tangents, so the Spline "
+								+ "record beside this one under the same handle is empty and "
+								+ "draws nothing"
+						);
+						unfitted.Flags = flags;
+						yield return unfitted;
+					}
+
 					yield break;
 				}
 

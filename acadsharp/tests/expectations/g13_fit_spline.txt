@@ -5,10 +5,16 @@
 00004 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00005 Warning handle=0 flags=0 code=READER_NOTIFICATION message="Warning: ACadSharp.Tables.TextStyle table reference with handle:  | name:  not found for ACadSharp.Objects.TableStyle+CellStyle"
 00006 Spline handle=49 flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
-00007 Spline handle=4A flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
-00008 Spline handle=4B flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
-00009 Spline handle=4C flags=0 layer=2 degree=3 splineflags=1 knots=[] ctrl=[] weights=[]
-00010 Spline handle=4D flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
-00011 Spline handle=4E flags=0 layer=2 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.000000,17.000000,0.000000);(254.166667,27.833333,0.000000);(259.166667,17.250000,0.000000);(259.000000,27.000000,0.000000)] weights=[]
-00012 Spline handle=4F flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
-00013 Spline handle=50 flags=0 layer=2 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(0.000000,80.000000,0.000000);(5.000000,90.000000,0.000000);(15.000000,75.000000,0.000000);(20.000000,88.000000,0.000000)] weights=[]
+00007 Warning handle=49 flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 3 fit points (chord parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00008 Spline handle=4A flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
+00009 Warning handle=4A flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 4 fit points (square root parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00010 Spline handle=4B flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
+00011 Warning handle=4B flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 10 fit points (uniform parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00012 Spline handle=4C flags=0 layer=2 degree=3 splineflags=1 knots=[] ctrl=[] weights=[]
+00013 Warning handle=4C flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 5 fit points (chord parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00014 Spline handle=4D flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
+00015 Warning handle=4D flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 3 fit points (chord parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00016 Spline handle=4E flags=0 layer=2 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(250.000000,17.000000,0.000000);(254.166667,27.833333,0.000000);(259.166667,17.250000,0.000000);(259.000000,27.000000,0.000000)] weights=[]
+00017 Spline handle=4F flags=0 layer=2 degree=3 splineflags=0 knots=[] ctrl=[] weights=[]
+00018 Warning handle=4F flags=0 code=FIT_SPLINE_NOT_FITTED message="SPLINE is stored as 2 fit points (uniform parametrisation) with no control points and no knots, and this build only works out a cubic through two fit points with both end tangents, so the Spline record beside this one under the same handle is empty and draws nothing"
+00019 Spline handle=50 flags=0 layer=2 degree=3 splineflags=0 knots=[0.000000,0.000000,0.000000,0.000000,1.000000,1.000000,1.000000,1.000000] ctrl=[(0.000000,80.000000,0.000000);(5.000000,90.000000,0.000000);(15.000000,75.000000,0.000000);(20.000000,88.000000,0.000000)] weights=[]

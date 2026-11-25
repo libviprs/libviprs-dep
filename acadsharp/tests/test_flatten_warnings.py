@@ -43,6 +43,7 @@ CODE_FIXTURES = {
     "ARROWHEAD_NOT_DRAWN": "g13_leader.dwg",
     "MLINE_STYLE_FEATURES_IGNORED": "g13_mline.dwg",
     "MULTILEADER_FEATURES_IGNORED": "g13_multileader.dwg",
+    "FIT_SPLINE_NOT_FITTED": "g13_fit_spline.dwg",
 }
 
 # A code the corpus cannot produce, and the C# constant that has to still be

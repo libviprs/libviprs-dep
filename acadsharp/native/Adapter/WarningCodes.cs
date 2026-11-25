@@ -159,6 +159,19 @@ namespace Viprs.Cad
 		// a consumer is not entitled to parse it for anything else.
 		public const uint MultiLeaderFeaturesIgnored = 116u;
 
+		// A SPLINE an AC1027 or later save stores as fit data (fit points and end
+		// tangents, no control points, no knots) that this build did not turn
+		// into control points. The wire's Spline record has no field for fit
+		// points, so the record beside this one crosses with no knots and no
+		// control points and draws nothing. Only a cubic through exactly two fit
+		// points with both end tangents is worked out (#150). For more points the
+		// parametrisation (chord, square root or uniform) and the tangent scaling
+		// both change the control points, and the corpus holds no drawing with
+		// both the fit data and the control points AutoCAD derived from it to
+		// check a fit against (libviprs-dep#155), so the shim says so rather than
+		// send a plausible wrong curve.
+		public const uint FitSplineNotFitted = 117u;
+
 		public static string Name(uint code)
 		{
 			switch (code)
@@ -180,6 +193,7 @@ namespace Viprs.Cad
 				case ArrowheadNotDrawn: return "ARROWHEAD_NOT_DRAWN";
 				case MLineStyleFeaturesIgnored: return "MLINE_STYLE_FEATURES_IGNORED";
 				case MultiLeaderFeaturesIgnored: return "MULTILEADER_FEATURES_IGNORED";
+				case FitSplineNotFitted: return "FIT_SPLINE_NOT_FITTED";
 				default: return "WARNING_" + code;
 			}
 		}
