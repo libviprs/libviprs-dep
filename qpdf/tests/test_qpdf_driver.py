@@ -3,9 +3,8 @@
 import os
 import re
 
-import pytest
-
 import build_qpdf as b
+import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

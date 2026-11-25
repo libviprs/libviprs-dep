@@ -50,14 +50,17 @@ def make_archive(tmp_path, cpu=None, mutate=None):
     files = dict(FILES)
     files["bin/qpdf"] = elf(cpu)
     files["lib/libqpdf.so.29"] = elf(cpu)
-    files["metadata/BUILDINFO.txt"] = f"qpdf_version={VERSION}\nplatform=linux\ncpu={cpu}\n".encode()
+    files["metadata/BUILDINFO.txt"] = (
+        f"qpdf_version={VERSION}\nplatform=linux\ncpu={cpu}\n".encode()
+    )
     if mutate:
         mutate(files)
     for rel, data in files.items():
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    (root / "lib" / "libqpdf.so").symlink_to("libqpdf.so.29") if "lib/libqpdf.so.29" in files else None
+    if "lib/libqpdf.so.29" in files:
+        (root / "lib" / "libqpdf.so").symlink_to("libqpdf.so.29")
     lines = [
         f"{hashlib.sha256(d).hexdigest()}  {rel}"
         for rel, d in sorted(files.items())
@@ -86,8 +89,16 @@ def test_a_complete_archive_passes(tmp_path):
 
 @pytest.mark.parametrize(
     "missing",
-    ["bin/qpdf", "lib/libqpdf.a", "lib/pkgconfig/libqpdf.pc", "LICENSE", "NOTICE.md",
-     "cmake-args.txt", "include/qpdf/QPDF.hh", "metadata/BUILDINFO.txt"],
+    [
+        "bin/qpdf",
+        "lib/libqpdf.a",
+        "lib/pkgconfig/libqpdf.pc",
+        "LICENSE",
+        "NOTICE.md",
+        "cmake-args.txt",
+        "include/qpdf/QPDF.hh",
+        "metadata/BUILDINFO.txt",
+    ],
 )
 def test_a_missing_file_is_refused(tmp_path, missing):
     r = run(make_archive(tmp_path, mutate=lambda f: f.pop(missing)))
@@ -118,8 +129,11 @@ def test_a_binary_for_the_wrong_architecture_is_refused(tmp_path):
 
 
 def test_a_version_record_that_disagrees_with_the_pin_is_refused(tmp_path):
-    r = run(make_archive(tmp_path, mutate=lambda f: f.update(
-        {"metadata/BUILDINFO.txt": b"qpdf_version=0.0.1\n"})))
+    r = run(
+        make_archive(
+            tmp_path, mutate=lambda f: f.update({"metadata/BUILDINFO.txt": b"qpdf_version=0.0.1\n"})
+        )
+    )
     assert r.returncode != 0
     assert "version" in r.stdout + r.stderr
 

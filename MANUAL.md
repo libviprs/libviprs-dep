@@ -21,6 +21,8 @@ optionally publish them as GitHub Releases on `libviprs/libviprs-dep`.
 
 **build_zstd.py** — the same, for the zstd compression library.
 
+**build_qpdf.py** — the same, for qpdf (library and CLI), shipped as a test-time PDF validator. See [`qpdf/README.md`](qpdf/README.md).
+
 Everything from **OPTIONS** through **TROUBLESHOOTING** below describes
 `build_pdfium.py`. zstd's driver shares the CLI shape and the archive
 conventions but almost none of the machinery; see [**ZSTD**](#zstd) for
@@ -279,6 +281,14 @@ pdfium/
 │   └── musl.py                # musl/Alpine patch script (accepts --mode)
 └── tests/                     # pytest suite for pure-function logic
 
+qpdf/
+├── build_qpdf.py              # entry point
+├── VERSION                    # qpdf release the archives ship
+├── bin/                       # default output directory (gitignored)
+├── scripts/
+│   └── verify_archive.sh      # invariant check run over every packaged .tgz
+└── tests/                     # pytest suite and the good/corrupt PDF fixtures
+
 zstd/
 ├── build_zstd.py              # entry point
 ├── VERSION                    # zstd release the archives ship
@@ -295,9 +305,12 @@ zstd/
 ├── release.yml                # fires on push to `release`, fans out to
 │                              # 4 ubuntu-latest + 1 macos-15 jobs, each
 │                              # uploading to pdfium-<VERSION> via --upload
-└── release-zstd.yml           # same trigger, zstd's own matrix: 4
-                               # ubuntu-latest + 2 macos-15 jobs, each
-                               # verifying before it uploads
+├── release-zstd.yml           # same trigger, zstd's own matrix: 4
+│                              # ubuntu-latest + 2 macos-15 jobs, each
+│                              # verifying before it uploads
+└── release-qpdf.yml           # same trigger, qpdf's matrix: 2 ubuntu-latest
+                               # + 1 macos-15 job, each verifying before it
+                               # uploads the archive and its .sha256
 ```
 
 `ci.yml` deliberately names no dependency directory: `ruff check .`,

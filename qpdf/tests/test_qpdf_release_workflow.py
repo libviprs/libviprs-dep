@@ -23,7 +23,8 @@ def test_every_cell_verifies_before_it_uploads():
 
 
 def test_the_driver_is_never_given_upload():
-    assert "--upload" not in WF
+    code = "\n".join(ln for ln in WF.splitlines() if not ln.lstrip().startswith("#"))
+    assert "--upload" not in code
 
 
 def test_version_input_goes_through_env_not_the_script():

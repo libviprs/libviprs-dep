@@ -15,6 +15,7 @@ For a full man-page-style reference on the build tooling, see [`MANUAL.md`](MANU
 | [`pdfium/`](pdfium/) | [PDFium](https://pdfium.googlesource.com/pdfium/) | PDF page rasterization |
 | [`zstd/`](zstd/) | [zstd](https://github.com/facebook/zstd) | Packfile compression, so `--features packfile` stops compiling C |
 | [`acadsharp/`](acadsharp/) | [ACadSharp](https://github.com/DomCR/ACadSharp) | DWG reading, through a .NET NativeAOT shim behind a C ABI |
+| [`qpdf/`](qpdf/) | [qpdf](https://github.com/qpdf/qpdf) | `qpdf --check` to validate the PDFs libviprs writes (test-time only, not a runtime dependency) |
 
 ## Release contents
 
@@ -39,6 +40,20 @@ zstd-<platform>-<cpu>/
 ├── include/                   # zstd.h, zstd_errors.h, zdict.h
 ├── cmake-args.txt             # CMake configure flags used
 └── LICENSE
+```
+
+```
+qpdf-<platform>-<cpu>/
+├── bin/qpdf                   # finds ../lib by itself, no library path needed
+├── lib/libqpdf.so             # or .dylib on mac
+├── lib/libqpdf.a
+├── lib/pkgconfig/libqpdf.pc   # relocatable
+├── include/qpdf/
+├── cmake-args.txt
+├── LICENSE                    # Apache-2.0
+├── NOTICE.md
+├── LICENSES/                  # the statically linked libjpeg
+└── metadata/{BUILDINFO.txt,CHECKSUMS.txt}
 ```
 
 ```
@@ -72,6 +87,8 @@ the ABI and wire versions, the header's sha256 and fingerprint, the system libra
 needed, and `static_certified`, which is `true` only on targets where a static smoke actually linked
 **and ran**. Linking alone cannot tell a working archive from a broken one here: without its
 initialiser the link is clean and the binary aborts on the first call.
+
+qpdf's matrix is `qpdf-linux-x64.tgz`, `qpdf-linux-arm64.tgz` and `qpdf-mac-arm64.tgz`, built the zstd way (a container per Linux architecture, the Mac slice on a macOS host) and published by `.github/workflows/release-qpdf.yml`.
 
 See [`pdfium/README.md`](pdfium/README.md#download) for direct download URLs and consumption examples. [`zstd/README.md`](zstd/README.md#download) covers the zstd archives, none of which are published yet.
 
@@ -209,6 +226,7 @@ A separate **Build PDFium** workflow (`.github/workflows/build.yml`) is availabl
 
 - [`MANUAL.md`](MANUAL.md) — complete man-page-style reference for the build tooling, CLI options, artifact layout, environment, exit statuses, troubleshooting.
 - [`pdfium/README.md`](pdfium/README.md) — PDFium-specific build pipeline overview, GN args, patches.
+- [`qpdf/README.md`](qpdf/README.md) — qpdf as a test-time validator: archives, licences, verification.
 - [`zstd/README.md`](zstd/README.md) — zstd build pipeline, version pin rationale, pkg-config consumption.
 - [`acadsharp/README.md`](acadsharp/README.md) — the NativeAOT shim, the C ABI, the archive layout and how to link it.
 - [`docs/hayro-spike.md`](docs/hayro-spike.md): whether the pure-Rust hayro renderer could replace pdfium (numbers on 36 PDFs, the encryption gap, and the keep-both-behind-a-feature recommendation).

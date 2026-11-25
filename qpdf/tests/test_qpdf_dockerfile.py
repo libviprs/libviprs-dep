@@ -1,8 +1,7 @@
 """The generated Dockerfile for the linux cells."""
 
-import pytest
-
 import build_qpdf as b
+import pytest
 
 
 def df(arch="amd64"):
@@ -29,8 +28,9 @@ def test_licences_and_checksums_are_staged():
     text = df()
     assert "LICENSE.txt /staging/LICENSE" in text
     assert "/staging/NOTICE.md" in text
-    assert "/staging/metadata/CHECKSUMS.txt" in text
-    assert "/staging/metadata/BUILDINFO.txt" in text
+    assert "finalize.sh /staging" in text
+    assert "metadata/CHECKSUMS.txt" in b.FINALIZE_SH
+    assert "metadata/BUILDINFO.txt" in b.FINALIZE_SH
 
 
 def test_the_staged_binary_is_run_before_the_image_is_done():
@@ -44,4 +44,6 @@ def test_smoke_script_checks_version_good_pdf_and_corrupt_pdf():
     assert "--version" in s
     assert "good.pdf" in s
     assert "corrupt.pdf" in s
-    assert "LD_LIBRARY_PATH" not in s.split("bin/qpdf", 1)[1].split("\n", 1)[0]
+    # the binary is run with the library path unset, so the rpath is what is tested
+    assert "env -u LD_LIBRARY_PATH" in s
+    assert "export LD_LIBRARY_PATH" not in s
