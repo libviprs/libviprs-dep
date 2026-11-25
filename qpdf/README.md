@@ -49,7 +49,7 @@ qpdf is Apache-2.0 since v11, and the Apache License text and upstream's NOTICE 
 ```bash
 python3 qpdf/build_qpdf.py                 # linux amd64 + arm64, in containers
 python3 qpdf/build_qpdf.py --arch arm64    # one cell
-python3 qpdf/build_qpdf.py --platform mac  # mac/arm64, needs a macOS host with cmake and jpeg-turbo
+python3 qpdf/build_qpdf.py --platform mac  # mac/arm64, needs a macOS host with cmake and jpeg-turbo (brew install cmake jpeg-turbo)
 python3 qpdf/build_qpdf.py --upload        # verify, then publish to the release
 ```
 
@@ -57,11 +57,11 @@ Every linux cell builds in a container of its own architecture (arm64 under QEMU
 
 ## Verification
 
-`qpdf/scripts/verify_archive.sh <archive.tgz>` runs on every archive before it is published. It checks the layout, that the licence is Apache-2.0, that `metadata/CHECKSUMS.txt` matches the files exactly, the architecture read from the ELF or Mach-O header, that `libqpdf.a` is not a thin archive, that the pkg-config file is relocatable, that BUILDINFO records the version in `qpdf/VERSION`, and, when the host can run the binary, the same good-PDF and corrupt-PDF checks as the smoke test.
+`qpdf/scripts/verify_archive.sh <archive.tgz>` runs on every archive before it is published. It checks the layout, that the licence is Apache-2.0, that `metadata/CHECKSUMS.txt` matches the files exactly, the architecture read from the ELF or Mach-O header, that `libqpdf.a` is not a thin archive, that the pkg-config file is relocatable (prefix, libdir and includedir all hang off `${pcfiledir}`) and that `cmake-args.txt` records the neutral `/staging` prefix instead of a path from the build host, that BUILDINFO records the version in `qpdf/VERSION`, and, when the host can run the binary, the same good-PDF and corrupt-PDF checks as the smoke test.
 
 ## Publishing
 
-`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It builds the two Linux cells, verifies each archive, uploads it with its sidecar, and moves `qpdf-latest` when both published. The macOS arm64 archive is not built yet: its job is optional (a `build_mac` dispatch input, off by default, `continue-on-error`) and does not gate `qpdf-latest`.
+`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It builds the two Linux cells, verifies each archive, uploads it with its sidecar, and moves `qpdf-latest` when both published. The macOS arm64 archive comes from an optional job (a `build_mac` dispatch input, off by default, `continue-on-error`) on a `macos-15` runner, and it does not gate `qpdf-latest`. The 12.4.2 mac archive was built by hand on an Apple Silicon Mac (`brew install cmake jpeg-turbo`, then the `--platform mac` command above, which takes a couple of minutes), verified with the same script, and attached to the release next to the Linux ones.
 
 ## Testing
 

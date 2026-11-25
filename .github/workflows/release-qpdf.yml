@@ -24,7 +24,7 @@ on:
         description: "qpdf version to publish (overrides qpdf/VERSION)"
         required: false
       build_mac:
-        description: "also build qpdf-mac-arm64.tgz (not built yet, needs a macOS runner; optional)"
+        description: "also build qpdf-mac-arm64.tgz (needs a macOS runner; optional)"
         type: boolean
         default: false
 
@@ -202,9 +202,8 @@ jobs:
     # macOS has no container image, so the mac/arm64 cell builds natively
     # with the host CMake on an Apple Silicon runner, where its smoke test
     # runs for real.
-    # Optional and off by default: the mac archive has not been built yet, so
-    # it runs only when a dispatch asks for it, and its failure never blocks
-    # the Linux archives or qpdf-latest.
+    # Optional and off by default: it runs only when a dispatch asks for it,
+    # and its failure never blocks the Linux archives or qpdf-latest.
     needs: [resolve-version, create-release]
     if: inputs.build_mac
     continue-on-error: true
@@ -284,8 +283,8 @@ jobs:
     # Moves qpdf-latest onto whatever this run just published, so a
     # consumer tracking the edge of this dependency has one URL that
     # never needs to resolve a version. Only when both Linux archives
-    # published. The macOS archive is optional and not built yet, so it
-    # does not gate this; a consumer needing it must check the release.
+    # published. The macOS archive is optional, so it does not gate
+    # this; a consumer needing it must check the release.
     # Every dependency's release workflow in this repo carries a similar
     # job, calling the same shared script with its own dependency name.
     needs: [resolve-version, build-linux, summary]

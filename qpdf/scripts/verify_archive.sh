@@ -24,7 +24,9 @@
 #      filename claims (ELF e_machine / Mach-O cputype, read from the header
 #      bytes so a foreign-arch archive checks fine on any host).
 #   5. libqpdf.a is a real archive, not a thin one that points at build paths.
-#   6. libqpdf.pc is relocatable (prefix relative to ${pcfiledir}).
+#   6. libqpdf.pc is relocatable (prefix relative to ${pcfiledir}, libdir and
+#      includedir under ${prefix}), and cmake-args.txt records the neutral
+#      /staging install prefix rather than a path from the build host.
 #   7. metadata/BUILDINFO.txt records the version in qpdf/VERSION.
 #   8. When the host can run the binary: `bin/qpdf --version` reports that
 #      version with no library path set, `--check` passes a known-good tiny
@@ -144,6 +146,14 @@ done
 # shellcheck disable=SC2016  # the dollar is literal text in the .pc file
 grep -q '^prefix=${pcfiledir}/\.\./\.\.$' "$ROOT/lib/pkgconfig/libqpdf.pc" ||
   fail "libqpdf.pc prefix is not relative to \${pcfiledir}"
+# shellcheck disable=SC2016
+grep -q '^libdir=${prefix}/lib$' "$ROOT/lib/pkgconfig/libqpdf.pc" ||
+  fail "libqpdf.pc libdir is not under \${prefix}"
+# shellcheck disable=SC2016
+grep -q '^includedir=${prefix}/include$' "$ROOT/lib/pkgconfig/libqpdf.pc" ||
+  fail "libqpdf.pc includedir is not under \${prefix}"
+grep -qx -e '-DCMAKE_INSTALL_PREFIX=/staging' "$ROOT/cmake-args.txt" ||
+  fail "cmake-args.txt does not record -DCMAKE_INSTALL_PREFIX=/staging (a path from the build host?)"
 
 # 7. version record
 WANT="$(tr -d '[:space:]' <"$QPDF_DIR/VERSION")"
