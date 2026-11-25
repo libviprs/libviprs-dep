@@ -327,6 +327,29 @@
       ],
       "views_without_extents": 0
     },
+    "g13_fit_spline.dwg": {
+      "batches": 1,
+      "bytes": 10987,
+      "decode_code": "OK",
+      "document_drawing_version": 1032,
+      "document_maintenance_version": 228,
+      "kinds": {
+        "Layer": 2,
+        "Spline": 8,
+        "Warning": 10
+      },
+      "live_handles": 0,
+      "notification_count": 4,
+      "output_bytes": 3380,
+      "records": 20,
+      "sha256": "4d2f28af3f6141936b659e56a18de61485ea5071e76d1190835bc968ddbe6142",
+      "view_count": 2,
+      "view_extents": [
+        "25.7,19.5,231.3,175.5",
+        "25.7,19.5,231.3,175.5"
+      ],
+      "views_without_extents": 0
+    },
     "g13_hatch.dwg": {
       "batches": 1,
       "bytes": 10827,
@@ -1383,10 +1406,10 @@
       "views_without_extents": 0
     }
   },
-  "recorded": "2026-11-03",
-  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/amd64",
+  "recorded": "2026-11-25",
+  "runner": "fixturegen decode --dump, mcr.microsoft.com/dotnet/sdk:10.0.401-noble, linux/arm64",
   "shim": {
-    "sha256": "81116ec31f4e56e5cdbfd590dbc880282cf0f73d0ef539a40f6b272e131a2355",
+    "sha256": "0d1d5824c687fc800028a758faeb3e391520b718dabf7a6e612c3ad99a874601",
     "sources": {
       "native/Abi.cs": "908b4db5e3dc790a0630af45079440ee00bb811ea438426413d340cedb2016b6",
       "native/Adapter/Flatten.Curves.cs": "3e81dc6b2235af16ce9fadae841f5490d5b78e0b89ed3c245245045f4b131a8c",
@@ -1399,11 +1422,11 @@
       "native/Adapter/Flatten.Points.cs": "409429722fdabeb4da39e6a3613445120c37b664d49f1e79db99b00b127418c9",
       "native/Adapter/Flatten.Text.cs": "d8d33d2b1e47df6a526185180acd9884afc86e81781b63d4896142d4d2546009",
       "native/Adapter/Flatten.Unbounded.cs": "ed6178065ae86456db10b504448d9c09dd841a5389bf248fda76a58d75a8054f",
-      "native/Adapter/Flattener.cs": "cf82059817378fca5cfedcdf1468089f10ccf94712ce78e0e5fe104d60c4775e",
+      "native/Adapter/Flattener.cs": "7944113c1ce6b04d8cf7f75ec587a7e79bc09bcedf59093f6fed6580d0fcc0d6",
       "native/Adapter/RecordName.cs": "c2a0c1fdfdd855f52b46f83f67b493c283d0c97a0a4a5b68d63a3fcb7f73f7ab",
       "native/Adapter/RefusedKinds.cs": "67aa09a53c85ff7fa27c8acd1077391d18eb74f4f7d68fa506ca15926acaaa1d",
       "native/Adapter/VersionGate.cs": "203178cfe431e771057d41adc596cf69022148f4e2c05e493e42d671407029fa",
-      "native/Adapter/WarningCodes.cs": "c49014e1db72553c7997554aebc19333a86f8037dbc4c21336495ec362ec8dee",
+      "native/Adapter/WarningCodes.cs": "b9e9d26d0cce9e286e81cd4d527a84e327ef7e4e42bc4d3e2209c2e743adfa15",
       "native/Probe.cs": "20324264668fc97753262780564739f785439c807834756d2e8dade0fe681e73",
       "native/Sources/AcadSharpSource.cs": "7bdf7f3c69be69f4fabdaf30fac2c91b4a63d353157c20befcc0b38b9a4cfc7e",
       "native/Sources/IDocumentSource.cs": "a5b7c6d8f56b1fe3876c01925a6eefd7438f01bed4c443181f66abfa1380f27b",

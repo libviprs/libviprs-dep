@@ -114,7 +114,7 @@ SOURCE_COMMIT = {
 SHIM_DIGESTS = {
     "3.7.1-viprs.1": "4d00f97ca7d7e7fdeedece16e5875b30be4b30d0ae6ceaa9f5cf248245b4aa6c",
     "3.7.1-viprs.2": "2538ef7f9486f81e25985a9a090371fa178874137119b0a7379920068548ef25",
-    "3.7.1-viprs.3": "81116ec31f4e56e5cdbfd590dbc880282cf0f73d0ef539a40f6b272e131a2355",
+    "3.7.1-viprs.3": "0d1d5824c687fc800028a758faeb3e391520b718dabf7a6e612c3ad99a874601",
 }
 
 # What this build changes about the pinned source before compiling it.

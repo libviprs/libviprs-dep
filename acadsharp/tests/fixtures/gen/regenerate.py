@@ -90,6 +90,9 @@ DUMPED = (
     "g13_circle.dwg",
     "g13_ellipse.dwg",
     "g13_spline.dwg",
+    # Fit-defined splines (#155): the kind a drawing saved as AC1027 or later holds
+    # as fit points only, which the shim cannot fit and now says so.
+    "g13_fit_spline.dwg",
     "g13_text.dwg",
     "g13_text_forms.dwg",
     "g13_text_aligned.dwg",

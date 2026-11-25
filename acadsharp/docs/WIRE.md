@@ -373,9 +373,17 @@ tangents and no control points, and this record has no field for fit points.
 For a cubic through exactly two fit points with both tangents present the shim
 sends the one Bezier segment they fix (control points P0, P0 + T0/3, P1 - T1/3,
 P1, knots 0,0,0,0,1,1,1,1), which matches the same drawing saved as AC1018 to
-1e-9 (libviprs-dep#150). A fit spline with more points still crosses with no
-control points and no knots, because their parametrisation and tangent scaling
-have no recorded drawing to be checked against.
+1e-9 (libviprs-dep#150). A fit spline with three or more fit points still crosses
+with no control points and no knots, because their parametrisation (chord,
+square root or uniform) and tangent scaling change the control points and no
+recorded drawing has them to be checked against: the only drawing that holds a
+fit spline in both a fit-data save and an AC1018 save has two fit points, and
+for two every parametrisation gives the same segment. Warning 117 says so under
+the same handle (libviprs-dep#155). What would finish it is a drawing saved by
+AutoCAD as AC1018 and as AC1027 or later holding fit splines of 3, 4 and 10 fit
+points under each of the three parametrisations, open and closed, with and
+without end tangents: the AC1018 control points are then the answer to check a
+global cubic interpolation with end tangents against, to 1e-9.
 
 **9 `Polygon`**: record 4's payload exactly, with `closed` always 1. The
 boundary is closed implicitly and the first vertex is not repeated, so the
@@ -739,6 +747,7 @@ and 105 with these meanings, whatever it is built on.
 | 114 | `ARROWHEAD_NOT_DRAWN` | A `LEADER` or a `MULTILEADER` whose arrowhead is on. The `Polyline` beside it, same `item_handle`, is the vertex run and nothing else. An arrowhead is a glyph the drawing's dimension style names, at a size that style sets, and neither the glyph nor the size is in the file as geometry, so it is not drawn and nothing is invented in its place. A consumer that wants one draws it itself at the first vertex, pointing along the first span; a consumer that does not know this code draws a leader whose tip is bare, which is the failure direction this code exists to make visible rather than silent. `item_handle` is the leader's. |
 | 115 | `MLINE_STYLE_FEATURES_IGNORED` | An `MLINE` whose style asks for something this build does not draw: a filled area between its outermost elements, the joint lines a style can display at each inner vertex, or a cap closing either end. The `Polyline` records beside it, same `item_handle`, are the element lines, which is the whole of what the entity draws here. Like 110 this sits beside real geometry and says what is missing from it rather than refusing anything. `item_handle` is the MLINE's. |
 | 116 | `MULTILEADER_FEATURES_IGNORED` | A `MULTILEADER` that carries something this build does not draw: the frame round its text, a break in a leader line, the attribute text of its block, or tolerance content. The records beside it, same `item_handle` or the handles of the block's own entities, are the geometry the file holds: the leader lines as open `Polyline` records, the landing as a `Line`, the text as a `Text`, and the content block's entities. A frame or a gap is something AutoCAD works out from text extents and a style, none of which is in the file as geometry, so this says what is missing and refuses nothing. `item_handle` is the MULTILEADER's. |
+| 117 | `FIT_SPLINE_NOT_FITTED` | A `SPLINE` an AC1027 or later save stores as fit data (fit points and end tangents, no control points, no knots) that this build did not turn into control points. The `Spline` record beside it, same `item_handle`, crosses with no knots and no control points, exactly as the reader gave it, and draws nothing. Only a cubic through two fit points with both end tangents is worked out (see record 8); for three or more the parametrisation and the tangent scaling change the control points and there is no recorded drawing to check a fit against, so this says so rather than send a plausible wrong curve. The message names the fit-point count and the parametrisation. `item_handle` is the SPLINE's. |
 
 ### Reserved ranges
 
