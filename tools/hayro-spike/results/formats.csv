@@ -1,0 +1,7 @@
+codec,file,page,status,size,hayro_s,pdfium_s,hayro_rss_mb,mean_abs,pct_diff32,vs_source_mean_abs,vs_source_pct_over_32,note
+ccitt,usace_swf_gpw_daca67-06-d-0029.pdf,1,OK,2000x1383,0.052,0.0948,64,1.669,0.028,,,dark share hayro/pdfium: 16.35%/16.29%
+ccitt,codec-ccitt-g4.pdf,1,OK,1414x2000,0.007,0.0049,24,6.024,6.800,0.000,0.000,dark share hayro/pdfium: 9.51%/9.48%
+jpx,usace_norfolk_hoskins_creek_dredging_plans.pdf,1,OK,2000x1295,0.181,0.4509,43,5.038,2.765,,,dark share hayro/pdfium: 58.59%/63.04%
+jpx,tm11b3.pdf,1,OK,1546x2000,0.133,0.1404,27,1.464,0.441,,,dark share hayro/pdfium: 23.67%/26.50%
+jbig2,codec-jbig2-generic.pdf,1,OK,1414x2000,0.009,0.0125,24,6.024,6.800,0.000,0.000,dark share hayro/pdfium: 9.51%/9.48%
+jbig2,codec-jbig2-symbol.pdf,1,OK,1414x2000,0.007,0.0074,24,6.024,6.800,0.000,0.000,dark share hayro/pdfium: 9.51%/9.48%

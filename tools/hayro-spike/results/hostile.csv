@@ -1,0 +1,31 @@
+case,description,hayro,hayro_s,hayro_peak_rss_mb,hayro_note,pdfium,pdfium_s,pdfium_peak_rss_mb,pdfium_note
+base,"the untouched base page, so every other row has a control",OK,0.001,8,,OK,0.0024,48,
+empty,zero bytes,ERR,0.00,,Invalid,ERR,0.05,,PdfiumError:Failed_to_load_document_(PDFium:_Data_format_error).
+garbage,"4 KiB of noise, no PDF header",ERR,0.00,,Invalid,ERR,0.06,,PdfiumError:Failed_to_load_document_(PDFium:_Data_format_error).
+header-only,just the %PDF header,ERR,0.00,,Invalid,ERR,0.06,,PdfiumError:Failed_to_load_document_(PDFium:_Data_format_error).
+truncated-half,the base file cut in half,OK,0.001,7,,ERR,0.06,,PdfiumError:Failed_to_load_document_(PDFium:_Data_format_error).
+trailer-missing,everything from the xref table on removed,OK,0.001,8,,OK,0.0019,48,
+no-eof-marker,the %%EOF line removed,OK,0.001,8,,OK,0.0034,48,
+startxref-wrong,startxref points into the middle of the file,OK,0.001,8,,OK,0.0016,48,
+startxref-past-end,startxref points past the end of the file,OK,0.001,8,,OK,0.0019,48,
+xref-offsets-wrong,every xref entry points 11 bytes off,OK,0.001,8,,OK,0.0017,48,
+xref-offsets-zero,every xref offset is zero,OK,0.001,8,,OK,0.0018,48,
+junk-before-header,"1 KiB of noise before %PDF, so every offset is 1024 too low",OK,0.001,8,,OK,0.0035,48,
+junk-after-eof,64 KiB of noise after the final %%EOF,OK,0.001,8,,OK,0.0023,48,
+stream-length-wrong,the content stream /Length says 99999 and the data is shorter,OK,0.001,8,,OK,0.0033,48,
+page-tree-cycle,the Pages node lists itself as a kid,OK,0.001,8,,OK,0.0029,48,
+form-xobject-recursion,a form XObject that paints itself,OK,0.001,7,,OK,0.0007,48,
+pattern-recursion,a tiling pattern whose cell paints with the same pattern,OK,0.001,7,,OK,0.0028,48,
+length-ref-cycle,the content stream's /Length is a reference to itself,OK,0.001,7,,OK,0.0006,48,
+deep-q-nesting,a million q operators with no Q,OK,0.016,10,,OK,0.0847,200,
+nested-arrays,200000 nested [ in the content stream,OK,0.001,7,,OK,0.0066,48,
+nested-dicts,100000 nested dictionaries in the page object,ERR,0.58,,NoPages,OK,0.0095,48,
+dash-pathological,a 1e6 pt line stroked with a 0.001 pt dash pattern,OOM,1.32,,memory allocation of 7516192768 bytes failed,OK,0.0011,48,
+path-explosion,"one path with 400000 segments, stroked",OK,0.118,170,,OK,0.2852,152,
+huge-mediabox,a MediaBox of 1e9 by 1e9 points,OK,0.001,8,,ERR,0.06,,BadPageSize_1000000000.0x1000000000.0
+mediabox-zero,a MediaBox of zero area,OK,0.001,7,,OK,0.0017,48,
+mediabox-negative,a MediaBox with the corners the wrong way round,OK,0.001,8,,OK,0.0016,48,
+flate-bomb-content,a content stream that inflates to 1 GiB of spaces (1043646 bytes packed),OK,0.338,1065,,OK,0.8901,2088,
+huge-declared-image,a 60000 by 60000 8 bit gray image whose data is 16 bytes,OK,0.002,7,,OK,0.2880,73,
+flate-bomb-image,a 32768 by 32768 gray image that really inflates to 1 GiB,OK,2.238,1065,,OK,0.2056,59,
+mutants,"6000 byte level mutants (flips, truncations, cut chunks) of two small files",OK,0.000,,ok=3933;err=2067;panic=0;slowest_s=0.0003,OK,,,ok=2242;err=3758
