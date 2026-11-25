@@ -296,8 +296,8 @@ fi
 echo "smoke: --check passes the good PDF and fails the corrupted one"
 """
 
-# CMake bakes the absolute install prefix into libqpdf.pc, which means nothing
-# on the consumer's machine; ${pcfiledir} is pkg-config's "directory this .pc
+# CMake bakes the absolute install prefix into libqpdf.pc (prefix, libdir and
+# includedir), which means nothing on the consumer's machine; ${pcfiledir} is pkg-config's "directory this .pc
 # lives in", so the archive works from wherever it is unpacked.
 RELOCATE_PKGCONFIG_SH = r"""#!/bin/sh
 # Usage: relocate-pc.sh <staging-dir>
@@ -308,11 +308,15 @@ PC="$STAGING/lib/pkgconfig/libqpdf.pc"
 
 [ -f "$PC" ] || { echo "relocate: $PC not found" >&2; exit 1; }
 
-sed 's|^prefix=.*|prefix=${pcfiledir}/../..|' "$PC" > "$PC.tmp"
+sed -e 's|^prefix=.*|prefix=${pcfiledir}/../..|' \
+    -e 's|^libdir=.*|libdir=${prefix}/lib|' \
+    -e 's|^includedir=.*|includedir=${prefix}/include|' "$PC" > "$PC.tmp"
 mv "$PC.tmp" "$PC"
 
-grep -q '^prefix=${pcfiledir}/\.\./\.\.$' "$PC" || {
-    echo "relocate: prefix rewrite did not take in $PC" >&2
+grep -q '^prefix=${pcfiledir}/\.\./\.\.$' "$PC" &&
+grep -q '^libdir=${prefix}/lib$' "$PC" &&
+grep -q '^includedir=${prefix}/include$' "$PC" || {
+    echo "relocate: prefix, libdir and includedir rewrite did not take in $PC" >&2
     exit 1
 }
 echo "relocate: libqpdf.pc prefix is now relative to its own directory"
@@ -827,16 +831,22 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
     src = os.path.join(workspace, f"qpdf-{version}")
 
     run_checked(
-        ["cmake"] + cmake_configure_args("mac", arch, staging, jpeg), log_file, job, cwd=src
+        # Configure with the neutral prefix the Linux Dockerfile uses, so
+        # cmake-args.txt does not record this machine's paths, and install
+        # into the real staging directory with --prefix.
+        ["cmake"] + cmake_configure_args("mac", arch, "/staging", jpeg),
+        log_file,
+        job,
+        cwd=src,
     )
     run_checked(["cmake", "--build", "out", "-j", str(os.cpu_count() or 4)], log_file, job, cwd=src)
-    run_checked(["cmake", "--install", "out"], log_file, job, cwd=src)
+    run_checked(["cmake", "--install", "out", "--prefix", staging], log_file, job, cwd=src)
 
     helpers = _write_helper_scripts(workspace)
     run_checked(["sh", helpers["relocate-pc.sh"], staging], log_file, job)
 
     with open(os.path.join(staging, "cmake-args.txt"), "w") as f:
-        f.write(cmake_args_text("mac", arch, staging, jpeg))
+        f.write(cmake_args_text("mac", arch, "/staging", jpeg))
     shutil.copy2(os.path.join(src, "LICENSE.txt"), os.path.join(staging, "LICENSE"))
     shutil.copy2(os.path.join(src, "NOTICE.md"), os.path.join(staging, "NOTICE.md"))
     os.makedirs(os.path.join(staging, "LICENSES"))
