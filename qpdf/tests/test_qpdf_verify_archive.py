@@ -41,6 +41,16 @@ def foreign_cpu():
     return "arm64" if host in ("x86_64", "AMD64") else "x64"
 
 
+# What a relocated libqpdfTargets.cmake looks like: everything hangs off
+# ${_IMPORT_PREFIX}, and zlib is the plain linker name.
+CLEAN_TARGETS = (
+    b'get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)\n'
+    b'if(_IMPORT_PREFIX STREQUAL "/")\n  set(_IMPORT_PREFIX "")\nendif()\n'
+    b"set_target_properties(qpdf::libqpdf_static PROPERTIES\n"
+    b'  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"\n'
+    b'  INTERFACE_LINK_LIBRARIES "z;${_IMPORT_PREFIX}/lib/libjpeg.a"\n)\n'
+)
+
 FILES = {
     "include/qpdf/QPDF.hh": b"// header\n",
     "lib/libqpdf.a": b"!<arch>\n",
@@ -49,6 +59,8 @@ FILES = {
     "LICENSE": b"Apache License\nVersion 2.0, January 2004\n",
     "NOTICE.md": b"notice\n",
     "LICENSES/libjpeg-turbo-LICENSE.md": b"licence\n",
+    "lib/libjpeg.a": b"!<arch>\n",
+    "lib/cmake/qpdf/libqpdfTargets.cmake": CLEAN_TARGETS,
 }
 
 
@@ -256,3 +268,108 @@ def test_cmake_args_naming_a_build_host_prefix_are_refused(tmp_path):
     r = run(make_archive(tmp_path, mutate=lambda f: f.update({"cmake-args.txt": args})))
     assert r.returncode != 0
     assert "cmake-args" in r.stdout + r.stderr
+
+
+# The cmake targets, pkg-config file, share/ and bin/ scripts must not carry a
+# path from the build machine: find_package(qpdf) has to resolve every library
+# and include directory inside the unpacked prefix (libviprs-dep#177).
+def baked(rel, data):
+    return lambda f: f.update({rel: data})
+
+
+TARGETS = "lib/cmake/qpdf/libqpdfTargets.cmake"
+
+
+def test_a_relocated_cmake_targets_file_passes(tmp_path):
+    r = run(make_archive(tmp_path))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_177_cmake_targets_with_a_baked_libjpeg_path_are_refused(tmp_path):
+    bad = CLEAN_TARGETS.replace(b"${_IMPORT_PREFIX}/lib/libjpeg.a", b"/opt/jpeg/lib/libjpeg.a")
+    r = run(make_archive(tmp_path, mutate=baked(TARGETS, bad)))
+    assert r.returncode != 0
+    out = r.stdout + r.stderr
+    assert "absolute path" in out and "libqpdfTargets.cmake" in out and "/opt/jpeg/lib/libjpeg.a" in out
+
+
+def test_177_cmake_targets_with_a_baked_homebrew_path_are_refused(tmp_path):
+    bad = CLEAN_TARGETS.replace(
+        b"${_IMPORT_PREFIX}/lib/libjpeg.a", b"/opt/homebrew/opt/jpeg-turbo/lib/libjpeg.a"
+    )
+    r = run(make_archive(tmp_path, cpu="arm64", plat="mac", mutate=baked(TARGETS, bad)))
+    assert r.returncode != 0
+    assert "absolute path" in r.stdout + r.stderr
+
+
+def test_177_cmake_targets_with_a_baked_system_zlib_are_refused(tmp_path):
+    bad = CLEAN_TARGETS.replace(b'"z;', b'"/usr/lib/x86_64-linux-gnu/libz.so;')
+    r = run(make_archive(tmp_path, mutate=baked(TARGETS, bad)))
+    assert r.returncode != 0
+    assert "libz.so" in r.stdout + r.stderr
+
+
+def test_177_a_baked_path_in_any_cmake_file_is_refused(tmp_path):
+    other = b'set(qpdf_DIR "/home/builder/out/lib/cmake/qpdf")\n'
+    r = run(make_archive(tmp_path, mutate=baked("lib/cmake/qpdf/qpdfConfig.cmake", other)))
+    assert r.returncode != 0
+    assert "qpdfConfig.cmake" in r.stdout + r.stderr
+
+
+def test_177_an_absolute_path_in_the_pkgconfig_libs_line_is_refused(tmp_path):
+    pc = (
+        b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n"
+        b"Libs: -L${libdir} -lqpdf -L/opt/jpeg/lib\n"
+    )
+    r = run(make_archive(tmp_path, mutate=baked("lib/pkgconfig/libqpdf.pc", pc)))
+    assert r.returncode != 0
+    assert "absolute path" in r.stdout + r.stderr
+
+
+def test_177_an_absolute_path_under_share_is_refused(tmp_path):
+    cfg = b"search_path=/home/builder/out/share/qpdf\n"
+    r = run(make_archive(tmp_path, mutate=baked("share/qpdf/qpdf.conf", cfg)))
+    assert r.returncode != 0
+    assert "share/qpdf/qpdf.conf" in r.stdout + r.stderr
+
+
+def test_177_upstream_prose_in_share_doc_and_man_is_not_a_path(tmp_path):
+    prose = b"see the manual in /usr/share/doc/qpdf for details\n"
+    r = run(
+        make_archive(
+            tmp_path,
+            mutate=lambda f: f.update({"share/doc/qpdf/README-doc.txt": prose, "share/man/man1/qpdf.1": prose}),
+        )
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_177_an_absolute_path_in_a_bin_script_is_refused(tmp_path):
+    script = b"#!/bin/sh\nPREFIX=/home/builder/out\nexec \"$PREFIX/bin/qpdf\" \"$@\"\n"
+    r = run(make_archive(tmp_path, mutate=baked("bin/qpdf-config", script)))
+    assert r.returncode != 0
+    assert "bin/qpdf-config" in r.stdout + r.stderr
+
+
+def test_177_a_shebang_in_a_bin_script_is_not_a_baked_path(tmp_path):
+    script = b"#!/usr/bin/perl\nprint 1;\n"
+    r = run(make_archive(tmp_path, mutate=baked("bin/fix-qdf", script)))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_177_the_import_prefix_is_not_an_absolute_path(tmp_path):
+    r = run(make_archive(tmp_path))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert b"_IMPORT_PREFIX" in CLEAN_TARGETS
+
+
+def test_177_a_prefix_relative_file_the_archive_does_not_hold_is_refused(tmp_path):
+    r = run(make_archive(tmp_path, mutate=lambda f: f.pop("lib/libjpeg.a")))
+    assert r.returncode != 0
+    assert "lib/libjpeg.a" in r.stdout + r.stderr
+
+
+def test_177_an_archive_without_cmake_targets_is_refused(tmp_path):
+    r = run(make_archive(tmp_path, mutate=lambda f: f.pop(TARGETS)))
+    assert r.returncode != 0
+    assert "libqpdfTargets.cmake" in r.stdout + r.stderr
