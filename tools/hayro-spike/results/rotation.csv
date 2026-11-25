@@ -1,0 +1,5 @@
+file,status,page_pt,golden_size,hayro_size,hayro_plain_render_size,mean_abs_vs_golden,pct_over_32,within_tolerance,pdfium_size,pdfium_mean_abs_vs_golden,hayro_s
+canonical.pdf,OK,595x842,595x842,595x842,595x842,0.080,0.168,yes,595x842,0.000,0.0013
+canonical_rotated_90.pdf,OK,842x595,842x595,842x595,842x595,0.080,0.168,yes,842x595,0.000,0.0019
+canonical_rotated_180.pdf,OK,595x842,595x842,595x842,595x842,0.080,0.168,yes,595x842,0.000,0.0012
+canonical_rotated_270.pdf,OK,842x595,842x595,842x595,842x595,0.080,0.168,yes,842x595,0.000,0.0011

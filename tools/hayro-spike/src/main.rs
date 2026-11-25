@@ -1,25 +1,22 @@
-use hayro::hayro_syntax::Pdf;
-use hayro::hayro_interpret::InterpreterSettings;
-use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
-use hayro::vello_cpu::color::palette::css::WHITE;
-use std::{sync::Arc, time::Instant};
+// hayro-spike: one binary, one mode per open question of #164 and #170. Every mode prints one line of
+// space separated key=value pairs on stdout, which run_cases.py turns into the CSVs under results/.
+// With no mode word the arguments are the old ones (<pdf> <png> <maxdim>) that run.py still uses.
+mod cases;
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let (path, out, maxdim) = (&a[1], &a[2], a[3].parse::<f32>().unwrap());
-    let data = Arc::new(std::fs::read(path).unwrap());
-    let t = Instant::now();
-    let r = std::panic::catch_unwind(|| {
-        let pdf = Pdf::new(data).map_err(|e| format!("{e:?}"))?;
-        let page = &pdf.pages()[0];
-        let (w, h) = page.render_dimensions();
-        let s = maxdim / w.max(h);
-        let pm = render(page, &RenderCache::new(), &InterpreterSettings::default(), &RenderSettings::default(), &PixmapSettings { x_scale: s, y_scale: s, bg_color: WHITE });
-        std::fs::write(out, pm.into_png().unwrap()).unwrap();
-        Ok::<_, String>((w, h, s))
-    });
-    match r {
-        Ok(Ok((w, h, s))) => println!("OK {w} {h} {s} {:.3}", t.elapsed().as_secs_f64()),
-        Ok(Err(e)) => println!("ERR {e}"),
-        Err(_) => println!("PANIC"),
-    }
+    let line = match a.get(1).map(String::as_str) {
+        Some("rotation") => cases::rotation(&a[2], &a[3]),
+        Some("fullres") => cases::fullres(&a[2..]),
+        Some("strips") => cases::strips(&a[2..]),
+        Some("formats") => cases::formats(&a[2], &a[3], &a[4], a.get(5)),
+        Some("hostile") if a.get(2).map(String::as_str) == Some("mutants") => {
+            cases::mutants(&a[3], &a[4], &a[5])
+        }
+        Some("hostile") => cases::hostile(&a[2]),
+        Some("threads") => cases::threads(&a[2], &a[3], &a[4], &a[5], a.get(6).is_some()),
+        Some("password") => cases::password(&a[2], &a[3], a.get(4)),
+        _ => cases::legacy(&a[1], &a[2], &a[3]),
+    };
+    println!("{line}");
 }
