@@ -112,7 +112,7 @@ cannot fit in memory.
 Real sheets in the sets: CCITT on page 1 of `usace_swf_gpw_daca67-06-d-0029`, JPX on
 `usace_norfolk_hoskins_creek_dredging_plans` and on `tm11b3`. There is no JBIG2 sheet in the sets, so I
 built three small ones (`gen_fixtures.py codecs`, A4 bilevel text page at 150 dpi): JBIG2 generic region and
-JBIG2 symbol dictionary from jbig2enc, and CCITT G4 from Pillow. Everything rendered at 2000 px on the long
+JBIG2 symbol dictionary from jbig2enc 0.32 (Apache-2.0, built from source, used only as an external tool to make the fixtures and never committed or linked), and CCITT G4 from Pillow. Everything rendered at 2000 px on the long
 side.
 
 | codec | file | hayro | pdfium | mean abs diff vs pdfium | vs the source bitmap |
@@ -146,16 +146,16 @@ one runs in a child process with a 90 s timeout and a 6 GB address-space limit.
   On the file cut in half hayro renders something and pdfium refuses.
 - **The one abort is a real hole.** A 1e6 pt line stroked with a 0.001 pt dash pattern makes hayro ask for a
   7.5 GB allocation, and Rust turns a failed allocation into `abort`, not a panic, so `catch_unwind` does not
-  help and the process dies after 1.3 s. Pdfium draws the same file in 1 ms.
+  help and the process dies after 1.27 s. Pdfium draws the same file in under a millisecond (0.6 ms).
 - **Decompression is not capped.** A 1 MB Flate content stream that inflates to 1 GiB costs hayro 1065 MB of
-  RSS in 0.34 s (pdfium used 2088 MB). A Flate image declared 32768 by 32768 that really inflates to 1 GiB
-  costs hayro 1065 MB and 2.2 s, where pdfium finishes in 0.2 s at 59 MB. Both grow linearly with the file
+  RSS in 0.52 s (pdfium used 2094 MB in 0.98 s). A Flate image declared 32768 by 32768 that really inflates to 1 GiB
+  costs hayro 1065 MB and 2.2 s, where pdfium finishes in 0.24 s at 64 MB. Both grow linearly with the file
   claim, so a hostile upload can pick its own memory bill.
 - Recursion is fine: a form XObject and a tiling pattern that paint themselves, a page tree that contains
-  itself, a `/Length` that references itself, a million `q`, 200000 nested `[`, a 400000 segment path (0.12 s,
+  itself, a `/Length` that references itself, a million `q`, 200000 nested `[`, a 400000 segment path (0.13 s,
   170 MB) all finish in under 0.2 s with a pixmap.
 - 6000 byte-level mutants (flips, truncations, cut chunks) of two small files: hayro 3933 rendered, 2067
-  refused, 0 panics, slowest mutant under a millisecond. Pdfium on its own 6000 mutants rendered 2242 and
+  refused, 0 panics, slowest mutant 0.8 ms. Pdfium on its own 6000 mutants rendered 2242 and
   refused 3758. The two use different random streams, so only the shape compares: hayro is the more
   forgiving reader, and not once did a forgiven file crash it.
 
@@ -223,7 +223,7 @@ it with these rules:
 - Give the hayro cells their own pixel tolerance in the parity tests rather than reusing pdfium's.
 
 **Alternative A: stay on pdfium only.** No new backend, no second tolerance, and the hostile-input story stays
-what it is today (pdfium gets through the Flate image bomb in 0.2 s and the dash case in 1 ms). The price is carrying the pdfium
+what it is today (pdfium gets through the Flate image bomb in 0.2 s and the dash case in under a millisecond). The price is carrying the pdfium
 binaries for every target forever, and no route to a pure-Rust build. I would pick this if the strip and
 untrusted-input blockers matter more than a second backend.
 
