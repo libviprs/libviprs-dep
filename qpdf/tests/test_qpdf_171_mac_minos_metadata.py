@@ -260,3 +260,15 @@ def test_171_the_readme_documents_the_revision_tag_and_the_latest_alias():
 
 def test_171_the_latest_alias_copies_the_sidecars_too():
     assert "'qpdf-*.tgz*'" in WF.split("publish-latest:", 1)[1]
+
+
+# ---- archives made on a Mac unpack without GNU tar warnings ----
+
+
+@pytest.mark.parametrize("builder", ["_build_docker", "_build_mac_native"])
+def test_171_the_archive_is_packed_without_extended_attributes(builder):
+    # a Mac host tags files with com.apple.provenance, which bsdtar writes as pax headers and
+    # GNU tar then warns about on every unpack
+    src = inspect.getsource(getattr(b, builder))
+    pack = src[src.index('"czf"') - 20 : src.index('"czf"') + 200]
+    assert '"--no-xattrs"' in pack
