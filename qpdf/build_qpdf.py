@@ -877,7 +877,7 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
             subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True)
 
         run_checked(
-            ["tar", "--no-xattrs", "czf", output_path, "-C", extract_dir, dir_name], log_file, job
+            ["tar", "--no-xattrs", "-czf", output_path, "-C", extract_dir, dir_name], log_file, job
         )
 
     size_kb = os.path.getsize(output_path) / 1024
@@ -1020,7 +1020,7 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
 
     env = dict(os.environ, COPYFILE_DISABLE="1")
     run_checked(
-        ["tar", "--no-xattrs", "czf", output_path, "-C", workspace, dir_name],
+        ["tar", "--no-xattrs", "-czf", output_path, "-C", workspace, dir_name],
         log_file,
         job,
         env=env,

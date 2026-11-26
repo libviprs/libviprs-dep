@@ -265,10 +265,18 @@ def test_171_the_latest_alias_copies_the_sidecars_too():
 # ---- archives made on a Mac unpack without GNU tar warnings ----
 
 
+def test_171_the_host_tar_accepts_the_pack_command(tmp_path):
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "f").write_text("x")
+    out = tmp_path / "o.tgz"
+    cmd = ["tar", "--no-xattrs", "-czf", str(out), "-C", str(tmp_path), "d"]
+    assert subprocess.run(cmd, capture_output=True).returncode == 0 and out.stat().st_size > 0
+
+
 @pytest.mark.parametrize("builder", ["_build_docker", "_build_mac_native"])
 def test_171_the_archive_is_packed_without_extended_attributes(builder):
     # a Mac host tags files with com.apple.provenance, which bsdtar writes as pax headers and
     # GNU tar then warns about on every unpack
     src = inspect.getsource(getattr(b, builder))
-    pack = src[src.index('"czf"') - 20 : src.index('"czf"') + 200]
+    pack = src[src.index('"-czf"') - 40 : src.index('"-czf"') + 200]
     assert '"--no-xattrs"' in pack
