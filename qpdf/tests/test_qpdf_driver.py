@@ -157,7 +157,7 @@ class TestMacNativeBuild:
         return inspect.getsource(b._build_mac_native)
 
     def test_cmake_args_txt_does_not_carry_the_staging_path(self):
-        assert 'cmake_args_text("mac", arch, "/staging", jpeg)' in self.source()
+        assert 'cmake_args_text("mac", arch, "/staging", JPEG_LINUX_PREFIX)' in self.source()
 
     def test_configure_uses_the_neutral_prefix_and_install_picks_the_real_one(self):
         src = self.source()

@@ -131,7 +131,7 @@ def test_171_linux_buildinfo_naming_libcxx_is_refused(tmp_path):
 
 def finalize(tmp_path, plat):
     stage = tmp_path / "stage"
-    (stage / "bin").mkdir(parents=True)
+    (stage / "bin").mkdir(parents=True, exist_ok=True)
     (stage / "bin" / "qpdf").write_bytes(b"x")
     script = tmp_path / "finalize.sh"
     script.write_text(b.FINALIZE_SH)
@@ -153,13 +153,18 @@ def test_171_buildinfo_names_libcxx_on_mac_and_libstdcxx_on_linux(tmp_path):
     assert "runtime_libraries=libc libstdc++ libz\n" in finalize(tmp_path, "linux")
 
 
+def test_171_the_verifier_and_the_driver_agree_on_the_mac_target():
+    script = open(os.path.join(QPDF, "scripts", "verify_archive.sh")).read()
+    assert f"MAC_MINOS={b.MAC_DEPLOYMENT_TARGET}\n" in script
+
+
 def test_171_driver_commit_is_a_full_commit_id():
     assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?", b.driver_commit())
 
 
 def test_171_the_linux_dockerfile_passes_the_provenance_to_finalize():
     text = b.make_dockerfile(b.read_version(), "amd64", "linux")
-    line = next(ln for ln in text.splitlines() if "finalize.sh /staging" in ln)
+    line = text.split("finalize.sh /staging", 1)[1].split("\n\n", 1)[0]
     assert b.JPEG_VERSION in line and b.JPEG_SOURCE_SHA256 in line and b.driver_commit() in line
 
 
@@ -218,7 +223,8 @@ class Recorder:
     def __call__(self, cmd, **kwargs):
         self.calls.append(cmd)
         code = 1 if cmd[:3] == ["gh", "release", "view"] else 0
-        return subprocess.CompletedProcess(cmd, code, "", "")
+        out = "c" * 40 + "\n" if "rev-parse" in cmd else ""
+        return subprocess.CompletedProcess(cmd, code, out, "")
 
 
 def test_171_upload_creates_a_draft_on_the_revision_tag_and_never_clobbers(monkeypatch):

@@ -65,8 +65,13 @@ jobs:
             V="$(tr -d '[:space:]' < qpdf/VERSION)"
           fi
           [ -n "$V" ] || { echo "qpdf/VERSION is empty" >&2; exit 1; }
+          # qpdf/REVISION is 0 for the original tag and n for qpdf-<version>-viprs.<n>,
+          # the tag corrected bytes go under so a published tag is never reused
+          R="$(tr -d '[:space:]' < qpdf/REVISION)"
+          TAG="qpdf-$V"
+          if [ "$R" != 0 ]; then TAG="$TAG-viprs.$R"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "tag=qpdf-$V" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Refuse a version with no pinned source hash
         # A VERSION bump with no matching SOURCE_SHA256 entry means the
@@ -223,7 +228,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: brew install cmake jpeg-turbo
+        run: brew install cmake
 
       - name: Build mac/${{ matrix.arch }}
         env:
@@ -299,4 +304,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-version.outputs.tag }}
-        run: tools/publish_latest_tag.sh qpdf "$TAG" 'qpdf-*.tgz'
+        run: tools/publish_latest_tag.sh qpdf "$TAG" 'qpdf-*.tgz*'
