@@ -5,9 +5,11 @@ name: Release qpdf
 # one is pdfium-shaped end to end (chromium branch input, lipo'd
 # universal job, its own summary table) and because a qpdf flake should
 # not colour a pdfium release run red. Both fire on a push to `release`,
-# so a merge there publishes whichever versions changed; qpdf's matrix
-# is three cells, and `gh release upload --clobber` makes a repeat run a
-# no-op in effect. qpdf is a test-time validator only, nothing in the
+# so a merge there publishes whichever versions changed. The release is
+# made as a draft on the run's commit and nothing is uploaded with
+# --clobber, so a tag that was published once never gets different bytes
+# (bump qpdf/REVISION for a rebuild). Publishing the draft is a person's
+# call, after review. qpdf is a test-time validator only, nothing in the
 # libviprs crate depends on it.
 #
 # Same split as release.yml inside each job: build, then verify, then
@@ -42,6 +44,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
+      revision: ${{ steps.v.outputs.revision }}
       tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +74,7 @@ jobs:
           TAG="qpdf-$V"
           if [ "$R" != 0 ]; then TAG="$TAG-viprs.$R"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "revision=$R" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Refuse a version with no pinned source hash
@@ -98,8 +102,9 @@ jobs:
 
   create-release:
     # Created up front so the fan-out jobs never race on `gh release
-    # create`. Re-running is safe: an existing tag is left alone and the
-    # uploads below use --clobber.
+    # create`. A draft this workflow made earlier is reused, but a tag that
+    # is already published is refused: its assets may be pinned somewhere,
+    # so corrected bytes go under the next qpdf/REVISION instead.
     needs: resolve-version
     runs-on: ubuntu-latest
     permissions:
@@ -118,22 +123,30 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-version.outputs.tag }}
           VERSION: ${{ needs.resolve-version.outputs.version }}
+          REVISION: ${{ needs.resolve-version.outputs.revision }}
         run: |
           set -eu
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists."
+          if DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$DRAFT" != true ]; then
+              echo "::error::$TAG is already published and its bytes never change. Bump qpdf/REVISION for a rebuild." >&2
+              exit 1
+            fi
+            echo "Draft release $TAG already exists, the uploads add to it."
             exit 0
           fi
-          python3 - "$VERSION" > release-notes.md <<'PY'
+          TITLE="qpdf $VERSION"
+          if [ "$REVISION" != 0 ]; then TITLE="$TITLE (viprs.$REVISION)"; fi
+          python3 - "$VERSION" "$REVISION" > release-notes.md <<'PY'
           import importlib.util
           import sys
 
           spec = importlib.util.spec_from_file_location("build_qpdf", "qpdf/build_qpdf.py")
           driver = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(driver)
-          print(driver.release_notes(sys.argv[1]))
+          print(driver.release_notes(sys.argv[1], int(sys.argv[2])))
           PY
-          gh release create "$TAG" --title "qpdf $VERSION" --notes-file release-notes.md
+          gh release create "$TAG" --draft --latest=false --target "$GITHUB_SHA" \
+            --title "$TITLE" --notes-file release-notes.md
 
   build-linux:
     # The two Docker cells, one job each, fail-fast off so a flake in one
@@ -193,7 +206,7 @@ jobs:
           TAG: ${{ needs.resolve-version.outputs.tag }}
         run: |
           gh release upload "$TAG" "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
-            "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz.sha256" --clobber
+            "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz.sha256"
 
       - name: Upload build logs on failure
         if: always()
@@ -247,7 +260,7 @@ jobs:
           TAG: ${{ needs.resolve-version.outputs.tag }}
         run: |
           gh release upload "$TAG" "bin/qpdf-mac-${{ matrix.cpu }}.tgz" \
-            "bin/qpdf-mac-${{ matrix.cpu }}.tgz.sha256" --clobber
+            "bin/qpdf-mac-${{ matrix.cpu }}.tgz.sha256"
 
       - name: Upload build logs on failure
         if: always()
@@ -292,6 +305,10 @@ jobs:
     # this; a consumer needing it must check the release.
     # Every dependency's release workflow in this repo carries a similar
     # job, calling the same shared script with its own dependency name.
+    # The release above is a draft until somebody publishes it after
+    # review, and qpdf-latest only ever follows a public release, so this
+    # leaves it alone while the draft stands. Re-run this job once the
+    # draft is published.
     needs: [resolve-version, build-linux, summary]
     if: needs.build-linux.result == 'success'
     runs-on: ubuntu-latest
@@ -304,4 +321,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.resolve-version.outputs.tag }}
-        run: tools/publish_latest_tag.sh qpdf "$TAG" 'qpdf-*.tgz*'
+        run: |
+          set -eu
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true ]; then
+            echo "::notice::$TAG is still a draft, so qpdf-latest stays where it is. Publish it, then re-run this job."
+            exit 0
+          fi
+          tools/publish_latest_tag.sh qpdf "$TAG" 'qpdf-*.tgz*'

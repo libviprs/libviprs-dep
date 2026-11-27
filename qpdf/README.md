@@ -89,7 +89,7 @@ Every linux cell builds in a container of its own architecture (arm64 under QEMU
 
 ## Publishing
 
-`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It builds the two Linux cells, verifies each archive, uploads it with its sidecar, and moves `qpdf-latest` when both published. The macOS arm64 archive comes from an optional job (a `build_mac` dispatch input, off by default, `continue-on-error`) on a `macos-15` runner, and it does not gate `qpdf-latest`. The 12.4.2 mac archives were built by hand on an Apple Silicon Mac (the `--platform mac` command above, which needs only cmake and the command line tools), verified with the same script, and attached to the release next to the Linux ones.
+`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It makes the release as a draft on the run's commit (and stops if that tag is already published, since a published tag never gets new bytes), builds the two Linux cells, verifies each archive and uploads it with its sidecar, never with `--clobber`. `qpdf-latest` only follows a public release, so while the draft stands the `publish-latest` job leaves it alone... publish the draft after review, then re-run that job. The macOS arm64 archive comes from an optional job (a `build_mac` dispatch input, off by default, `continue-on-error`) on a `macos-15` runner, and it does not gate `qpdf-latest`. The 12.4.2 mac archives were built by hand on an Apple Silicon Mac (the `--platform mac` command above, which needs only cmake and the command line tools), verified with the same script, and attached to the release next to the Linux ones.
 
 ## The qpdf-latest alias
 
