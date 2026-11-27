@@ -230,7 +230,9 @@ if [ "$HOST" != "$PLATFORM-$CPU" ]; then
 fi
 
 FIX="$QPDF_DIR/tests/fixtures"
-[ -f "$FIX/good.pdf" ] && [ -f "$FIX/corrupt.pdf" ] || fail "missing fixtures in $FIX"
+if [ ! -f "$FIX/good.pdf" ] || [ ! -f "$FIX/corrupt.pdf" ]; then
+  fail "missing fixtures in $FIX"
+fi
 run_qpdf() { env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH "$ROOT/bin/qpdf" "$@"; }
 
 first="$(run_qpdf --version | head -n 1)"
