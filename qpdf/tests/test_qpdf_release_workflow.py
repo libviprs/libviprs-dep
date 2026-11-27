@@ -59,3 +59,20 @@ def test_the_mac_job_is_optional_and_off_by_default():
     assert "inputs.build_mac" in mac
     assert "build_mac:" in top
     assert "default: false" in top
+
+
+def _code_lines():
+    return [ln for ln in WF.splitlines() if not ln.lstrip().startswith("#")]
+
+
+def test_no_upload_overwrites_an_existing_asset():
+    # A re-run must fail on a clashing asset, not silently replace a
+    # published archive; build_qpdf.py's own upload gets the same treatment.
+    code = "\n".join(_code_lines())
+    assert "--clobber" not in code
+
+
+def test_the_release_is_created_as_a_draft():
+    create = [ln for ln in _code_lines() if "gh release create" in ln]
+    assert create, "no gh release create call found"
+    assert all("--draft" in ln for ln in create)
