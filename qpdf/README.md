@@ -28,8 +28,8 @@ The `qpdf-12.4.2-viprs.1` archives (built from driver commit `cc16c324705070ec08
 
 | Archive | Size (bytes) | sha256 |
 | --- | --- | --- |
-| `qpdf-linux-x64.tgz` | 4445518 | `0044cf4097edd8b49d8ac8c47bc86c10cfdfbec8d1ec9020accb3ba4a4230553` |
-| `qpdf-linux-arm64.tgz` | 4383850 | `e29e289a467f4b25b5dfe6402af8613fcab115edb0dae44450e16233e7afc068` |
+| `qpdf-linux-x64.tgz` | 4445539 | `d1ace474127b6f009d18a34ee48d688b64bb2b439d2ad2478a29016d5137aaf2` |
+| `qpdf-linux-arm64.tgz` | 4383872 | `801e3def1995c9673e883322aa42335fbe07e9f180d29d5bb847e71c304c72d5` |
 | `qpdf-mac-arm64.tgz` | 3642997 | `f505e8066926606d36bc429b2b27ef2196f5cc873450afcf0671f67f1aec4433` |
 
 ```
