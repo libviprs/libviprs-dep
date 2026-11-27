@@ -189,9 +189,11 @@ def test_171_linux_and_mac_share_one_libjpeg_configure():
 
 
 def test_171_the_mac_build_no_longer_links_homebrews_libjpeg():
-    src = inspect.getsource(b._build_mac_native) + inspect.getsource(b.check_dependencies)
-    assert "brew" not in src and "jpeg_prefix_mac" not in src
-    assert b.JPEG_SOURCE_SHA256 in inspect.getsource(b) or "JPEG_SOURCE_SHA256" in src
+    mac_src = inspect.getsource(b._build_mac_native)
+    both = mac_src + inspect.getsource(b.check_dependencies)
+    code = "\n".join(ln for ln in both.splitlines() if not ln.lstrip().startswith("#"))
+    assert "brew" not in code and "jpeg_prefix_mac" not in code
+    assert "JPEG_SOURCE_SHA256" in mac_src  # the pinned digest
     assert not hasattr(b, "jpeg_prefix_mac")
 
 
@@ -209,7 +211,9 @@ def test_171_a_revision_gives_a_new_tag_and_zero_keeps_the_old_one():
 
 
 def test_171_the_revision_is_pinned_in_a_file_next_to_version():
-    assert b.read_revision() >= 1
+    # a bump of VERSION resets this to 0, so it only has to be a valid revision
+    assert open(b.REVISION_FILE).read().strip().isdigit()
+    assert b.read_revision() >= 0
 
 
 def test_171_the_workflow_tag_carries_the_revision():
