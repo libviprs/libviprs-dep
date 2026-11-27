@@ -8,8 +8,15 @@ name: Release qpdf
 # so a merge there publishes whichever versions changed. The release is
 # made as a draft on the run's commit and nothing is uploaded with
 # --clobber, so a tag that was published once never gets different bytes
-# (bump qpdf/REVISION for a rebuild). Publishing the draft is a person's
-# call, after review. qpdf is a test-time validator only, nothing in the
+# (bump qpdf/REVISION for a rebuild, and reset it to 0 when qpdf/VERSION is
+# bumped, since a revision counts rebuilds of one version; a dispatch version
+# override that differs from qpdf/VERSION is refused while REVISION is not 0).
+# Publishing the draft is a person's call, after review.
+#
+# Re-running a single failed cell: nothing is uploaded with --clobber, so an
+# asset a cell already put on the draft makes its re-run fail. Delete that
+# asset from the draft by hand (gh release delete-asset <tag> <name>, or on
+# the release page), then re-run the cell. qpdf is a test-time validator only, nothing in the
 # libviprs crate depends on it.
 #
 # Same split as release.yml inside each job: build, then verify, then
@@ -71,6 +78,14 @@ jobs:
           # qpdf/REVISION is 0 for the original tag and n for qpdf-<version>-viprs.<n>,
           # the tag corrected bytes go under so a published tag is never reused
           R="$(tr -d '[:space:]' < qpdf/REVISION)"
+          # The revision belongs to the version in qpdf/VERSION. Resetting it to 0
+          # when VERSION is bumped is a person's job (see qpdf/README.md), but an
+          # override for some other version must not inherit it silently.
+          FILE_V="$(tr -d '[:space:]' < qpdf/VERSION)"
+          if [ "$V" != "$FILE_V" ] && [ "$R" != 0 ]; then
+            echo "version override $V differs from qpdf/VERSION ($FILE_V) while qpdf/REVISION is $R: reset REVISION to 0 for $V first" >&2
+            exit 1
+          fi
           TAG="qpdf-$V"
           if [ "$R" != 0 ]; then TAG="$TAG-viprs.$R"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"

@@ -4,7 +4,7 @@
 
 ## Version
 
-`qpdf/VERSION` is the single source of truth (currently 12.4.2), and `qpdf/REVISION` counts packaging revisions of that version (currently 1). `build_qpdf.py` refuses a version that has no entry in `SOURCE_SHA256`, so a bump without a pinned upstream digest fails before anything is downloaded.
+`qpdf/VERSION` is the single source of truth (currently 12.4.2), and `qpdf/REVISION` counts packaging revisions of that version (currently 1). When you bump `VERSION`, reset `REVISION` to 0 in the same commit, otherwise the new version's first release goes out as `qpdf-<version>-viprs.1`. The release workflow refuses a `workflow_dispatch` version override that differs from `VERSION` while `REVISION` is not 0. `build_qpdf.py` refuses a version that has no entry in `SOURCE_SHA256`, so a bump without a pinned upstream digest fails before anything is downloaded.
 
 ## Download
 
@@ -89,7 +89,7 @@ Every linux cell builds in a container of its own architecture (arm64 under QEMU
 
 ## Publishing
 
-`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It makes the release as a draft on the run's commit (and stops if that tag is already published, since a published tag never gets new bytes), builds the two Linux cells, verifies each archive and uploads it with its sidecar, never with `--clobber`. `qpdf-latest` only follows a public release, so while the draft stands the `publish-latest` job leaves it alone... publish the draft after review, then re-run that job. The macOS arm64 archive comes from an optional job (a `build_mac` dispatch input, off by default, `continue-on-error`) on a `macos-15` runner, and it does not gate `qpdf-latest`. The 12.4.2 mac archives were built by hand on an Apple Silicon Mac (the `--platform mac` command above, which needs only cmake and the command line tools), verified with the same script, and attached to the release next to the Linux ones.
+`.github/workflows/release-qpdf.yml` fires on a push to `release` and on manual dispatch (with a `version` input). It makes the release as a draft on the run's commit (and stops if that tag is already published, since a published tag never gets new bytes), builds the two Linux cells, verifies each archive and uploads it with its sidecar, never with `--clobber`. Because nothing is overwritten, re-running one failed cell (or the mac job after a partial upload) fails on any asset that is already on the draft: delete that asset from the draft by hand (`gh release delete-asset <tag> <name>`), then re-run. `qpdf-latest` only follows a public release, so while the draft stands the `publish-latest` job leaves it alone... publish the draft after review, then re-run that job. The macOS arm64 archive comes from an optional job (a `build_mac` dispatch input, off by default, `continue-on-error`) on a `macos-15` runner, and it does not gate `qpdf-latest`. The 12.4.2 mac archives were built by hand on an Apple Silicon Mac (the `--platform mac` command above, which needs only cmake and the command line tools), verified with the same script, and attached to the release next to the Linux ones.
 
 ## The qpdf-latest alias
 
