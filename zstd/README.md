@@ -1,6 +1,6 @@
 # zstd
 
-Pre-compiled [zstd](https://github.com/facebook/zstd) libraries for [libviprs](https://github.com/libviprs/libviprs). Built from source here and published as GitHub Releases on this repo. No release has been cut yet, so see [Download](#download).
+Pre-compiled [zstd](https://github.com/facebook/zstd) libraries for [libviprs](https://github.com/libviprs/libviprs). Built from source here and published as GitHub Releases on this repo, starting with [`zstd-1.5.7`](https://github.com/libviprs/libviprs-dep/releases/tag/zstd-1.5.7).
 
 zstd is the compression codec behind libviprs' packfile support. Today `libviprs --features packfile` pulls in `zip` → `zstd` → `zstd-safe` → `zstd-sys`, and `zstd-sys`' build script compiles 216 vendored C files on every clean build. `zstd-sys` already knows how to link a prebuilt library instead (it has a `pkg-config` feature and honours `ZSTD_SYS_USE_PKG_CONFIG`), so publishing the library here removes that compile without forking anything.
 
@@ -18,18 +18,16 @@ That number is not a guess at "latest". `libviprs` gets zstd through `zstd-sys v
 
 ## Download
 
-**No archives are published yet.** There is no `zstd-1.5.7` release on this repo, so there is no URL to hand you. Build them yourself with [Building from source](#building-from-source), or cut the release with [Publishing](#publishing). This section gets the six URLs and their sha256s the day that runs.
+The six archives are attached to the [`zstd-1.5.7`](https://github.com/libviprs/libviprs-dep/releases/tag/zstd-1.5.7) release. Check the digest before you unpack one: `shasum -a 256 <file>`, or `sha256sum` on linux.
 
-The six archives the build produces, which is what a release carries:
-
-```
-zstd-linux-x64.tgz
-zstd-linux-arm64.tgz
-zstd-musl-x64.tgz
-zstd-musl-arm64.tgz
-zstd-mac-arm64.tgz
-zstd-mac-x64.tgz
-```
+| Archive | Size (bytes) | sha256 |
+| --- | --- | --- |
+| [`zstd-linux-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-linux-x64.tgz) | 791401 | `e2d8ac614fe9838623dd7ba6c45e651bbfd90ce16940dda2f48415b4e88a6358` |
+| [`zstd-linux-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-linux-arm64.tgz) | 747353 | `3d233cbc1433fb84ce36dfcef9191c6dfd484fa485fdc06b99a80379b977a456` |
+| [`zstd-musl-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-musl-x64.tgz) | 816355 | `2a8674dcc1c01f86a66f63f59d06b031827080c61279d42f8d59b73ec2c25f52` |
+| [`zstd-musl-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-musl-arm64.tgz) | 779048 | `3b8b02f9c0c6d988fd058113e8ef3a7b9a322860191d3d8c32dc84255d6d35ca` |
+| [`zstd-mac-arm64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-mac-arm64.tgz) | 579814 | `4e87d6d6bed2064ef41f91e09b5087980eea0bb36890118635f5865a14ceaa08` |
+| [`zstd-mac-x64.tgz`](https://github.com/libviprs/libviprs-dep/releases/download/zstd-1.5.7/zstd-mac-x64.tgz) | 704947 | `1857c38fd53fb6873ecef17227186c87de684a8658e32d526b3d05f7981656d2` |
 
 | Archive suffix | libc | Compatible runtime |
 | --- | --- | --- |
@@ -167,7 +165,7 @@ python3 zstd/build_zstd.py --parallel --upload
 
 It needs Docker for the four Linux cells and a macOS host for the two mac ones, which is the whole reason the workflow exists.
 
-Once a release is up, put the six URLs and their digests into [Download](#download) and drop the note saying there are none:
+When a version bump publishes a new release, replace the six rows in [Download](#download) with its URLs and digests:
 
 ```bash
 gh release download zstd-1.5.7 -R libviprs/libviprs-dep
@@ -191,6 +189,7 @@ pytest zstd/tests -v
 | `test_zstd_resolve_jobs.py` | `--platform` / `--arch` resolution and arch aliases |
 | `test_zstd_verify_archive.py` | Builds a real archive with the host compiler, then breaks it one way at a time and asserts `verify_archive.sh` rejects each break |
 | `test_zstd_release_workflow.py` | `release-zstd.yml`: what triggers it, that an unpinned version stops it before any build, that every cell the driver builds is in the matrix, and that verify runs between build and upload |
+| `test_zstd_readme_digests_issue_43.py` | Every archive has a Download row at the pinned release tag, and its sha256 is the one the release serves (needs the network; `LIBVIPRS_DEP_OFFLINE=1` skips the comparison and says so) |
 | `test_ci_coverage.py` | That CI's paths are discovered from the tree rather than hardcoded, so the next dependency directory is covered the day it lands |
 
 ## Reference
