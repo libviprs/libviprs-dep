@@ -1,8 +1,8 @@
 """The qpdf build driver: version pin, naming, matrix and configure flags."""
 
 import os
-import subprocess
 import re
+import subprocess
 
 import build_qpdf as b
 import pytest

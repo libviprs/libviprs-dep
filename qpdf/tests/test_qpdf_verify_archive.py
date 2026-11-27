@@ -69,7 +69,10 @@ CLEAN_TARGETS = (
 FILES = {
     "include/qpdf/QPDF.hh": b"// header\n",
     "lib/libqpdf.a": b"!<arch>\n",
-    "lib/pkgconfig/libqpdf.pc": b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: libqpdf\n",
+    "lib/pkgconfig/libqpdf.pc": (
+        b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n"
+        b"Name: libqpdf\n"
+    ),
     "cmake-args.txt": b"-DCMAKE_BUILD_TYPE=Release\n-DCMAKE_INSTALL_PREFIX=/staging\n",
     "LICENSE": b"Apache License\nVersion 2.0, January 2004\n",
     "NOTICE.md": b"notice\n",

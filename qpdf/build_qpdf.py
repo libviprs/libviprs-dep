@@ -348,8 +348,9 @@ echo "smoke: --check passes the good PDF and fails the corrupted one"
 """
 
 # CMake bakes the absolute install prefix into libqpdf.pc (prefix, libdir and
-# includedir), which means nothing on the consumer's machine; ${pcfiledir} is pkg-config's "directory this .pc
-# lives in", so the archive works from wherever it is unpacked.
+# includedir), which means nothing on the consumer's machine; ${pcfiledir} is
+# pkg-config's "directory this .pc lives in", so the archive works from
+# wherever it is unpacked.
 RELOCATE_PKGCONFIG_SH = r"""#!/bin/sh
 # Usage: relocate-pc.sh <staging-dir>
 set -eu
@@ -602,7 +603,8 @@ def check_dependencies(upload, platforms):
 
     linux needs a working Docker daemon with buildx; mac needs CMake and a C++
     compiler on the host, since there is no macOS container to build in
-    (libjpeg-turbo is built from the pinned source, not taken from a host package). A mac-only invocation therefore does not require Docker.
+    (libjpeg-turbo is built from the pinned source, not taken from a host
+    package). A mac-only invocation therefore does not require Docker.
     """
     errors = []
     plats = list(platforms)
