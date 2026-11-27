@@ -4,10 +4,14 @@
 Usage: macho_minos.py <max-minos> <file>...
 
 Each file may be a thin or fat Mach-O, or a static library (an ar archive) whose
-members are Mach-O objects. Anything else is skipped. A Mach-O whose deployment
+members are Mach-O objects. Other files are skipped. A Mach-O whose deployment
 target is newer than <max-minos>, or that has none at all, is reported on stderr
-and the exit status is 1. This is what `otool -l` shows as minos, read straight
-from the load commands so it also works on a Linux host that has no otool.
+and the exit status is 1. It fails closed: a Fat64 image or a byte-swapped
+Mach-O is refused rather than skipped, and so is a run in which none of the
+files held a Mach-O, since that is a check that looked at nothing.
+
+The target is what `otool -l` shows as minos, read straight from the
+load commands so it also works on a Linux host that has no otool.
 """
 
 import struct
@@ -17,6 +21,12 @@ LC_VERSION_MIN_MACOSX = 0x24
 LC_BUILD_VERSION = 0x32
 MAGICS_LE = {0xFEEDFACF: 32, 0xFEEDFACE: 28}  # magic -> header size, little endian
 FAT_MAGIC = 0xCAFEBABE
+FAT64_MAGIC = 0xCAFEBABF
+SWAPPED_MAGICS = {0xCEFAEDFE, 0xCFFAEDFE}  # a big endian Mach-O, read as little endian
+
+
+class Unreadable(Exception):
+    """A Mach-O image this script does not know how to read."""
 
 
 def parse(text):
@@ -55,6 +65,10 @@ def objects(data):
     (magic,) = struct.unpack_from("<I", data, 0)
     if magic in MAGICS_LE:
         yield data
+    elif magic in SWAPPED_MAGICS:
+        raise Unreadable("a byte-swapped (big endian) Mach-O, which this check cannot read")
+    elif struct.unpack_from(">I", data, 0)[0] == FAT64_MAGIC:
+        raise Unreadable("a Fat64 Mach-O, which this check cannot read")
     elif struct.unpack_from(">I", data, 0)[0] == FAT_MAGIC:
         (count,) = struct.unpack_from(">I", data, 4)
         for i in range(count):
@@ -75,10 +89,18 @@ def objects(data):
 def main(argv):
     limit = parse(argv[1])
     bad = 0
+    seen = 0
     for path in argv[2:]:
         with open(path, "rb") as f:
             data = f.read()
-        for obj in objects(data):
+        try:
+            images = list(objects(data))
+        except Unreadable as why:
+            print(f"{path}: {why}", file=sys.stderr)
+            bad += 1
+            continue
+        for obj in images:
+            seen += 1
             try:
                 packed = minos_of(obj)
             except struct.error:
@@ -93,6 +115,9 @@ def main(argv):
                 )
                 bad += 1
                 break
+    if not seen and not bad:
+        print("no Mach-O found in any of the given files", file=sys.stderr)
+        return 1
     return 1 if bad else 0
 
 
