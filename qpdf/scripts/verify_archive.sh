@@ -197,8 +197,8 @@ grep -Eqx 'jpeg_version=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/metadata/BUILDINFO.txt" |
   fail "metadata/BUILDINFO.txt: jpeg_version is not a version"
 grep -Eqx 'jpeg_source_sha256=[0-9a-f]{64}' "$ROOT/metadata/BUILDINFO.txt" ||
   fail "metadata/BUILDINFO.txt: jpeg_source_sha256 is not a sha256"
-grep -Eqx 'driver_commit=[0-9a-f]{40}(-dirty)?' "$ROOT/metadata/BUILDINFO.txt" ||
-  fail "metadata/BUILDINFO.txt: driver_commit is not a full commit id"
+grep -Eqx 'driver_commit=[0-9a-f]{40}' "$ROOT/metadata/BUILDINFO.txt" ||
+  fail "metadata/BUILDINFO.txt: driver_commit is not a full, clean commit id (a -dirty tree is refused)"
 if [ "$PLATFORM" = mac ]; then
   want_runtime="libc libc++ libz"
 else
