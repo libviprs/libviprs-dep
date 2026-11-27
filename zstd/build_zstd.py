@@ -828,7 +828,9 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
     run_checked(["sh", helpers["relocate-pc.sh"], staging], log_file, job)
 
     with open(os.path.join(staging, "cmake-args.txt"), "w") as f:
-        f.write(cmake_args_text("mac", arch, staging))
+        # The docker builds record /staging; the real path here is the
+        # build machine's scratch directory and must not ship.
+        f.write(cmake_args_text("mac", arch, "/staging"))
     shutil.copy2(os.path.join(src, "LICENSE"), os.path.join(staging, "LICENSE"))
 
     # Rosetta may or may not be installed, and an arm64 host cannot run

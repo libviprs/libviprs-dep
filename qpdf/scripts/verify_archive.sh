@@ -33,6 +33,12 @@
 #      ${_IMPORT_PREFIX}/... the cmake targets name exists in the archive
 #      (the static libjpeg ships as lib/libjpeg.a).
 #   7. metadata/BUILDINFO.txt records the version in qpdf/VERSION.
+#   7b. BUILDINFO also records the libjpeg-turbo version and source digest, the
+#      driver commit, and the C++ runtime the platform really uses (libstdc++
+#      on linux, libc++ on mac).
+#   7c. On mac, every Mach-O in bin/ and lib/ (members of the static libraries
+#      too) has a deployment target no newer than macOS 11.0, which is what
+#      the README promises.
 #   8. When the host can run the binary: `bin/qpdf --version` reports that
 #      version with no library path set, `--check` passes a known-good tiny
 #      PDF, and `--check` fails a corrupted one.
@@ -183,6 +189,33 @@ WANT="$(tr -d '[:space:]' <"$QPDF_DIR/VERSION")"
 grep -qx "qpdf_version=$WANT" "$ROOT/metadata/BUILDINFO.txt" ||
   fail "metadata/BUILDINFO.txt does not record qpdf_version=$WANT (the version in qpdf/VERSION)"
 
+# 7b. build provenance
+for key in jpeg_version jpeg_source_sha256 driver_commit runtime_libraries; do
+  grep -q "^$key=" "$ROOT/metadata/BUILDINFO.txt" || fail "metadata/BUILDINFO.txt has no $key"
+done
+grep -Eqx 'jpeg_version=[0-9]+\.[0-9]+\.[0-9]+' "$ROOT/metadata/BUILDINFO.txt" ||
+  fail "metadata/BUILDINFO.txt: jpeg_version is not a version"
+grep -Eqx 'jpeg_source_sha256=[0-9a-f]{64}' "$ROOT/metadata/BUILDINFO.txt" ||
+  fail "metadata/BUILDINFO.txt: jpeg_source_sha256 is not a sha256"
+grep -Eqx 'driver_commit=[0-9a-f]{40}' "$ROOT/metadata/BUILDINFO.txt" ||
+  fail "metadata/BUILDINFO.txt: driver_commit is not a full, clean commit id (a -dirty tree is refused)"
+if [ "$PLATFORM" = mac ]; then
+  want_runtime="libc libc++ libz"
+else
+  want_runtime="libc libstdc++ libz"
+fi
+grep -qx "runtime_libraries=$want_runtime" "$ROOT/metadata/BUILDINFO.txt" ||
+  fail "metadata/BUILDINFO.txt: runtime_libraries must be '$want_runtime' on $PLATFORM"
+
+# 7c. the mac slice keeps its macOS 11 promise, in every object it ships
+MAC_MINOS=11.0
+if [ "$PLATFORM" = mac ]; then
+  command -v python3 >/dev/null 2>&1 || fail "python3 is needed to read the Mach-O deployment targets"
+  minos_out="$(cd "$ROOT" && find bin lib -type f -print0 | sort -z |
+    xargs -0 python3 -I "$SCRIPT_DIR/macho_minos.py" "$MAC_MINOS" 2>&1)" ||
+    fail "deployment target above macOS $MAC_MINOS: $(echo "$minos_out" | tr '\n' ' ')"
+fi
+
 # 8. run it, when this host can
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) HOST=linux-x64 ;;
@@ -197,7 +230,9 @@ if [ "$HOST" != "$PLATFORM-$CPU" ]; then
 fi
 
 FIX="$QPDF_DIR/tests/fixtures"
-[ -f "$FIX/good.pdf" ] && [ -f "$FIX/corrupt.pdf" ] || fail "missing fixtures in $FIX"
+if [ ! -f "$FIX/good.pdf" ] || [ ! -f "$FIX/corrupt.pdf" ]; then
+  fail "missing fixtures in $FIX"
+fi
 run_qpdf() { env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH "$ROOT/bin/qpdf" "$@"; }
 
 first="$(run_qpdf --version | head -n 1)"

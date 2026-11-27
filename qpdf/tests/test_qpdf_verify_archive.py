@@ -11,6 +11,7 @@ import hashlib
 import os
 import platform
 import shutil
+import struct
 import subprocess
 import tarfile
 
@@ -32,8 +33,22 @@ def elf(cpu):
 CPUTYPE = {"x64": b"\x07\x00\x00\x01", "arm64": b"\x0c\x00\x00\x01"}
 
 
-def macho(cpu):
-    return b"\xcf\xfa\xed\xfe" + CPUTYPE[cpu] + b"\x00" * 40
+def macho(cpu, minos=(11, 0)):
+    """A 64-bit Mach-O header with one LC_BUILD_VERSION command saying macOS <minos>."""
+    major, minor = minos
+    header = b"\xcf\xfa\xed\xfe" + CPUTYPE[cpu] + struct.pack("<IIIIII", 0, 6, 1, 24, 0, 0)
+    build_version = struct.pack("<IIIIII", 0x32, 24, 1, (major << 16) | (minor << 8), 14 << 16, 0)
+    return header + build_version
+
+
+def ar(*members):
+    """A static archive holding the given member bytes."""
+    out = b"!<arch>\n"
+    for i, data in enumerate(members):
+        fields = [f"obj{i}.o/".ljust(16), "0".ljust(12), "0".ljust(6), "0".ljust(6)]
+        fields += ["100644".ljust(8), str(len(data)).ljust(10), "`\n"]
+        out += "".join(fields).encode() + data + (b"\n" if len(data) % 2 else b"")
+    return out
 
 
 def foreign_cpu():
@@ -54,7 +69,10 @@ CLEAN_TARGETS = (
 FILES = {
     "include/qpdf/QPDF.hh": b"// header\n",
     "lib/libqpdf.a": b"!<arch>\n",
-    "lib/pkgconfig/libqpdf.pc": b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: libqpdf\n",
+    "lib/pkgconfig/libqpdf.pc": (
+        b"prefix=${pcfiledir}/../..\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\n"
+        b"Name: libqpdf\n"
+    ),
     "cmake-args.txt": b"-DCMAKE_BUILD_TYPE=Release\n-DCMAKE_INSTALL_PREFIX=/staging\n",
     "LICENSE": b"Apache License\nVersion 2.0, January 2004\n",
     "NOTICE.md": b"notice\n",
@@ -77,9 +95,13 @@ def make_archive(tmp_path, cpu=None, mutate=None, plat="linux"):
     files = dict(FILES)
     files["bin/qpdf"] = obj(cpu)
     files[shared] = obj(cpu)
+    runtime = "libc libc++ libz" if mac else "libc libstdc++ libz"
     files["metadata/BUILDINFO.txt"] = (
-        f"qpdf_version={VERSION}\nplatform={plat}\ncpu={cpu}\n".encode()
-    )
+        f"qpdf_version={VERSION}\nplatform={plat}\ncpu={cpu}\n"
+        f"source_sha256={'a' * 64}\ncrypto=native\njpeg=static\n"
+        f"jpeg_version=3.2.1\njpeg_source_sha256={'b' * 64}\ndriver_commit={'c' * 40}\n"
+        f"runtime_libraries={runtime}\n"
+    ).encode()
     if mutate:
         mutate(files)
     for rel, data in files.items():

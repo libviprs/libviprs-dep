@@ -48,6 +48,7 @@ GITHUB_REPO = "libviprs/libviprs-dep"
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 VERSION_FILE = os.path.join(HERE, "VERSION")
+REVISION_FILE = os.path.join(HERE, "REVISION")
 VERIFY_ARCHIVE_SCRIPT = os.path.join(HERE, "scripts", "verify_archive.sh")
 FIND_PACKAGE_SMOKE_SCRIPT = os.path.join(HERE, "scripts", "find_package_smoke.sh")
 FIXTURES_DIR = os.path.join(HERE, "tests", "fixtures")
@@ -85,10 +86,11 @@ SOURCE_SHA256 = {
 
 MAC_DEPLOYMENT_TARGET = "11.0"
 
-# libjpeg-turbo is built from source on linux and linked statically, because
-# Debian's libjpeg.a is not position-independent on amd64 and cannot go into
-# libqpdf.so. Pinned the same way the qpdf source is. The mac slice links
-# Homebrew's libjpeg-turbo instead.
+# libjpeg-turbo is built from source on linux and mac and linked statically,
+# because Debian's libjpeg.a is not position-independent on amd64 and cannot go
+# into libqpdf.so, and Homebrew's bottle carries the deployment target of the
+# macOS it was built on (minos 26.0), not ours. Pinned the same way the qpdf
+# source is.
 JPEG_VERSION = "3.2.1"
 JPEG_SOURCE_URL = (
     "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/"
@@ -96,6 +98,31 @@ JPEG_SOURCE_URL = (
 )
 JPEG_SOURCE_SHA256 = "c27ad72a68da151177929aa969ae773a2da5ac2af9ce946079314fdac8cece7f"
 JPEG_LINUX_PREFIX = "/opt/jpeg"
+
+
+def read_revision(path=REVISION_FILE):
+    """Return the packaging revision from `qpdf/REVISION`.
+
+    0 is the original tag (`qpdf-12.4.2`). Corrected bytes for the same qpdf
+    version go out under `qpdf-<version>-viprs.<n>`, the way acadsharp does it,
+    so a tag that was published once is never given different contents.
+    """
+    with open(path) as f:
+        return int(f.read().strip())
+
+
+def driver_commit():
+    """The commit this driver runs from, with `-dirty` when tracked files differ."""
+    sha = subprocess.run(
+        ["git", "-C", REPO_ROOT, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "-C", REPO_ROOT, "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return sha + ("-dirty" if status else "")
 
 
 def read_version(path=VERSION_FILE):
@@ -163,6 +190,29 @@ def source_sha256(version):
 # ---------------------------------------------------------------------------
 # Build configuration
 # ---------------------------------------------------------------------------
+
+
+def jpeg_cmake_args(plat, arch, prefix):
+    """CMake flags for the static, position-independent libjpeg-turbo qpdf links.
+
+    The Dockerfile and the native mac build both use these, so the two never
+    drift, and the mac one gets the same deployment target as qpdf itself.
+    """
+    args = [
+        "-DCMAKE_BUILD_TYPE=Release",
+        f"-DCMAKE_INSTALL_PREFIX={prefix}",
+        "-DCMAKE_INSTALL_LIBDIR=lib",
+        "-DENABLE_SHARED=OFF",
+        "-DENABLE_STATIC=ON",
+        "-DWITH_TURBOJPEG=OFF",
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+    ]
+    if plat == "mac":
+        args += [
+            f"-DCMAKE_OSX_ARCHITECTURES={TARGETS[arch]['apple_arch']}",
+            f"-DCMAKE_OSX_DEPLOYMENT_TARGET={MAC_DEPLOYMENT_TARGET}",
+        ]
+    return args
 
 
 def cmake_configure_args(plat, arch, prefix, jpeg_prefix=None):
@@ -298,8 +348,9 @@ echo "smoke: --check passes the good PDF and fails the corrupted one"
 """
 
 # CMake bakes the absolute install prefix into libqpdf.pc (prefix, libdir and
-# includedir), which means nothing on the consumer's machine; ${pcfiledir} is pkg-config's "directory this .pc
-# lives in", so the archive works from wherever it is unpacked.
+# includedir), which means nothing on the consumer's machine; ${pcfiledir} is
+# pkg-config's "directory this .pc lives in", so the archive works from
+# wherever it is unpacked.
 RELOCATE_PKGCONFIG_SH = r"""#!/bin/sh
 # Usage: relocate-pc.sh <staging-dir>
 set -eu
@@ -360,18 +411,27 @@ echo "relocate: libqpdfTargets.cmake now points at lib/libjpeg.a inside the pref
 # in place, because the verifier compares the list against the archive.
 FINALIZE_SH = r"""#!/bin/sh
 # Usage: finalize.sh <staging-dir> <platform> <cpu> <version> <source-sha256> <crypto> <jpeg>
+#                    <jpeg-version> <jpeg-source-sha256> <driver-commit>
 set -eu
 
 STAGING="${1:?staging dir}"
+# mac links the system libc++, linux the GNU libstdc++
+case "${2:?platform}" in
+    mac) CXXRT=libc++ ;;
+    *) CXXRT=libstdc++ ;;
+esac
 mkdir -p "$STAGING/metadata"
 cat > "$STAGING/metadata/BUILDINFO.txt" <<INFO
 qpdf_version=${4:?version}
-platform=${2:?platform}
+platform=$2
 cpu=${3:?cpu}
 source_sha256=${5:?source sha256}
 crypto=${6:-native}
 jpeg=${7:-static}
-runtime_libraries=libc libstdc++ libz
+jpeg_version=${8:?libjpeg-turbo version}
+jpeg_source_sha256=${9:?libjpeg-turbo source sha256}
+driver_commit=${10:?driver commit}
+runtime_libraries=libc $CXXRT libz
 INFO
 
 if command -v sha256sum >/dev/null 2>&1; then SHA="sha256sum"; else SHA="shasum -a 256"; fi
@@ -416,6 +476,8 @@ def make_dockerfile(version, arch, plat):
     args_text = cmake_args_text(plat, arch, "/staging", JPEG_LINUX_PREFIX)
     jpeg_url = JPEG_SOURCE_URL.format(version=JPEG_VERSION)
     cpu = TARGETS[arch]["cpu"]
+    jpeg_args = " ".join(shlex.quote(a) for a in jpeg_cmake_args(plat, arch, JPEG_LINUX_PREFIX))
+    commit = driver_commit()
 
     return f"""\
 FROM --platform={docker_platform} {base_image}
@@ -431,10 +493,7 @@ RUN curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \\
         --connect-timeout 30 -o /tmp/jpeg.tar.gz "{jpeg_url}" \\
     && echo "{JPEG_SOURCE_SHA256}  /tmp/jpeg.tar.gz" | sha256sum -c - \\
     && mkdir -p /build/jpeg && tar xzf /tmp/jpeg.tar.gz -C /build/jpeg --strip-components=1 \\
-    && cmake -S /build/jpeg -B /build/jpeg/out -DCMAKE_BUILD_TYPE=Release \\
-        -DCMAKE_INSTALL_PREFIX={JPEG_LINUX_PREFIX} -DCMAKE_INSTALL_LIBDIR=lib \\
-        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON -DWITH_TURBOJPEG=OFF \\
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \\
+    && cmake -S /build/jpeg -B /build/jpeg/out {jpeg_args} \\
     && cmake --build /build/jpeg/out -j"$(nproc)" && cmake --install /build/jpeg/out \\
     && cp /build/jpeg/LICENSE.md /build/jpeg/README.ijg /tmp/ \\
     && rm -rf /build/jpeg /tmp/jpeg.tar.gz
@@ -478,7 +537,8 @@ RUN cp LICENSE.txt /staging/LICENSE && cp NOTICE.md /staging/NOTICE.md \\
 
 # Step 8: BUILDINFO and CHECKSUMS, last, so they cover every other file
 COPY finalize.sh /tmp/finalize.sh
-RUN sh /tmp/finalize.sh /staging linux {cpu} {version} {sha} native static
+RUN sh /tmp/finalize.sh /staging linux {cpu} {version} {sha} native static \\
+    {JPEG_VERSION} {JPEG_SOURCE_SHA256} {commit}
 
 # Step 9: run what was built. The container is the target architecture, so
 # the binary executes for real, with no library path set.
@@ -524,10 +584,6 @@ def _install_hint(tool):
             "mac": "Install the Xcode command line tools: `xcode-select --install`.",
             "linux": "Install a C compiler: `sudo apt install build-essential`.",
         },
-        "jpeg": {
-            "mac": "Install libjpeg-turbo: `brew install jpeg-turbo`.",
-            "linux": "Install libjpeg: `sudo apt install libjpeg-dev`.",
-        },
         "gh": {
             "mac": "Install GitHub CLI: `brew install gh` (or see https://cli.github.com/).",
             "linux": (
@@ -542,21 +598,13 @@ def _install_hint(tool):
     return hints[tool]["mac" if is_mac else "linux"]
 
 
-def jpeg_prefix_mac():
-    """Homebrew prefix of libjpeg-turbo, or None when it is not installed."""
-    if not shutil.which("brew"):
-        return None
-    result = subprocess.run(["brew", "--prefix", "jpeg-turbo"], capture_output=True, text=True)
-    prefix = result.stdout.strip()
-    return prefix if result.returncode == 0 and os.path.isdir(prefix) else None
-
-
 def check_dependencies(upload, platforms):
     """Verify the tools each requested platform needs are present.
 
-    linux needs a working Docker daemon with buildx; mac needs CMake, a C++
-    compiler and libjpeg-turbo on the host, since there is no macOS container
-    to build in. A mac-only invocation therefore does not require Docker.
+    linux needs a working Docker daemon with buildx; mac needs CMake and a C++
+    compiler on the host, since there is no macOS container to build in
+    (libjpeg-turbo is built from the pinned source, not taken from a host
+    package). A mac-only invocation therefore does not require Docker.
     """
     errors = []
     plats = list(platforms)
@@ -583,10 +631,6 @@ def check_dependencies(upload, platforms):
         for tool in ("cmake", "cc"):
             if not shutil.which(tool):
                 errors.append(f"{tool} not found (required for mac builds). {_install_hint(tool)}")
-        if sys.platform == "darwin" and jpeg_prefix_mac() is None:
-            errors.append(
-                f"libjpeg-turbo not found (required for mac builds). {_install_hint('jpeg')}"
-            )
 
     if upload:
         if not shutil.which("gh"):
@@ -631,9 +675,9 @@ def staging_dir_name(plat, arch):
     return f"qpdf-{plat}-{TARGETS[arch]['cpu']}"
 
 
-def release_tag(version):
-    """Release tag derived from the version: qpdf-12.4.2"""
-    return f"qpdf-{version}"
+def release_tag(version, revision=0):
+    """Release tag: qpdf-12.4.2 for revision 0, qpdf-12.4.2-viprs.1 for the first correction."""
+    return f"qpdf-{version}" if revision == 0 else f"qpdf-{version}-viprs.{revision}"
 
 
 def stream(cmd, log_file, prefix, env=None, cwd=None):
@@ -672,10 +716,8 @@ def run_checked(cmd, log_file, prefix, **kwargs):
         raise RuntimeError(f"{cmd[0]} failed with exit {rc}: {' '.join(cmd)}")
 
 
-def download_source(version, dest, log_file, prefix):
-    """Download the pinned release tarball to ``dest`` and check its hash."""
-    url = source_url(version)
-    expected = source_sha256(version)
+def download_source(url, expected, dest, log_file, prefix):
+    """Download a pinned tarball to ``dest`` and check it against ``expected``."""
     print(f"[{prefix}] downloading {url}", flush=True)
     log_file.write(f"\n# downloading {url}\n")
     with urllib.request.urlopen(url) as response, open(dest, "wb") as out:
@@ -836,7 +878,9 @@ def _build_docker(version, plat, arch, output_dir, log_file, job):
             subprocess.run(["docker", "rm", "-f", container_name], capture_output=True)
             subprocess.run(["docker", "rmi", "-f", image_tag], capture_output=True)
 
-        run_checked(["tar", "czf", output_path, "-C", extract_dir, dir_name], log_file, job)
+        run_checked(
+            ["tar", "--no-xattrs", "-czf", output_path, "-C", extract_dir, dir_name], log_file, job
+        )
 
     size_kb = os.path.getsize(output_path) / 1024
     print(f"[{job}] -> {output_path} ({size_kb:.0f} KB)", flush=True)
@@ -850,10 +894,6 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
             "mac builds require a macOS host (there is no macOS container image); "
             "run this job on a macos runner."
         )
-    jpeg = jpeg_prefix_mac()
-    if jpeg is None:
-        raise RuntimeError(f"libjpeg-turbo not found. {_install_hint('jpeg')}")
-
     dir_name = staging_dir_name("mac", arch)
     output_path = os.path.join(output_dir, archive_name("mac", arch))
     workspace = os.path.join(output_dir, f"workspace-mac-{arch}")
@@ -870,9 +910,33 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
     os.makedirs(workspace)
 
     tarball = os.path.join(workspace, f"qpdf-{version}.tar.gz")
-    download_source(version, tarball, log_file, job)
+    download_source(source_url(version), source_sha256(version), tarball, log_file, job)
     run_checked(["tar", "xzf", tarball, "-C", workspace], log_file, job)
     src = os.path.join(workspace, f"qpdf-{version}")
+
+    # libjpeg-turbo from the pinned source at our deployment target, the same
+    # way the linux Dockerfile does it.
+    jpeg_tarball = os.path.join(workspace, f"libjpeg-turbo-{JPEG_VERSION}.tar.gz")
+    download_source(
+        JPEG_SOURCE_URL.format(version=JPEG_VERSION),
+        JPEG_SOURCE_SHA256,
+        jpeg_tarball,
+        log_file,
+        job,
+    )
+    jpeg_src = os.path.join(workspace, "jpeg-src")
+    os.makedirs(jpeg_src)
+    run_checked(["tar", "xzf", jpeg_tarball, "-C", jpeg_src, "--strip-components=1"], log_file, job)
+    jpeg = os.path.join(workspace, "jpeg")
+    run_checked(
+        ["cmake", "-S", jpeg_src, "-B", os.path.join(jpeg_src, "out")]
+        + jpeg_cmake_args("mac", arch, jpeg),
+        log_file,
+        job,
+    )
+    jobs = str(os.cpu_count() or 4)
+    run_checked(["cmake", "--build", os.path.join(jpeg_src, "out"), "-j", jobs], log_file, job)
+    run_checked(["cmake", "--install", os.path.join(jpeg_src, "out")], log_file, job)
 
     run_checked(
         # Configure with the neutral prefix the Linux Dockerfile uses, so
@@ -895,17 +959,16 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
     )
 
     with open(os.path.join(staging, "cmake-args.txt"), "w") as f:
-        f.write(cmake_args_text("mac", arch, "/staging", jpeg))
+        # the libjpeg prefix is a path in this build's workspace, so the file records the
+        # same neutral one the linux Dockerfile uses
+        f.write(cmake_args_text("mac", arch, "/staging", JPEG_LINUX_PREFIX))
     shutil.copy2(os.path.join(src, "LICENSE.txt"), os.path.join(staging, "LICENSE"))
     shutil.copy2(os.path.join(src, "NOTICE.md"), os.path.join(staging, "NOTICE.md"))
     os.makedirs(os.path.join(staging, "LICENSES"))
     for name in ("LICENSE.md", "README.ijg"):
-        if os.path.exists(os.path.join(jpeg, name)):
-            shutil.copy2(
-                os.path.join(jpeg, name), os.path.join(staging, "LICENSES", f"libjpeg-turbo-{name}")
-            )
-    if not os.listdir(os.path.join(staging, "LICENSES")):
-        raise RuntimeError(f"no libjpeg-turbo licence file found under {jpeg}")
+        shutil.copy2(
+            os.path.join(jpeg_src, name), os.path.join(staging, "LICENSES", f"libjpeg-turbo-{name}")
+        )
 
     run_checked(
         [
@@ -918,6 +981,9 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
             source_sha256(version),
             "native",
             "static",
+            JPEG_VERSION,
+            JPEG_SOURCE_SHA256,
+            driver_commit(),
         ],
         log_file,
         job,
@@ -955,7 +1021,12 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
     )
 
     env = dict(os.environ, COPYFILE_DISABLE="1")
-    run_checked(["tar", "czf", output_path, "-C", workspace, dir_name], log_file, job, env=env)
+    run_checked(
+        ["tar", "--no-xattrs", "-czf", output_path, "-C", workspace, dir_name],
+        log_file,
+        job,
+        env=env,
+    )
 
     size_kb = os.path.getsize(output_path) / 1024
     print(f"[{job}] -> {output_path} ({size_kb:.0f} KB)", flush=True)
@@ -967,17 +1038,25 @@ def _build_mac_native(version, arch, output_dir, log_file, job):
 # ---------------------------------------------------------------------------
 
 
-def release_notes(version):
+def release_notes(version, revision=0):
     """Body of the `qpdf-<version>` release.
 
     Kept here rather than in the workflow so a release cut by CI and one cut
     by a local `--upload` read the same, digest included. Raises `ValueError`
     for a version with no pinned source hash, the same refusal the build makes.
     """
+    rev_note = (
+        f"Packaging revision {revision} of qpdf {version}: same upstream source, rebuilt. "
+        f"The archives under `{release_tag(version)}` stay up unchanged, pin these digests "
+        "instead.\n\n"
+        if revision
+        else ""
+    )
     return (
         f"qpdf {version} built from source, shipped as a test-time PDF validator "
         "(`qpdf --check`). It is not a runtime dependency of libviprs.\n\n"
-        "Each archive contains:\n"
+        + rev_note
+        + "Each archive contains:\n"
         "- `bin/qpdf`: the command line tool, finds ../lib on its own\n"
         "- `lib/libqpdf.so` (`.dylib` on mac) and `lib/libqpdf.a`\n"
         "- `lib/pkgconfig/libqpdf.pc`: relocatable pkg-config file\n"
@@ -987,19 +1066,27 @@ def release_notes(version):
         "- `LICENSES/`: the licence of the statically linked libjpeg\n"
         "- `metadata/BUILDINFO.txt` and `metadata/CHECKSUMS.txt` (sha256 of every other file)\n\n"
         "Every archive has a `.sha256` sidecar with the digest of the archive itself. "
-        "Runtime libraries: libc, libstdc++ and zlib.\n\n"
+        "Runtime libraries: libc, zlib and the C++ runtime (libstdc++ on linux, libc++ on mac). "
+        "The mac archive targets macOS 11 or newer: every Mach-O in it, the static libraries "
+        "included, is checked for that deployment target.\n\n"
         f"Source: {source_url(version)}\n"
         f"sha256: `{source_sha256(version)}`"
     )
 
 
 def upload_release(version, built_files):
-    """Create or update the qpdf-<version> Release with the built assets.
+    """Create the qpdf-<version>[-viprs.<n>] draft release and attach the built assets.
 
-    Assets already on the release whose names don't collide are left
-    alone, so a partial run can be combined with an earlier one.
+    The release is a draft on an explicit commit and never the "Latest" one, and
+    the upload has no --clobber: a name that is already on the release fails
+    loudly instead of replacing bytes somebody may have pinned. Publishing the
+    draft is a separate, deliberate step.
     """
-    tag = release_tag(version)
+    revision = read_revision()
+    tag = release_tag(version, revision)
+    commit = driver_commit()
+    if commit.endswith("-dirty"):
+        raise RuntimeError(f"refusing to publish from a dirty tree ({commit})")
     exists = (
         subprocess.run(
             ["gh", "release", "view", tag, "-R", GITHUB_REPO], capture_output=True
@@ -1008,8 +1095,8 @@ def upload_release(version, built_files):
     )
 
     if not exists:
-        print(f"Release '{tag}' doesn't exist, creating...", flush=True)
-        notes = release_notes(version)
+        print(f"Release '{tag}' doesn't exist, creating a draft...", flush=True)
+        notes = release_notes(version, revision)
         subprocess.run(
             [
                 "gh",
@@ -1018,20 +1105,21 @@ def upload_release(version, built_files):
                 tag,
                 "-R",
                 GITHUB_REPO,
+                "--draft",
+                "--latest=false",
+                "--target",
+                commit,
                 "--title",
-                f"qpdf {version}",
+                f"qpdf {version}" + (f" (viprs.{revision})" if revision else ""),
                 "--notes",
                 notes,
             ],
             check=True,
         )
     else:
-        print(f"Release '{tag}' exists, appending/replacing assets...", flush=True)
+        print(f"Release '{tag}' exists, adding assets (no replacing)...", flush=True)
 
-    subprocess.run(
-        ["gh", "release", "upload", tag, "-R", GITHUB_REPO, "--clobber", *built_files],
-        check=True,
-    )
+    subprocess.run(["gh", "release", "upload", tag, "-R", GITHUB_REPO, *built_files], check=True)
     print(f"\nRelease: https://github.com/{GITHUB_REPO}/releases/tag/{tag}", flush=True)
 
 
@@ -1047,7 +1135,7 @@ def _print_summary(version, built_files, failures, output_dir, uploaded):
     print()
     print(bar)
     if uploaded:
-        tag = release_tag(version)
+        tag = release_tag(version, read_revision())
         header = f"Published to {tag}" if not failures else f"Partial publish to {tag}"
         print(f"  {header}")
         print(f"  https://github.com/{GITHUB_REPO}/releases/tag/{tag}")
