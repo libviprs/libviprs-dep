@@ -6,8 +6,8 @@ name: Release qpdf
 # universal job, its own summary table) and because a qpdf flake should
 # not colour a pdfium release run red. Both fire on a push to `release`,
 # so a merge there publishes whichever versions changed; qpdf's matrix
-# is three cells, and `gh release upload --clobber` makes a repeat run a
-# no-op in effect. qpdf is a test-time validator only, nothing in the
+# is three cells, and an upload never overwrites an asset, so a repeat run fails on a
+# clash instead of replacing a published archive. qpdf is a test-time validator only, nothing in the
 # libviprs crate depends on it.
 #
 # Same split as release.yml inside each job: build, then verify, then
@@ -93,8 +93,8 @@ jobs:
 
   create-release:
     # Created up front so the fan-out jobs never race on `gh release
-    # create`. Re-running is safe: an existing tag is left alone and the
-    # uploads below use --clobber.
+    # create`. Re-running is safe: an existing tag is left alone. The
+    # release is a draft, so nothing is public until the owner publishes it.
     needs: resolve-version
     runs-on: ubuntu-latest
     permissions:
@@ -128,7 +128,7 @@ jobs:
           spec.loader.exec_module(driver)
           print(driver.release_notes(sys.argv[1]))
           PY
-          gh release create "$TAG" --title "qpdf $VERSION" --notes-file release-notes.md
+          gh release create "$TAG" --draft --title "qpdf $VERSION" --notes-file release-notes.md
 
   build-linux:
     # The two Docker cells, one job each, fail-fast off so a flake in one
@@ -188,7 +188,7 @@ jobs:
           TAG: ${{ needs.resolve-version.outputs.tag }}
         run: |
           gh release upload "$TAG" "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz" \
-            "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz.sha256" --clobber
+            "bin/qpdf-${{ matrix.platform }}-${{ matrix.cpu }}.tgz.sha256"
 
       - name: Upload build logs on failure
         if: always()
@@ -243,7 +243,7 @@ jobs:
           TAG: ${{ needs.resolve-version.outputs.tag }}
         run: |
           gh release upload "$TAG" "bin/qpdf-mac-${{ matrix.cpu }}.tgz" \
-            "bin/qpdf-mac-${{ matrix.cpu }}.tgz.sha256" --clobber
+            "bin/qpdf-mac-${{ matrix.cpu }}.tgz.sha256"
 
       - name: Upload build logs on failure
         if: always()
